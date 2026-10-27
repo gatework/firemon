@@ -1,0 +1,41 @@
+# Firemon Go specification
+
+Authority: approved design from the planning conversation, with the user's subsequent correction: firewall objects include **StaticNAT and DynamicNAT**, not a unified NATRule.
+
+## Domain and ownership
+
+A firewall owns a concrete immutable graph: Interface, Route, Zone, Address, AddressGroup, Service, ServiceGroup, Schedule, Rule, RuleBinding, StaticNAT, DynamicNAT, NATPool, context and evidence. Construction uses mutable DTO drafts; sealing validates and resolves typed IDs in two passes. Shared references retain pointer identity after snapshot restoration. Readers receive copies of mutable containers. Ordered slices describe execution; maps are indexes only. Unknown, any and empty are distinct. Protocol zero is a protocol, not a wildcard. Native NAT order may interleave both object types and may have multiple native stages.
+
+StaticNAT retains explicit fixed mappings, original match context, direction, zones/interfaces/VRF, ports, stage/order and evidence. DynamicNAT retains original match conditions, pools/interface allocation, source/destination modes, exemption and native order. Do not infer mapping semantics from equal address counts or classify every policy-shaped NAT statement as a generic NATRule. Translation primitives may be shared internally without erasing these objects.
+
+## Parsing
+
+Perl cursor behavior is deliberate: skip means pending for a later pass; rewind preserves committed state. Go parsing uses a native structural scanner followed by targeted scoped stages. Peek/NextPending/checkpoint/restore/rewind never authorize swallowing unrelated lines. Transactions commit drafts together with actual consumed spans; rollback restores both. Only known irrelevant syntax may be ignored with a reason. Unknown nested blocks and quoted text cannot create domain objects.
+
+Stages: native structure/context; zones/interfaces; address/service/schedule drafts; direct/static routes; VRF-scoped next-hop resolution and interface-route binding; zone networks; group references; rules/ACL binding; PBR and NAT; diagnostics; seal. Resolve next hops by longest connected prefix within VRF, preserving ambiguous and unresolved evidence.
+
+## Snapshot and publication
+
+Versioned bounded envelope and fixed concrete gob DTO tables, typed references, separate payload checksum and canonical semantic digest. Full raw text, source state, context, references and diagnostics retained. gob is trusted local storage, not a hostile network format. Load restores the graph without raw parsing, DB queries or device fallback. Unsupported versions fail explicitly.
+
+Publish immutable blobs via temp/fsync/rename before atomically replacing a generation manifest under a stable sidecar lock. CAS, per-device durable reservations, idempotency, cross-process manifest reads and a projection outbox are required. Offline incomplete drafts cannot replace current; changed live state invalidates stale current and archives evidence. Projection consumes loaded published snapshots; failure does not roll back a good snapshot. No SQL schema or database adapter in this module.
+
+## Evaluation and planning
+
+IPv4/IPv6 interval algebra without enumeration. Exact multidimensional traffic union/difference preserves request pairs. First-match consumes known and potentially matching unknown traffic; conservative budgets prevent partial success. Scope, time, application/user, logging, route and NAT evidence participates.
+
+Native NAT semantics govern selection: original match first; explicit identity/constant/offset/dynamic relations; no-NAT terminal; dynamic allocation is possible, not exact session state. Reverse inventory aliases require forward validation. PAN ordered NAT and ASA staged auto/manual semantics must not be conflated.
+
+Reuse coverage, then append members, then create exact gaps. Perl candidate subset/equality conditions and append-member costs are retained, with deterministic lexicographic cost: new rules, appended members, new objects, modified rules, moves, position, ID. Every rendered candidate and batch merge needs exact-target and outside-preservation proof; try safe alternatives if rendering fails. Limits: 100 requests, 4096 combinations, 100000 candidate visits, 4096 regions, 128 plan combinations; charge before expansion.
+
+## Lifecycle and online
+
+Request optimization by exact fixed point; convergence with full-plan proof; translation by effective partitions and explicit zone mappings; declared/effective risk; separate redundant/disabled/expired/unused reclamation with revision-bound contiguous hit evidence.
+
+Capture baseline, reserve, authorize exact plan, persist receipts, save/commit confirmation, independent readback, parse/prove, publish, project. No uncertain write replay; no expiry-based reservation release. Recovery reads state independently. Transport, authorization and journal are injected. Optional private connector adapter belongs in a separate module; root offline builds remain independent. No private source publication, real-device access, push, commit or release is authorized by implementation approval.
+
+## Vendor and delivery sequence
+
+Hillstone, Palo Alto, ASA first, then SRX, Netscreen, Fortinet, H3C, Huawei, Topsec, Neteye. Each capability is supported only when fixture and semantic evidence establish it. Never advertise a parser stub as vendor parity. No web app/account/approval platform.
+
+Validation includes independent small-domain algebra oracle, fuzz/race tests, native scoped fixtures, first-match/unknown behavior, NAT offsets/ports/stages, graph identity, cursor rollback, crash/CAS/projection ordering, offline CLI and conditional adapter checks. Benchmarks report measurements separately from real-device/CI evidence.

@@ -1,0 +1,57 @@
+[
+  {
+    "implementation": "perl",
+    "path": "lib/Firewall/Config/Parser/Hillstone.pm",
+    "sha256": "f8604905ada19a92c91693b0f453d6e94c77cd0e57a320dd5092d4247f60bf29"
+  },
+  {
+    "implementation": "perl",
+    "path": "lib/Firewall/Config/Content/Role.pm",
+    "sha256": "0958fd0be3df40dd3c90a04b66b74c60d9c6011945a16a931728ac3122d51554"
+  },
+  {
+    "implementation": "perl",
+    "path": "lib/Firewall/Config/Content/Static.pm",
+    "sha256": "2abd7d4a5bc5bb4af9aa6b40bd23ec88be9fabc3fd9fa5c096adf48eaecd7fbf"
+  },
+  {
+    "implementation": "perl",
+    "path": "lib/Firewall/Config/Parser/Elements.pm",
+    "sha256": "26511fb0dc6f78bad705079c950b77843598335e7ebbb0b5688f6458302425c6"
+  },
+  {
+    "implementation": "perl",
+    "path": "lib/Firewall/Policy/Searcher.pm",
+    "sha256": "19cba15439530a5803746540f3d250d582579d91bb637a73169e3d81068ce990"
+  },
+  {
+    "implementation": "perl",
+    "path": "lib/Firewall/Policy/SearchNatIp.pm",
+    "sha256": "ec1cc6c7467181c82aa2d6aac96ffb5e2fab294d73118702a9c39900aaac972e"
+  },
+  {
+    "implementation": "ruby",
+    "path": "lib/algosec/config/parser.rb",
+    "sha256": "03893f91b23762ca5477be3de8fcba022ebe0d8f8b7d954a38e1228843567e24"
+  },
+  {
+    "implementation": "ruby",
+    "path": "lib/algosec/elements/static_nat.rb",
+    "sha256": "35205fdcab9e114da375b80f80547d0c9db238083f6789dbc5ce2895123a0739"
+  },
+  {
+    "implementation": "ruby",
+    "path": "lib/algosec/elements/dynamic_nat.rb",
+    "sha256": "554343f6364d6f17023fa7e6177533c98fa39d7c9670c878c890bce2a8def6a4"
+  },
+  {
+    "implementation": "ruby",
+    "path": "lib/algosec/vendors/hillstone/parser.rb",
+    "sha256": "b916b2bfa6b29b7185db7a4debb169698ea7dfc9983d0177cf9d01a1074dee8f"
+  },
+  {
+    "implementation": "ruby",
+    "path": "lib/algosec/policy/designer.rb",
+    "sha256": "26c04fd6043dd73fb9ef4238c8e31d1f36275da44b7c0b5361c301bef56d6947"
+  }
+]

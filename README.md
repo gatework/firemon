@@ -1,61 +1,30 @@
 # firemon
 
-[![CI](https://github.com/gatework/firemon/actions/workflows/ci.yml/badge.svg)](https://github.com/gatework/firemon/actions/workflows/ci.yml)
-[![Gem Version](https://badge.fury.io/rb/firemon.svg)](https://rubygems.org/gems/firemon)
+Go firewall configuration and policy automation. Implementation is in progress against [the specification](docs/spec.md) and [execution plan](docs/plans/go-firewall.md).
 
-面向 FireMon 自动化的 Ruby gem。目前为初始骨架，提供命名空间、版本常量与基础异常；设备连接、配置解析和命令操作尚未实现。
+The firewall graph includes interfaces, routes, zones, addresses and groups, services and groups, schedules, security rules, **StaticNAT**, **DynamicNAT**, and NAT pools. Vendor execution order is retained separately from object identity.
 
-## 安装
+This branch converts the original Ruby gem skeleton to Go while retaining Git history. The Ruby and Perl Algosec implementations are reference implementations, not runtime dependencies.
 
-要求 Ruby 3.3 或更高版本。
+Run `go test ./...` and `go vet ./...` from this directory. No database or device connection is required for offline tests.
 
-```sh
-gem install firemon
-```
+The [status matrix](docs/status.md) distinguishes implemented slices from the remaining approved work. First parsers are `hillstone`, `paloalto` (set/XML) and `asa`; native syntax coverage is reported per fixture.
 
-或在 Gemfile 中添加：
-
-```ruby
-gem "firemon", "~> 0.1.0"
-```
-
-## 使用
-
-```ruby
-require "firemon"
-
-Firemon::VERSION # => "0.1.0"
-Firemon::Error   # StandardError 的子类
-```
-
-## 开发
+Offline example (synthetic or sanitized configuration):
 
 ```sh
-bundle install
-bundle exec rake
-bundle exec rake package
+go run ./cmd/firemon import --store ./snapshots --device lab --vendor hillstone \
+  --file ./lab.cfg --complete --publication import-1
+go run ./cmd/firemon inspect --store ./snapshots --device lab
+go run ./cmd/firemon query --store ./snapshots --device lab \
+  --source 192.0.2.10/32 --destination 198.51.100.20/32 --service tcp/443 \
+  --from-zone inside --to-zone outside
 ```
 
-CI 覆盖 Ruby 3.3、3.4、4.0。打包步骤在临时 GEM_HOME 中安装并加载 gem，检查版本与加载路径。
+`--complete` asserts the capture was fully received; unsupported syntax can still make the parsed graph incomplete. Incomplete offline imports are archived without replacing current. Use `inspect --revision <revision>` to inspect an archived graph. Updates require `--expected <current-revision>` and a new publication ID. A known capture time can be supplied as `--captured-at <RFC3339>`.
 
-## 发布
+`query` evaluates the supplied policy address/zone context. `policy.Engine.QueryPacket` also models PAN original-address/post-DNAT-zone and ASA real-address ACL paths. `nat` preserves separate static/dynamic objects, native order and inverse/pipeline steps; uncertain versions or mapping semantics return explicit unknown/error. `plan` renders supported Hillstone, PAN and ASA changes for review.
 
-1. 更新 `lib/firemon/version.rb` 与 `CHANGELOG.md`，提交并推送到 `main`。
-2. 等待该提交的 CI 通过，创建并推送同版本标签，例如 `v0.1.1`。
-3. 在 GitHub 发布该标签的 Release；`release.yml` 会重新运行完整 CI，下载通过验证的 gem，发布到 RubyGems，再将相同的 gem 与 `SHA256SUMS` 附加到 Release。
+The `analysis` package provides exact request optimization, convergence, explicit-zone translation, declared/effective risk and evidence-bound reclamation. Lifecycle plans share independent readback verification with request plans. `deploy` injects transport, authorization and a durable journal, reserves the current snapshot, records receipts, confirms persistence and parses a new-session capture before publication. Recovery reads independently and never replays uncertain writes. These paths have local synthetic tests; no real-device interoperability is claimed.
 
-```sh
-git tag -a v0.1.1 -m "Release 0.1.1"
-git push origin v0.1.1
-gh release create v0.1.1 --verify-tag --title v0.1.1 --notes-file CHANGELOG.md
-```
-
-本仓库已配置 [RubyGems Trusted Publishing](https://guides.rubygems.org/trusted-publishing/)，通过 GitHub OIDC 获取短期发布凭据，无需长期 API key 或手动 OTP。RubyGems 上的 gem `firemon` 信任 owner `gatework`、repository `firemon`、workflow `release.yml`、environment `release`；发布环境仅允许 `v*` 标签。
-
-只有主动切换为 API key 认证时，才需要设置 `release` environment 的 `RUBYGEMS_API_KEY` secret。
-
-发布后最多等待 10 分钟，核对 RubyGems 版本与下载字节。失败时优先重新运行失败的 job，以复用原 CI 产物。`workflow_dispatch` 仅接受版本标签，并要求 GitHub Release 已存在。已发布的相同版本只有校验和一致才可继续；不同内容必须提升版本号。
-
-## 许可
-
-MIT，见 [LICENSE](LICENSE)。本项目由 gatework 维护，与设备厂商无隶属关系。
+Snapshot directories contain complete source configurations. Keep them local and trusted; gob is not an untrusted interchange format. Runtime files use private permissions. The optional database projection reads published snapshot files and requires a host-supplied idempotent transactional sink.

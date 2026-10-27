@@ -1,5 +1,8 @@
-/.bundle/
-/pkg/
-/vendor/bundle/
-/coverage/
-.DS_Store
+/bin/
+/dist/
+*.test
+coverage.out
+.superpowers/
+
+/snapshots/
+*.gob

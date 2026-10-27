@@ -1,0 +1,73 @@
+{
+  "config": "zone \"inside\"\nexit\nzone \"outside\"\nexit\ninterface ethernet0/0\n zone \"inside\"\n ip address 192.0.2.1 255.255.255.0\nexit\naddress \"client\"\n description \"sanitized\"\n ip 192.0.2.10/32\nexit\naddress \"server\"\n ip 198.51.100.20/32\nexit\nservice \"test-https\"\n tcp dst-port 443 443\nexit\nrule id 10\n action permit\n src-zone \"inside\"\n dst-zone \"outside\"\n src-addr \"client\"\n dst-addr \"server\"\n service \"test-https\"\nexit\nrule id 20\n action deny\n src-zone \"inside\"\n dst-zone \"outside\"\n src-addr \"client\"\n dst-addr \"server\"\n service \"test-https\"\n disable\nexit\n\nip vrouter \"trust-vr\"\n bnatrule id 1 virtual ip 203.0.113.0/24 real ip 192.0.2.0/24\nexit\naddress \"cost-source-a\"\n ip 192.0.2.30/32\nexit\naddress \"cost-source-b\"\n ip 192.0.2.31/32\nexit\naddress \"cost-server\"\n ip 198.51.100.99/32\nexit\nservice \"test-http\"\n tcp dst-port 80 80\nexit\nservice \"test-ssh\"\n tcp dst-port 22 22\nexit\nrule id 40\n action permit\n src-zone \"inside\"\n dst-zone \"outside\"\n src-addr \"cost-source-a\"\n dst-addr \"cost-server\"\n service \"test-https\"\n service \"test-http\"\nexit\nrule id 50\n action permit\n src-zone \"inside\"\n dst-zone \"outside\"\n src-addr \"cost-source-b\"\n dst-addr \"cost-server\"\n service \"test-ssh\"\nexit\n",
+  "cases": [
+    {
+      "name": "equal",
+      "src": [
+        "192.0.2.10/32"
+      ],
+      "dst": [
+        "198.51.100.20/32"
+      ],
+      "srv": [
+        "tcp/443"
+      ],
+      "expected_type": "ignore",
+      "expected_rule": "10"
+    },
+    {
+      "name": "append-source",
+      "src": [
+        "192.0.2.11/32"
+      ],
+      "dst": [
+        "198.51.100.20/32"
+      ],
+      "srv": [
+        "tcp/443"
+      ],
+      "expected_type": "modify",
+      "expected_rule": "10"
+    },
+    {
+      "name": "new-two-dimensions",
+      "src": [
+        "192.0.2.11/32"
+      ],
+      "dst": [
+        "198.51.100.21/32"
+      ],
+      "srv": [
+        "tcp/443"
+      ],
+      "expected_type": "new",
+      "expected_rule": null
+    },
+    {
+      "name": "least-appended-members",
+      "src": [
+        "192.0.2.31/32"
+      ],
+      "dst": [
+        "198.51.100.99/32"
+      ],
+      "srv": [
+        "tcp/443",
+        "tcp/80"
+      ],
+      "expected_type": "modify",
+      "expected_rule": "40"
+    }
+  ],
+  "source_hashes": {
+    "Config/Parser/Hillstone.pm": "f8604905ada19a92c91693b0f453d6e94c77cd0e57a320dd5092d4247f60bf29",
+    "FireFlow/FWDeploy.pm": "a93c07472f13d6a718859e4f7a510b77a39a0d3d7e28822851563017c59fda41",
+    "FireFlow/FWDesign.pm": "6a4019a0a4222b2c04dec676f5230a6afcaa0237f8a76d4b6b7aafab53e9dbb4",
+    "FireFlow/RuleOtimize.pm": "3885d73bfa74d5b0d7ed9cba9b30e199b092b97bfb6f2f0efeb6b74f6616748c",
+    "Policy/Designer.pm": "7cd75e5f47e439a8a252db73ce6f47ce9a010f038b18d117a14c0339d2b59fef",
+    "Policy/FindIp.pm": "447536a8779530c01093203899eb2ed65625f459aa2046b3eba36ac556250aeb",
+    "Policy/SearchNatIp.pm": "ec1cc6c7467181c82aa2d6aac96ffb5e2fab294d73118702a9c39900aaac972e",
+    "Policy/Searcher.pm": "19cba15439530a5803746540f3d250d582579d91bb637a73169e3d81068ce990"
+  },
+  "perl": "v5.44.0"
+}
