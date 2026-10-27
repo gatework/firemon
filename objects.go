@@ -107,11 +107,13 @@ func (o *StaticNAT) Interface() *Interface   { return o.iface }
 type DynamicNAT struct {
 	match                       MatchObjects
 	record                      DynamicNATRecord
+	rule                        *Rule
 	sourcePool, destinationPool *NATPool
 	iface                       *Interface
 }
 
 func (o *DynamicNAT) Record() DynamicNATRecord  { return o.record.clone() }
+func (o *DynamicNAT) Rule() *Rule               { return o.rule }
 func (o *DynamicNAT) SourcePool() *NATPool      { return o.sourcePool }
 func (o *DynamicNAT) DestinationPool() *NATPool { return o.destinationPool }
 func (o *DynamicNAT) Interface() *Interface     { return o.iface }

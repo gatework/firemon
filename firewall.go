@@ -400,6 +400,14 @@ func Seal(data Data) (*Firewall, error) {
 	}
 	for _, n := range f.DynamicNATs() {
 		r := n.record
+		n.rule = f.rules[r.Rule]
+		if r.Rule != "" {
+			if n.rule == nil {
+				f.issue(r.ID, "missing-rule", string(r.Rule))
+			} else if owner := n.rule.record; !sameMatch(owner.Match, r.Match) || owner.Scope != r.Scope || owner.Disabled != r.Disabled || owner.Action != Permit {
+				f.issue(r.ID, "policy-nat-mismatch", "translation must retain its owning permit policy's complete match and state")
+			}
+		}
 		n.sourcePool = f.natPools[r.SourcePool]
 		n.destinationPool = f.natPools[r.DestinationPool]
 		n.iface = f.interfaces[r.Interface]

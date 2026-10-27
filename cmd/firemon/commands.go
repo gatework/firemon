@@ -14,6 +14,7 @@ import (
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors/asa"
 	"github.com/gatework/firemon/vendors/hillstone"
+	"github.com/gatework/firemon/vendors/netscreen"
 	"github.com/gatework/firemon/vendors/paloalto"
 	"github.com/gatework/firemon/vendors/srx"
 	"io"
@@ -93,6 +94,8 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 		fw, err = asa.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
 	case "srx":
 		fw, err = srx.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
+	case "netscreen", "screenos":
+		fw, err = netscreen.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
 	default:
 		return fmt.Errorf("vendor %q has no enabled parser", *vendor)
 	}
@@ -217,6 +220,8 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			renderer = asa.Renderer{}
 		case "srx":
 			renderer = srx.Renderer{}
+		case "netscreen":
+			renderer = netscreen.Renderer{}
 		default:
 			return plan.ErrUnsafe
 		}

@@ -20,6 +20,14 @@ The [source NAT guide](https://www.juniper.net/documentation/us/en/software/juno
 
 The [address-book guide](https://www.juniper.net/documentation/us/en/software/junos/security-policies/topics/topic-map/security-address-books-sets.html) gives attached books priority over global objects, then predefined names. Zone attachments participate in the sealed graph and semantic digest. Planning checks visibility before reusing an address; native readback compares policy order within each zone pair. Tests use synthetic display-set captures, not a live SRX or a complete Junos compatibility matrix.
 
+## ScreenOS Netscreen
+
+Juniper's [NAT migration application note](https://supportportal.juniper.net/sfc/servlet.shepherd/document/download/0693c00000LXgNrAAL?operationContext=S1) supplies native MIP, VIP, DIP, `fix-port`, interface source NAT and policy destination NAT examples. The Go parser retains MIP as `StaticNAT`; VIP and policy translation use `DynamicNAT`, and DIP remains a separate pool. Policy NAT references its owning security rule and is evaluated only for that rule's first-match permitted traffic. Earlier plain permits, denies and unknown rules cannot be skipped.
+
+The [ScreenOS destination NAT guide](https://supportportal.juniper.net/sfc/servlet.shepherd/document/download/0693c00000LXgMAAA1?operationContext=S1), pages 1–2, requires routing for the original public address and keeps original/translated destination addresses in the same security zone. `QueryPacket` enforces both conditions. MIP/VIP instead resolve the real destination before route lookup; policy matching retains the original address and service view.
+
+The Juniper-authored [ScreenOS 6.2 Concepts & Examples reference](https://sup.xenya.si/sup/info/Juniper/SSG/ScreenOS_V6.2.0/Concepts%20%26%20Examples%20ScreenOS%20Reference%20Guide%20-%20All%20volumes%20combined_ce_all.pdf) is available through this archived mirror. Volume 2, printed pages 11–12, 31 and 161–164 establish MIP/VIP route resolution, intrazone bypass without blocking, and the Untrust default exception. Volume 8, pages 2–3 and 63–64 establish PAT's reserved low ports, MIP/VIP priority over policy DNAT and bidirectional MIP mappings. Tests cover explicit intrazone block/unblock, original ports, PAT versus `fix-port`, and snapshot identity. Overlapping interface mappings and mixed interface/policy rewrites in opposite directions remain unknown; no live ScreenOS interoperability is claimed.
+
 ## Configuration persistence and capture
 
 The StoneOS 5.5R5 CLI guide, printed page 372, distinguishes the saved startup configuration (`show configuration startup`) from the configuration in use (`show configuration running`). The adapter reads these separately. Save completion uses the connector profile's affirmative Hillstone response validation; a returned prompt alone is insufficient.

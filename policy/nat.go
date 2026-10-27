@@ -53,6 +53,8 @@ func (e Engine) QueryNAT(ctx context.Context, fw *fm.Firewall, q Request) (NATRe
 		return e.asaNAT(ctx, fw, q, &budget)
 	case "srx":
 		return e.srxNAT(ctx, fw, q, &budget)
+	case "netscreen":
+		return e.netscreenNAT(ctx, fw, q, &budget)
 	case "paloalto":
 		entries := fw.NATSequence()
 		if len(entries) > e.Limits.defaults().Rules {
@@ -118,7 +120,7 @@ func transform(fw *fm.Firewall, step NATStep) (natTransform, error) {
 			n.egress = r.Interface
 		}
 		if step.Reverse {
-			if fw.Metadata().Vendor == "asa" || fw.Metadata().Vendor == "srx" {
+			if fw.Metadata().Vendor == "asa" || fw.Metadata().Vendor == "srx" || fw.Metadata().Vendor == "netscreen" {
 				return reverseStatic(n, r), nil
 			}
 			// StoneOS BNAT is unconditional one-to-one source mapping, with an implicit
@@ -150,6 +152,11 @@ func transform(fw *fm.Firewall, step NATStep) (natTransform, error) {
 		// target and is intentionally not treated as a match predicate here.
 		if fw.Metadata().Vendor == "hillstone" {
 			n.egress = r.Interface
+		}
+		if fw.Metadata().Vendor == "netscreen" && r.SourceMode == fm.InterfaceIP && len(n.sourcePorts) == 0 {
+			// ScreenOS reserves the well-known ports for both DIP and interface PAT.
+			// Allocation remains possible, not an exact observed session binding.
+			n.sourcePorts = []fm.PortMapping{{Original: flow.Interval{High: 65535}, Translated: flow.Interval{Low: 1024, High: 65535}, Mode: fm.Constant}}
 		}
 	default:
 		return n, ErrNAT

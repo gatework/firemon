@@ -1,0 +1,29 @@
+# Synthetic ScreenOS capture. Routes precede interface declarations deliberately.
+set vrouter "blue-vr"
+set route 203.0.113.0/24 gateway 192.0.2.254 metric 7
+exit
+set zone "Trust" vrouter "blue-vr"
+set zone "Untrust" vrouter "trust-vr"
+set interface "ethernet0/1" zone "Trust"
+set interface "ethernet0/1" ip 192.0.2.1/24
+set interface "ethernet0/2" zone "Untrust"
+set interface "ethernet0/2" ip 192.0.2.2/24
+set interface "ethernet0/2" ip 198.51.100.1/24 secondary
+set address "Trust" "host" 192.0.2.10 255.255.255.255
+set address "Untrust" "host" 198.51.100.20/32
+set address "Untrust" "other" 198.51.100.21 255.255.255.255
+set address "Global" "fallback" 203.0.113.5/32
+set group address "Untrust" "targets" add "host"
+set group address "Untrust" "targets" add "nested"
+set group address "Untrust" "nested" add "other"
+set service "pair" protocol tcp src-port 1000-1001 dst-port 443-443
+set service "pair" + udp src-port 2000-2000 dst-port 53-53
+set service "zero" protocol 0 src-port 0-65535 dst-port 0-65535
+set group service "apps" add "pair"
+set policy id 10 name "paired traffic" from "Trust" to "Untrust" "host" "targets" "apps" permit log
+set policy id 10
+set dst-address "fallback"
+set log session-init
+exit
+set policy id 20 from "Untrust" to "Trust" "Any" "host" "ANY" reject
+exit

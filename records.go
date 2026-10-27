@@ -246,6 +246,9 @@ type NATPoolRecord struct {
 }
 type DynamicNATRecord struct {
 	Object
+	// Rule is the owning security policy for native policy-based translation.
+	// Empty identifies an independent NAT declaration.
+	Rule                                   ID
 	Match                                  Match
 	Order                                  NATOrder
 	SourceMode, DestinationMode            TranslationMode

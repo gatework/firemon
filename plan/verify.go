@@ -191,14 +191,14 @@ func normalized(d fm.Data) (*fm.Firewall, error) {
 	for i := range d.Rules {
 		r := &d.Rules[i]
 		key := [4]string{r.Scope, r.RuleSet}
-		// Junos orders security policies within each zone pair. Reordering
-		// independent pair blocks in display-set does not reorder either chain.
-		if d.Metadata.Vendor == "srx" && !r.Builtin && len(r.Match.FromZones) == 1 && len(r.Match.ToZones) == 1 && !r.Match.AnyFromZone && !r.Match.AnyToZone {
+		// Junos and ScreenOS order ordinary policies within each zone pair.
+		// Reordering independent pair blocks does not reorder either chain.
+		if (d.Metadata.Vendor == "srx" && !r.Builtin || d.Metadata.Vendor == "netscreen") && len(r.Match.FromZones) == 1 && len(r.Match.ToZones) == 1 && !r.Match.AnyFromZone && !r.Match.AnyToZone {
 			key[2], key[3] = string(r.Match.FromZones[0]), string(r.Match.ToZones[0])
 		}
 		r.Position = positions[key]
 		positions[key]++
-		if d.Metadata.Vendor == "srx" && r.Builtin {
+		if (d.Metadata.Vendor == "srx" || d.Metadata.Vendor == "netscreen") && r.Builtin && r.Match.AnyFromZone && r.Match.AnyToZone {
 			r.Position = len(d.Rules) // The global implicit default remains terminal.
 		}
 		r.Name = "" // Rule ID carries native identity; Name is its display label.

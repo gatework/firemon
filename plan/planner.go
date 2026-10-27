@@ -244,6 +244,9 @@ func equal(a, b flow.Traffic) (bool, error) {
 	return err == nil && x.Empty(), err
 }
 func (p Planner) prove(ctx context.Context, before, after *fm.Firewall, q policy.Request) (Proof, error) {
+	if before == nil || after == nil || !before.Complete() || !after.Complete() {
+		return Proof{}, ErrUnsafe
+	}
 	target, err := p.Engine.Query(ctx, after, q)
 	if err != nil {
 		return Proof{}, err

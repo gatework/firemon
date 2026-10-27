@@ -1,0 +1,29 @@
+# Synthetic ScreenOS NAT capture; all addresses are documentation ranges.
+set interface ethernet0/1 zone Trust
+set interface ethernet0/1 ip 192.0.2.1/24
+set interface ethernet0/2 zone Untrust
+set interface ethernet0/2 ip 198.51.100.1/24
+set route 0.0.0.0/0 gateway 198.51.100.254
+set route 203.0.113.100/32 interface ethernet0/1
+set service inside-https protocol tcp src-port 0-65535 dst-port 443-443
+set service outside-https protocol tcp src-port 0-65535 dst-port 8443-8443
+set service web protocol tcp src-port 0-65535 dst-port 80-80
+set interface ethernet0/2 mip 198.51.100.60 host 192.0.2.60 netmask 255.255.255.255 vrouter trust-vr
+set interface ethernet0/2 vip 198.51.100.70 8443 inside-https 192.0.2.70
+set interface ethernet0/2 dip 4 198.51.100.100 198.51.100.103 fix-port
+set interface ethernet0/2 dip 5 198.51.100.110 198.51.100.113
+set address Trust public-web 203.0.113.100/32
+set address Trust blocked 192.0.2.10/32
+set address Trust plain 192.0.2.11/32
+set policy id 1 from Untrust to Trust Any MIP(198.51.100.60) inside-https permit
+exit
+set policy id 2 from Untrust to Trust Any VIP(198.51.100.70) outside-https permit
+exit
+set policy id 3 from Untrust to Trust Any public-web web nat dst ip 192.0.2.80 port 8080 permit
+exit
+set policy id 10 from Trust to Untrust blocked Any ANY deny
+exit
+set policy id 11 from Trust to Untrust plain Any ANY permit
+exit
+set policy id 12 from Trust to Untrust Any Any ANY nat src dip-id 4 permit
+exit

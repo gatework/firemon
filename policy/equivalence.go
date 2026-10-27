@@ -197,13 +197,23 @@ type effect struct {
 	action          fm.Action
 	log, start, end fm.Status
 	uncertain       fm.ID
+	natOwner        fm.ID
 }
 
 func effects(fw *fm.Firewall, r Result, limit int) (map[effect]flow.Traffic, error) {
 	out := make(map[effect]flow.Traffic)
+	owners := make(map[fm.ID]bool)
+	for _, n := range fw.DynamicNATs() {
+		if r := n.Record(); r.Rule != "" && !r.Disabled {
+			owners[r.Rule] = true
+		}
+	}
 	for _, t := range r.Trace {
 		rule := fw.Rule(t.Rule).Record()
 		key := effect{action: rule.Action, log: rule.Log, start: rule.LogStart, end: rule.LogEnd}
+		if owners[rule.ID] {
+			key.natOwner = rule.ID
+		}
 		if rule.Log == fm.Unknown || rule.LogStart == fm.Unknown || rule.LogEnd == fm.Unknown {
 			key.uncertain = rule.ID
 		}
