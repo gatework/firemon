@@ -1,6 +1,6 @@
 # Implementation status
 
-This worktree is an implementation in progress, **not the completion of the approved plan or a release**. No real device, SQL database, remote CI or release validation has been performed.
+This worktree is an implementation in progress, **not the completion of the approved plan or a release**. No real device, SQL database or release validation has been performed.
 
 | Area | Current evidence | Remaining work |
 | --- | --- | --- |
@@ -21,6 +21,8 @@ Unrecognized source and unsupported semantics remain incomplete; do not describe
 ## Commit checkpoint
 
 The root module passed `GOWORK=off GOPROXY=off go test -count=1 -race ./...` across 14 packages, `GOWORK=off GOPROXY=off go vet ./...`, CLI build and formatting checks locally on macOS. It has no external module dependency. These checks do not establish remote CI or real-device behavior.
+
+The source checkpoint `d15b6bb13b702568c64a7b107f8097fdf07fb40a` was pushed to the public [gatework/firemon](https://github.com/gatework/firemon) repository on `main`. Its [Go workflow](https://github.com/gatework/firemon/actions/runs/40423712908) passed `go vet ./...` and `go test -race ./...` on Ubuntu. This evidence applies to that commit; later changes require their own CI results.
 
 The optional connector adapter is still a local draft and is excluded from this checkpoint. Its placeholder dependencies do not resolve as published versions; the root module and its CI do not depend on that adapter. The remaining vendor, lifecycle and verification work above remains open.
 
