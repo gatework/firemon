@@ -51,6 +51,8 @@ func (e Engine) QueryNAT(ctx context.Context, fw *fm.Firewall, q Request) (NATRe
 		return e.hillstoneNAT(ctx, fw, q, &budget)
 	case "asa":
 		return e.asaNAT(ctx, fw, q, &budget)
+	case "srx":
+		return e.srxNAT(ctx, fw, q, &budget)
 	case "paloalto":
 		entries := fw.NATSequence()
 		if len(entries) > e.Limits.defaults().Rules {
@@ -116,7 +118,7 @@ func transform(fw *fm.Firewall, step NATStep) (natTransform, error) {
 			n.egress = r.Interface
 		}
 		if step.Reverse {
-			if fw.Metadata().Vendor == "asa" {
+			if fw.Metadata().Vendor == "asa" || fw.Metadata().Vendor == "srx" {
 				return reverseStatic(n, r), nil
 			}
 			// StoneOS BNAT is unconditional one-to-one source mapping, with an implicit
@@ -391,6 +393,9 @@ func allocate(input flow.Traffic, n *fm.DynamicNAT, limit int) (flow.Traffic, bo
 			piece.Source = target
 			if r.SourceMode == fm.DynamicIPPort || r.SourceMode == fm.InterfaceIP {
 				piece.SourcePort = flow.Interval{Low: 0, High: 65535}
+				if pool := n.SourcePool(); pool != nil && pool.Record().Ports != (flow.Interval{}) {
+					piece.SourcePort = pool.Record().Ports
+				}
 			}
 			t, err := flow.NewTraffic(limit, piece)
 			if err != nil {

@@ -40,3 +40,33 @@ func TestPreservationPlanVerifiesWholeGraphAndRejectsIncompleteRemoval(t *testin
 		t.Fatal(p.Commands())
 	}
 }
+
+type retainedCommands []string
+
+func (r retainedCommands) Render(context.Context, *fm.Firewall, *fm.Firewall, []plan.Change) ([]string, error) {
+	return r, nil
+}
+
+func TestPreservationPlanOwnsCommandsBeforeSealingApprovalDigest(t *testing.T) {
+	d := baseline(t).Export()
+	d.Rules[0].Disabled = true
+	before, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Rules = nil
+	after, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := retainedCommands{"configure", "remove rule 10", "exit"}
+	p, err := (plan.Planner{Renderer: commands}).Preserve(context.Background(), before, after, []plan.Change{{Kind: plan.RemoveRule, Rule: "10"}}, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := p.Digest()
+	commands[1] = "remove all rules"
+	if p.Commands()[1] != "remove rule 10" || p.Digest() != digest {
+		t.Fatal("approved command sequence retained renderer-owned memory")
+	}
+}

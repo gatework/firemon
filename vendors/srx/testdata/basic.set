@@ -1,0 +1,33 @@
+set system host-name synthetic-srx
+set routing-instances customer routing-options static route 203.0.113.0/24 next-hop 192.0.2.254
+set routing-instances customer instance-type virtual-router
+set routing-instances customer interface ge-0/0/0.0
+set interfaces ge-0/0/0 unit 0 family inet address 192.0.2.1/24
+set interfaces ge-0/0/1 unit 0 family inet address 198.51.100.1/24
+set interfaces ge-0/0/2 unit 0 family inet6 address 2001:db8:1::1/64
+set security zones security-zone inside interfaces ge-0/0/0.0
+set security zones security-zone outside interfaces ge-0/0/1.0
+set security zones security-zone v6 interfaces ge-0/0/2.0
+set security address-book internal attach zone inside
+set security address-book external attach zone outside
+set security address-book internal address host 192.0.2.10/32
+set security address-book external address host 198.51.100.20/32
+set security address-book global address fallback 198.51.100.30/32
+set security address-book internal address-set nested address-set clients
+set security address-book internal address-set clients address host
+set applications application pair term tcp protocol tcp
+set applications application pair term tcp source-port 1000-1001
+set applications application pair term tcp destination-port 443
+set applications application pair term udp protocol udp
+set applications application pair term udp source-port 2000
+set applications application pair term udp destination-port 53
+set applications application-set web application pair
+set security policies from-zone inside to-zone outside policy permit-web match source-address nested
+set security policies from-zone inside to-zone outside policy permit-web match destination-address host
+set security policies from-zone inside to-zone outside policy permit-web match application web
+set security policies from-zone inside to-zone outside policy permit-web then permit
+set security policies from-zone inside to-zone outside policy permit-web then log session-close
+set security policies from-zone outside to-zone inside policy permit-web match source-address any-ipv4
+set security policies from-zone outside to-zone inside policy permit-web match destination-address any-ipv4
+set security policies from-zone outside to-zone inside policy permit-web match application any
+set security policies from-zone outside to-zone inside policy permit-web then reject

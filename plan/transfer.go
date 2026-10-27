@@ -58,7 +58,14 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 			for before.Rule(id) != nil || slices.ContainsFunc(rules, func(r fm.RuleRecord) bool { return r.ID == id }) {
 				id += "-new"
 			}
-			m := fm.Match{Sources: []fm.AddressRef{ensureAddress(&d, box.Source)}, Destinations: []fm.AddressRef{ensureAddress(&d, box.Destination)}, Services: []fm.ServiceRef{ensureService(&d, serviceOf(box))}}
+			var from, to []fm.ID
+			if q.FromZone != "" {
+				from = []fm.ID{q.FromZone}
+			}
+			if q.ToZone != "" {
+				to = []fm.ID{q.ToZone}
+			}
+			m := fm.Match{Sources: []fm.AddressRef{ensureAddress(&d, box.Source, from)}, Destinations: []fm.AddressRef{ensureAddress(&d, box.Destination, to)}, Services: []fm.ServiceRef{ensureService(&d, serviceOf(box))}}
 			if q.FromZone == "" {
 				m.AnyFromZone = true
 			} else {

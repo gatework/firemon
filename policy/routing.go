@@ -135,6 +135,9 @@ func (e Engine) QueryPacket(ctx context.Context, fw *fm.Firewall, q PacketReques
 	if fw != nil && fw.Metadata().Vendor == "asa" {
 		return e.asaPacket(ctx, fw, q)
 	}
+	if fw != nil && fw.Metadata().Vendor == "srx" {
+		return e.srxPacket(ctx, fw, q)
+	}
 	if fw == nil || fw.Metadata().Vendor != "paloalto" {
 		return PacketResult{}, ErrNAT
 	}

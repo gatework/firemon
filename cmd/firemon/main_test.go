@@ -57,3 +57,36 @@ func TestOfflinePANPlanUsesNativeRenderer(t *testing.T) {
 		t.Fatal(out.String())
 	}
 }
+
+func TestOfflineSRXImportNATAndPlanningUsePersistedGraph(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "srx.set")
+	raw, err := os.ReadFile("../../vendors/srx/testdata/nat.set")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(input, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"import", "--store", dir, "--device", "srx", "--vendor", "srx", "--file", input, "--complete", "--publication", "one"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(input); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := run([]string{"nat", "--store", dir, "--device", "srx", "--source", "192.0.2.130/32", "--destination", "198.51.100.50/32", "--service", "tcp/443", "--from-zone", "inside", "--to-zone", "outside"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"Reverse": true`) || !strings.Contains(out.String(), `"198.51.100.130"`) {
+		t.Fatal(out.String())
+	}
+	out.Reset()
+	if err := run([]string{"plan", "--store", dir, "--device", "srx", "--source", "192.0.2.10/32", "--destination", "198.51.100.10/32", "--service", "tcp/443", "--from-zone", "inside", "--to-zone", "outside"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "set security policies") || !strings.Contains(out.String(), `"TargetAllowed": true`) {
+		t.Fatal(out.String())
+	}
+}

@@ -60,7 +60,7 @@ func TestUnrenderableCandidateFallsBackToProvenNewRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Changes()) != 1 || result.Changes()[0].Kind != plan.CreateRule || !result.Proof().TargetAllowed {
+	if len(result.Changes()) != 1 || result.Changes()[0].Kind != plan.CreateRule || !result.Proof().TargetAllowed || !result.Proof().TargetSatisfied {
 		t.Fatal(result.Changes())
 	}
 }

@@ -118,6 +118,9 @@ type ServiceRef struct {
 type ZoneRecord struct {
 	Object
 	Networks []flow.Range
+	// AddressScope is the native address-book namespace attached to this zone.
+	// Empty means the global namespace; it is independent of a routing context.
+	AddressScope string
 }
 type InterfaceRecord struct {
 	Object

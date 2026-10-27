@@ -15,6 +15,7 @@ import (
 	"github.com/gatework/firemon/vendors/asa"
 	"github.com/gatework/firemon/vendors/hillstone"
 	"github.com/gatework/firemon/vendors/paloalto"
+	"github.com/gatework/firemon/vendors/srx"
 	"io"
 	"net/netip"
 	"os"
@@ -90,6 +91,8 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 		fw, err = paloalto.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
 	case "asa":
 		fw, err = asa.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
+	case "srx":
+		fw, err = srx.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
 	default:
 		return fmt.Errorf("vendor %q has no enabled parser", *vendor)
 	}
@@ -212,6 +215,8 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			renderer = paloalto.Renderer{}
 		case "asa":
 			renderer = asa.Renderer{}
+		case "srx":
+			renderer = srx.Renderer{}
 		default:
 			return plan.ErrUnsafe
 		}

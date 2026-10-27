@@ -1,0 +1,38 @@
+set interfaces ge-0/0/0 unit 0 family inet address 192.0.2.1/24
+set interfaces ge-0/0/1 unit 0 family inet address 198.51.100.1/24
+set security zones security-zone inside interfaces ge-0/0/0.0
+set security zones security-zone outside interfaces ge-0/0/1.0
+set security nat source pool shared address 198.51.100.200/32
+set security nat source pool shared port range 40000 to 40010
+set security nat destination pool shared address 192.0.2.80/32
+set security nat destination pool shared address port 80
+set security nat static rule-set fixed from zone outside
+set security nat static rule-set fixed rule subnet match destination-address 198.51.100.128/25
+set security nat static rule-set fixed rule subnet then static-nat prefix 192.0.2.128/25
+set security nat static rule-set fixed rule ports match destination-address 198.51.100.90
+set security nat static rule-set fixed rule ports match destination-port 1000 to 1003
+set security nat static rule-set fixed rule ports then static-nat prefix 192.0.2.90
+set security nat static rule-set fixed rule ports then static-nat prefix mapped-port 2000 to 2003
+set security nat destination rule-set incoming from zone outside
+set security nat destination rule-set incoming rule web match destination-address 198.51.100.80/32
+set security nat destination rule-set incoming rule web match protocol tcp
+set security nat destination rule-set incoming rule web match destination-port 8080
+set security nat destination rule-set incoming rule web then destination-nat pool shared
+set security nat source rule-set inbound from zone outside
+set security nat source rule-set inbound to zone inside
+set security nat source rule-set inbound rule hide match source-address 198.51.100.0/24
+set security nat source rule-set inbound rule hide match destination-address 192.0.2.0/24
+set security nat source rule-set inbound rule hide then source-nat pool shared
+set security nat source rule-set outbound from zone inside
+set security nat source rule-set outbound to zone outside
+set security nat source rule-set outbound rule exempt match source-address 192.0.2.10/32
+set security nat source rule-set outbound rule exempt then source-nat off
+set security nat source rule-set outbound rule hide match source-address 192.0.2.0/24
+set security nat source rule-set outbound rule hide then source-nat pool shared
+set security address-book global address server 192.0.2.80/32
+set applications application http protocol tcp
+set applications application http destination-port 80
+set security policies from-zone outside to-zone inside policy web match source-address any
+set security policies from-zone outside to-zone inside policy web match destination-address server
+set security policies from-zone outside to-zone inside policy web match application http
+set security policies from-zone outside to-zone inside policy web then permit

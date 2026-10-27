@@ -131,7 +131,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		return nil, err
 	}
 	if gap.Empty() {
-		result := &Plan{before: fw, after: fw, proof: Proof{BaseDigest: fw.SemanticDigest(), ResultDigest: fw.SemanticDigest(), TargetAllowed: true, OutsidePreserved: true, NATUnchanged: true}}
+		result := &Plan{before: fw, after: fw, proof: Proof{BaseDigest: fw.SemanticDigest(), ResultDigest: fw.SemanticDigest(), TargetAllowed: true, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}}
 		result.target, result.engine = q, p.Engine
 		if err := result.seal(); err != nil {
 			return nil, err
@@ -315,7 +315,7 @@ func (p Planner) prove(ctx context.Context, before, after *fm.Firewall, q policy
 	if !same {
 		return Proof{}, ErrUnsafe
 	}
-	return Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), TargetAllowed: true, OutsidePreserved: true, NATUnchanged: true}, nil
+	return Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), TargetAllowed: true, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}, nil
 }
 func (p *Plan) seal() error {
 	type transfer struct {
@@ -348,17 +348,62 @@ func generatedID(prefix string, value any) fm.ID {
 	sum := sha256.Sum256(b)
 	return fm.ID(prefix + hex.EncodeToString(sum[:8]))
 }
-func ensureAddress(d *fm.Data, r flow.Range) fm.AddressRef {
+func addressVisible(d *fm.Data, a fm.AddressRecord, zones []fm.ID) bool {
+	name := a.Name
+	if name == "" {
+		name = string(a.ID)
+	}
+	contexts := zones
+	if len(contexts) == 0 {
+		for _, z := range d.Zones {
+			contexts = append(contexts, z.ID)
+		}
+	}
+	if len(contexts) == 0 {
+		return a.Scope == ""
+	}
+	for _, id := range contexts {
+		scope, found := "", false
+		for _, z := range d.Zones {
+			if z.ID == id {
+				scope, found = z.AddressScope, true
+				break
+			}
+		}
+		if !found || a.Scope != "" && a.Scope != scope {
+			return false
+		}
+		if a.Scope != "" || scope == "" {
+			continue
+		}
+		// A local object or group can shadow a globally available address name.
+		for _, other := range d.Addresses {
+			if other.Scope == scope && (other.Name == name || other.Name == "" && string(other.ID) == name) {
+				return false
+			}
+		}
+		for _, other := range d.AddressGroups {
+			if other.Scope == scope && (other.Name == name || other.Name == "" && string(other.ID) == name) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func ensureAddress(d *fm.Data, r flow.Range, zones []fm.ID) fm.AddressRef {
 	for _, a := range d.Addresses {
-		if len(a.Ranges) == 1 && a.Ranges[0] == r && a.FQDN == "" && len(a.Unsupported) == 0 {
+		if len(a.Ranges) == 1 && a.Ranges[0] == r && a.FQDN == "" && len(a.Unsupported) == 0 && addressVisible(d, a, zones) {
 			return fm.AddressRef{Kind: fm.AddressObject, ID: a.ID}
 		}
 	}
 	id := generatedID("fm-a-", r)
-	for _, a := range d.Addresses {
-		if a.ID == id {
-			id += "-new"
+	for {
+		collision := slices.ContainsFunc(d.Addresses, func(a fm.AddressRecord) bool { return a.ID == id || a.Name == string(id) }) || slices.ContainsFunc(d.AddressGroups, func(g fm.AddressGroupRecord) bool { return g.ID == id || g.Name == string(id) })
+		if !collision {
+			break
 		}
+		id += "-new"
 	}
 	d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: string(id)}, Ranges: []flow.Range{r}})
 	return fm.AddressRef{Kind: fm.AddressObject, ID: id}
@@ -368,7 +413,7 @@ func serviceOf(b flow.Box) fm.ServiceTerm {
 }
 func ensureService(d *fm.Data, term fm.ServiceTerm) fm.ServiceRef {
 	for _, s := range d.Services {
-		if len(s.Terms) == 1 && s.Terms[0] == term && len(s.Unsupported) == 0 {
+		if s.Scope == "" && len(s.Terms) == 1 && s.Terms[0] == term && len(s.Unsupported) == 0 {
 			return fm.ServiceRef{Kind: fm.ServiceObject, ID: s.ID}
 		}
 	}
@@ -400,7 +445,7 @@ func appendCandidate(fw *fm.Firewall, rule fm.RuleRecord, gap flow.Traffic) (*fm
 	for _, box := range gap.Boxes() {
 		addresses, _ := flow.NewSet(box.Source)
 		if !src.Contains(addresses) {
-			ref := ensureAddress(&d, box.Source)
+			ref := ensureAddress(&d, box.Source, rule.Match.FromZones)
 			if !slices.Contains(change.Sources, ref) {
 				change.Sources = append(change.Sources, ref)
 				rule.Match.Sources = append(rule.Match.Sources, ref)
@@ -409,7 +454,7 @@ func appendCandidate(fw *fm.Firewall, rule fm.RuleRecord, gap flow.Traffic) (*fm
 		}
 		addresses, _ = flow.NewSet(box.Destination)
 		if !dst.Contains(addresses) {
-			ref := ensureAddress(&d, box.Destination)
+			ref := ensureAddress(&d, box.Destination, rule.Match.ToZones)
 			if !slices.Contains(change.Destinations, ref) {
 				change.Destinations = append(change.Destinations, ref)
 				rule.Match.Destinations = append(rule.Match.Destinations, ref)
@@ -452,7 +497,14 @@ func createCandidate(fw *fm.Firewall, q policy.Request, gap flow.Traffic) (*fm.F
 				id += "-new"
 			}
 		}
-		m := fm.Match{Sources: []fm.AddressRef{ensureAddress(&d, box.Source)}, Destinations: []fm.AddressRef{ensureAddress(&d, box.Destination)}, Services: []fm.ServiceRef{ensureService(&d, serviceOf(box))}}
+		var from, to []fm.ID
+		if q.FromZone != "" {
+			from = []fm.ID{q.FromZone}
+		}
+		if q.ToZone != "" {
+			to = []fm.ID{q.ToZone}
+		}
+		m := fm.Match{Sources: []fm.AddressRef{ensureAddress(&d, box.Source, from)}, Destinations: []fm.AddressRef{ensureAddress(&d, box.Destination, to)}, Services: []fm.ServiceRef{ensureService(&d, serviceOf(box))}}
 		if q.FromZone == "" {
 			m.AnyFromZone = true
 		} else {
