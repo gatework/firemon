@@ -8,6 +8,8 @@ A firewall owns a concrete immutable graph: Interface, Route, Zone, Address, Add
 
 StaticNAT retains explicit fixed mappings, original match context, direction, zones/interfaces/VRF, ports, stage/order and evidence. DynamicNAT retains original match conditions, pools/interface allocation, source/destination modes, exemption and native order. Do not infer mapping semantics from equal address counts or classify every policy-shaped NAT statement as a generic NATRule. Translation primitives may be shared internally without erasing these objects.
 
+Inline address/service values have no independent native declaration. Unreferenced inline values may remain in immutable drafts, but do not affect semantic comparison; explicit declarations and values referenced by groups or NAT still do. Unknown inline evidence is retained.
+
 ## Parsing
 
 Perl cursor behavior is deliberate: skip means pending for a later pass; rewind preserves committed state. Go parsing uses a native structural scanner followed by targeted scoped stages. Peek/NextPending/checkpoint/restore/rewind never authorize swallowing unrelated lines. Transactions commit drafts together with actual consumed spans; rollback restores both. Only known irrelevant syntax may be ignored with a reason. Unknown nested blocks and quoted text cannot create domain objects.

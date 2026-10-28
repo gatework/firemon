@@ -99,6 +99,9 @@ type Metadata struct {
 type Object struct {
 	ID          ID
 	Name, Scope string
+	// Inline identifies a value materialized from native inline syntax. It has
+	// no independent native declaration once its final reference is removed.
+	Inline      bool
 	Spans       []Span
 	Unsupported []string
 }
