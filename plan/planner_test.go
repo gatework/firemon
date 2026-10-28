@@ -11,11 +11,14 @@ import (
 	"testing"
 )
 
-type renderer struct{ rejectAppend bool }
+type renderer struct{ rejectAppend, rejectEarlierAppends bool }
 
 func (r renderer) Render(_ context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
 	if r.rejectAppend && changes[0].Kind == plan.AppendMembers {
 		return nil, errors.New("native append unsupported")
+	}
+	if r.rejectEarlierAppends && changes[0].Kind == plan.AppendMembers && changes[0].Rule != "10" {
+		return nil, errors.New("earlier rule cannot be edited")
 	}
 	return []string{"reviewable native commands"}, nil
 }
@@ -62,6 +65,55 @@ func TestUnrenderableCandidateFallsBackToProvenNewRule(t *testing.T) {
 	}
 	if len(result.Changes()) != 1 || result.Changes()[0].Kind != plan.CreateRule || !result.Proof().TargetAllowed || !result.Proof().TargetSatisfied {
 		t.Fatal(result.Changes())
+	}
+}
+
+func TestImpossibleAppendDoesNotExhaustPlanCombinationBudget(t *testing.T) {
+	// Extending both addresses would also permit the two unrequested cross
+	// pairs. There is only one viable combination: a new exact rule.
+	q := request(t, "192.0.2.2/32")
+	box := q.Traffic.Boxes()[0]
+	box.Destination = addressRange("198.51.100.2/32")
+	q.Traffic, _ = flow.NewTraffic(32, box)
+	p, err := (plan.Planner{Renderer: renderer{}, MaxCandidates: 1}).Plan(context.Background(), baseline(t), []policy.Request{q})
+	if err != nil {
+		t.Fatal("impossible append consumed the only plan combination", err)
+	}
+	if p.Cost().NewRules != 1 || !p.Proof().OutsidePreserved {
+		t.Fatal("exact new rule required", p.Cost(), p.Proof())
+	}
+}
+
+func TestAppendKeepsCrossPairsAlreadyShadowedByEarlierRules(t *testing.T) {
+	// The later rule may safely grow in both address dimensions: the earlier
+	// two rules already own both cross pairs. A declaration-only prefilter
+	// would wrongly discard this cheaper, behavior-preserving append.
+	d := baseline(t).Export()
+	d.Addresses = append(d.Addresses,
+		fm.AddressRecord{Object: fm.Object{ID: "src2"}, Ranges: []flow.Range{addressRange("192.0.2.2/32")}},
+		fm.AddressRecord{Object: fm.Object{ID: "dst2"}, Ranges: []flow.Range{addressRange("198.51.100.2/32")}})
+	original := d.Rules[0]
+	original.Position = 2
+	a, b := original, original
+	a.ID, a.Position = "first-cross", 0
+	b.ID, b.Position = "second-cross", 1
+	a.Match.Sources = []fm.AddressRef{{Kind: fm.AddressObject, ID: "src2"}}
+	b.Match.Destinations = []fm.AddressRef{{Kind: fm.AddressObject, ID: "dst2"}}
+	d.Rules = []fm.RuleRecord{a, b, original}
+	fw, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := request(t, "192.0.2.2/32")
+	box := q.Traffic.Boxes()[0]
+	box.Destination = addressRange("198.51.100.2/32")
+	q.Traffic, _ = flow.NewTraffic(32, box)
+	p, err := (plan.Planner{Renderer: renderer{rejectEarlierAppends: true}}).Plan(context.Background(), fw, []policy.Request{q})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Cost().NewRules != 0 || len(p.Changes()) != 1 || p.Changes()[0].Rule != "10" || !p.Proof().OutsidePreserved {
+		t.Fatal("safe shadowed append lost", p.Cost(), p.Changes())
 	}
 }
 func TestPlannerRejectsUnknownAndDoesNotMutateBaseline(t *testing.T) {

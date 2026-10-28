@@ -1,0 +1,21 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                      │ docs/benchmarks/2026-10-29-before.txt │ docs/benchmarks/2026-10-29-after.txt │
+                      │                sec/op                 │    sec/op      vs base               │
+Plan/create/rules=10                             19.709m ± 1%     2.708m ± 1%  -86.26% (p=0.002 n=6)
+Plan/create/rules=100                           15156.0m ± 4%     229.0m ± 1%  -98.49% (p=0.002 n=6)
+geomean                                           546.5m          24.90m       -95.44%
+
+                      │ docs/benchmarks/2026-10-29-before.txt │ docs/benchmarks/2026-10-29-after.txt │
+                      │                 B/op                  │     B/op       vs base               │
+Plan/create/rules=10                            56.969Mi ± 0%    7.768Mi ± 0%  -86.36% (p=0.002 n=6)
+Plan/create/rules=100                          43047.2Mi ± 0%    625.4Mi ± 0%  -98.55% (p=0.002 n=6)
+geomean                                          1.529Gi         69.70Mi       -95.55%
+
+                      │ docs/benchmarks/2026-10-29-before.txt │ docs/benchmarks/2026-10-29-after.txt │
+                      │               allocs/op               │   allocs/op    vs base               │
+Plan/create/rules=10                             319.18k ± 0%     38.71k ± 0%  -87.87% (p=0.002 n=6)
+Plan/create/rules=100                           261.582M ± 0%     3.259M ± 0%  -98.75% (p=0.002 n=6)
+geomean                                           9.137M          355.2k       -96.11%

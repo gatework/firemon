@@ -30,6 +30,8 @@ Native NAT semantics govern selection: original match first; explicit identity/c
 
 Reuse coverage, then append members, then create exact gaps. Perl candidate subset/equality conditions and append-member costs are retained, with deterministic lexicographic cost: new rules, appended members, new objects, modified rules, moves, position, ID. Every rendered candidate and batch merge needs exact-target and outside-preservation proof; try safe alternatives if rendering fails. Limits: 100 requests, 4096 combinations, 100000 candidate visits, 4096 regions, 128 plan combinations; charge before expansion.
 
+An append proven to change effective ownership outside the request is rejected before counting viable plan combinations. Earlier-rule shadowing must be retained: declaration cross-products alone cannot establish a behavior change. Baseline evaluation may be shared only within one immutable graph and request context; candidate and independent-readback proofs still run in full.
+
 ## Lifecycle and online
 
 Request optimization by exact fixed point; convergence with full-plan proof; translation by effective partitions and explicit zone mappings; declared/effective risk; separate redundant/disabled/expired/unused reclamation with revision-bound contiguous hit evidence.

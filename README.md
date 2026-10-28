@@ -8,6 +8,8 @@ This branch converts the original Ruby gem skeleton to Go while retaining Git hi
 
 Run `go test ./...` and `go vet ./...` from this directory. No database or device connection is required for offline tests.
 
+The [benchmark matrix](docs/benchmarks.md) includes reproducible synthetic workloads for all seven parsers and queries, plus NAT, packet routing, snapshots, planning and exact traffic algorithms.
+
 The approved vendor scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. The [status matrix](docs/status.md) distinguishes implemented slices from remaining work. Parsers are `hillstone`, `paloalto` (set/XML), `asa`, `srx` (Junos display-set), `netscreen` (ScreenOS) `fortinet` (FortiOS config/edit) and `huawei` (USG current-configuration); native syntax coverage is reported per fixture.
 
 Offline example (synthetic or sanitized configuration):

@@ -148,6 +148,15 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 			return nil, ErrUnsafe
 		}
 	}
+	all := q
+	all.Traffic = universe()
+	prior, err := p.Engine.Query(ctx, fw, all)
+	if err != nil {
+		return nil, err
+	}
+	if !prior.Complete {
+		return nil, ErrUnsafe
+	}
 	var candidates []*Plan
 	visits := 0
 	for _, rule := range fw.Rules() {
@@ -167,6 +176,13 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 			continue
 		}
 		if len(changes) == 0 {
+			continue
+		}
+		possible, err := p.appendCanPreserve(ctx, fw, next, r, q, prior)
+		if err != nil {
+			return nil, err
+		}
+		if !possible {
 			continue
 		}
 		if len(candidates) >= maxCandidates {
@@ -192,7 +208,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		return 0
 	})
 	for _, candidate := range candidates {
-		proof, err := p.prove(ctx, fw, candidate.after, q)
+		proof, err := p.proveWithPrior(ctx, fw, candidate.after, q, &prior)
 		if err != nil {
 			if errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget) || ctx.Err() != nil {
 				return nil, err
@@ -219,6 +235,45 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 	}
 	return nil, ErrUnsafe
 }
+
+// appendCanPreserve rejects a candidate only when its expanded match takes
+// traffic outside the request from a later rule or from unmatched traffic.
+// Earlier ownership can mask declaration cross-products, so subset tests on
+// individual dimensions alone are insufficient. This is a rejection filter;
+// every surviving candidate still needs the complete proof and native renderer.
+func (p Planner) appendCanPreserve(ctx context.Context, before, after *fm.Firewall, rule fm.RuleRecord, q policy.Request, prior policy.Result) (bool, error) {
+	// FortiOS policy lookup has VIP classes and a translated match view. Its
+	// ownership cannot be inferred from ordinary position ordering.
+	if before.Metadata().Vendor == "fortinet" {
+		return true, nil
+	}
+	expanded, known, err := p.Engine.Match(ctx, after, after.Rule(rule.ID).Record().Match, q, universe())
+	if err != nil || !known {
+		return true, err
+	}
+	outside, err := expanded.Difference(q.Traffic, 4096)
+	if err != nil {
+		return false, err
+	}
+	for _, trace := range prior.Trace {
+		if outside.Empty() {
+			return true, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		owner := before.Rule(trace.Rule).Record()
+		if owner.Position > rule.Position || owner.Position == rule.Position && owner.ID > rule.ID {
+			continue
+		}
+		outside, err = outside.Difference(trace.Traffic, 4096)
+		if err != nil {
+			return false, err
+		}
+	}
+	return outside.Empty(), nil
+}
+
 func sameZones(m fm.Match, q policy.Request) bool {
 	from := q.FromZone == "" && m.AnyFromZone || !m.AnyFromZone && len(m.FromZones) == 1 && m.FromZones[0] == q.FromZone
 	to := q.ToZone == "" && m.AnyToZone || !m.AnyToZone && len(m.ToZones) == 1 && m.ToZones[0] == q.ToZone
@@ -244,6 +299,10 @@ func equal(a, b flow.Traffic) (bool, error) {
 	return err == nil && x.Empty(), err
 }
 func (p Planner) prove(ctx context.Context, before, after *fm.Firewall, q policy.Request) (Proof, error) {
+	return p.proveWithPrior(ctx, before, after, q, nil)
+}
+
+func (p Planner) proveWithPrior(ctx context.Context, before, after *fm.Firewall, q policy.Request, prior *policy.Result) (Proof, error) {
 	if before == nil || after == nil || !before.Complete() || !after.Complete() {
 		return Proof{}, ErrUnsafe
 	}
@@ -260,9 +319,12 @@ func (p Planner) prove(ctx context.Context, before, after *fm.Firewall, q policy
 	}
 	all := q
 	all.Traffic = universe()
-	prior, err := p.Engine.Query(ctx, before, all)
-	if err != nil {
-		return Proof{}, err
+	if prior == nil {
+		result, err := p.Engine.Query(ctx, before, all)
+		if err != nil {
+			return Proof{}, err
+		}
+		prior = &result
 	}
 	next, err := p.Engine.Query(ctx, after, all)
 	if err != nil {
