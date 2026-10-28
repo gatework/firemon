@@ -141,6 +141,9 @@ func (e Engine) QueryPacket(ctx context.Context, fw *fm.Firewall, q PacketReques
 	if fw != nil && fw.Metadata().Vendor == "netscreen" {
 		return e.netscreenPacket(ctx, fw, q)
 	}
+	if fw != nil && fw.Metadata().Vendor == "fortinet" {
+		return e.fortinetPacket(ctx, fw, q)
+	}
 	if fw == nil || fw.Metadata().Vendor != "paloalto" {
 		return PacketResult{}, ErrNAT
 	}

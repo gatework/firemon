@@ -2,6 +2,8 @@
 
 Use golang-how-to for Go work, selecting relevant secondary skills.
 
+Vendor scope approved by the user: Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA only. H3C, Topsec, Neteye and other vendors are out of scope for now.
+
 - Concrete immutable firewall graph; separate StaticNAT and DynamicNAT domain objects.
 - Read docs/spec.md and docs/plans/go-firewall.md before architectural changes.
 - Preserve pending/unknown evidence. Never turn unsupported syntax into an unrestricted match.

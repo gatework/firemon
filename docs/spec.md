@@ -36,6 +36,6 @@ Capture baseline, reserve, authorize exact plan, persist receipts, save/commit c
 
 ## Vendor and delivery sequence
 
-Hillstone, Palo Alto, ASA first, then SRX, Netscreen, Fortinet, H3C, Huawei, Topsec, Neteye. Each capability is supported only when fixture and semantic evidence establish it. Never advertise a parser stub as vendor parity. No web app/account/approval platform.
+The user narrowed the vendor scope on 2026-10-28 to Hillstone, Palo Alto, ASA, SRX, Netscreen, Fortinet and Huawei. H3C, Topsec, Neteye and other vendors are out of scope for now. Continue the implementation sequence with Fortinet, then Huawei. Each capability is supported only when fixture and semantic evidence establish it. Never advertise a parser stub as vendor parity. No web app/account/approval platform.
 
 Validation includes independent small-domain algebra oracle, fuzz/race tests, native scoped fixtures, first-match/unknown behavior, NAT offsets/ports/stages, graph identity, cursor rollback, crash/CAS/projection ordering, offline CLI and conditional adapter checks. Benchmarks report measurements separately from real-device/CI evidence.

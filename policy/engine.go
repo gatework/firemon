@@ -63,6 +63,15 @@ func (e Engine) Query(ctx context.Context, fw *fm.Firewall, q Request) (Result, 
 			return Result{Unknown: q.Traffic}, nil
 		}
 	}
+	if fw.Metadata().Vendor == "fortinet" {
+		return e.fortinetQuery(ctx, fw, q)
+	}
+	return e.queryRules(ctx, fw, q, nil)
+}
+
+// queryRules evaluates one native policy view. selectRule only adapts a copied
+// declaration; it cannot alter the immutable graph or native order.
+func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, selectRule func(fm.RuleRecord) (fm.RuleRecord, bool)) (Result, error) {
 	limits := e.Limits.defaults()
 	remaining := q.Traffic
 	result := Result{Complete: true}
@@ -93,6 +102,13 @@ func (e Engine) Query(ctx context.Context, fw *fm.Firewall, q Request) (Result, 
 		r := rule.Record()
 		if r.Disabled || r.Scope != q.Scope || r.RuleSet != q.RuleSet {
 			continue
+		}
+		if selectRule != nil {
+			var include bool
+			r, include = selectRule(r)
+			if !include {
+				continue
+			}
 		}
 		hit, certain, err := e.Match(ctx, fw, r.Match, q, remaining)
 		if err != nil {

@@ -56,6 +56,11 @@ func resolveAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *r
 			if len(r.Unsupported) > 0 || r.FQDN != "" {
 				known = false
 			}
+			// A FortiOS VIP also selects ports, interfaces and a policy lookup
+			// class. Only the native evaluator may reduce it to address coverage.
+			if fw.Metadata().Vendor == "fortinet" && r.Scope == "vip" {
+				known = false
+			}
 			for _, interval := range a.Set().Ranges() {
 				if err := budget.charge(); err != nil {
 					return err

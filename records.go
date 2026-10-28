@@ -90,7 +90,9 @@ type Evidence struct {
 }
 type Metadata struct {
 	Device, Vendor, Software, ParserVersion, SourceDigest string
-	CapturedAt                                            time.Time
+	// Context identifies the selected native configuration domain, such as a VDOM.
+	Context    string
+	CapturedAt time.Time
 }
 
 // Object IDs are unique within their typed catalog. Scope retains the native VRF/vsys/context.
@@ -206,8 +208,11 @@ type RuleRecord struct {
 	Disabled         bool
 	Log              Status
 	LogStart, LogEnd Status
-	Builtin          bool
-	Description      string
+	// MatchVIP records native VIP matching for deny policies: Known enables it,
+	// Irrelevant disables it, Unknown means the captured default is not established.
+	MatchVIP    Status
+	Builtin     bool
+	Description string
 }
 type RuleBindingRecord struct {
 	Object

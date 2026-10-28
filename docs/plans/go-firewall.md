@@ -59,7 +59,7 @@ Verification: go test -race ./analysis/.... Expected: success.
 
 ### Task 9: Remaining vendors and delivery verification
 
-Add staged capability implementations for SRX/Netscreen/Fortinet/H3C/Huawei/Topsec/Neteye, fixture parity, benchmark matrix, documentation and fresh independent whole-branch review. Implement supported capabilities, explicitly retain unknown for unsupported syntax.
+Add staged capability implementations for SRX/Netscreen/Fortinet/Huawei, fixture parity, benchmark matrix, documentation and fresh independent whole-branch review. Together with Hillstone, Palo Alto and ASA, these are the seven vendors the user authorized on 2026-10-28. H3C, Topsec, Neteye and other vendors are out of scope for now. Implement supported capabilities, explicitly retain unknown for unsupported syntax.
 Verification: go test -race ./...; go vet ./...; selected fuzz/benchmark runs. Expected: success. Record local vs CI vs real-device evidence separately.
 
 ## Review Focus

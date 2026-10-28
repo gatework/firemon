@@ -13,6 +13,7 @@ import (
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors/asa"
+	"github.com/gatework/firemon/vendors/fortinet"
 	"github.com/gatework/firemon/vendors/hillstone"
 	"github.com/gatework/firemon/vendors/netscreen"
 	"github.com/gatework/firemon/vendors/paloalto"
@@ -53,6 +54,7 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 	root := fs.String("store", "", "snapshot directory")
 	device := fs.String("device", "", "device identifier")
 	vendor := fs.String("vendor", "", "native vendor")
+	vdom := fs.String("vdom", "", "Fortinet VDOM (default root)")
 	file := fs.String("file", "", "configuration path")
 	complete := fs.Bool("complete", false, "capture is known complete")
 	publication := fs.String("publication", "", "idempotency identifier")
@@ -64,6 +66,9 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 	}
 	if fs.NArg() != 0 || *root == "" || *device == "" || *file == "" || *publication == "" {
 		return errors.New("store, device, file and publication are required")
+	}
+	if *vdom != "" && *vendor != "fortinet" {
+		return errors.New("vdom applies only to Fortinet imports")
 	}
 	input, err := os.Open(*file)
 	if err != nil {
@@ -96,6 +101,11 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 		fw, err = srx.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
 	case "netscreen", "screenos":
 		fw, err = netscreen.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
+	case "fortinet":
+		if *vdom == "" {
+			*vdom = "root"
+		}
+		fw, err = fortinet.ParseVDOM(ctx, config.Source{Text: string(raw), Complete: *complete}, meta, *vdom)
 	default:
 		return fmt.Errorf("vendor %q has no enabled parser", *vendor)
 	}
@@ -157,6 +167,7 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 	if command == "inspect" {
 		return output(out, struct {
 			Device      string          `json:"device"`
+			Context     string          `json:"context,omitempty"`
 			Revision    string          `json:"revision"`
 			Complete    bool            `json:"complete"`
 			Interfaces  int             `json:"interfaces"`
@@ -165,13 +176,16 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			StaticNATs  int             `json:"static_nats"`
 			DynamicNATs int             `json:"dynamic_nats"`
 			Diagnostics []fm.Diagnostic `json:"diagnostics"`
-		}{fw.Metadata().Device, head.Revision, fw.Complete(), len(fw.Interfaces()), len(fw.Routes()), len(fw.Rules()), len(fw.StaticNATs()), len(fw.DynamicNATs()), fw.Diagnostics()})
+		}{fw.Metadata().Device, fw.Metadata().Context, head.Revision, fw.Complete(), len(fw.Interfaces()), len(fw.Routes()), len(fw.Rules()), len(fw.StaticNATs()), len(fw.DynamicNATs()), fw.Diagnostics()})
 	}
 	traffic, err := requestTraffic(*source, *destination, *service)
 	if err != nil {
 		return err
 	}
 	q := policy.Request{Traffic: traffic, Scope: *scope, RuleSet: *ruleset, FromZone: fm.ID(*from), ToZone: fm.ID(*to)}
+	if q.Scope == "" && fw.Metadata().Vendor == "fortinet" {
+		q.Scope = fw.Metadata().Context
+	}
 	if *at != "" {
 		q.At, err = time.Parse(time.RFC3339, *at)
 		if err != nil {
@@ -222,6 +236,8 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			renderer = srx.Renderer{}
 		case "netscreen":
 			renderer = netscreen.Renderer{}
+		case "fortinet":
+			renderer = fortinet.Renderer{}
 		default:
 			return plan.ErrUnsafe
 		}
@@ -230,12 +246,13 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			return err
 		}
 		return output(out, struct {
+			Context  string `json:"context,omitempty"`
 			Digest   string
 			Proof    plan.Proof
 			Cost     plan.Cost
 			Changes  []plan.Change
 			Commands []string
-		}{result.Digest(), result.Proof(), result.Cost(), result.Changes(), result.Commands()})
+		}{fw.Metadata().Context, result.Digest(), result.Proof(), result.Cost(), result.Changes(), result.Commands()})
 	}
 	return errors.New("unsupported command")
 }

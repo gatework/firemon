@@ -8,7 +8,7 @@ This branch converts the original Ruby gem skeleton to Go while retaining Git hi
 
 Run `go test ./...` and `go vet ./...` from this directory. No database or device connection is required for offline tests.
 
-The [status matrix](docs/status.md) distinguishes implemented slices from the remaining approved work. Parsers are `hillstone`, `paloalto` (set/XML), `asa`, `srx` (Junos display-set), and `netscreen` (ScreenOS); native syntax coverage is reported per fixture.
+The approved vendor scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. The [status matrix](docs/status.md) distinguishes implemented slices from remaining work. Parsers are `hillstone`, `paloalto` (set/XML), `asa`, `srx` (Junos display-set), `netscreen` (ScreenOS) and `fortinet` (FortiOS config/edit); native syntax coverage is reported per fixture. Huawei remains to be implemented.
 
 Offline example (synthetic or sanitized configuration):
 
@@ -23,7 +23,9 @@ go run ./cmd/firemon query --store ./snapshots --device lab \
 
 `--complete` asserts the capture was fully received; unsupported syntax can still make the parsed graph incomplete. Incomplete offline imports are archived without replacing current. Use `inspect --revision <revision>` to inspect an archived graph. Updates require `--expected <current-revision>` and a new publication ID. A known capture time can be supplied as `--captured-at <RFC3339>`.
 
-`query` evaluates the supplied policy address/zone context. `policy.Engine.QueryPacket` also models PAN original-address/post-DNAT-zone, ASA real-address ACL paths, SRX post-DNAT policy followed by permitted source translation, and ScreenOS original-address/service policy with MIP/VIP destination-zone resolution. `nat` preserves separate static/dynamic objects, native order and inverse/pipeline steps; uncertain versions or mapping semantics return explicit unknown/error. For SRX and ScreenOS, its `--to-zone` is the destination security zone after resolving interface DNAT. `plan` renders supported Hillstone, PAN, ASA, SRX and ScreenOS changes for review.
+`query` evaluates the supplied policy address/zone context. `policy.Engine.QueryPacket` also models PAN original-address/post-DNAT-zone, ASA real-address ACL paths, SRX post-DNAT policy followed by permitted source translation, ScreenOS original-address/service policy with MIP/VIP destination-zone resolution, and FortiOS VIP routing followed by policy-owned source translation. `nat` preserves separate static/dynamic objects, native order and inverse/pipeline steps; uncertain versions or mapping semantics return explicit unknown/error. For SRX, ScreenOS and FortiOS, its `--to-zone` is the destination security zone after resolving DNAT. `plan` renders supported changes for all six implemented vendors for review.
+
+Fortinet imports accept `--vdom <name>` (default `root`). One firewall graph represents that selected VDOM; `Metadata.Context` survives snapshot loading, and the CLI uses it as the default query scope. The Go API takes `Request.Scope` explicitly. Commands are relative to the reported VDOM; callers must establish that device context. The online connector adapter does not enable Fortinet deployment. VIP identity, `match-vip` policy selection, forward port mappings and policy NAT ownership are retained. Source allocation is possible session behavior, not an exact binding. Translated service checks without sufficient native evidence and local VIP/IP-pool packet destinations stay unknown. See [native semantics](docs/native-semantics.md) for evidence and limits.
 
 ScreenOS policy NAT has an explicit `DynamicNAT.Rule()` reference to its owning security policy. Query and lifecycle proofs retain first-match ownership, including earlier ordinary permits and denies. Modifying a policy that owns NAT requires joint translation proof; the current renderer rejects those edits. MIP is a bidirectional `StaticNAT`, while VIP and DIP allocation remain `DynamicNAT` behavior. Mixed interface/policy translations in opposite directions remain unknown.
 
@@ -33,4 +35,4 @@ The optional [connector adapter](adapter/netconnector/README.md) is a separate m
 
 Snapshot directories contain complete source configurations. Keep them local and trusted; gob is not an untrusted interchange format. Runtime files use private permissions. The optional database projection reads published snapshot files and requires a host-supplied idempotent transactional sink.
 
-Snapshot semantic format 5 preserves zone address-book attachments and policy-owned NAT references. Older semantic formats are rejected explicitly; import the original capture into a new store rather than treating old cached graphs as current evidence.
+Snapshot semantic format 6 preserves zone address-book attachments, policy-owned NAT references, the selected native context and VIP policy matching. Older semantic formats are rejected explicitly; import the original capture into a new store rather than treating old cached graphs as current evidence.

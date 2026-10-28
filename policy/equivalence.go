@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -115,6 +116,20 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 	}
 	if before == nil || after == nil || !before.Complete() || !after.Complete() {
 		return Equivalence{}, ErrNotEquivalent
+	}
+	if before.Metadata().Vendor == "fortinet" || after.Metadata().Vendor == "fortinet" {
+		budget := e.Limits.defaults().Rules
+		a, err := e.fortinetActiveVIPs(ctx, before, &budget)
+		if err != nil {
+			return Equivalence{}, err
+		}
+		b, err := e.fortinetActiveVIPs(ctx, after, &budget)
+		if err != nil {
+			return Equivalence{}, err
+		}
+		if !maps.Equal(a, b) {
+			return Equivalence{}, ErrNotEquivalent
+		}
 	}
 	a, b := before.Export(), after.Export()
 	a.Rules, b.Rules = nil, nil

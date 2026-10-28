@@ -55,6 +55,8 @@ func (e Engine) QueryNAT(ctx context.Context, fw *fm.Firewall, q Request) (NATRe
 		return e.srxNAT(ctx, fw, q, &budget)
 	case "netscreen":
 		return e.netscreenNAT(ctx, fw, q, &budget)
+	case "fortinet":
+		return e.fortinetNAT(ctx, fw, q, &budget)
 	case "paloalto":
 		entries := fw.NATSequence()
 		if len(entries) > e.Limits.defaults().Rules {
