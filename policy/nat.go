@@ -401,8 +401,12 @@ func allocate(input flow.Traffic, n *fm.DynamicNAT, limit int) (flow.Traffic, bo
 		if n.Interface() == nil {
 			return flow.Traffic{}, false, false, ErrNAT
 		}
-		for _, p := range n.Interface().Record().Addresses {
-			targets = append(targets, flow.Range{First: p.Addr(), Last: p.Addr()})
+		if r.InterfaceAddress.IsValid() {
+			targets = []flow.Range{{First: r.InterfaceAddress, Last: r.InterfaceAddress}}
+		} else {
+			for _, p := range n.Interface().Record().Addresses {
+				targets = append(targets, flow.Range{First: p.Addr(), Last: p.Addr()})
+			}
 		}
 	}
 	if len(targets) == 0 {

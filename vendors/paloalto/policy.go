@@ -6,6 +6,7 @@ import (
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
+	"net/netip"
 	"slices"
 	"strings"
 )
@@ -259,6 +260,7 @@ type natDraft struct {
 	sourceMode, destinationMode         fm.TranslationMode
 	sourceTarget, destinationTarget     []string
 	iface                               fm.ID
+	interfaceAddress                    string
 	destinationPort                     string
 	disabled, bidirectional             bool
 	originalSource, originalDestination []string
@@ -314,13 +316,13 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 					if rest[1] == "translated-address" && len(rest) > 2 {
 						r.sourceTarget = rest[2:]
 						ok = true
-					} else if len(rest) == 4 && rest[1] == "interface-address" {
+					} else if len(rest) == 4 && rest[0] == "dynamic-ip-and-port" && rest[1] == "interface-address" {
 						if rest[2] == "interface" {
 							r.iface = fm.ID(rest[3])
 							r.sourceMode = fm.InterfaceIP
 							ok = true
 						} else if rest[2] == "ip" {
-							r.sourceTarget = []string{rest[3]}
+							r.interfaceAddress = rest[3]
 							r.sourceMode = fm.InterfaceIP
 							ok = true
 						}
@@ -373,6 +375,29 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 			return result, true
 		}
 		var known bool
+		var selected netip.Addr
+		if r.sourceMode == fm.InterfaceIP {
+			if len(r.sourceTarget) > 0 {
+				r.object.Unsupported = append(r.object.Unsupported, "interface selection conflicts with translated-address pool")
+			}
+			if r.interfaceAddress != "" {
+				prefix, err := hostPrefix(r.interfaceAddress)
+				if err != nil {
+					if a := p.graph.Address(fm.ID(r.interfaceAddress)); a != nil && a.Record().FQDN == "" && len(a.Record().Unsupported) == 0 {
+						prefix = p.prefixes[a.Record().ID]
+					}
+				}
+				if prefix.IsValid() {
+					selected = prefix.Addr()
+				} else {
+					r.object.Unsupported = append(r.object.Unsupported, "unresolved interface host selection")
+				}
+			} else if iface := p.graph.Interface(r.iface); iface == nil || len(iface.Record().Addresses) != 1 {
+				r.object.Unsupported = append(r.object.Unsupported, "interface source address is not uniquely established")
+			}
+		} else if r.iface != "" || r.interfaceAddress != "" {
+			r.object.Unsupported = append(r.object.Unsupported, "conflicting interface translation mode")
+		}
 		srcTargets, known = collect(r.sourceTarget)
 		if !known {
 			r.object.Unsupported = append(r.object.Unsupported, "unresolved NAT source target")
@@ -424,7 +449,7 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 			}
 			d.StaticNATs = append(d.StaticNATs, fm.StaticNATRecord{Object: r.object, Match: r.match, Order: r.order, Source: sources, Destination: destinations, DestinationPorts: portMappings, Bidirectional: r.bidirectional, Disabled: r.disabled})
 		} else {
-			dynamic := fm.DynamicNATRecord{Object: r.object, Match: r.match, Order: r.order, SourceMode: r.sourceMode, DestinationMode: r.destinationMode, Interface: r.iface, Destination: destinations, DestinationPorts: portMappings, Disabled: r.disabled}
+			dynamic := fm.DynamicNATRecord{Object: r.object, Match: r.match, Order: r.order, SourceMode: r.sourceMode, DestinationMode: r.destinationMode, Interface: r.iface, InterfaceAddress: selected, Destination: destinations, DestinationPorts: portMappings, Disabled: r.disabled}
 			if len(srcTargets) > 0 {
 				poolID := fm.ID("$nat:" + name)
 				d.NATPools = append(d.NATPools, fm.NATPoolRecord{Object: fm.Object{ID: poolID}, Ranges: srcTargets})

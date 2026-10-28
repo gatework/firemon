@@ -261,9 +261,12 @@ type DynamicNATRecord struct {
 	Order                                  NATOrder
 	SourceMode, DestinationMode            TranslationMode
 	SourcePool, DestinationPool, Interface ID
-	Destination                            []Mapping
-	SourcePorts, DestinationPorts          []PortMapping
-	Disabled                               bool
+	// InterfaceAddress selects one configured host for InterfaceIP allocation.
+	// Its zero value leaves selection to the established native interface mode.
+	InterfaceAddress              netip.Addr
+	Destination                   []Mapping
+	SourcePorts, DestinationPorts []PortMapping
+	Disabled                      bool
 }
 
 // NATEntry is an execution reference to either typed catalog, not a substitute NAT domain object.

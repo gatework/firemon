@@ -426,6 +426,18 @@ func Seal(data Data) (*Firewall, error) {
 		if r.SourceMode == InterfaceIP && n.iface == nil {
 			f.issue(r.ID, "missing-allocation", "interface translation has no interface")
 		}
+		if r.InterfaceAddress.IsValid() {
+			known := r.SourceMode == InterfaceIP && r.SourcePool == "" && n.iface != nil && r.InterfaceAddress.Zone() == "" && !r.InterfaceAddress.IsUnspecified()
+			if known {
+				iface := n.iface.record
+				known = !iface.Disabled && len(iface.Unsupported) == 0 && slices.ContainsFunc(iface.Addresses, func(prefix netip.Prefix) bool {
+					return prefix.Addr() == r.InterfaceAddress
+				})
+			}
+			if !known {
+				f.issue(r.ID, "invalid-interface-selection", "selected NAT source must be one known host assigned to its allocation interface")
+			}
+		}
 		if r.DestinationMode != NoTranslation && r.DestinationMode != UnknownTranslation && n.destinationPool == nil && len(r.Destination) == 0 {
 			f.issue(r.ID, "missing-allocation", "destination translation has no target")
 		}

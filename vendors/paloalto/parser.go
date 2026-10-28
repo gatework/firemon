@@ -30,7 +30,7 @@ type parser struct {
 
 func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor = "paloalto"
-	metadata.ParserVersion = "paloalto-go-2"
+	metadata.ParserVersion = "paloalto-go-3"
 	var c *config.Cursor
 	var statements []config.Statement
 	var native *xmlInput
@@ -457,9 +457,11 @@ func (p *parser) network(_ context.Context, s *config.Session) error {
 			}
 			if len(w) >= 9 && slices.Equal(w[3:6], []string{"routing-table", "ip", "static-route"}) {
 				name := w[6]
-				r := routes[name]
+				key := fmt.Sprintf("static:%q:%q", vrf, name)
+				r := routes[key]
 				if r.ID == "" {
 					r.Object = object(name, row)
+					r.ID = fm.ID(key)
 					r.Scope = vrf
 				}
 				switch w[7] {
@@ -487,7 +489,7 @@ func (p *parser) network(_ context.Context, s *config.Session) error {
 				if !ok {
 					r.Unsupported = append(r.Unsupported, "unsupported route field")
 				}
-				routes[name] = r
+				routes[key] = r
 			}
 		}
 		if ok {

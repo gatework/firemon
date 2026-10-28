@@ -23,19 +23,19 @@ The report uses `golang.org/x/perf/cmd/benchstat` at `v0.0.0-20261009192801-be2c
 | Traffic algebra | Union/intersection/difference of 16 and 128 paired regions, IPv4 and IPv6 |
 | Request optimization | 10 and 100 requests; adjacent ranges coalesce, paired source/destination requests remain separate |
 
-Current medians for the 1000-rule native captures:
+Final medians for the 1000-rule native captures, measured again after the PAN interface-selection and route-identity corrections (snapshot semantic format 8):
 
 | Vendor | Parse | Parse allocation | Last-rule query |
 | --- | ---: | ---: | ---: |
-| ASA | 34.602 ms | 166.848 MiB/op | 1.073 ms |
-| Fortinet | 14.893 ms | 48.914 MiB/op | 1.691 ms |
-| Hillstone | 14.806 ms | 39.101 MiB/op | 1.403 ms |
-| Huawei | 13.192 ms | 40.913 MiB/op | 1.429 ms |
-| Netscreen | 14.338 ms | 29.301 MiB/op | 1.252 ms |
-| Palo Alto | 18.290 ms | 40.227 MiB/op | 1.329 ms |
-| SRX | 13.348 ms | 28.931 MiB/op | 1.384 ms |
+| ASA | 33.245 ms | 166.766 MiB/op | 1.071 ms |
+| Fortinet | 14.154 ms | 48.492 MiB/op | 1.674 ms |
+| Hillstone | 14.284 ms | 39.171 MiB/op | 1.378 ms |
+| Huawei | 12.753 ms | 41.405 MiB/op | 1.423 ms |
+| Netscreen | 13.695 ms | 28.755 MiB/op | 1.235 ms |
+| Palo Alto | 17.514 ms | 39.899 MiB/op | 1.319 ms |
+| SRX | 12.820 ms | 28.439 MiB/op | 1.376 ms |
 
-Allocation is cumulative heap allocation per operation, not peak memory. Captures have comparable object counts but different native grammar, byte sizes and default policy behavior; these numbers do not rank device products. The 1000-rule snapshot median is 2.423 ms to encode and 5.920 ms to decode, excluding disk durability work.
+Allocation is cumulative heap allocation per operation, not peak memory. Captures have comparable object counts but different native grammar, byte sizes and default policy behavior; these numbers do not rank device products. The 1000-rule snapshot median is 2.401 ms to encode and 5.900 ms to decode, excluding disk durability work. All 75 cases and 450 samples passed in this final run; its [raw results](benchmarks/2026-10-29-final.txt) are retained separately from the planner comparison below.
 
 ## Planning correction found by measurement
 
@@ -50,7 +50,7 @@ The planner now queries the immutable baseline once. For ordinary ordered chains
 
 Both time differences have `p=0.002`, `n=6`. The large remaining allocation for creation is visible; no 1000-rule creation, adversarial region explosion, peak-RSS or production SLA claim is made. Existing limits still bound candidate visits, plan combinations and traffic regions.
 
-The before runtime is commit `ccc3430`; benchmark sources are captured by `2a43b85` (the only subsequent fixture edit was a comment). The after runtime is that tree plus the planner correction accompanying this report. Raw [before](benchmarks/2026-10-29-before.txt), [after](benchmarks/2026-10-29-after.txt) and [benchstat comparison](benchmarks/2026-10-29-plan-comparison.txt) are retained. Reproduce the comparison with:
+The before runtime is commit `ccc3430`; benchmark sources are captured by `2a43b85` (the only subsequent fixture edit was a comment). The after runtime is `fdcec7b`, which adds the planner correction. Raw [before](benchmarks/2026-10-29-before.txt), [after](benchmarks/2026-10-29-after.txt) and [benchstat comparison](benchmarks/2026-10-29-plan-comparison.txt) are retained. The subsequent final run measured 2.658 ms / 7.769 MiB for 10-rule creation and 227.605 ms / 625.359 MiB for 100-rule creation; it is not substituted into the earlier statistical comparison. Reproduce that comparison with:
 
 ```sh
 benchstat -filter '.name:Plan .fullname:/create/' \

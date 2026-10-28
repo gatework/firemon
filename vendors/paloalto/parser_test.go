@@ -45,7 +45,7 @@ func TestSetConfigurationRestoresHostAliasAndNativeNATKinds(t *testing.T) {
 	if fw.Interface("ethernet1/2").Record().Addresses[0].String() != "203.0.113.9/24" {
 		t.Fatal("address alias lost actual interface host")
 	}
-	if fw.Route("default").Interface() != fw.Interface("ethernet1/2") {
+	if routeFor(t, fw, "default", "default").Interface() != fw.Interface("ethernet1/2") {
 		t.Fatal("route not bound")
 	}
 	if len(fw.DynamicNATs()) != 2 || fw.DynamicNAT("outbound").Interface() != fw.Interface("ethernet1/2") {

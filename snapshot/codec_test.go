@@ -78,6 +78,21 @@ func TestGobRejectsCorruptionVersionsAndOversize(t *testing.T) {
 		t.Fatal("size limit ignored")
 	}
 }
+
+func TestGobRejectsVersionSevenWithoutInterfaceSelectionSemantics(t *testing.T) {
+	var buf bytes.Buffer
+	if err := snapshot.Encode(&buf, graph(t, "fw", "raw", true)); err != nil {
+		t.Fatal(err)
+	}
+	// Version 7 could persist a complete PAN graph with a widened interface
+	// allocation or a route merged across virtual routers. Loading must not
+	// endorse it or silently reparse the retained configuration.
+	old := bytes.Clone(buf.Bytes())
+	old[10], old[11] = 0, 7
+	if _, err := snapshot.Decode(bytes.NewReader(old), snapshot.DefaultMaxBytes); !errors.Is(err, snapshot.ErrFormat) {
+		t.Fatal("obsolete native semantics accepted", err)
+	}
+}
 func TestStoreCASDraftsAndLiveIncompleteInvalidateCurrent(t *testing.T) {
 	ctx := context.Background()
 	store, err := snapshot.Open(t.TempDir())

@@ -164,6 +164,47 @@ func TestNATConflictingMappingsAndMissingAllocationStayUnsafe(t *testing.T) {
 	})
 }
 
+func TestSelectedInterfaceAddressMustBelongToItsAllocationInterface(t *testing.T) {
+	base := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "paloalto"},
+		Interfaces:  []fm.InterfaceRecord{{Object: fm.Object{ID: "egress"}, Addresses: []netip.Prefix{netip.MustParsePrefix("203.0.113.9/24"), netip.MustParsePrefix("203.0.113.10/24")}}},
+		DynamicNATs: []fm.DynamicNATRecord{{Object: fm.Object{ID: "selected"}, Interface: "egress", InterfaceAddress: netip.MustParseAddr("203.0.113.9"), SourceMode: fm.InterfaceIP, DestinationMode: fm.NoTranslation}},
+	}
+	first, err := fm.Seal(base)
+	if err != nil || !first.Complete() {
+		t.Fatal(first, err)
+	}
+	for _, tt := range []struct {
+		name string
+		edit func(*fm.Data)
+	}{
+		{"unassigned-host-in-same-subnet", func(d *fm.Data) { d.DynamicNATs[0].InterfaceAddress = netip.MustParseAddr("203.0.113.99") }},
+		{"wrong-mode", func(d *fm.Data) { d.DynamicNATs[0].SourceMode = fm.NoTranslation }},
+		{"unknown-interface", func(d *fm.Data) { d.Interfaces[0].Unsupported = []string{"dynamic address selection"} }},
+		{"conflicting-pool", func(d *fm.Data) {
+			d.NATPools = []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.Range{rng("198.51.100.1", "198.51.100.2")}}}
+			d.DynamicNATs[0].SourcePool = "pool"
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			d := first.Export()
+			tt.edit(&d)
+			fw, err := fm.Seal(d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fw.Complete() {
+				t.Fatal("unproven interface selection became complete")
+			}
+		})
+	}
+	d := first.Export()
+	d.DynamicNATs[0].InterfaceAddress = netip.MustParseAddr("203.0.113.10")
+	second, err := fm.Seal(d)
+	if err != nil || !second.Complete() || second.SemanticDigest() == first.SemanticDigest() {
+		t.Fatal("changing the selected interface host did not change semantics", err)
+	}
+}
+
 func TestUnencodableScheduleCannotReceiveSemanticDigest(t *testing.T) {
 	d := seed()
 	d.Schedules = []fm.ScheduleRecord{{Object: fm.Object{ID: "invalid-year"}, Windows: []fm.TimeWindow{{Start: time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC), End: time.Date(10000, 1, 2, 0, 0, 0, 0, time.UTC)}}}}
