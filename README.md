@@ -1,6 +1,6 @@
 # firemon
 
-Go firewall configuration and policy automation. Implementation is in progress against [the specification](docs/spec.md) and [execution plan](docs/plans/go-firewall.md).
+Go firewall configuration and policy automation. The approved [specification](docs/spec.md) and nine-task [execution plan](docs/plans/go-firewall.md) are implemented and verified within the documented capability boundaries. See the [requirement audit and review results](docs/verification.md).
 
 The firewall graph includes interfaces, routes, zones, addresses and groups, services and groups, schedules, security rules, **StaticNAT**, **DynamicNAT**, and NAT pools. Vendor execution order is retained separately from object identity.
 

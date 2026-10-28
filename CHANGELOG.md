@@ -1,14 +1,14 @@
 # Changelog
 
-## Unreleased — Go implementation in progress
+## Unreleased — Go implementation
 
 - Replace the Ruby gem skeleton with a Go module and offline CLI.
 - Add the immutable firewall graph, separate StaticNAT and DynamicNAT catalogs, staged configuration parsing, exact policy and NAT evaluation, snapshot persistence, change proofs, deployment orchestration and lifecycle analysis.
 - Add staged implementations for Hillstone, Palo Alto, ASA, SRX, Netscreen, Fortinet and Huawei with synthetic tests. See [implementation status](docs/status.md) for supported behavior and remaining work; this is not a release or full vendor parity.
-
 - Preserve inline address/service ownership through lifecycle deletion and independent readback.
 - Preserve PAN interface NAT host selection and independent static-route names in each virtual router; snapshot semantic format 8 rejects older graphs that could retain widened allocations or merged routes.
 - Add the seven-vendor performance matrix and avoid fully proving append candidates that already violate outside-request ownership.
+- Complete the nine-task requirement audit and independent whole-branch review, fix both Important findings, and verify the optional adapter against the published corrected core.
 
 ## 0.1.0 - 2026-10-17
 

@@ -2,6 +2,8 @@
 
 Spec: ../spec.md
 
+Completion audit (2026-10-29): all nine tasks have implementation and executable verification evidence in [the requirement audit](../verification.md). The fresh whole-branch review's two Important findings were corrected with failing-then-passing regressions and a green full race suite. [Delivery status](../status.md) separates exact-commit CI, the pinned optional adapter and unverified real-device/native capabilities. The original task contracts below are retained.
+
 ## Global constraints
 
 Implement inline in the Go worktree, branch feat/go-firewall. Preserve reference worktrees. Commits, pushes, releases and device writes require explicit user authorization; implementation approval alone does not grant it. Each behavior uses RED then GREEN tests; task completion requires fresh verification. Concrete StaticNAT and DynamicNAT replace the initially proposed unified NATRule. No compatibility alias.
