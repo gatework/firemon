@@ -205,6 +205,13 @@ func srxOriginal(fw *fm.Firewall, pre NATRelation, subset flow.Traffic, limit in
 	if len(n.source) > 0 || len(n.sourcePorts) > 0 {
 		return flow.Traffic{}, ErrNAT
 	}
+	return destinationPreimage(n, pre.Original, subset, limit)
+}
+
+// destinationPreimage restores only the address/port dimensions changed before
+// policy lookup. Source allocation is deliberately absent from this relation.
+func destinationPreimage(n natTransform, original, subset flow.Traffic, limit int) (flow.Traffic, error) {
+	var err error
 	var out flow.Traffic
 	for _, b := range subset.Boxes() {
 		addresses := []flow.Range{b.Destination}
@@ -262,5 +269,5 @@ func srxOriginal(fw *fm.Firewall, pre NATRelation, subset flow.Traffic, limit in
 			}
 		}
 	}
-	return out.Intersection(pre.Original, limit)
+	return out.Intersection(original, limit)
 }

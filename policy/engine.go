@@ -182,6 +182,9 @@ func zoneMatch(zones []fm.ID, any bool, q fm.ID) (bool, bool) {
 
 // Match returns a conservative possible match and whether that match is semantically certain.
 func (e Engine) Match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Request, input flow.Traffic) (flow.Traffic, bool, error) {
+	if fw != nil && fw.Metadata().Vendor == "huawei" {
+		q.FromZone, q.ToZone = fm.ID(strings.ToLower(string(q.FromZone))), fm.ID(strings.ToLower(string(q.ToZone)))
+	}
 	limits := e.Limits.defaults()
 	if err := ctx.Err(); err != nil {
 		return flow.Traffic{}, false, err

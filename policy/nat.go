@@ -57,6 +57,8 @@ func (e Engine) QueryNAT(ctx context.Context, fw *fm.Firewall, q Request) (NATRe
 		return e.netscreenNAT(ctx, fw, q, &budget)
 	case "fortinet":
 		return e.fortinetNAT(ctx, fw, q, &budget)
+	case "huawei":
+		return e.huaweiNAT(ctx, fw, q, &budget)
 	case "paloalto":
 		entries := fw.NATSequence()
 		if len(entries) > e.Limits.defaults().Rules {
@@ -122,7 +124,7 @@ func transform(fw *fm.Firewall, step NATStep) (natTransform, error) {
 			n.egress = r.Interface
 		}
 		if step.Reverse {
-			if fw.Metadata().Vendor == "asa" || fw.Metadata().Vendor == "srx" || fw.Metadata().Vendor == "netscreen" {
+			if fw.Metadata().Vendor == "asa" || fw.Metadata().Vendor == "srx" || fw.Metadata().Vendor == "netscreen" || fw.Metadata().Vendor == "huawei" {
 				return reverseStatic(n, r), nil
 			}
 			// StoneOS BNAT is unconditional one-to-one source mapping, with an implicit
@@ -154,6 +156,23 @@ func transform(fw *fm.Firewall, step NATStep) (natTransform, error) {
 		// target and is intentionally not treated as a match predicate here.
 		if fw.Metadata().Vendor == "hillstone" {
 			n.egress = r.Interface
+		}
+		if fw.Metadata().Vendor == "huawei" {
+			if r.Order.Section == "nat-policy" {
+				n.egress = r.Interface
+			}
+			for _, pool := range []*fm.NATPool{n.dynamic.SourcePool(), n.dynamic.DestinationPool()} {
+				if pool != nil {
+					n.known = n.known && len(pool.Record().Unsupported) == 0
+				}
+			}
+			if r.SourceMode == fm.InterfaceIP {
+				iface := n.dynamic.Interface()
+				n.known = n.known && iface != nil
+				if iface != nil {
+					n.known = n.known && !iface.Record().Disabled && len(iface.Record().Unsupported) == 0 && len(iface.Record().Addresses) == 1
+				}
+			}
 		}
 		if fw.Metadata().Vendor == "netscreen" && r.SourceMode == fm.InterfaceIP && len(n.sourcePorts) == 0 {
 			// ScreenOS reserves the well-known ports for both DIP and interface PAT.

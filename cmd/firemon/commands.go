@@ -15,6 +15,7 @@ import (
 	"github.com/gatework/firemon/vendors/asa"
 	"github.com/gatework/firemon/vendors/fortinet"
 	"github.com/gatework/firemon/vendors/hillstone"
+	"github.com/gatework/firemon/vendors/huawei"
 	"github.com/gatework/firemon/vendors/netscreen"
 	"github.com/gatework/firemon/vendors/paloalto"
 	"github.com/gatework/firemon/vendors/srx"
@@ -106,6 +107,8 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 			*vdom = "root"
 		}
 		fw, err = fortinet.ParseVDOM(ctx, config.Source{Text: string(raw), Complete: *complete}, meta, *vdom)
+	case "huawei":
+		fw, err = huawei.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
 	default:
 		return fmt.Errorf("vendor %q has no enabled parser", *vendor)
 	}
@@ -238,6 +241,8 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			renderer = netscreen.Renderer{}
 		case "fortinet":
 			renderer = fortinet.Renderer{}
+		case "huawei":
+			renderer = huawei.Renderer{}
 		default:
 			return plan.ErrUnsafe
 		}
