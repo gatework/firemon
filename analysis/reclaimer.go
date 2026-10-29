@@ -214,6 +214,9 @@ func unused(observations []UsageObservation, id RuleIdentity, revision, digest s
 }
 
 func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, request ReclamationRequest, ids []fm.ID) (*plan.Plan, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(ids) == 0 || len(ids) > 100 {
 		return nil, ErrInvalid
 	}

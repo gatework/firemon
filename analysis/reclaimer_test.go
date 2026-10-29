@@ -2,6 +2,7 @@ package analysis_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -97,5 +98,27 @@ func TestUnusedDoesNotAuthorizeDeletionAndRedundantBatchKeepsObjects(t *testing.
 	otherDigest, err := analysis.RuleDigest(other, "1")
 	if err != nil || otherDigest == digest {
 		t.Fatal("referenced declaration excluded from rule digest")
+	}
+}
+
+func TestReclaimerPlanCancellationPrecedesSelectionValidation(t *testing.T) {
+	fw := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.1", "198.51.100.1"}})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r := analysis.Reclaimer{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}
+	for _, tc := range []struct {
+		name string
+		ids  []fm.ID
+	}{
+		{name: "empty"},
+		{name: "oversized", ids: make([]fm.ID, 101)},
+		{name: "valid", ids: []fm.ID{"2"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := r.Plan(ctx, fw, analysis.ReclamationRequest{}, tc.ids)
+			if p != nil || !errors.Is(err, context.Canceled) {
+				t.Fatalf("canceled call returned plan %v and error %v", p, err)
+			}
+		})
 	}
 }
