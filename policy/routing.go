@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"net/netip"
 	"slices"
 	"strings"
 
@@ -26,36 +27,24 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 	}
 	limits := e.Limits.defaults()
 	limit := limits.Regions
-	var routes []*fm.Route
+	var routes []routeCandidate
 	for _, r := range fw.Routes() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		record := r.Record()
-		if record.Scope != vrf {
+		if r.Scope() != vrf {
 			continue
 		}
+		record := r.Record()
 		if len(routes) >= limits.Rules {
 			return nil, ErrBudget
 		}
 		if len(record.PolicyMatch) > 0 {
 			return []RoutePath{{Addresses: addresses}}, nil
 		}
-		routes = append(routes, r)
+		routes = append(routes, routeCandidate{route: r, destination: record.Destination, metric: record.Metric, key: record.Destination.String()})
 	}
-	slices.SortStableFunc(routes, func(a, b *fm.Route) int {
-		x, y := a.Record(), b.Record()
-		if x.Destination.Bits() != y.Destination.Bits() {
-			return y.Destination.Bits() - x.Destination.Bits()
-		}
-		if x.Metric < y.Metric {
-			return -1
-		}
-		if x.Metric > y.Metric {
-			return 1
-		}
-		return strings.Compare(x.Destination.String(), y.Destination.String())
-	})
+	slices.SortStableFunc(routes, compareRoutes)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -65,17 +54,17 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		r := routes[i]
-		record := r.Record()
+		r := routes[i].route
+		record := routes[i]
 		j := i + 1
 		for j < len(routes) {
-			other := routes[j].Record()
-			if other.Destination != record.Destination || other.Metric != record.Metric {
+			other := routes[j]
+			if other.destination != record.destination || other.metric != record.metric {
 				break
 			}
 			j++
 		}
-		network, err := flow.PrefixRange(record.Destination)
+		network, err := flow.PrefixRange(record.destination)
 		if err != nil {
 			return nil, err
 		}
@@ -87,16 +76,15 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 				path.Known = false
 			} else {
 				path.Zone = path.Interface.Zone()
-				record := path.Interface.Record()
-				if record.Disabled || len(record.Unsupported) > 0 || len(path.Zone.Record().Unsupported) > 0 {
+				if path.Interface.Disabled() || path.Interface.HasUnsupported() || path.Zone.HasUnsupported() {
 					path.Known = false
 				}
 			}
-			if len(record.Unsupported) > 0 {
+			if r.HasUnsupported() {
 				path.Known = false
 			}
 			for _, other := range routes[i+1 : j] {
-				if other.Interface() != path.Interface || len(other.Record().Unsupported) > 0 {
+				if other.route.Interface() != path.Interface || other.route.HasUnsupported() {
 					path.Known = false
 					path.Interface = nil
 					path.Zone = nil
@@ -318,7 +306,23 @@ func originalDestination(fw *fm.Firewall, relation NATRelation, destinations flo
 	return out, nil
 }
 
-// Routes temporarily supports native parser callers until their migration lands.
-func Routes(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set, limit int) ([]RoutePath, error) {
-	return (Engine{Limits: Limits{Regions: limit}}).ResolveRoutes(ctx, fw, vrf, addresses)
+// routeCandidate caches only ordering keys, retaining immutable object identity.
+type routeCandidate struct {
+	route       *fm.Route
+	destination netip.Prefix
+	metric      uint32
+	key         string
+}
+
+func compareRoutes(a, b routeCandidate) int {
+	if a.destination.Bits() != b.destination.Bits() {
+		return b.destination.Bits() - a.destination.Bits()
+	}
+	if a.metric < b.metric {
+		return -1
+	}
+	if a.metric > b.metric {
+		return 1
+	}
+	return strings.Compare(a.key, b.key)
 }

@@ -28,7 +28,7 @@ func Graph(ctx context.Context, parser config.Parser, source config.Source, meta
 		fw, failure = parser.Parse(ctx, source, metadata)
 		failure = errors.Join(failure, ctx.Err())
 	}
-	if failure == nil && (fw == nil || !sameMetadata(fw.Metadata(), metadata) || fw.Export().Raw != source.Text) {
+	if failure == nil && (fw == nil || !sameMetadata(fw.Metadata(), metadata) || fw.Raw() != source.Text) {
 		failure = fmt.Errorf("%w: parser did not retain captured identity and source", invalid)
 	}
 	if failure != nil {
