@@ -24,6 +24,42 @@ Unrecognized source and unsupported semantics remain incomplete; do not describe
 
 The user-confirmed scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. H3C, Topsec, Neteye and other vendors are deferred.
 
+## Boundary contract delivery (2026-10-29)
+
+Core [`f85f9d6737f9d0fffcee801c58314c803ff9ac2b`](https://github.com/gatework/firemon/commit/f85f9d6737f9d0fffcee801c58314c803ff9ac2b)
+was pushed by SSH to public `gatework/firemon` on `main`; exact remote SHA readback
+matched. Its [Go workflow](https://github.com/gatework/firemon/actions/runs/40843009590)
+passed formatting, vet and race tests on Ubuntu. Local final
+`GOWORK=off GOPROXY=off go test -count=1 -race ./...` passed all 23 root test
+packages, and vet/format/diff checks passed. Independent review findings and the
+completion audit's additional persisted-head check are recorded in
+[verification](verification.md); all identified findings are fixed.
+
+Seven native renderers now enforce complete declared deltas, native identity,
+explicit wildcard/empty semantics and deterministic order. Lifecycle usage shares
+bounded request-local evidence indexing. Snapshot/journal input, corruption and
+I/O failure classifications are separate. See the [migration notes](refactoring.md)
+for custom renderer error handling and stricter evidence budgets. Snapshot
+semantic format 9, journal encoding and existing approval golden digests remain
+compatible; this iteration requires no snapshot reimport.
+
+The optional adapter pins published core
+`v0.0.0-20261029083333-f85f9d6737f9`, with connector
+`v0.0.0-20261026235641-c68c42b4bbcf` unchanged. After tidy, standalone
+`GOWORK=off GOPROXY=off go test -count=1 -race ./...` passed (7.012s), followed by
+vet and module verification. Module metadata confirms both published versions and
+no replacement. Current-core workspace checks passed separately. Public root CI
+does not test this private-dependency nested module, and no private source is
+published.
+
+Six-sample serial benchmarks reduce the 1000-rule/16-observation case from
+95.541ms to 1.882ms (-98.03%), while allocated bytes increase 11.37% for the index.
+The smallest case has no significant timing change and uses 24.92% more bytes.
+The [complete comparison](benchmarks/2026-10-29-usage-comparison.txt) reports all
+cases; these are synthetic local measurements, not production capacity claims.
+Real-device/firmware behavior, release publication and SQL integration remain
+outside this iteration's evidence.
+
 ## Contract and ownership delivery (2026-10-29)
 
 Core [`ed34cf431f3a459e3602a45a796768a45945b1ca`](https://github.com/gatework/firemon/commit/ed34cf431f3a459e3602a45a796768a45945b1ca)

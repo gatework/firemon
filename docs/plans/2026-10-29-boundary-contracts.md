@@ -22,3 +22,11 @@ Undeclared graph changes and native ordering; unknown evidence incorrectly grant
 
 ## Delivery
 Fresh independent whole-diff review, standalone adapter validation with GOWORK=off and a published core pin, serial benchmarks, SSH push and exact-commit CI verification. Report local/CI/device evidence separately.
+
+## Completion
+
+All three tasks and the independent review fix pass are implemented through
+f85f9d6. Final root race/vet, 23 test packages, existing approval goldens and
+standalone published-pin adapter checks pass. The exact-core GitHub workflow
+passed. See ../verification.md for findings and benchmark tradeoffs and
+../status.md for publication evidence. No live-device or release claim is made.
