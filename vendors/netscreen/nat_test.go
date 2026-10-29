@@ -50,7 +50,7 @@ func TestMIPVIPAndPolicyNATKeepNativeTypesAndOwnership(t *testing.T) {
 			t.Fatal(tc, r, err)
 		}
 		n := r.Relations[0]
-		b := n.Translated.Boxes()
+		b := n.Translated.Regions()
 		if n.Kind != tc.kind || n.Steps[0].Reverse != tc.reverse || n.PossibleAllocation != tc.possible || len(b) != 1 || b[0].Source.First.String() != tc.wantSrc || b[0].Destination.First.String() != tc.wantDst || b[0].DestinationPort.Low != tc.wantPort || b[0].SourcePort != (flow.Interval{Low: 12345, High: 12345}) {
 			t.Fatal(tc, n)
 		}
@@ -86,7 +86,7 @@ func TestDIPPortTranslationAndPolicyContinuation(t *testing.T) {
 	if err != nil || !r.Complete || len(r.Relations) != 1 || !r.Relations[0].PossibleAllocation || r.Relations[0].Exact {
 		t.Fatal(r, err)
 	}
-	b := r.Relations[0].Translated.Boxes()[0]
+	b := r.Relations[0].Translated.Regions()[0]
 	if b.Source.First.String() != "198.51.100.110" || b.Source.Last.String() != "198.51.100.113" || b.SourcePort != (flow.Interval{Low: 1024, High: 65535}) {
 		t.Fatal(b)
 	}

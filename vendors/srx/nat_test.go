@@ -52,7 +52,7 @@ func TestNativeNATCatalogsAndPostDestinationSourceSelection(t *testing.T) {
 			t.Fatal(tc, r, err)
 		}
 		rel := r.Relations[0]
-		b := rel.Translated.Boxes()
+		b := rel.Translated.Regions()
 		if len(b) != 1 || b[0].Source.First != netip.MustParseAddr(tc.wsrc) || b[0].Destination.First != netip.MustParseAddr(tc.wdst) || b[0].SourcePort.Low != tc.wsp || b[0].DestinationPort.Low != tc.wdp || rel.PossibleAllocation != tc.possible || rel.Exact == tc.possible || len(rel.Steps) != tc.steps {
 			t.Fatal(tc, rel, b)
 		}
@@ -92,7 +92,7 @@ func TestSourceNATWithoutPATPreservesPortAndDeactivatedRuleIsSkipped(t *testing.
 		t.Fatal(fw.Diagnostics())
 	}
 	r, err := (policy.Engine{}).QueryNAT(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.10/32", "198.51.100.50/32", 6, 12345, 443), FromZone: "inside", ToZone: "outside"})
-	if err != nil || len(r.Relations) != 1 || r.Relations[0].Translated.Boxes()[0].SourcePort != (flow.Interval{Low: 12345, High: 12345}) || !r.Relations[0].PossibleAllocation {
+	if err != nil || len(r.Relations) != 1 || r.Relations[0].Translated.Regions()[0].SourcePort != (flow.Interval{Low: 12345, High: 12345}) || !r.Relations[0].PossibleAllocation {
 		t.Fatal(r, err)
 	}
 }
@@ -117,7 +117,7 @@ func TestSRXPacketUsesRealDestinationAndServiceBeforeSourceNAT(t *testing.T) {
 		if !permit {
 			coverage = p.Policy.Denied
 		}
-		b := coverage.Boxes()
+		b := coverage.Regions()
 		if len(b) != 1 || b[0].Source.First.String() != "198.51.100.50" || b[0].Destination.First.String() != "192.0.2.80" || b[0].DestinationPort.Low != 80 {
 			t.Fatal("wrong native policy view", b)
 		}

@@ -22,13 +22,13 @@ func (r renderer) Render(_ context.Context, before, after *fm.Firewall, changes 
 	}
 	return []string{"reviewable native commands"}, nil
 }
-func addressRange(cidr string) flow.Range {
+func addressRange(cidr string) flow.AddressRange {
 	r, _ := flow.PrefixRange(netip.MustParsePrefix(cidr))
 	return r
 }
 func request(t *testing.T, source string) policy.Request {
 	t.Helper()
-	q, err := flow.NewTraffic(32, flow.Box{Source: addressRange(source), Destination: addressRange("198.51.100.1/32"), Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
+	q, err := flow.NewTraffic(32, flow.TrafficRegion{Source: addressRange(source), Destination: addressRange("198.51.100.1/32"), Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func request(t *testing.T, source string) policy.Request {
 }
 func baseline(t *testing.T) *fm.Firewall {
 	t.Helper()
-	d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "src"}, Ranges: []flow.Range{addressRange("192.0.2.1/32")}}, {Object: fm.Object{ID: "dst"}, Ranges: []flow.Range{addressRange("198.51.100.1/32")}}}, Services: []fm.ServiceRecord{{Object: fm.Object{ID: "https"}, Terms: []fm.ServiceTerm{{Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}}}}}, Rules: []fm.RuleRecord{{Object: fm.Object{ID: "10"}, RuleSet: "security", Action: fm.Permit, Log: fm.Irrelevant, Match: fm.Match{Sources: []fm.AddressRef{{Kind: fm.AddressObject, ID: "src"}}, Destinations: []fm.AddressRef{{Kind: fm.AddressObject, ID: "dst"}}, Services: []fm.ServiceRef{{Kind: fm.ServiceObject, ID: "https"}}, AnyFromZone: true, AnyToZone: true}}}}
+	d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "src"}, Ranges: []flow.AddressRange{addressRange("192.0.2.1/32")}}, {Object: fm.Object{ID: "dst"}, Ranges: []flow.AddressRange{addressRange("198.51.100.1/32")}}}, Services: []fm.ServiceRecord{{Object: fm.Object{ID: "https"}, Terms: []fm.ServiceTerm{{Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}}}}}, Rules: []fm.RuleRecord{{Object: fm.Object{ID: "10"}, RuleSet: "security", Action: fm.Permit, Log: fm.Irrelevant, Match: fm.Match{Sources: []fm.AddressRef{{Kind: fm.AddressObject, ID: "src"}}, Destinations: []fm.AddressRef{{Kind: fm.AddressObject, ID: "dst"}}, Services: []fm.ServiceRef{{Kind: fm.ServiceObject, ID: "https"}}, AnyFromZone: true, AnyToZone: true}}}}
 	fw, err := fm.Seal(d)
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestImpossibleAppendDoesNotExhaustPlanCombinationBudget(t *testing.T) {
 	// Extending both addresses would also permit the two unrequested cross
 	// pairs. There is only one viable combination: a new exact rule.
 	q := request(t, "192.0.2.2/32")
-	box := q.Traffic.Boxes()[0]
+	box := q.Traffic.Regions()[0]
 	box.Destination = addressRange("198.51.100.2/32")
 	q.Traffic, _ = flow.NewTraffic(32, box)
 	p, err := (plan.Planner{Renderer: renderer{}, MaxCandidates: 1}).Plan(context.Background(), baseline(t), []policy.Request{q})
@@ -90,8 +90,8 @@ func TestAppendKeepsCrossPairsAlreadyShadowedByEarlierRules(t *testing.T) {
 	// would wrongly discard this cheaper, behavior-preserving append.
 	d := baseline(t).Export()
 	d.Addresses = append(d.Addresses,
-		fm.AddressRecord{Object: fm.Object{ID: "src2"}, Ranges: []flow.Range{addressRange("192.0.2.2/32")}},
-		fm.AddressRecord{Object: fm.Object{ID: "dst2"}, Ranges: []flow.Range{addressRange("198.51.100.2/32")}})
+		fm.AddressRecord{Object: fm.Object{ID: "src2"}, Ranges: []flow.AddressRange{addressRange("192.0.2.2/32")}},
+		fm.AddressRecord{Object: fm.Object{ID: "dst2"}, Ranges: []flow.AddressRange{addressRange("198.51.100.2/32")}})
 	original := d.Rules[0]
 	original.Position = 2
 	a, b := original, original
@@ -105,7 +105,7 @@ func TestAppendKeepsCrossPairsAlreadyShadowedByEarlierRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := request(t, "192.0.2.2/32")
-	box := q.Traffic.Boxes()[0]
+	box := q.Traffic.Regions()[0]
 	box.Destination = addressRange("198.51.100.2/32")
 	q.Traffic, _ = flow.NewTraffic(32, box)
 	p, err := (plan.Planner{Renderer: renderer{rejectEarlierAppends: true}}).Plan(context.Background(), fw, []policy.Request{q})

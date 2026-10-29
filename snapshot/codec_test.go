@@ -33,7 +33,7 @@ func TestGobRestoresTypedNATAndSharedGraphWithoutParsingRaw(t *testing.T) {
 	original := graph(t, "fw", "this raw is deliberately not a configuration", true)
 	data := original.Export()
 	host := netip.MustParseAddr("192.0.2.10")
-	data.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "host"}, Ranges: []flow.Range{{First: host, Last: host}}}}
+	data.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "host"}, Ranges: []flow.AddressRange{{First: host, Last: host}}}}
 	data.StaticNATs[0].Match.Sources = []fm.AddressRef{{Kind: fm.AddressObject, ID: "host"}}
 	data.DynamicNATs[0].Match.Sources = []fm.AddressRef{{Kind: fm.AddressObject, ID: "host"}}
 	original, err := fm.Seal(data)
@@ -110,13 +110,13 @@ func TestGobRejectsVersionEightWithoutExplicitVIPReferences(t *testing.T) {
 func TestGobRestoresExplicitVIPReferencesAndTypedPointerIdentity(t *testing.T) {
 	public := netip.MustParseAddr("198.51.100.20")
 	private := netip.MustParseAddr("192.0.2.20")
-	mapping := fm.Mapping{Original: flow.Range{First: public, Last: public}, Translated: flow.Range{First: private, Last: private}, Mode: fm.Offset}
+	mapping := fm.Mapping{Original: flow.AddressRange{First: public, Last: public}, Translated: flow.AddressRange{First: private, Last: private}, Mode: fm.Offset}
 	d := fm.Data{
 		Metadata: fm.Metadata{Device: "synthetic", Vendor: "fortinet", Context: "root"},
 		Addresses: []fm.AddressRecord{
-			{Object: fm.Object{ID: "static-address", Scope: "root"}, Ranges: []flow.Range{mapping.Original}, VIP: fm.NATRef{Kind: fm.StaticNATObject, ID: "same-native-id"}},
-			{Object: fm.Object{ID: "port-address", Scope: "root"}, Ranges: []flow.Range{mapping.Original}, VIP: fm.NATRef{Kind: fm.DynamicNATObject, ID: "same-native-id"}},
-			{Object: fm.Object{ID: "vip:ordinary", Name: "vip", Scope: "root"}, Ranges: []flow.Range{mapping.Original}},
+			{Object: fm.Object{ID: "static-address", Scope: "root"}, Ranges: []flow.AddressRange{mapping.Original}, VIP: fm.NATRef{Kind: fm.StaticNATObject, ID: "same-native-id"}},
+			{Object: fm.Object{ID: "port-address", Scope: "root"}, Ranges: []flow.AddressRange{mapping.Original}, VIP: fm.NATRef{Kind: fm.DynamicNATObject, ID: "same-native-id"}},
+			{Object: fm.Object{ID: "vip:ordinary", Name: "vip", Scope: "root"}, Ranges: []flow.AddressRange{mapping.Original}},
 		},
 		StaticNATs: []fm.StaticNATRecord{
 			{Object: fm.Object{ID: "same-native-id", Scope: "root"}, Destination: []fm.Mapping{mapping}},

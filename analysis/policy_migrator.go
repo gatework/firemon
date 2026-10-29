@@ -121,10 +121,10 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 		if !result.Complete || !result.Unknown.Empty() {
 			return nil, plan.ErrUnsafe
 		}
-		if err := visits.take(ctx, len(result.Trace)); err != nil {
+		if err := visits.take(ctx, len(result.Decisions)); err != nil {
 			return nil, err
 		}
-		for _, trace := range result.Trace {
+		for _, trace := range result.Decisions {
 			r := source.Rule(trace.Rule).Record()
 			if r.Builtin || len(request.Rules) > 0 && !selected[r.ID] {
 				continue

@@ -84,7 +84,7 @@ func BenchmarkSharedGroupMemberUsage(b *testing.B) {
 					b.Fatalf("members=%d: %v", len(rows), err)
 				}
 				for _, row := range rows {
-					if row.Unused != analysis.Unknown || row.Removable {
+					if row.Unused != analysis.Unknown {
 						b.Fatal("missing evidence became actionable")
 					}
 				}

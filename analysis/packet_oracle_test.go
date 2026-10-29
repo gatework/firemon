@@ -25,20 +25,20 @@ type oracleDecision struct {
 	log, logStart, logEnd fm.Status
 }
 
-func oracleContains(bounds flow.Range, address netip.Addr) bool {
+func oracleContains(bounds flow.AddressRange, address netip.Addr) bool {
 	return address.BitLen() == bounds.First.BitLen() && address.Compare(bounds.First) >= 0 && address.Compare(bounds.Last) <= 0
 }
 func oracleInterval(bounds flow.Interval, value uint16) bool {
 	return bounds.Low <= value && value <= bounds.High
 }
-func oracleRegion(region flow.Box, packet oraclePacket) bool {
+func oracleRegion(region flow.TrafficRegion, packet oraclePacket) bool {
 	return oracleContains(region.Source, packet.source) && oracleContains(region.Destination, packet.destination) &&
 		oracleInterval(region.Protocol, packet.protocol) && oracleInterval(region.SourcePort, packet.sourcePort) &&
 		oracleInterval(region.DestinationPort, packet.destinationPort) && oracleInterval(region.ICMPType, packet.icmpType) &&
 		oracleInterval(region.ICMPCode, packet.icmpCode)
 }
 func oracleTraffic(traffic flow.Traffic, packet oraclePacket) bool {
-	for _, region := range traffic.Boxes() {
+	for _, region := range traffic.Regions() {
 		if oracleRegion(region, packet) {
 			return true
 		}
@@ -212,9 +212,9 @@ func oraclePackets(ipv6 bool) []oraclePacket {
 	}
 	return packets
 }
-func oraclePoint(packet oraclePacket) flow.Box {
+func oraclePoint(packet oraclePacket) flow.TrafficRegion {
 	point := func(value uint16) flow.Interval { return flow.Interval{Low: value, High: value} }
-	return flow.Box{Source: flow.Range{First: packet.source, Last: packet.source}, Destination: flow.Range{First: packet.destination, Last: packet.destination},
+	return flow.TrafficRegion{Source: flow.AddressRange{First: packet.source, Last: packet.source}, Destination: flow.AddressRange{First: packet.destination, Last: packet.destination},
 		Protocol: point(packet.protocol), SourcePort: point(packet.sourcePort), DestinationPort: point(packet.destinationPort), ICMPType: point(packet.icmpType), ICMPCode: point(packet.icmpCode)}
 }
 func oracleSeal(t *testing.T, data fm.Data) *fm.Firewall {
@@ -225,7 +225,7 @@ func oracleSeal(t *testing.T, data fm.Data) *fm.Firewall {
 	}
 	return fw
 }
-func oracleMakeTraffic(t *testing.T, regions ...flow.Box) flow.Traffic {
+func oracleMakeTraffic(t *testing.T, regions ...flow.TrafficRegion) flow.Traffic {
 	t.Helper()
 	traffic, err := flow.NewTraffic(4096, regions...)
 	if err != nil {

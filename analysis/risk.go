@@ -52,7 +52,7 @@ const (
 type RiskPredicate struct {
 	Dimension Dimension
 	Relation  Relation
-	Addresses flow.Set
+	Addresses flow.AddressSet
 	Services  []fm.ServiceTerm
 }
 
@@ -140,7 +140,7 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 		if !r.Complete || !r.Unknown.Empty() {
 			return rows, nil
 		}
-		for _, trace := range r.Trace {
+		for _, trace := range r.Decisions {
 			effective[trace.Rule] = trace.Traffic
 		}
 	}

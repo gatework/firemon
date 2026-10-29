@@ -35,12 +35,12 @@ func TestRiskExpressionsMatchFiniteSetOracle(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := request(t, "192.0.2.1", "198.51.100.1")
-	var boxes []flow.Box
+	var boxes []flow.TrafficRegion
 	for _, source := range []string{"192.0.2.1", "192.0.2.2"} {
 		for _, term := range terms[:2] {
-			b := q.Traffic.Boxes()[0]
+			b := q.Traffic.Regions()[0]
 			address := netip.MustParseAddr(source)
-			b.Source = flow.Range{First: address, Last: address}
+			b.Source = flow.AddressRange{First: address, Last: address}
 			b.Protocol, b.SourcePort, b.DestinationPort, b.ICMPType, b.ICMPCode = term.Protocol, term.SourcePort, term.DestinationPort, term.ICMPType, term.ICMPCode
 			boxes = append(boxes, b)
 		}
@@ -73,7 +73,7 @@ func TestRiskExpressionsMatchFiniteSetOracle(t *testing.T) {
 			mask, relation := uint8(1+rng.IntN(7)), analysis.Relation(1+rng.IntN(5))
 			masks[dimension], relations[dimension] = mask, relation
 			p := analysis.RiskPredicate{Dimension: analysis.Dimension(dimension + 1), Relation: relation}
-			var ranges []flow.Range
+			var ranges []flow.AddressRange
 			for bit := range 3 {
 				if mask&(1<<bit) == 0 {
 					continue
@@ -87,10 +87,10 @@ func TestRiskExpressionsMatchFiniteSetOracle(t *testing.T) {
 					prefix = "198.51.100"
 				}
 				address := netip.MustParseAddr(fmt.Sprintf("%s.%d", prefix, bit+1))
-				ranges = append(ranges, flow.Range{First: address, Last: address})
+				ranges = append(ranges, flow.AddressRange{First: address, Last: address})
 			}
 			if len(ranges) > 0 {
-				p.Addresses, _ = flow.NewSet(ranges...)
+				p.Addresses, _ = flow.NewAddressSet(ranges...)
 			}
 			leaves[dimension] = analysis.RiskExpression{Predicate: &p}
 		}

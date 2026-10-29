@@ -20,7 +20,7 @@ func TestASAServiceGroupsPreserveProtocolAndBothPortAxes(t *testing.T) {
 		{6, 1234, 443, true}, {6, 1234, 80, false}, {6, 5000, 443, false},
 		{17, 53, 5353, true}, {17, 1234, 443, false}, {6, 53, 5353, false},
 	} {
-		traffic, err := flow.NewTraffic(16, flow.Box{Source: host("192.0.2.2"), Destination: host("198.51.100.2"), Protocol: flow.Interval{Low: tc.proto, High: tc.proto}, SourcePort: flow.Interval{Low: tc.src, High: tc.src}, DestinationPort: flow.Interval{Low: tc.dst, High: tc.dst}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
+		traffic, err := flow.NewTraffic(16, flow.TrafficRegion{Source: host("192.0.2.2"), Destination: host("198.51.100.2"), Protocol: flow.Interval{Low: tc.proto, High: tc.proto}, SourcePort: flow.Interval{Low: tc.src, High: tc.src}, DestinationPort: flow.Interval{Low: tc.dst, High: tc.dst}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 		if err != nil {
 			t.Fatal(err)
 		}

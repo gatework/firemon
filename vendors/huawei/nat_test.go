@@ -100,7 +100,7 @@ func TestNativeNATPriorityAndOriginalPortSelection(t *testing.T) {
 				t.Fatal(got, err)
 			}
 			r := got.Relations[0]
-			b := r.Translated.Boxes()[0]
+			b := r.Translated.Regions()[0]
 			if r.ID != tt.id || b.Source.First.String() != tt.src || b.Destination.First.String() != tt.dst || b.DestinationPort.Low != tt.translatedPort || r.PossibleAllocation != tt.possible {
 				t.Fatal(r)
 			}

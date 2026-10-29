@@ -159,7 +159,7 @@ func Seal(data Data) (*Firewall, error) {
 		}
 	}
 	for _, a := range f.Addresses() {
-		set, err := flow.NewSet(a.record.Ranges...)
+		set, err := flow.NewAddressSet(a.record.Ranges...)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +169,7 @@ func Seal(data Data) (*Firewall, error) {
 		}
 	}
 	for _, z := range f.Zones() {
-		if _, err := flow.NewSet(z.record.Networks...); err != nil {
+		if _, err := flow.NewAddressSet(z.record.Networks...); err != nil {
 			return nil, err
 		}
 	}
@@ -229,7 +229,7 @@ func Seal(data Data) (*Firewall, error) {
 		}
 	}
 	for _, p := range f.NATPools() {
-		if _, err := flow.NewSet(p.record.Ranges...); err != nil {
+		if _, err := flow.NewAddressSet(p.record.Ranges...); err != nil {
 			return nil, err
 		}
 		p.iface = f.interfaces[p.record.Interface]

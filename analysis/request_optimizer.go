@@ -71,7 +71,7 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 		}
 	}
 	for i := range groups {
-		boxes := groups[i].Request.Traffic.Boxes()
+		boxes := groups[i].Request.Traffic.Regions()
 		for {
 			merged := false
 			for a := 0; a < len(boxes) && !merged; a++ {
@@ -100,20 +100,20 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 	return groups, nil
 }
 
-func joinBoxes(a, b flow.Box) (flow.Box, bool) {
+func joinBoxes(a, b flow.TrafficRegion) (flow.TrafficRegion, bool) {
 	out := a
 	differences := 0
-	for i, pair := range [][2]flow.Range{{a.Source, b.Source}, {a.Destination, b.Destination}} {
+	for i, pair := range [][2]flow.AddressRange{{a.Source, b.Source}, {a.Destination, b.Destination}} {
 		if pair[0] == pair[1] {
 			continue
 		}
 		differences++
 		if differences > 1 {
-			return flow.Box{}, false
+			return flow.TrafficRegion{}, false
 		}
-		u, err := flow.NewSet(pair[:]...)
+		u, err := flow.NewAddressSet(pair[:]...)
 		if err != nil || len(u.Ranges()) != 1 {
-			return flow.Box{}, false
+			return flow.TrafficRegion{}, false
 		}
 		if i == 0 {
 			out.Source = u.Ranges()[0]
@@ -127,7 +127,7 @@ func joinBoxes(a, b flow.Box) (flow.Box, bool) {
 		}
 		differences++
 		if differences > 1 || uint32(pair[0].High)+1 < uint32(pair[1].Low) || uint32(pair[1].High)+1 < uint32(pair[0].Low) {
-			return flow.Box{}, false
+			return flow.TrafficRegion{}, false
 		}
 		v := flow.Interval{Low: min(pair[0].Low, pair[1].Low), High: max(pair[0].High, pair[1].High)}
 		switch i {

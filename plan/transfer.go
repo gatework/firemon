@@ -73,7 +73,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 		if err := visits.take(ctx, q.Traffic.RegionCount()); err != nil {
 			return nil, err
 		}
-		for _, box := range q.Traffic.Boxes() {
+		for _, box := range q.Traffic.Regions() {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
@@ -82,7 +82,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 			}
 			id := generatedID("fm-transfer-", struct {
 				Index int
-				Box   flow.Box
+				Box   flow.TrafficRegion
 			}{index, box})
 			for before.Rule(id) != nil || slices.ContainsFunc(rules, func(r fm.RuleRecord) bool { return r.ID == id }) {
 				if err := visits.take(ctx, len(rules)+1); err != nil {
@@ -176,11 +176,11 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 		if !prior.Complete || !next.Complete || !prior.Unknown.Empty() || !next.Unknown.Empty() {
 			return Proof{}, ErrUnsafe
 		}
-		if err := visits.take(ctx, len(next.Trace)); err != nil {
+		if err := visits.take(ctx, len(next.Decisions)); err != nil {
 			return Proof{}, err
 		}
 		owned := make(map[fm.ID]flow.Traffic)
-		for _, trace := range next.Trace {
+		for _, trace := range next.Decisions {
 			if err := ctx.Err(); err != nil {
 				return Proof{}, err
 			}
@@ -222,17 +222,17 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 }
 
 func preservedOutside(ctx context.Context, prior, next policy.Result, target flow.Traffic, limit int, visits *visitBudget) error {
-	if err := visits.take(ctx, len(next.Trace)+len(prior.Trace)); err != nil {
+	if err := visits.take(ctx, len(next.Decisions)+len(prior.Decisions)); err != nil {
 		return err
 	}
 	traces := make(map[fm.ID]flow.Traffic)
-	for _, trace := range next.Trace {
+	for _, trace := range next.Decisions {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		traces[trace.Rule] = trace.Traffic
 	}
-	for _, trace := range prior.Trace {
+	for _, trace := range prior.Decisions {
 		if err := ctx.Err(); err != nil {
 			return err
 		}

@@ -109,9 +109,9 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 				return PacketResult{}, err
 			}
 		}
-		var destinations flow.Set
-		for _, b := range view.Boxes() {
-			set, _ := flow.NewSet(b.Destination)
+		var destinations flow.AddressSet
+		for _, b := range view.Regions() {
+			set, _ := flow.NewAddressSet(b.Destination)
 			destinations = destinations.Union(set)
 		}
 		routes, err := e.ResolveRoutes(ctx, fw, piece.vrf, destinations)
@@ -120,7 +120,7 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 		}
 		for _, route := range routes {
 			var translated flow.Traffic
-			for _, b := range view.Boxes() {
+			for _, b := range view.Regions() {
 				t, err := restrictDestinations(b, route.Addresses, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
@@ -186,9 +186,9 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 }
 
 func (e Engine) netscreenDestination(ctx context.Context, fw *fm.Firewall, n NATRelation, before RoutePath, limit int) (bool, error) {
-	var destinations flow.Set
-	for _, box := range n.Translated.Boxes() {
-		s, _ := flow.NewSet(box.Destination)
+	var destinations flow.AddressSet
+	for _, box := range n.Translated.Regions() {
+		s, _ := flow.NewAddressSet(box.Destination)
 		destinations = destinations.Union(s)
 	}
 	routes, err := e.ResolveRoutes(ctx, fw, before.Zone.Scope(), destinations)

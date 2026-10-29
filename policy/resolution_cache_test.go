@@ -12,7 +12,7 @@ import (
 
 func TestResolutionReusePreservesBudgetAndGraphIsolation(t *testing.T) {
 	ip := netip.MustParseAddr("192.0.2.1")
-	d := fm.Data{Metadata: fm.Metadata{Device: "test", Vendor: "huawei"}, Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "a"}, Ranges: []flow.Range{{First: ip, Last: ip}}}}}
+	d := fm.Data{Metadata: fm.Metadata{Device: "test", Vendor: "huawei"}, Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "a"}, Ranges: []flow.AddressRange{{First: ip, Last: ip}}}}}
 	fw, err := fm.Seal(d)
 	if err != nil {
 		t.Fatal(err)

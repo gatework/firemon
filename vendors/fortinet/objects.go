@@ -11,10 +11,10 @@ import (
 	"github.com/gatework/firemon/flow"
 )
 
-func ipv4Range(first, last string) (flow.Range, bool) {
+func ipv4Range(first, last string) (flow.AddressRange, bool) {
 	a, e1 := netip.ParseAddr(first)
 	b, e2 := netip.ParseAddr(last)
-	r := flow.Range{First: a, Last: b}
+	r := flow.AddressRange{First: a, Last: b}
 	return r, e1 == nil && e2 == nil && a.Is4() && b.Is4() && r.Valid()
 }
 func ports(value string) (flow.Interval, bool) {
@@ -53,7 +53,7 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 	any4, _ := flow.PrefixRange(netip.MustParsePrefix("0.0.0.0/0"))
 	anyService := serviceTerm(0)
 	anyService.Protocol.High = 255
-	d := fm.Data{Addresses: []fm.AddressRecord{{Object: object("$all-ipv4", "all", "builtin"), Ranges: []flow.Range{any4}}}, Services: []fm.ServiceRecord{{Object: object("$ALL", "ALL", "builtin"), Terms: []fm.ServiceTerm{anyService}}}}
+	d := fm.Data{Addresses: []fm.AddressRecord{{Object: object("$all-ipv4", "all", "builtin"), Ranges: []flow.AddressRange{any4}}}, Services: []fm.ServiceRecord{{Object: object("$ALL", "ALL", "builtin"), Terms: []fm.ServiceTerm{anyService}}}}
 	err := p.each(ctx, tx, "firewall address", func(b *config.Block) {
 		name := b.Header.Words[1]
 		r := fm.AddressRecord{Object: object(name, name, "")}
@@ -66,13 +66,13 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 			}
 			if v, ok := prefix(values); ok && v == v.Masked() {
 				rr, _ := flow.PrefixRange(v)
-				r.Ranges = []flow.Range{rr}
+				r.Ranges = []flow.AddressRange{rr}
 			} else {
 				f.invalid("subnet")
 			}
 		case "iprange":
 			if v, ok := ipv4Range(f.one("start-ip", ""), f.one("end-ip", "")); ok {
-				r.Ranges = []flow.Range{v}
+				r.Ranges = []flow.AddressRange{v}
 			} else {
 				f.invalid("iprange")
 			}

@@ -10,14 +10,14 @@ import (
 
 func algebraInputs(tb testing.TB, family, n int) (flow.Traffic, flow.Traffic) {
 	tb.Helper()
-	a, b := make([]flow.Box, n), make([]flow.Box, n)
+	a, b := make([]flow.TrafficRegion, n), make([]flow.TrafficRegion, n)
 	for i := range n {
 		src, dst := host(i), netip.MustParseAddr("203.0.113.10")
 		if family == 6 {
 			src = netip.MustParseAddr(fmt.Sprintf("2001:db8::%x", i+1))
 			dst = netip.MustParseAddr("2001:db8:1::1")
 		}
-		a[i] = flow.Box{Source: flow.Range{First: src, Last: src}, Destination: flow.Range{First: dst, Last: dst},
+		a[i] = flow.TrafficRegion{Source: flow.AddressRange{First: src, Last: src}, Destination: flow.AddressRange{First: dst, Last: dst},
 			Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1000, High: 65535},
 			DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}}
 		b[i] = a[i]

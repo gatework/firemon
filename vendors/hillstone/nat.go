@@ -11,9 +11,9 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-func (p *parser) resolve(ctx context.Context, name string) ([]flow.Range, bool, error) {
+func (p *parser) resolve(ctx context.Context, name string) ([]flow.AddressRange, bool, error) {
 	if r, err := literal(name); err == nil {
-		return []flow.Range{r}, true, nil
+		return []flow.AddressRange{r}, true, nil
 	}
 	set, known, err := (policy.Engine{}).ResolveAddresses(ctx, p.graph, []fm.AddressRef{p.addressRef(name)}, false)
 	return set.Ranges(), known, err
@@ -28,7 +28,7 @@ func (p *parser) natAddress(name string, d *fm.Data) (fm.AddressRef, bool) {
 	}
 	id := fm.ID("$literal:" + name)
 	if _, exists := p.addressKinds[id]; !exists {
-		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name}, Ranges: []flow.Range{r}})
+		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name}, Ranges: []flow.AddressRange{r}})
 		p.addressKinds[id] = fm.AddressObject
 	}
 	return fm.AddressRef{Kind: fm.AddressObject, ID: id}, true

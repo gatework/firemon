@@ -23,7 +23,7 @@ func (s *brokenLoader) Load(context.Context, string) (*fm.Firewall, error) {
 func TestInventoryDependencyAndCancellationBoundaries(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := inventory.Locate(ctx, nil, flow.Set{}); !errors.Is(err, context.Canceled) {
+	if _, err := inventory.Locate(ctx, nil, flow.AddressSet{}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if _, err := inventory.LoadBatch(ctx, nil, inventory.Result{}); !errors.Is(err, context.Canceled) {
@@ -32,7 +32,7 @@ func TestInventoryDependencyAndCancellationBoundaries(t *testing.T) {
 	var loader *brokenLoader
 	var manifest *snapshot.Store
 	for _, store := range []inventory.ManifestReader{nil, manifest} {
-		if _, err := inventory.Locate(context.Background(), store, flow.Set{}); !errors.Is(err, inventory.ErrInvalid) || errors.Is(err, snapshot.ErrFormat) {
+		if _, err := inventory.Locate(context.Background(), store, flow.AddressSet{}); !errors.Is(err, inventory.ErrInvalid) || errors.Is(err, snapshot.ErrFormat) {
 			t.Fatal("invalid manifest dependency classification", err)
 		}
 	}

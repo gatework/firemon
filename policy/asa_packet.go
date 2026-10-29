@@ -125,9 +125,9 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 		if err != nil {
 			return PacketResult{}, err
 		}
-		var dest flow.Set
-		for _, b := range traffic.Boxes() {
-			s, _ := flow.NewSet(b.Destination)
+		var dest flow.AddressSet
+		for _, b := range traffic.Regions() {
+			s, _ := flow.NewAddressSet(b.Destination)
 			dest = dest.Union(s)
 		}
 		var paths []RoutePath
@@ -190,7 +190,7 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 // commands need additional native evidence and remain unsupported by parsing.
 func (e Engine) asaAccess(ctx context.Context, fw *fm.Firewall, q Request, ingress, egress *fm.Interface) (Result, error) {
 	// Multicast/broadcast needs native routing/relay evidence beyond an ACL.
-	for _, box := range q.Traffic.Boxes() {
+	for _, box := range q.Traffic.Regions() {
 		for _, cidr := range []string{"224.0.0.0/4", "ff00::/8", "255.255.255.255/32"} {
 			network, _ := flow.PrefixRange(netip.MustParsePrefix(cidr))
 			if _, overlap := box.Destination.Intersection(network); overlap {
@@ -258,7 +258,7 @@ func (e Engine) asaAccess(ctx context.Context, fw *fm.Firewall, q Request, ingre
 		return Result{}, err
 	}
 	r.Unknown, err = r.Unknown.Union(out.Unknown, limit)
-	r.Trace = append(r.Trace, out.Trace...)
+	r.Decisions = append(r.Decisions, out.Decisions...)
 	r.Complete = r.Complete && out.Complete
 	return r, err
 }

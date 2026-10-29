@@ -37,7 +37,7 @@ func TestReclaimerRequestsAreIndependent(t *testing.T) {
 		before.Observations = slices.Clone(request.Observations)
 		before.MemberObservations = slices.Clone(request.MemberObservations)
 		rows, err := r.Analyze(context.Background(), fw, request)
-		if err != nil || len(rows) != 1 || rows[0].Unused != want || rows[0].Removable {
+		if err != nil || len(rows) != 1 || rows[0].Unused != want || rows[0].RemovalCandidate {
 			t.Fatalf("rule evidence crossed requests: %+v, %v", rows, err)
 		}
 		members, err := r.AnalyzeMembers(context.Background(), fw, request)
@@ -46,7 +46,7 @@ func TestReclaimerRequestsAreIndependent(t *testing.T) {
 		}
 		found := false
 		for _, row := range members {
-			if row.Revision != request.Revision || row.Removable {
+			if row.Revision != request.Revision {
 				t.Fatalf("member evidence crossed requests: %+v", row)
 			}
 			if row.Identity == member {
@@ -181,7 +181,7 @@ func TestReclaimerExpiryUsesRequestTimeAndPreservesFutureProof(t *testing.T) {
 	}{{end.Add(-time.Nanosecond), analysis.False}, {end, analysis.True}, {end.Add(time.Hour), analysis.True}} {
 		request := analysis.ReclamationRequest{At: tc.at}
 		rows, err := r.Analyze(context.Background(), fw, request)
-		if err != nil || len(rows) != 1 || rows[0].Expired != tc.expired || rows[0].Removable != (tc.expired == analysis.True) {
+		if err != nil || len(rows) != 1 || rows[0].Expired != tc.expired || rows[0].RemovalCandidate != (tc.expired == analysis.True) {
 			t.Fatalf("expiry at %v: %+v, %v", tc.at, rows, err)
 		}
 		p, err := r.Plan(context.Background(), fw, request, []fm.ID{"1"})

@@ -72,11 +72,11 @@ func setHeader(w []string) (string, string, error) {
 	}
 	return "", "", fmt.Errorf("unsupported object header")
 }
-func addressRange(w []string) (flow.Range, bool) {
+func addressRange(w []string) (flow.AddressRange, bool) {
 	if len(w) == 3 && w[0] == "range" {
 		a, ok1 := ipv4(w[1])
 		b, ok2 := ipv4(w[2])
-		r := flow.Range{First: a, Last: b}
+		r := flow.AddressRange{First: a, Last: b}
 		return r, ok1 && ok2 && r.Valid()
 	}
 	if len(w) == 1 {
@@ -87,7 +87,7 @@ func addressRange(w []string) (flow.Range, bool) {
 	}
 	p, ok := prefix(w)
 	if !ok || p != p.Masked() {
-		return flow.Range{}, false
+		return flow.AddressRange{}, false
 	}
 	r, e := flow.PrefixRange(p)
 	return r, e == nil
@@ -190,7 +190,7 @@ func (p *parser) serviceRef(name string) fm.ServiceRef {
 	}
 	return fm.ServiceRef{Kind: fm.ServiceObject, ID: fm.ID(name)}
 }
-func (p *parser) literalAddress(d *fm.Data, r flow.Range) fm.AddressRef {
+func (p *parser) literalAddress(d *fm.Data, r flow.AddressRange) fm.AddressRef {
 	id := fm.ID("$address:" + r.First.String() + "-" + r.Last.String())
 	key := string(id)
 	if ref, ok := p.addresses[key]; ok {
@@ -199,7 +199,7 @@ func (p *parser) literalAddress(d *fm.Data, r flow.Range) fm.AddressRef {
 	o := object(key)
 	o.Scope = "literal"
 	o.Inline = true
-	d.Addresses = append(d.Addresses, fm.AddressRecord{Object: o, Ranges: []flow.Range{r}})
+	d.Addresses = append(d.Addresses, fm.AddressRecord{Object: o, Ranges: []flow.AddressRange{r}})
 	ref := fm.AddressRef{Kind: fm.AddressObject, ID: id}
 	p.addresses[key] = ref
 	return ref
@@ -250,7 +250,7 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 	}
 	type addressMember struct {
 		ref   string
-		value flow.Range
+		value flow.AddressRange
 	}
 	for _, g := range addresses {
 		o := object(g.name)

@@ -24,7 +24,7 @@ type resolutionKey struct {
 	members string
 }
 type addressResolution struct {
-	set   flow.Set
+	set   flow.AddressSet
 	known bool
 	cost  int
 }
@@ -79,7 +79,7 @@ func (b *resolutionBudget) reuse(cost int) error {
 	return nil
 }
 
-func resolveAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *resolutionBudget) (flow.Set, bool, error) {
+func resolveAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *resolutionBudget) (flow.AddressSet, bool, error) {
 	c := budget.cache
 	if c == nil || c.firewall != fw || any || len(refs) > budget.limit {
 		return expandAddresses(fw, refs, any, budget)
@@ -87,7 +87,7 @@ func resolveAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *r
 	key := addressKey(refs)
 	if cached, ok := c.addresses[key]; ok {
 		if err := budget.reuse(cached.cost); err != nil {
-			return flow.Set{}, false, err
+			return flow.AddressSet{}, false, err
 		}
 		return cached.set, cached.known, nil
 	}

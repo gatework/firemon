@@ -13,7 +13,7 @@ import (
 	"github.com/gatework/firemon/vendors/huawei"
 )
 
-func mustTraffic(t *testing.T, b flow.Box) flow.Traffic {
+func mustTraffic(t *testing.T, b flow.TrafficRegion) flow.Traffic {
 	t.Helper()
 	v, err := flow.NewTraffic(8, b)
 	if err != nil {
@@ -91,7 +91,7 @@ func TestAppendCommandsPreserveAllExistingMembers(t *testing.T) {
 	raw := strings.Replace(basic, " service 1 protocol udp source-port 2000 destination-port 53\n", "", 1)
 	q := policy.Request{FromZone: "trust", ToZone: "untrust", Traffic: traffic(t, "192.0.2.11/32", "203.0.113.10/32", 6, 1000, 443)}
 	// Request the existing complete source-port term so an address append is exact.
-	b := q.Traffic.Boxes()[0]
+	b := q.Traffic.Regions()[0]
 	b.SourcePort.High = 1001
 	q.Traffic = mustTraffic(t, b)
 	p, err := (plan.Planner{Renderer: huawei.Renderer{}}).Plan(ctx, parse(t, raw), []policy.Request{q})

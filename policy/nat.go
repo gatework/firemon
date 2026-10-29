@@ -249,10 +249,10 @@ func (e Engine) natChain(ctx context.Context, fw *fm.Firewall, q Request, steps 
 	out.Unmatched = remaining
 	return out, nil
 }
-func translate(r flow.Range, m fm.Mapping) (flow.Range, error) {
+func translate(r flow.AddressRange, m fm.Mapping) (flow.AddressRange, error) {
 	overlap, ok := r.Intersection(m.Original)
 	if !ok || overlap != r {
-		return flow.Range{}, ErrNAT
+		return flow.AddressRange{}, ErrNAT
 	}
 	switch m.Mode {
 	case fm.Identity:
@@ -262,15 +262,15 @@ func translate(r flow.Range, m fm.Mapping) (flow.Range, error) {
 	case fm.Offset:
 		first, err := offset(r.First, m.Original.First, m.Translated.First)
 		if err != nil {
-			return flow.Range{}, err
+			return flow.AddressRange{}, err
 		}
 		last, err := offset(r.Last, m.Original.First, m.Translated.First)
 		if err != nil {
-			return flow.Range{}, err
+			return flow.AddressRange{}, err
 		}
-		return flow.Range{First: first, Last: last}, nil
+		return flow.AddressRange{First: first, Last: last}, nil
 	default:
-		return flow.Range{}, ErrNAT
+		return flow.AddressRange{}, ErrNAT
 	}
 }
 func offset(a, base, target netip.Addr) (netip.Addr, error) {
@@ -296,13 +296,13 @@ func mapTraffic(input flow.Traffic, mappings []fm.Mapping, source bool, limit in
 		return input, nil
 	}
 	var result flow.Traffic
-	for _, box := range input.Boxes() {
+	for _, box := range input.Regions() {
 		original := box.Destination
 		if source {
 			original = box.Source
 		}
-		set, _ := flow.NewSet(original)
-		var covered flow.Set
+		set, _ := flow.NewAddressSet(original)
+		var covered flow.AddressSet
 		for _, m := range mappings {
 			part, ok := original.Intersection(m.Original)
 			if !ok {
@@ -326,7 +326,7 @@ func mapTraffic(input flow.Traffic, mappings []fm.Mapping, source bool, limit in
 			if err != nil {
 				return flow.Traffic{}, err
 			}
-			r, _ := flow.NewSet(part)
+			r, _ := flow.NewAddressSet(part)
 			covered = covered.Union(r)
 		}
 		if !covered.Contains(set) {
@@ -346,7 +346,7 @@ func allocate(input flow.Traffic, n *fm.DynamicNAT, limit int) (flow.Traffic, bo
 	if r.SourceMode == fm.NoTranslation {
 		return input, true, false, nil
 	}
-	var targets []flow.Range
+	var targets []flow.AddressRange
 	if pool := n.SourcePool(); pool != nil {
 		targets = pool.Record().Ranges
 	}
@@ -355,10 +355,10 @@ func allocate(input flow.Traffic, n *fm.DynamicNAT, limit int) (flow.Traffic, bo
 			return flow.Traffic{}, false, false, ErrNAT
 		}
 		if r.InterfaceAddress.IsValid() {
-			targets = []flow.Range{{First: r.InterfaceAddress, Last: r.InterfaceAddress}}
+			targets = []flow.AddressRange{{First: r.InterfaceAddress, Last: r.InterfaceAddress}}
 		} else {
 			for _, p := range n.Interface().Record().Addresses {
-				targets = append(targets, flow.Range{First: p.Addr(), Last: p.Addr()})
+				targets = append(targets, flow.AddressRange{First: p.Addr(), Last: p.Addr()})
 			}
 		}
 	}
@@ -369,7 +369,7 @@ func allocate(input flow.Traffic, n *fm.DynamicNAT, limit int) (flow.Traffic, bo
 		return flow.Traffic{}, false, false, ErrNAT
 	} // Equal pool size does not establish an offset relation.
 	var out flow.Traffic
-	for _, box := range input.Boxes() {
+	for _, box := range input.Regions() {
 		for _, target := range targets {
 			if box.Source.First.BitLen() != target.First.BitLen() {
 				continue
@@ -402,7 +402,7 @@ func mapPorts(input flow.Traffic, mappings []fm.PortMapping, source bool, limit 
 		return input, nil
 	}
 	var out flow.Traffic
-	for _, box := range input.Boxes() {
+	for _, box := range input.Regions() {
 		origin := box.DestinationPort
 		if source {
 			origin = box.SourcePort
@@ -459,7 +459,7 @@ func restrictMappings(input flow.Traffic, mappings []fm.Mapping, source bool, li
 		return input, nil
 	}
 	var out flow.Traffic
-	for _, box := range input.Boxes() {
+	for _, box := range input.Regions() {
 		for _, m := range mappings {
 			axis := box.Destination
 			if source {
@@ -491,7 +491,7 @@ func restrictMappings(input flow.Traffic, mappings []fm.Mapping, source bool, li
 // Reverse packet selection depends on native direction and zone semantics. Until that
 // pipeline is established, a possible reverse match cannot be reported as definite no-NAT.
 func reverseDomainIntersects(input flow.Traffic, record fm.StaticNATRecord) bool {
-	for _, box := range input.Boxes() {
+	for _, box := range input.Regions() {
 		for _, mapping := range record.Source {
 			if _, ok := box.Destination.Intersection(mapping.Translated); ok {
 				return true

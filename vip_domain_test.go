@@ -14,9 +14,9 @@ func vipData() fm.Data {
 	return fm.Data{
 		Metadata: fm.Metadata{Device: "synthetic", Vendor: "fortinet", Context: "root"},
 		Addresses: []fm.AddressRecord{
-			{Object: fm.Object{ID: "public-static", Name: "native-static", Scope: "root"}, Ranges: []flow.Range{public}, VIP: fm.NATRef{Kind: fm.StaticNATObject, ID: "shared-native-id"}},
-			{Object: fm.Object{ID: "public-port", Name: "native-port", Scope: "root"}, Ranges: []flow.Range{public}, VIP: fm.NATRef{Kind: fm.DynamicNATObject, ID: "shared-native-id"}},
-			{Object: fm.Object{ID: "vip:ordinary", Name: "vip", Scope: "root"}, Ranges: []flow.Range{public}},
+			{Object: fm.Object{ID: "public-static", Name: "native-static", Scope: "root"}, Ranges: []flow.AddressRange{public}, VIP: fm.NATRef{Kind: fm.StaticNATObject, ID: "shared-native-id"}},
+			{Object: fm.Object{ID: "public-port", Name: "native-port", Scope: "root"}, Ranges: []flow.AddressRange{public}, VIP: fm.NATRef{Kind: fm.DynamicNATObject, ID: "shared-native-id"}},
+			{Object: fm.Object{ID: "vip:ordinary", Name: "vip", Scope: "root"}, Ranges: []flow.AddressRange{public}},
 		},
 		StaticNATs: []fm.StaticNATRecord{
 			{Object: fm.Object{ID: "shared-native-id", Scope: "root"}, Match: match, Destination: []fm.Mapping{{Original: public, Translated: private, Mode: fm.Offset}}},

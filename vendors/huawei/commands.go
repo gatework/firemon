@@ -32,7 +32,7 @@ func quoted(v string) (string, error) {
 	}
 	return "\"" + v + "\"", nil
 }
-func nativeRange(r flow.Range) (string, error) {
+func nativeRange(r flow.AddressRange) (string, error) {
 	if !r.Valid() || !r.First.Is4() {
 		return "", ErrRender
 	}

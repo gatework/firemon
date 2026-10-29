@@ -24,14 +24,14 @@ func (b *resolutionBudget) charge() error {
 	return nil
 }
 
-func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *resolutionBudget) (flow.Set, bool, error) {
+func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *resolutionBudget) (flow.AddressSet, bool, error) {
 	if any {
 		return allAddresses(), true, nil
 	}
 	known := true
 	states := make(map[fm.ID]uint8)
 	leaves := make(map[fm.ID]bool)
-	var ranges []flow.Range
+	var ranges []flow.AddressRange
 	var visit func(fm.AddressRef) error
 	visit = func(ref fm.AddressRef) error {
 		if err := budget.charge(); err != nil {
@@ -94,13 +94,13 @@ func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *re
 	}
 	for _, ref := range refs {
 		if err := visit(ref); err != nil {
-			return flow.Set{}, false, err
+			return flow.AddressSet{}, false, err
 		}
 	}
 	if !known {
 		return allAddresses(), false, nil
 	}
-	set, err := flow.NewSet(ranges...)
+	set, err := flow.NewAddressSet(ranges...)
 	return set, err == nil, err
 }
 func allServices() []fm.ServiceTerm {
@@ -187,12 +187,12 @@ func expandServices(fw *fm.Firewall, refs []fm.ServiceRef, any bool, budget *res
 
 // ResolveAddresses separates unknown declarations from cancellation and resource errors.
 // The returned set is conservative when known is false.
-func (e Engine) ResolveAddresses(ctx context.Context, fw *fm.Firewall, refs []fm.AddressRef, any bool) (flow.Set, bool, error) {
+func (e Engine) ResolveAddresses(ctx context.Context, fw *fm.Firewall, refs []fm.AddressRef, any bool) (flow.AddressSet, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return flow.Set{}, false, err
+		return flow.AddressSet{}, false, err
 	}
 	if fw == nil {
-		return flow.Set{}, false, ErrInvalid
+		return flow.AddressSet{}, false, ErrInvalid
 	}
 	return resolveAddresses(fw, refs, any, &resolutionBudget{ctx: ctx, limit: e.Limits.WithDefaults().MaxCombinations})
 }

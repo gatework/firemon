@@ -16,7 +16,7 @@ var ErrInvalid = errors.New("invalid inventory arguments")
 
 type Hit struct {
 	Device, Revision string
-	Addresses        flow.Set
+	Addresses        flow.AddressSet
 }
 type Result struct {
 	Generation uint64
@@ -32,7 +32,7 @@ type RevisionLoader interface {
 	Load(context.Context, string) (*fm.Firewall, error)
 }
 
-func Locate(ctx context.Context, store ManifestReader, addresses flow.Set) (Result, error) {
+func Locate(ctx context.Context, store ManifestReader, addresses flow.AddressSet) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
@@ -62,7 +62,7 @@ func Locate(ctx context.Context, store ManifestReader, addresses flow.Set) (Resu
 			result.Complete = false
 			continue
 		}
-		networks, err := flow.NewSet(head.Networks...)
+		networks, err := flow.NewAddressSet(head.Networks...)
 		if err != nil {
 			return Result{}, err
 		}

@@ -24,7 +24,7 @@ func translationGraphs(t *testing.T) (*fm.Firewall, *fm.Firewall) {
 	d := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.2", "198.51.100.1"}}).Export()
 	d.Metadata.Vendor = "paloalto"
 	d.Zones = []fm.ZoneRecord{{Object: fm.Object{ID: "inside"}}, {Object: fm.Object{ID: "outside"}}}
-	term := request(t, "192.0.2.1", "198.51.100.1").Traffic.Boxes()[0]
+	term := request(t, "192.0.2.1", "198.51.100.1").Traffic.Regions()[0]
 	d.Services = []fm.ServiceRecord{{Object: fm.Object{ID: "web"}, Terms: []fm.ServiceTerm{{Protocol: term.Protocol, SourcePort: term.SourcePort, DestinationPort: term.DestinationPort, ICMPType: term.ICMPType, ICMPCode: term.ICMPCode}}}}
 	d.Rules[0].Action = fm.Drop
 	// The permit declares both hosts; only the second survives the earlier drop.
@@ -272,7 +272,7 @@ func TestTranslationRejectsNATAndImplicitZoneMerging(t *testing.T) {
 	d := source.Export()
 	a := netip.MustParseAddr("192.0.2.1")
 	b := netip.MustParseAddr("203.0.113.1")
-	d.StaticNATs = []fm.StaticNATRecord{{Object: fm.Object{ID: "nat"}, Source: []fm.Mapping{{Original: flow.Range{First: a, Last: a}, Translated: flow.Range{First: b, Last: b}, Mode: fm.Offset}}}}
+	d.StaticNATs = []fm.StaticNATRecord{{Object: fm.Object{ID: "nat"}, Source: []fm.Mapping{{Original: flow.AddressRange{First: a, Last: a}, Translated: flow.AddressRange{First: b, Last: b}, Mode: fm.Offset}}}}
 	withNAT, err := fm.Seal(d)
 	if err != nil {
 		t.Fatal(err)

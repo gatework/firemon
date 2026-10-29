@@ -43,7 +43,7 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 	}
 	for _, view := range natParts(pre) {
 		var localTraffic flow.Traffic
-		for _, box := range view.Translated.Boxes() {
+		for _, box := range view.Translated.Regions() {
 			part, err := restrictDestinations(box, local, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
@@ -73,9 +73,9 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 				continue
 			}
 		}
-		var destinations flow.Set
-		for _, box := range view.Translated.Boxes() {
-			set, _ := flow.NewSet(box.Destination)
+		var destinations flow.AddressSet
+		for _, box := range view.Translated.Regions() {
+			set, _ := flow.NewAddressSet(box.Destination)
 			destinations = destinations.Union(set)
 		}
 		routes, err := e.ResolveRoutes(ctx, fw, q.VRF, destinations)
@@ -91,7 +91,7 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			}
 			budget--
 			var actual flow.Traffic
-			for _, box := range view.Translated.Boxes() {
+			for _, box := range view.Translated.Regions() {
 				part, err := restrictDestinations(box, route.Addresses, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
@@ -128,8 +128,8 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			if err := markUnknown(unknown); err != nil {
 				return PacketResult{}, err
 			}
-			for _, trace := range evaluated.Trace {
-				if !trace.Certain {
+			for _, trace := range evaluated.Decisions {
+				if !trace.Known {
 					continue
 				}
 				post := NATResult{Complete: true, Unmatched: trace.Traffic}
@@ -153,7 +153,7 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					if err != nil {
 						return PacketResult{}, err
 					}
-					result := Result{Complete: true, Trace: []Trace{{Rule: trace.Rule, Action: trace.Action, Traffic: policyView, Certain: true}}}
+					result := Result{Complete: true, Decisions: []RuleDecision{{Rule: trace.Rule, Action: trace.Action, Traffic: policyView, Known: true}}}
 					if trace.Action == fm.Permit {
 						result.Allowed = policyView
 					} else {
@@ -182,8 +182,8 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 // VIP and IP-pool addresses can be local destinations in FortiOS even when no
 // policy references them. Version/ARP/local-in behavior is not established by a
 // route alone, so an untranslated packet to these addresses stays unknown.
-func fortinetLocalAddresses(ctx context.Context, fw *fm.Firewall, scope string, budget *int) (flow.Set, error) {
-	var ranges []flow.Range
+func fortinetLocalAddresses(ctx context.Context, fw *fm.Firewall, scope string, budget *int) (flow.AddressSet, error) {
+	var ranges []flow.AddressRange
 	charge := func() error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -196,7 +196,7 @@ func fortinetLocalAddresses(ctx context.Context, fw *fm.Firewall, scope string, 
 	}
 	for _, pool := range fw.NATPools() {
 		if err := charge(); err != nil {
-			return flow.Set{}, err
+			return flow.AddressSet{}, err
 		}
 		r := pool.Record()
 		if r.Scope == scope {
@@ -205,14 +205,14 @@ func fortinetLocalAddresses(ctx context.Context, fw *fm.Firewall, scope string, 
 	}
 	for _, entry := range fw.NATSequence() {
 		if err := charge(); err != nil {
-			return flow.Set{}, err
+			return flow.AddressSet{}, err
 		}
 		if entry.Scope != scope || entry.Order.Section != "vip" {
 			continue
 		}
 		n, err := transform(fw, NATStep{Kind: entry.Kind, ID: entry.ID})
 		if err != nil {
-			return flow.Set{}, err
+			return flow.AddressSet{}, err
 		}
 		if n.disabled {
 			continue
@@ -221,5 +221,5 @@ func fortinetLocalAddresses(ctx context.Context, fw *fm.Firewall, scope string, 
 			ranges = append(ranges, m.Original)
 		}
 	}
-	return flow.NewSet(ranges...)
+	return flow.NewAddressSet(ranges...)
 }

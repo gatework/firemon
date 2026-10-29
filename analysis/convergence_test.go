@@ -21,11 +21,11 @@ func graph(t *testing.T, pairs [][2]string) *fm.Firewall {
 	seen := make(map[fm.ID]bool)
 	for i, pair := range pairs {
 		q := request(t, pair[0], pair[1])
-		box := q.Traffic.Boxes()[0]
-		for _, r := range []flow.Range{box.Source, box.Destination} {
+		box := q.Traffic.Regions()[0]
+		for _, r := range []flow.AddressRange{box.Source, box.Destination} {
 			id := fm.ID(r.First.String())
 			if !seen[id] {
-				d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: string(id)}, Ranges: []flow.Range{r}})
+				d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: string(id)}, Ranges: []flow.AddressRange{r}})
 				seen[id] = true
 			}
 		}

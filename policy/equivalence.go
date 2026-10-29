@@ -256,7 +256,7 @@ func effects(fw *fm.Firewall, r Result, limit int) (map[effect]flow.Traffic, err
 			owners[r.Rule] = true
 		}
 	}
-	for _, t := range r.Trace {
+	for _, t := range r.Decisions {
 		rule := fw.Rule(t.Rule).Record()
 		key := effect{action: rule.Action, log: rule.Log, start: rule.LogStart, end: rule.LogEnd}
 		if owners[rule.ID] {

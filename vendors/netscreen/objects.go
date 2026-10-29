@@ -34,7 +34,7 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 	// Native builtins exist independently of whether a user policy references
 	// them. Removing the last reference must not appear to delete an object.
 	anyRange, _ := flow.PrefixRange(netip.MustParsePrefix("0.0.0.0/0"))
-	*addresses.get("$any-ipv4") = fm.AddressRecord{Object: object("$any-ipv4", "Any", "builtin"), Ranges: []flow.Range{anyRange}}
+	*addresses.get("$any-ipv4") = fm.AddressRecord{Object: object("$any-ipv4", "Any", "builtin"), Ranges: []flow.AddressRange{anyRange}}
 	p.addresses["$any-ipv4"] = fm.AddressRef{Kind: fm.AddressObject, ID: "$any-ipv4"}
 	for _, r := range p.rows {
 		if err := ctx.Err(); err != nil {
@@ -53,7 +53,7 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 			v, n, ok := prefix(w[4:])
 			if ok && v == v.Masked() && (len(w) == 4+n || len(w) == 5+n) {
 				rr, _ := flow.PrefixRange(v)
-				a.Ranges = []flow.Range{rr}
+				a.Ranges = []flow.AddressRange{rr}
 				touch(&a.Object, r)
 				tx.Parse(r.Lines()...)
 			} else {
@@ -184,7 +184,7 @@ func (p *parser) addressRef(zone, name string, d *fm.Data) fm.AddressRef {
 		id := fm.ID("$any-ipv4")
 		if _, ok := p.addresses[id]; !ok {
 			r, _ := flow.PrefixRange(netip.MustParsePrefix("0.0.0.0/0"))
-			d.Addresses = append(d.Addresses, fm.AddressRecord{Object: object(id, "Any", "builtin"), Ranges: []flow.Range{r}})
+			d.Addresses = append(d.Addresses, fm.AddressRecord{Object: object(id, "Any", "builtin"), Ranges: []flow.AddressRange{r}})
 			p.addresses[id] = fm.AddressRef{Kind: fm.AddressObject, ID: id}
 		}
 		return p.addresses[id]

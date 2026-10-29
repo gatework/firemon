@@ -11,14 +11,14 @@ import (
 )
 
 type RoutePath struct {
-	Addresses flow.Set
+	Addresses flow.AddressSet
 	Interface *fm.Interface
 	Zone      *fm.Zone
 	Known     bool
 }
 
 // ResolveRoutes partitions addresses by native longest-prefix route evidence within one VRF.
-func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set) ([]RoutePath, error) {
+func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.AddressSet) ([]RoutePath, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 		if err != nil {
 			return nil, err
 		}
-		set, _ := flow.NewSet(network)
+		set, _ := flow.NewAddressSet(network)
 		hit := remaining.Intersection(set)
 		if !hit.Empty() {
 			path := RoutePath{Addresses: hit, Interface: r.Interface(), Known: true}
@@ -159,8 +159,8 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 		result.Complete = false
 		return err
 	}
-	for _, box := range q.Traffic.Boxes() {
-		destinations, _ := flow.NewSet(box.Destination)
+	for _, box := range q.Traffic.Regions() {
+		destinations, _ := flow.NewAddressSet(box.Destination)
 		pre, err := e.ResolveRoutes(ctx, fw, q.VRF, destinations)
 		if err != nil {
 			return PacketResult{}, err
@@ -193,9 +193,9 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 				relations = append(relations, NATRelation{Original: nat.Unmatched, Translated: nat.Unmatched, Exact: true})
 			}
 			for _, relation := range relations {
-				var dest flow.Set
-				for _, translated := range relation.Translated.Boxes() {
-					part, _ := flow.NewSet(translated.Destination)
+				var dest flow.AddressSet
+				for _, translated := range relation.Translated.Regions() {
+					part, _ := flow.NewAddressSet(translated.Destination)
 					dest = dest.Union(part)
 				}
 				post, err := e.ResolveRoutes(ctx, fw, q.VRF, dest)
@@ -235,7 +235,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 	}
 	return result, nil
 }
-func restrictDestinations(box flow.Box, addresses flow.Set, limit int) (flow.Traffic, error) {
+func restrictDestinations(box flow.TrafficRegion, addresses flow.AddressSet, limit int) (flow.Traffic, error) {
 	var out flow.Traffic
 	for _, r := range addresses.Ranges() {
 		if intersection, ok := box.Destination.Intersection(r); ok {
@@ -253,7 +253,7 @@ func restrictDestinations(box flow.Box, addresses flow.Set, limit int) (flow.Tra
 	}
 	return out, nil
 }
-func originalDestination(fw *fm.Firewall, relation NATRelation, destinations flow.Set, limit int) (flow.Traffic, error) {
+func originalDestination(fw *fm.Firewall, relation NATRelation, destinations flow.AddressSet, limit int) (flow.Traffic, error) {
 	var mappings []fm.Mapping
 	if len(relation.Steps) > 1 {
 		return flow.Traffic{}, ErrNAT
@@ -271,16 +271,16 @@ func originalDestination(fw *fm.Firewall, relation NATRelation, destinations flo
 	}
 	original := destinations
 	if len(mappings) > 0 {
-		original = flow.Set{}
+		original = flow.AddressSet{}
 		for _, mapping := range mappings {
-			target, _ := flow.NewSet(mapping.Translated)
+			target, _ := flow.NewAddressSet(mapping.Translated)
 			overlap := target.Intersection(destinations)
 			if overlap.Empty() {
 				continue
 			}
 			switch mapping.Mode {
 			case fm.Constant:
-				part, _ := flow.NewSet(mapping.Original)
+				part, _ := flow.NewAddressSet(mapping.Original)
 				original = original.Union(part)
 			case fm.Identity, fm.Offset:
 				reverse := fm.Mapping{Original: mapping.Translated, Translated: mapping.Original, Mode: mapping.Mode}
@@ -289,7 +289,7 @@ func originalDestination(fw *fm.Firewall, relation NATRelation, destinations flo
 					if err != nil {
 						return flow.Traffic{}, err
 					}
-					part, _ := flow.NewSet(v)
+					part, _ := flow.NewAddressSet(v)
 					original = original.Union(part)
 				}
 			default:
@@ -298,7 +298,7 @@ func originalDestination(fw *fm.Firewall, relation NATRelation, destinations flo
 		}
 	}
 	var out flow.Traffic
-	for _, box := range relation.Original.Boxes() {
+	for _, box := range relation.Original.Regions() {
 		part, err := restrictDestinations(box, original, limit)
 		if err != nil {
 			return flow.Traffic{}, err

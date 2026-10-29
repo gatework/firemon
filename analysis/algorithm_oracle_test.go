@@ -29,7 +29,7 @@ func TestOrderedPolicyAgainstPacketOracle(t *testing.T) {
 				early := &data.Rules[0]
 				early.Match.AnySource = false
 				early.Match.Sources = []fm.AddressRef{{Kind: fm.AddressObject, ID: "source"}}
-				data.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "source"}, Ranges: []flow.Range{{First: first.source, Last: first.source}}}}
+				data.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "source"}, Ranges: []flow.AddressRange{{First: first.source, Last: first.source}}}}
 				queryAt := at
 				switch scenario {
 				case "unknown match":
@@ -81,12 +81,12 @@ func TestOrderedPolicyAgainstPacketOracle(t *testing.T) {
 						t.Fatalf("packet %+v belongs to %d partitions", packet, matches)
 					}
 					decisions := 0
-					for _, decision := range result.Trace {
+					for _, decision := range result.Decisions {
 						if !oracleTraffic(decision.Traffic, packet) {
 							continue
 						}
 						decisions++
-						if decision.Rule != want.rule || decision.Action != want.action || decision.Certain != want.known {
+						if decision.Rule != want.rule || decision.Action != want.action || decision.Known != want.known {
 							t.Fatalf("decision %+v want %+v", decision, want)
 						}
 					}
@@ -107,7 +107,7 @@ func TestRequestOptimizationAgainstPacketOracle(t *testing.T) {
 		packets := oraclePackets(ipv6)
 		for seed := range 16 {
 			var requests []policy.Request
-			var declared []flow.Box
+			var declared []flow.TrafficRegion
 			for i := range 6 {
 				region := oraclePoint(packets[(seed*79+i*97)%len(packets)])
 				declared = append(declared, region)
@@ -219,7 +219,7 @@ func TestPlansAndLifecycleAgainstPacketOracle(t *testing.T) {
 	}
 	var selected []fm.ID
 	for _, row := range rows {
-		if row.Removable {
+		if row.RemovalCandidate {
 			selected = append(selected, row.Rule)
 		}
 	}

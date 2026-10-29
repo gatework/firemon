@@ -36,7 +36,7 @@ func traffic(t *testing.T, src, dst string, proto, sp, dp uint16) flow.Traffic {
 	t.Helper()
 	a, _ := flow.PrefixRange(netip.MustParsePrefix(src))
 	b, _ := flow.PrefixRange(netip.MustParsePrefix(dst))
-	r, err := flow.NewTraffic(16, flow.Box{Source: a, Destination: b, Protocol: flow.Interval{Low: proto, High: proto}, SourcePort: flow.Interval{Low: sp, High: sp}, DestinationPort: flow.Interval{Low: dp, High: dp}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
+	r, err := flow.NewTraffic(16, flow.TrafficRegion{Source: a, Destination: b, Protocol: flow.Interval{Low: proto, High: proto}, SourcePort: flow.Interval{Low: sp, High: sp}, DestinationPort: flow.Interval{Low: dp, High: dp}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 	if err != nil {
 		t.Fatal(err)
 	}

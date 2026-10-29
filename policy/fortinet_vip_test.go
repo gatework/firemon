@@ -16,7 +16,7 @@ func TestFortinetOrdinaryAddressInVIPNamedScopeRemainsOrdinary(t *testing.T) {
 	m.Destinations = []fm.AddressRef{{Kind: fm.AddressObject, ID: "vip:ordinary"}}
 	d := fm.Data{
 		Metadata:  fm.Metadata{Device: "synthetic", Vendor: "fortinet", Context: "vip"},
-		Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "vip:ordinary", Name: "vip", Scope: "vip"}, Ranges: []flow.Range{q.Traffic.Boxes()[0].Destination}}},
+		Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "vip:ordinary", Name: "vip", Scope: "vip"}, Ranges: []flow.AddressRange{q.Traffic.Regions()[0].Destination}}},
 		Rules:     []fm.RuleRecord{{Object: fm.Object{ID: "allow", Scope: "vip"}, Match: m, Action: fm.Permit, RuleSet: "security"}},
 	}
 	fw, err := fm.Seal(d)
@@ -47,7 +47,7 @@ func TestFortinetInvalidExplicitVIPDoesNotBecomeOrdinaryCoverage(t *testing.T) {
 			m.Destinations = []fm.AddressRef{{Kind: fm.AddressObject, ID: "ordinary"}}
 			d := fm.Data{
 				Metadata:  fm.Metadata{Device: "synthetic", Vendor: "fortinet", Context: "root"},
-				Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "ordinary", Scope: "root"}, Ranges: []flow.Range{q.Traffic.Boxes()[0].Destination}, VIP: tc.ref}},
+				Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "ordinary", Scope: "root"}, Ranges: []flow.AddressRange{q.Traffic.Regions()[0].Destination}, VIP: tc.ref}},
 				Rules:     []fm.RuleRecord{{Object: fm.Object{ID: "allow", Scope: "root"}, Match: m, Action: fm.Permit, RuleSet: "security"}},
 			}
 			fw, err := fm.Seal(d)

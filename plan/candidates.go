@@ -88,7 +88,7 @@ func addressVisible(ctx context.Context, d *fm.Data, a fm.AddressRecord, zones [
 type objectCatalog struct {
 	data      *fm.Data
 	visits    *visitBudget
-	addresses map[flow.Range][]fm.AddressRecord
+	addresses map[flow.AddressRange][]fm.AddressRecord
 	services  map[fm.ServiceTerm]fm.ServiceRef
 }
 
@@ -96,7 +96,7 @@ func newObjectCatalog(ctx context.Context, data *fm.Data, visits *visitBudget) (
 	if err := visits.take(ctx, len(data.Addresses)+len(data.Services)); err != nil {
 		return nil, err
 	}
-	c := &objectCatalog{data: data, visits: visits, addresses: make(map[flow.Range][]fm.AddressRecord), services: make(map[fm.ServiceTerm]fm.ServiceRef)}
+	c := &objectCatalog{data: data, visits: visits, addresses: make(map[flow.AddressRange][]fm.AddressRecord), services: make(map[fm.ServiceTerm]fm.ServiceRef)}
 	for _, a := range data.Addresses {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -118,7 +118,7 @@ func newObjectCatalog(ctx context.Context, data *fm.Data, visits *visitBudget) (
 	return c, nil
 }
 
-func (c *objectCatalog) ensureAddress(ctx context.Context, r flow.Range, zones []fm.ID) (fm.AddressRef, error) {
+func (c *objectCatalog) ensureAddress(ctx context.Context, r flow.AddressRange, zones []fm.ID) (fm.AddressRef, error) {
 	d := c.data
 	for _, a := range c.addresses[r] {
 		if err := c.visits.take(ctx, 1); err != nil {
@@ -143,7 +143,7 @@ func (c *objectCatalog) ensureAddress(ctx context.Context, r flow.Range, zones [
 		}
 		id += "-new"
 	}
-	a := fm.AddressRecord{Object: fm.Object{ID: id, Name: string(id)}, Ranges: []flow.Range{r}}
+	a := fm.AddressRecord{Object: fm.Object{ID: id, Name: string(id)}, Ranges: []flow.AddressRange{r}}
 	d.Addresses = append(d.Addresses, a)
 	c.addresses[r] = append(c.addresses[r], a)
 	return fm.AddressRef{Kind: fm.AddressObject, ID: id}, nil
@@ -169,7 +169,7 @@ func (c *objectCatalog) addressCollision(ctx context.Context, id fm.ID) (bool, e
 	return false, nil
 }
 
-func serviceOf(b flow.Box) fm.ServiceTerm {
+func serviceOf(b flow.TrafficRegion) fm.ServiceTerm {
 	return fm.ServiceTerm{Protocol: b.Protocol, SourcePort: b.SourcePort, DestinationPort: b.DestinationPort, ICMPType: b.ICMPType, ICMPCode: b.ICMPCode}
 }
 
@@ -195,7 +195,7 @@ func (c *objectCatalog) ensureService(ctx context.Context, term fm.ServiceTerm) 
 	return ref, nil
 }
 
-func (c *objectCatalog) match(ctx context.Context, box flow.Box, q policy.Request) (fm.Match, error) {
+func (c *objectCatalog) match(ctx context.Context, box flow.TrafficRegion, q policy.Request) (fm.Match, error) {
 	m := fm.Match{AnyFromZone: q.FromZone == "", AnyToZone: q.ToZone == ""}
 	if !m.AnyFromZone {
 		m.FromZones = []fm.ID{q.FromZone}
@@ -256,11 +256,11 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 	if err := visits.take(ctx, gap.RegionCount()); err != nil {
 		return nil, nil, Cost{}, err
 	}
-	for _, box := range gap.Boxes() {
+	for _, box := range gap.Regions() {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, Cost{}, err
 		}
-		addresses, _ := flow.NewSet(box.Source)
+		addresses, _ := flow.NewAddressSet(box.Source)
 		if !src.Contains(addresses) {
 			ref, err := catalog.ensureAddress(ctx, box.Source, rule.Match.FromZones)
 			if err != nil {
@@ -272,7 +272,7 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 			}
 			src = src.Union(addresses)
 		}
-		addresses, _ = flow.NewSet(box.Destination)
+		addresses, _ = flow.NewAddressSet(box.Destination)
 		if !dst.Contains(addresses) {
 			ref, err := catalog.ensureAddress(ctx, box.Destination, rule.Match.ToZones)
 			if err != nil {
@@ -330,7 +330,7 @@ func createCandidate(ctx context.Context, fw *fm.Firewall, q policy.Request, gap
 	if err := visits.take(ctx, gap.RegionCount()); err != nil {
 		return nil, nil, Cost{}, err
 	}
-	boxes := gap.Boxes()
+	boxes := gap.Regions()
 	var changes []Change
 	var newRules []fm.RuleRecord
 	for i, box := range boxes {

@@ -190,7 +190,7 @@ func (e *riskEvaluation) assess(ctx context.Context, expression preparedRiskExpr
 }
 
 func riskProjection(traffic flow.Traffic, dimension Dimension, limit int) (flow.Traffic, error) {
-	boxes := traffic.Boxes()
+	boxes := traffic.Regions()
 	for i, b := range boxes {
 		switch dimension {
 		case Source, Destination:
@@ -202,10 +202,10 @@ func riskProjection(traffic flow.Traffic, dimension Dimension, limit int) (flow.
 			if address.First.Is6() {
 				zero = netip.IPv6Unspecified()
 			}
-			boxes[i] = flow.Box{Source: address, Destination: flow.Range{First: zero, Last: zero}}
+			boxes[i] = flow.TrafficRegion{Source: address, Destination: flow.AddressRange{First: zero, Last: zero}}
 		case Service:
 			zero := netip.IPv4Unspecified()
-			b.Source, b.Destination = flow.Range{First: zero, Last: zero}, flow.Range{First: zero, Last: zero}
+			b.Source, b.Destination = flow.AddressRange{First: zero, Last: zero}, flow.AddressRange{First: zero, Last: zero}
 			boxes[i] = b
 		default:
 			return flow.Traffic{}, ErrInvalid
@@ -218,7 +218,7 @@ func riskStandard(ctx context.Context, predicate RiskPredicate, limit int) (flow
 	if err := ctx.Err(); err != nil {
 		return flow.Traffic{}, err
 	}
-	var boxes []flow.Box
+	var boxes []flow.TrafficRegion
 	switch predicate.Dimension {
 	case Source, Destination:
 		if predicate.Addresses.Empty() || len(predicate.Services) != 0 {
@@ -227,7 +227,7 @@ func riskStandard(ctx context.Context, predicate RiskPredicate, limit int) (flow
 		if predicate.Addresses.RangeCount() > limit {
 			return flow.Traffic{}, flow.ErrBudget
 		}
-		boxes = make([]flow.Box, 0, predicate.Addresses.RangeCount())
+		boxes = make([]flow.TrafficRegion, 0, predicate.Addresses.RangeCount())
 		for _, address := range predicate.Addresses.Ranges() {
 			if err := ctx.Err(); err != nil {
 				return flow.Traffic{}, err
@@ -236,7 +236,7 @@ func riskStandard(ctx context.Context, predicate RiskPredicate, limit int) (flow
 			if address.First.Is6() {
 				zero = netip.IPv6Unspecified()
 			}
-			boxes = append(boxes, flow.Box{Source: address, Destination: flow.Range{First: zero, Last: zero}})
+			boxes = append(boxes, flow.TrafficRegion{Source: address, Destination: flow.AddressRange{First: zero, Last: zero}})
 		}
 	case Service:
 		if !predicate.Addresses.Empty() || len(predicate.Services) == 0 {
@@ -246,12 +246,12 @@ func riskStandard(ctx context.Context, predicate RiskPredicate, limit int) (flow
 		if len(predicate.Services) > limit {
 			return flow.Traffic{}, flow.ErrBudget
 		}
-		boxes = make([]flow.Box, 0, len(predicate.Services))
+		boxes = make([]flow.TrafficRegion, 0, len(predicate.Services))
 		for _, term := range predicate.Services {
 			if err := ctx.Err(); err != nil {
 				return flow.Traffic{}, err
 			}
-			boxes = append(boxes, flow.Box{Source: flow.Range{First: zero, Last: zero}, Destination: flow.Range{First: zero, Last: zero}, Protocol: term.Protocol, SourcePort: term.SourcePort, DestinationPort: term.DestinationPort, ICMPType: term.ICMPType, ICMPCode: term.ICMPCode})
+			boxes = append(boxes, flow.TrafficRegion{Source: flow.AddressRange{First: zero, Last: zero}, Destination: flow.AddressRange{First: zero, Last: zero}, Protocol: term.Protocol, SourcePort: term.SourcePort, DestinationPort: term.DestinationPort, ICMPType: term.ICMPType, ICMPCode: term.ICMPCode})
 		}
 	default:
 		return flow.Traffic{}, ErrInvalid

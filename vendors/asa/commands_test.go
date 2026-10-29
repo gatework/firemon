@@ -27,7 +27,7 @@ func TestASADeclarationIdentitiesSurviveUnrelatedLineInsertion(t *testing.T) {
 func TestASANewACLCommandsRoundTripThroughIndependentNativeParser(t *testing.T) {
 	raw := interfaces + "access-list IN extended deny ip any4 any4\naccess-group IN in interface inside\n"
 	before := parseASA(t, raw)
-	traffic, _ := flow.NewTraffic(16, flow.Box{Source: host("192.0.2.10"), Destination: host("198.51.100.10"), Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1000, High: 2000}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
+	traffic, _ := flow.NewTraffic(16, flow.TrafficRegion{Source: host("192.0.2.10"), Destination: host("198.51.100.10"), Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1000, High: 2000}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 	p, err := (plan.Planner{Renderer: asa.Renderer{}}).Plan(context.Background(), before, []policy.Request{{Traffic: traffic, RuleSet: "IN", FromZone: "inside"}})
 	if err != nil {
 		t.Fatal(err)

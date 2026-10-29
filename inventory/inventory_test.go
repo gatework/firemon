@@ -25,7 +25,7 @@ func TestLocationUsesManifestAndUnknownDeviceCannotDisappear(t *testing.T) {
 		}
 	}
 	r, _ := flow.PrefixRange(netip.MustParsePrefix("192.0.2.128/25"))
-	query, _ := flow.NewSet(r)
+	query, _ := flow.NewAddressSet(r)
 	result, err := inventory.Locate(ctx, store, query)
 	if err != nil {
 		t.Fatal(err)

@@ -53,7 +53,7 @@ func TestCreateAndIndependentScreenOSReadback(t *testing.T) {
 func TestAppendUsesScopedObjectsAndIndependentContinuation(t *testing.T) {
 	ctx := context.Background()
 	raw := topology + "set address Trust client 192.0.2.10/32\nset address Untrust client 198.51.100.10/32\nset service web protocol tcp src-port 1000-1001 dst-port 443-443\nset policy id 10 from Trust to Untrust client client web permit\nexit\n"
-	b := traffic(t, "192.0.2.11/32", "198.51.100.10/32", 6, 1000, 443).Boxes()[0]
+	b := traffic(t, "192.0.2.11/32", "198.51.100.10/32", 6, 1000, 443).Regions()[0]
 	b.SourcePort.High = 1001
 	v, _ := flow.NewTraffic(8, b)
 	p, err := (plan.Planner{Renderer: netscreen.Renderer{}}).Plan(ctx, parse(t, raw), []policy.Request{{Traffic: v, FromZone: "Trust", ToZone: "Untrust"}})

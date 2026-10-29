@@ -23,7 +23,7 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 			return netip.AddrFrom4([4]byte{192, 0, 2, byte(n)})
 		}
 		var bounds [4][7]flow.Interval
-		var boxes [4]flow.Box
+		var boxes [4]flow.TrafficRegion
 		for n := range boxes {
 			for axis := range bounds[n] {
 				a, b := uint16(seed&1), uint16((seed>>1)&1)
@@ -31,7 +31,7 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 				bounds[n][axis] = flow.Interval{Low: min(a, b), High: max(a, b)}
 			}
 			v := bounds[n]
-			boxes[n] = flow.Box{Source: flow.Range{First: addr(v[0].Low), Last: addr(v[0].High)}, Destination: flow.Range{First: addr(v[1].Low), Last: addr(v[1].High)}, Protocol: v[2], SourcePort: v[3], DestinationPort: v[4], ICMPType: v[5], ICMPCode: v[6]}
+			boxes[n] = flow.TrafficRegion{Source: flow.AddressRange{First: addr(v[0].Low), Last: addr(v[0].High)}, Destination: flow.AddressRange{First: addr(v[1].Low), Last: addr(v[1].High)}, Protocol: v[2], SourcePort: v[3], DestinationPort: v[4], ICMPType: v[5], ICMPCode: v[6]}
 		}
 		x, err := flow.NewTraffic(4096, boxes[:2]...)
 		if err != nil {
@@ -41,10 +41,10 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		beforeX, beforeY := x.Boxes(), y.Boxes()
-		canonical, canonicalErr := flow.NewTraffic(limit, append(x.Boxes(), y.Boxes()...)...)
+		beforeX, beforeY := x.Regions(), y.Regions()
+		canonical, canonicalErr := flow.NewTraffic(limit, append(x.Regions(), y.Regions()...)...)
 		bounded, boundedErr := x.Union(y, limit)
-		if !errors.Is(canonicalErr, boundedErr) || !reflect.DeepEqual(canonical.Boxes(), bounded.Boxes()) {
+		if !errors.Is(canonicalErr, boundedErr) || !reflect.DeepEqual(canonical.Regions(), bounded.Regions()) {
 			t.Fatalf("union changed construction or budget at limit %d: %v / %v", limit, canonicalErr, boundedErr)
 		}
 
@@ -60,7 +60,7 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		contains := func(b flow.Box, packet int) bool {
+		contains := func(b flow.TrafficRegion, packet int) bool {
 			values := [7]uint16{}
 			for axis := range values {
 				values[axis] = uint16((packet >> axis) & 1)
@@ -83,7 +83,7 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 				want bool
 			}{{diff, inX && !inY}, {union, inX || inY}, {intersection, inX && inY}} {
 				matches := 0
-				for _, b := range tc.got.Boxes() {
+				for _, b := range tc.got.Regions() {
 					if contains(b, packet) {
 						matches++
 					}
@@ -93,7 +93,7 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 				}
 			}
 		}
-		if !reflect.DeepEqual(beforeX, x.Boxes()) || !reflect.DeepEqual(beforeY, y.Boxes()) {
+		if !reflect.DeepEqual(beforeX, x.Regions()) || !reflect.DeepEqual(beforeY, y.Regions()) {
 			t.Fatal("operand mutated")
 		}
 	})

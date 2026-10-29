@@ -26,7 +26,7 @@ func pair(value string) (string, string, bool) {
 	}
 	return parts[0], parts[1], true
 }
-func (p *parser) ranges(name string) ([]flow.Range, bool) {
+func (p *parser) ranges(name string) ([]flow.AddressRange, bool) {
 	for _, a := range p.data.Addresses {
 		if string(a.ID) == name {
 			return a.Ranges, len(a.Unsupported) == 0 && a.FQDN == ""
@@ -36,7 +36,7 @@ func (p *parser) ranges(name string) ([]flow.Range, bool) {
 	if err != nil {
 		return nil, false
 	}
-	return []flow.Range{r}, true
+	return []flow.AddressRange{r}, true
 }
 func nativeMatch(from, to string) fm.Match {
 	m := fm.Match{AnySource: true, AnyDestination: true, AnyService: true}
@@ -52,7 +52,7 @@ func nativeMatch(from, to string) fm.Match {
 	}
 	return m
 }
-func staticMappings(original, target []flow.Range) ([]fm.Mapping, bool) {
+func staticMappings(original, target []flow.AddressRange) ([]fm.Mapping, bool) {
 	if len(original) != 1 || len(target) != 1 {
 		return nil, false
 	}
@@ -386,7 +386,7 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 	tx.Emit(d)
 	return s.Commit(tx)
 }
-func rangeCount(r flow.Range) *big.Int {
+func rangeCount(r flow.AddressRange) *big.Int {
 	first, last := r.First.As16(), r.Last.As16()
 	n := new(big.Int).Sub(new(big.Int).SetBytes(last[:]), new(big.Int).SetBytes(first[:]))
 	return n.Add(n, big.NewInt(1))

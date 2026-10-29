@@ -32,7 +32,7 @@ func (e Engine) AppendCanPreserve(ctx context.Context, before, after *fm.Firewal
 		return false, err
 	}
 	rule := before.Rule(id).Record()
-	for _, trace := range prior.Trace {
+	for _, trace := range prior.Decisions {
 		if outside.Empty() {
 			return true, nil
 		}

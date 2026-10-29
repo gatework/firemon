@@ -37,7 +37,7 @@ func TestHillstoneBNATReverseAndTwoDirectionsPreserveOffsets(t *testing.T) {
 			if !r.Exact || r.PossibleAllocation {
 				t.Fatal("fixed mapping lost exactness")
 			}
-			boxes := r.Translated.Boxes()
+			boxes := r.Translated.Regions()
 			if len(boxes) != 1 || boxes[0].Source != rangeOf(test.wantSrc) || boxes[0].Destination != rangeOf(test.wantDst) {
 				t.Fatalf("wrong offset: %+v", boxes)
 			}
@@ -47,7 +47,7 @@ func TestHillstoneBNATReverseAndTwoDirectionsPreserveOffsets(t *testing.T) {
 
 func TestHillstoneBNATPrecedesSNATRegardlessOfConfigPosition(t *testing.T) {
 	d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone", Software: "5.5R8"}, StaticNATs: []fm.StaticNATRecord{bnat()},
-		NATPools:    []fm.NATPoolRecord{{Object: fm.Object{ID: "pat"}, Ranges: []flow.Range{rangeOf("198.51.100.1/32")}}},
+		NATPools:    []fm.NATPoolRecord{{Object: fm.Object{ID: "pat"}, Ranges: []flow.AddressRange{rangeOf("198.51.100.1/32")}}},
 		DynamicNATs: []fm.DynamicNATRecord{{Object: fm.Object{ID: "fallback"}, Order: fm.NATOrder{Section: "snat", Position: 1}, Match: anyMatch(), SourceMode: fm.DynamicIPPort, DestinationMode: fm.NoTranslation, SourcePool: "pat"}}}
 	fw, err := fm.Seal(d)
 	if err != nil {
@@ -65,8 +65,8 @@ func TestHillstoneBNATPrecedesSNATRegardlessOfConfigPosition(t *testing.T) {
 func TestHillstoneNATStagesMatchOriginalDestinationAndComposePerPair(t *testing.T) {
 	// This pipeline is pinned to the 5.5R8 documented delayed rewrite model.
 	d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone", Software: "5.5R8"},
-		Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "public"}, Ranges: []flow.Range{rangeOf("203.0.113.10/32")}}},
-		NATPools:  []fm.NATPoolRecord{{Object: fm.Object{ID: "pat"}, Ranges: []flow.Range{rangeOf("198.51.100.1/32")}}}}
+		Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "public"}, Ranges: []flow.AddressRange{rangeOf("203.0.113.10/32")}}},
+		NATPools:  []fm.NATPoolRecord{{Object: fm.Object{ID: "pat"}, Ranges: []flow.AddressRange{rangeOf("198.51.100.1/32")}}}}
 	m := anyMatch()
 	m.AnyDestination = false
 	m.Destinations = []fm.AddressRef{{Kind: fm.AddressObject, ID: "public"}}
@@ -89,7 +89,7 @@ func TestHillstoneNATStagesMatchOriginalDestinationAndComposePerPair(t *testing.
 	if len(r.Relations) != 1 || r.Relations[0].Exact || !r.Relations[0].PossibleAllocation {
 		t.Fatalf("wrong composition: %+v", r)
 	}
-	boxes := r.Relations[0].Translated.Boxes()
+	boxes := r.Relations[0].Translated.Regions()
 	if len(boxes) != 1 || boxes[0].Source != rangeOf("198.51.100.1/32") || boxes[0].Destination != rangeOf("10.0.0.10/32") {
 		t.Fatal(boxes)
 	}
@@ -161,7 +161,7 @@ func TestBNATReverseRetainsInvalidSourceEvidence(t *testing.T) {
 func TestHillstoneEgressPredicateCannotBeTreatedAsOnlyAllocationTarget(t *testing.T) {
 	d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"},
 		Interfaces:  []fm.InterfaceRecord{{Object: fm.Object{ID: "wan"}}},
-		NATPools:    []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.Range{rangeOf("203.0.113.1/32")}}},
+		NATPools:    []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.AddressRange{rangeOf("203.0.113.1/32")}}},
 		DynamicNATs: []fm.DynamicNATRecord{{Object: fm.Object{ID: "pat"}, Match: anyMatch(), Interface: "wan", SourcePool: "pool", SourceMode: fm.DynamicIPPort, DestinationMode: fm.NoTranslation}}}
 	fw, _ := fm.Seal(d)
 	q := policy.Request{Traffic: traffic(t, "192.0.2.1/32", "198.51.100.1/32")}

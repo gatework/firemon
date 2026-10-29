@@ -30,7 +30,7 @@ func (p *parser) addressRef(name string, d *fm.Data) fm.AddressRef {
 				return fm.AddressRef{Kind: fm.AddressObject, ID: id}
 			}
 		}
-		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name}, Ranges: []flow.Range{r}})
+		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name}, Ranges: []flow.AddressRange{r}})
 		return fm.AddressRef{Kind: fm.AddressObject, ID: id}
 	}
 	return fm.AddressRef{Kind: fm.AddressObject, ID: fm.ID(name)}
@@ -242,9 +242,9 @@ func (p *parser) rules(_ context.Context, s *config.Session) error {
 	p.data = s.Data()
 	return nil
 }
-func (p *parser) ranges(ctx context.Context, name string) ([]flow.Range, bool, error) {
+func (p *parser) ranges(ctx context.Context, name string) ([]flow.AddressRange, bool, error) {
 	if r, err := address(name); err == nil {
-		return []flow.Range{r}, true, nil
+		return []flow.AddressRange{r}, true, nil
 	}
 	kind := fm.AddressObject
 	if p.graph.AddressGroup(fm.ID(name)) != nil {
@@ -363,9 +363,9 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 	for _, name := range order {
 		r := drafts[name]
 		ensureSelectors(&r.match)
-		var srcTargets, dstTargets, srcOriginal, dstOriginal []flow.Range
-		collect := func(names []string) ([]flow.Range, bool) {
-			var result []flow.Range
+		var srcTargets, dstTargets, srcOriginal, dstOriginal []flow.AddressRange
+		collect := func(names []string) ([]flow.AddressRange, bool) {
+			var result []flow.AddressRange
 			for _, name := range names {
 				ranges, ok, resolveErr := p.ranges(ctx, name)
 				if resolveErr != nil {

@@ -306,19 +306,19 @@ func (p *parser) interfaces(_ context.Context, s *config.Session) error {
 	}
 	return nil
 }
-func literal(value string) (flow.Range, error) {
+func literal(value string) (flow.AddressRange, error) {
 	if parts := strings.Split(value, "-"); len(parts) == 2 {
 		a, e := netip.ParseAddr(parts[0])
 		b, e2 := netip.ParseAddr(parts[1])
-		r := flow.Range{First: a, Last: b}
+		r := flow.AddressRange{First: a, Last: b}
 		if e != nil || e2 != nil || !r.Valid() {
-			return flow.Range{}, flow.ErrRange
+			return flow.AddressRange{}, flow.ErrRange
 		}
 		return r, nil
 	}
 	v, err := prefix([]string{value})
 	if err != nil {
-		return flow.Range{}, err
+		return flow.AddressRange{}, err
 	}
 	return flow.PrefixRange(v)
 }

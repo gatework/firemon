@@ -121,13 +121,13 @@ func prefix(value string) (netip.Prefix, error) {
 	}
 	return netip.PrefixFrom(a, a.BitLen()), nil
 }
-func addressRange(value string) (flow.Range, error) {
+func addressRange(value string) (flow.AddressRange, error) {
 	p, err := prefix(value)
 	if err != nil {
-		return flow.Range{}, err
+		return flow.AddressRange{}, err
 	}
 	if p != p.Masked() {
-		return flow.Range{}, fmt.Errorf("unaligned address prefix %s", p)
+		return flow.AddressRange{}, fmt.Errorf("unaligned address prefix %s", p)
 	}
 	return flow.PrefixRange(p)
 }

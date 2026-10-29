@@ -18,8 +18,8 @@ func BenchmarkOptimize(b *testing.B) {
 				for i := range n {
 					requests[i] = request(b, i, 443)
 					if kind == "paired" {
-						box := requests[i].Traffic.Boxes()[0]
-						box.Destination = flow.Range{First: host(i + 1024), Last: host(i + 1024)}
+						box := requests[i].Traffic.Regions()[0]
+						box.Destination = flow.AddressRange{First: host(i + 1024), Last: host(i + 1024)}
 						requests[i].Traffic = traffic(b, box)
 					}
 				}
@@ -31,7 +31,7 @@ func BenchmarkOptimize(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
 					got, err := (analysis.RequestOptimizer{}).Optimize(ctx, requests)
-					if err != nil || len(got) != 1 || len(got[0].Request.Traffic.Boxes()) != want {
+					if err != nil || len(got) != 1 || len(got[0].Request.Traffic.Regions()) != want {
 						b.Fatalf("exact optimizer: %v", err)
 					}
 				}

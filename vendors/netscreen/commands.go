@@ -90,7 +90,7 @@ func serviceName(fw *fm.Firewall, ref fm.ServiceRef) (string, error) {
 	return quoted(label(o))
 }
 func portText(v flow.Interval) string { return fmt.Sprintf("%d-%d", v.Low, v.High) }
-func rangePrefix(v flow.Range) (netip.Prefix, bool) {
+func rangePrefix(v flow.AddressRange) (netip.Prefix, bool) {
 	if !v.First.Is4() || !v.Last.Is4() {
 		return netip.Prefix{}, false
 	}

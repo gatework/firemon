@@ -24,7 +24,7 @@ func memberGraph(t *testing.T) *fm.Firewall {
 	d.Rules[0].Match.Sources = []fm.AddressRef{{Kind: fm.AddressGroupObject, ID: "outer"}}
 	// Same object in another role must not inherit source observations.
 	d.Rules[0].Match.Destinations = []fm.AddressRef{leaf}
-	term := request(t, "192.0.2.1", "192.0.2.1").Traffic.Boxes()[0]
+	term := request(t, "192.0.2.1", "192.0.2.1").Traffic.Regions()[0]
 	d.Services = []fm.ServiceRecord{{Object: fm.Object{ID: "web"}, Terms: []fm.ServiceTerm{{Protocol: term.Protocol, SourcePort: term.SourcePort, DestinationPort: term.DestinationPort, ICMPType: term.ICMPType, ICMPCode: term.ICMPCode}}}}
 	d.ServiceGroups = []fm.ServiceGroupRecord{{Object: fm.Object{ID: "services"}, Members: []fm.ServiceRef{{Kind: fm.ServiceObject, ID: "web"}}}}
 	d.Rules[0].Match.AnyService = false
@@ -52,9 +52,6 @@ func TestMemberUsageBindsRolesAndKeepsEveryNestedReferencePath(t *testing.T) {
 	found := make(map[analysis.MemberIdentity]analysis.MemberUsage)
 	for _, row := range rows {
 		found[row.Identity] = row
-		if row.Removable {
-			t.Fatal("member counters authorized deletion", row)
-		}
 	}
 	row, ok := found[identity]
 	if !ok || row.Unused != analysis.True || row.Revision != "v1" || row.GraphDigest != fw.SemanticDigest() || len(row.Paths) != 2 {

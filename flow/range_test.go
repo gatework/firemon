@@ -7,11 +7,13 @@ import (
 	"github.com/gatework/firemon/flow"
 )
 
-func address(s string) netip.Addr    { return netip.MustParseAddr(s) }
-func iprange(a, b string) flow.Range { return flow.Range{First: address(a), Last: address(b)} }
-func set(t *testing.T, rs ...flow.Range) flow.Set {
+func address(s string) netip.Addr { return netip.MustParseAddr(s) }
+func iprange(a, b string) flow.AddressRange {
+	return flow.AddressRange{First: address(a), Last: address(b)}
+}
+func set(t *testing.T, rs ...flow.AddressRange) flow.AddressSet {
 	t.Helper()
-	s, err := flow.NewSet(rs...)
+	s, err := flow.NewAddressSet(rs...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +40,7 @@ func TestSetNormalizesAndSubtractsWithoutEnumerating(t *testing.T) {
 	}
 }
 func TestRangeRejectsMixedFamilyAndPreservesIPv6Maximum(t *testing.T) {
-	if _, err := flow.NewSet(iprange("0.0.0.0", "::1")); err == nil {
+	if _, err := flow.NewAddressSet(iprange("0.0.0.0", "::1")); err == nil {
 		t.Fatal("mixed range accepted")
 	}
 	r, err := flow.PrefixRange(netip.MustParsePrefix("::/0"))
@@ -65,8 +67,8 @@ func FuzzSetAgainstByteOracle(f *testing.F) {
 			c, d = d, c
 		}
 		addr := func(n uint8) netip.Addr { return netip.AddrFrom4([4]byte{192, 0, 2, n}) }
-		x := set(t, flow.Range{First: addr(a), Last: addr(b)})
-		y := set(t, flow.Range{First: addr(c), Last: addr(d)})
+		x := set(t, flow.AddressRange{First: addr(a), Last: addr(b)})
+		y := set(t, flow.AddressRange{First: addr(c), Last: addr(d)})
 		diff, intersection, union := x.Difference(y), x.Intersection(y), x.Union(y)
 		for i := 0; i < 256; i++ {
 			inX, inY := i >= int(a) && i <= int(b), i >= int(c) && i <= int(d)

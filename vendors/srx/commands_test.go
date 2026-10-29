@@ -49,7 +49,7 @@ func TestSRXAppendResolvesScopedNamesAndKeepsExistingMembers(t *testing.T) {
 	}
 	raw = strings.Join(retained, "\n")
 	p, err := (plan.Planner{Renderer: srx.Renderer{}}).Plan(ctx, parse(t, raw), []policy.Request{{Traffic: func() flow.Traffic {
-		b := traffic(t, "192.0.2.11/32", "198.51.100.20/32", 6, 1000, 443).Boxes()[0]
+		b := traffic(t, "192.0.2.11/32", "198.51.100.20/32", 6, 1000, 443).Regions()[0]
 		b.SourcePort.High = 1001
 		v, _ := flow.NewTraffic(8, b)
 		return v

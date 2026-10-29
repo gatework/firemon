@@ -75,7 +75,7 @@ func TestValidateChangesAccountsForEntireDelta(t *testing.T) {
 			return nil
 		}, plan.ErrInvalid},
 		{"changed shared object", func(d *fm.Data) []plan.Change {
-			d.Addresses[0].Ranges = []flow.Range{addressRange("10.0.0.1/32")}
+			d.Addresses[0].Ranges = []flow.AddressRange{addressRange("10.0.0.1/32")}
 			return nil
 		}, plan.ErrInvalid},
 		{"remove", func(d *fm.Data) []plan.Change {

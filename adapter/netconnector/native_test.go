@@ -215,7 +215,7 @@ func TestNativeVendorsApplyAndRecoverLostSaveWithoutReplay(t *testing.T) {
 				}
 				src, _ := flow.PrefixRange(netip.MustParsePrefix("192.0.2.10/32"))
 				dst, _ := flow.PrefixRange(netip.MustParsePrefix("198.51.100.10/32"))
-				traffic, err := flow.NewTraffic(8, flow.Box{Source: src, Destination: dst, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1000, High: 1000}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
+				traffic, err := flow.NewTraffic(8, flow.TrafficRegion{Source: src, Destination: dst, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1000, High: 1000}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -43,19 +43,19 @@ func (e Engine) fortinetQuery(ctx context.Context, fw *fm.Firewall, q Request) (
 				return Result{}, err
 			}
 		}
-		for _, trace := range part.Trace {
-			key := traceKey{trace.Rule, trace.Action, trace.Certain}
+		for _, trace := range part.Decisions {
+			key := traceKey{trace.Rule, trace.Action, trace.Known}
 			if i, exists := traceIndexes[key]; exists {
-				out.Trace[i].Traffic, err = out.Trace[i].Traffic.Union(trace.Traffic, e.Limits.WithDefaults().MaxRegions)
+				out.Decisions[i].Traffic, err = out.Decisions[i].Traffic.Union(trace.Traffic, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
 					return Result{}, err
 				}
 			} else {
-				if len(out.Trace) >= e.Limits.WithDefaults().MaxRegions {
+				if len(out.Decisions) >= e.Limits.WithDefaults().MaxRegions {
 					return Result{}, ErrBudget
 				}
-				traceIndexes[key] = len(out.Trace)
-				out.Trace = append(out.Trace, trace)
+				traceIndexes[key] = len(out.Decisions)
+				out.Decisions = append(out.Decisions, trace)
 			}
 		}
 		out.Complete = out.Complete && part.Complete
@@ -337,9 +337,9 @@ func fortinetOriginalResult(fw *fm.Firewall, view NATRelation, part Result, limi
 			return Result{}, err
 		}
 	}
-	for i := range part.Trace {
+	for i := range part.Decisions {
 		var err error
-		part.Trace[i].Traffic, err = srxOriginal(fw, view, part.Trace[i].Traffic, limit)
+		part.Decisions[i].Traffic, err = srxOriginal(fw, view, part.Decisions[i].Traffic, limit)
 		if err != nil {
 			return Result{}, err
 		}

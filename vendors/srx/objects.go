@@ -69,7 +69,7 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 				case len(rest) == 6 && rest[2] == "range-address" && rest[4] == "to":
 					a, e1 := netip.ParseAddr(rest[3])
 					b, e2 := netip.ParseAddr(rest[5])
-					rr := flow.Range{First: a, Last: b}
+					rr := flow.AddressRange{First: a, Last: b}
 					if e1 == nil && e2 == nil && rr.Valid() {
 						if len(r.Ranges) > 0 && r.Ranges[0] != rr {
 							r.Unsupported = append(r.Unsupported, "conflicting address leaves")
@@ -294,7 +294,7 @@ func (p *parser) addressRef(zone, name string, d *fm.Data) fm.AddressRef {
 			prefix = "::/0"
 		}
 		r, _ := addressRange(prefix)
-		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name}, Ranges: []flow.Range{r}})
+		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name}, Ranges: []flow.AddressRange{r}})
 		return fm.AddressRef{Kind: fm.AddressObject, ID: id}
 	}
 	return fm.AddressRef{Kind: fm.AddressObject, ID: nativeID("missing-address", zone, name)}

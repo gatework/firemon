@@ -107,19 +107,19 @@ func values(w []string) []string {
 func object(name string, r row) fm.Object {
 	return fm.Object{ID: fm.ID(name), Name: name, Spans: []fm.Span{r.source.Span}}
 }
-func address(value string) (flow.Range, error) {
+func address(value string) (flow.AddressRange, error) {
 	if parts := strings.Split(value, "-"); len(parts) == 2 {
 		a, e := netip.ParseAddr(parts[0])
 		b, e2 := netip.ParseAddr(parts[1])
-		r := flow.Range{First: a, Last: b}
+		r := flow.AddressRange{First: a, Last: b}
 		if e != nil || e2 != nil || !r.Valid() {
-			return flow.Range{}, flow.ErrRange
+			return flow.AddressRange{}, flow.ErrRange
 		}
 		return r, nil
 	}
 	p, err := hostPrefix(value)
 	if err != nil {
-		return flow.Range{}, err
+		return flow.AddressRange{}, err
 	}
 	return flow.PrefixRange(p)
 }
@@ -227,7 +227,7 @@ func (p *parser) objects(_ context.Context, s *config.Session) error {
 			case "ip-netmask", "ip-range":
 				if len(rest) == 1 {
 					if v, err := address(rest[0]); err == nil {
-						a.Ranges = []flow.Range{v}
+						a.Ranges = []flow.AddressRange{v}
 						ok = true
 					}
 					if field == "ip-netmask" {

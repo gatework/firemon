@@ -18,7 +18,7 @@ func TestRoutePartitionsSplitRequestAtLongestPrefixBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	addresses, _ := flow.NewSet(rangeOf("192.0.2.0/24"))
+	addresses, _ := flow.NewAddressSet(rangeOf("192.0.2.0/24"))
 	paths, err := (policy.Engine{Limits: policy.Limits{MaxRegions: 64}}).ResolveRoutes(context.Background(), fw, "vr", addresses)
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestRoutePartitionsSplitRequestAtLongestPrefixBoundaries(t *testing.T) {
 	}
 }
 func TestPANPacketUsesOriginalDestinationWithPostDNATZone(t *testing.T) {
-	d := fm.Data{Metadata: fm.Metadata{Device: "pan", Vendor: "paloalto"}, Zones: []fm.ZoneRecord{{Object: fm.Object{ID: "outside"}}, {Object: fm.Object{ID: "inside"}}}, Interfaces: []fm.InterfaceRecord{{Object: fm.Object{ID: "out", Scope: "vr"}, Zone: "outside"}, {Object: fm.Object{ID: "in", Scope: "vr"}, Zone: "inside"}}, Routes: []fm.RouteRecord{{Object: fm.Object{ID: "default", Scope: "vr"}, Destination: netip.MustParsePrefix("0.0.0.0/0"), Interface: "out"}, {Object: fm.Object{ID: "internal", Scope: "vr"}, Destination: netip.MustParsePrefix("10.0.0.0/24"), Interface: "in"}}, Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "public"}, Ranges: []flow.Range{rangeOf("203.0.113.10/32")}}}}
+	d := fm.Data{Metadata: fm.Metadata{Device: "pan", Vendor: "paloalto"}, Zones: []fm.ZoneRecord{{Object: fm.Object{ID: "outside"}}, {Object: fm.Object{ID: "inside"}}}, Interfaces: []fm.InterfaceRecord{{Object: fm.Object{ID: "out", Scope: "vr"}, Zone: "outside"}, {Object: fm.Object{ID: "in", Scope: "vr"}, Zone: "inside"}}, Routes: []fm.RouteRecord{{Object: fm.Object{ID: "default", Scope: "vr"}, Destination: netip.MustParsePrefix("0.0.0.0/0"), Interface: "out"}, {Object: fm.Object{ID: "internal", Scope: "vr"}, Destination: netip.MustParsePrefix("10.0.0.0/24"), Interface: "in"}}, Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "public"}, Ranges: []flow.AddressRange{rangeOf("203.0.113.10/32")}}}}
 	natMatch := anyMatch()
 	natMatch.AnyToZone = false
 	natMatch.ToZones = []fm.ID{"outside"}

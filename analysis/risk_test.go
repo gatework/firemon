@@ -46,7 +46,7 @@ func TestRiskSeparatesDeclaredExposureFromEffectiveDenyShadowing(t *testing.T) {
 func riskAddress(t *testing.T, dimension analysis.Dimension, relation analysis.Relation, address string) analysis.RiskExpression {
 	t.Helper()
 	a := netip.MustParseAddr(address)
-	set, err := flow.NewSet(flow.Range{First: a, Last: a})
+	set, err := flow.NewAddressSet(flow.AddressRange{First: a, Last: a})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestCompoundRiskKeepsServicePairsAndEffectiveOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := request(t, "192.0.2.1", "198.51.100.1")
-	box := q.Traffic.Boxes()[0]
+	box := q.Traffic.Regions()[0]
 	box.Protocol, box.DestinationPort = flow.Interval{High: 255}, flow.Interval{High: 65535}
 	q.Traffic, err = flow.NewTraffic(32, box)
 	if err != nil {

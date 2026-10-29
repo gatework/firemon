@@ -19,7 +19,7 @@ type natContext struct {
 }
 type natDraft struct {
 	object                          fm.Object
-	source, destination             []flow.Range
+	source, destination             []flow.AddressRange
 	sourcePorts, destinationPorts   []flow.Interval
 	protocol                        uint16
 	hasProtocol, hasMatch, disabled bool
@@ -69,7 +69,7 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 			rest := w[6:]
 			switch {
 			case len(rest) >= 2 && rest[0] == "address" && rest[1] != "port":
-				var value flow.Range
+				var value flow.AddressRange
 				var err error
 				if len(rest) == 2 {
 					value, err = addressRange(rest[1])
@@ -78,7 +78,7 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 				if len(rest) == 4 && rest[2] == "to" {
 					a, e1 := netip.ParseAddr(rest[1])
 					b, e2 := netip.ParseAddr(rest[3])
-					value = flow.Range{First: a, Last: b}
+					value = flow.AddressRange{First: a, Last: b}
 					valid = e1 == nil && e2 == nil && value.Valid()
 				}
 				if valid {
@@ -246,7 +246,7 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 							originals := r.destination
 							if len(originals) == 0 {
 								v, _ := addressRange("0.0.0.0/0")
-								originals = []flow.Range{v}
+								originals = []flow.AddressRange{v}
 							}
 							for _, original := range originals {
 								if original.First.BitLen() != pool.record.Ranges[0].First.BitLen() {
@@ -278,13 +278,13 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 	return nil
 }
 
-func equalPrefixSize(a, b flow.Range) bool {
+func equalPrefixSize(a, b flow.AddressRange) bool {
 	// Input comes from native prefixes, not arbitrary pools with equal counts.
 	pa, oka := rangePrefix(a)
 	pb, okb := rangePrefix(b)
 	return oka && okb && pa.Addr().BitLen() == pb.Addr().BitLen() && pa.Bits() == pb.Bits()
 }
-func rangePrefix(r flow.Range) (netip.Prefix, bool) {
+func rangePrefix(r flow.AddressRange) (netip.Prefix, bool) {
 	for bits := r.First.BitLen(); bits >= 0; bits-- {
 		p := netip.PrefixFrom(r.First, bits).Masked()
 		v, err := flow.PrefixRange(p)
@@ -302,7 +302,7 @@ func parseNATLeaf(r *natDraft, leaf []string, direction string) bool {
 			if !ok {
 				return false
 			}
-			var ranges []flow.Range
+			var ranges []flow.AddressRange
 			for _, v := range values {
 				a, err := addressRange(v)
 				if err != nil {
@@ -384,10 +384,10 @@ func natMatch(r *natDraft, group *natContext, d *fm.Data) fm.Match {
 	if group.to != "" {
 		m.ToZones = []fm.ID{fm.ID(group.to)}
 	}
-	for axis, values := range [][]flow.Range{r.source, r.destination} {
+	for axis, values := range [][]flow.AddressRange{r.source, r.destination} {
 		for _, v := range values {
 			id := nativeID("nat-address", string(r.object.ID), string(rune('s'+axis)), v.First.String(), v.Last.String())
-			d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Scope: "nat:" + string(r.object.ID)}, Ranges: []flow.Range{v}})
+			d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Scope: "nat:" + string(r.object.ID)}, Ranges: []flow.AddressRange{v}})
 			ref := fm.AddressRef{Kind: fm.AddressObject, ID: id}
 			if axis == 0 {
 				m.Sources = append(m.Sources, ref)

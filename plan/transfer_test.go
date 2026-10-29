@@ -26,7 +26,7 @@ func TestTransferCannotRemoveEffectivePolicyNAT(t *testing.T) {
 	if err != nil || !before.Complete() {
 		t.Fatal(err)
 	}
-	traffic, err := flow.NewTraffic(32, flow.Box{Source: addressRange("192.0.2.10/32"), Destination: addressRange("203.0.113.10/32"), Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1000, High: 1000}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
+	traffic, err := flow.NewTraffic(32, flow.TrafficRegion{Source: addressRange("192.0.2.10/32"), Destination: addressRange("203.0.113.10/32"), Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1000, High: 1000}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestTransferCannotRemoveEffectivePolicyNAT(t *testing.T) {
 	}
 	// A disjoint transfer remains supported when the existing translation is
 	// unaffected; NAT presence alone is not grounds for rejection.
-	b := traffic.Boxes()[0]
+	b := traffic.Regions()[0]
 	b.Source = addressRange("192.0.2.11/32")
 	intent.Request.Traffic, _ = flow.NewTraffic(32, b)
 	p, err := (plan.Planner{Renderer: fortinet.Renderer{}}).Transfer(context.Background(), before, []plan.RuleIntent{intent}, time.Time{})
@@ -75,7 +75,7 @@ func TestTransferDoesNotReuseVIPAsOrdinaryAddress(t *testing.T) {
 	address := addressRange("198.51.100.1/32")
 	before, err := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fg", Vendor: "fortinet", Context: "root"},
 		Zones:      []fm.ZoneRecord{{Object: fm.Object{ID: "inside", Scope: "root"}, AddressScope: "root"}, {Object: fm.Object{ID: "outside", Scope: "root"}, AddressScope: "root"}},
-		Addresses:  []fm.AddressRecord{{Object: fm.Object{ID: "public", Name: "public", Scope: "root"}, Ranges: []flow.Range{address}, VIP: fm.NATRef{Kind: fm.StaticNATObject, ID: "vip"}}},
+		Addresses:  []fm.AddressRecord{{Object: fm.Object{ID: "public", Name: "public", Scope: "root"}, Ranges: []flow.AddressRange{address}, VIP: fm.NATRef{Kind: fm.StaticNATObject, ID: "vip"}}},
 		StaticNATs: []fm.StaticNATRecord{{Object: fm.Object{ID: "vip", Scope: "root"}, Disabled: true, Order: fm.NATOrder{Section: "vip"}, Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}, Destination: []fm.Mapping{{Original: address, Translated: address, Mode: fm.Identity}}}},
 	})
 	if err != nil || !before.Complete() {

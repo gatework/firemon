@@ -16,10 +16,10 @@ import (
 func universe(limit int) (flow.Traffic, error) {
 	full := flow.Interval{Low: 0, High: 65535}
 	octet := flow.Interval{Low: 0, High: 255}
-	var boxes []flow.Box
+	var boxes []flow.TrafficRegion
 	for _, cidr := range []string{"0.0.0.0/0", "::/0"} {
 		r, _ := flow.PrefixRange(netip.MustParsePrefix(cidr))
-		boxes = append(boxes, flow.Box{Source: r, Destination: r, Protocol: octet, SourcePort: full, DestinationPort: full, ICMPType: octet, ICMPCode: octet})
+		boxes = append(boxes, flow.TrafficRegion{Source: r, Destination: r, Protocol: octet, SourcePort: full, DestinationPort: full, ICMPType: octet, ICMPCode: octet})
 	}
 	return flow.NewTraffic(limit, boxes...)
 }
@@ -98,22 +98,22 @@ func (p Planner) proveWithPrior(ctx context.Context, before, after *fm.Firewall,
 func (p *Plan) seal() error {
 	type transfer struct {
 		Intent  RuleIntent
-		Traffic []flow.Box
+		Traffic []flow.TrafficRegion
 	}
 	targets := make([]transfer, 0, len(p.transfers))
 	for _, intent := range p.transfers {
-		targets = append(targets, transfer{intent, intent.Request.Traffic.Boxes()})
+		targets = append(targets, transfer{intent, intent.Request.Traffic.Regions()})
 	}
 	b, err := json.Marshal(struct {
 		Proof        Proof
 		Changes      []Change
 		Commands     []string
 		Target       policy.Request
-		Traffic      []flow.Box
+		Traffic      []flow.TrafficRegion
 		Preservation *policy.Equivalence
 		Transfers    []transfer
 		TransferFrom time.Time
-	}{p.proof, p.changes, p.commands, p.target, p.target.Traffic.Boxes(), p.preservation, targets, p.transferFrom})
+	}{p.proof, p.changes, p.commands, p.target, p.target.Traffic.Regions(), p.preservation, targets, p.transferFrom})
 	if err != nil {
 		return err
 	}

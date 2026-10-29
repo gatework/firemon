@@ -72,7 +72,7 @@ func uniqueInterface(fw *fm.Firewall, zone fm.ID) *fm.Interface {
 	}
 	return out
 }
-func routeInterface(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set) *fm.Interface {
+func routeInterface(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.AddressSet) *fm.Interface {
 	paths, err := (policy.Engine{}).ResolveRoutes(ctx, fw, vrf, addresses)
 	if err != nil || len(paths) == 0 {
 		return nil
@@ -86,7 +86,7 @@ func routeInterface(ctx context.Context, fw *fm.Firewall, vrf string, addresses 
 	}
 	return out
 }
-func (p *parser) nativeAddress(d *fm.Data, name string, r flow.Range, span fm.Span) fm.AddressRef {
+func (p *parser) nativeAddress(d *fm.Data, name string, r flow.AddressRange, span fm.Span) fm.AddressRef {
 	id := fm.ID(name)
 	ref := fm.AddressRef{Kind: fm.AddressObject, ID: id}
 	if old, ok := p.addresses[id]; ok {
@@ -101,7 +101,7 @@ func (p *parser) nativeAddress(d *fm.Data, name string, r flow.Range, span fm.Sp
 		}
 		return old
 	}
-	d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name, Spans: []fm.Span{span}}, Ranges: []flow.Range{r}})
+	d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name, Spans: []fm.Span{span}}, Ranges: []flow.AddressRange{r}})
 	p.addresses[id] = ref
 	return ref
 }
@@ -152,7 +152,7 @@ func (p *parser) interfaceNAT(ctx context.Context, s *config.Session) error {
 				continue
 			}
 			seen[id] = true
-			pool := fm.NATPoolRecord{Object: object(id, rest[0], ""), Interface: ir.ID, Ranges: []flow.Range{{First: first, Last: last}}}
+			pool := fm.NATPoolRecord{Object: object(id, rest[0], ""), Interface: ir.ID, Ranges: []flow.AddressRange{{First: first, Last: last}}}
 			if len(rest) == 3 {
 				pool.Ports = flow.Interval{Low: 1024, High: 65535}
 			}
@@ -200,7 +200,7 @@ func (p *parser) interfaceNAT(ctx context.Context, s *config.Session) error {
 			}
 			original, _ := flow.PrefixRange(mapped)
 			target, _ := flow.PrefixRange(real)
-			set, _ := flow.NewSet(target)
+			set, _ := flow.NewAddressSet(target)
 			vr := fields["vrouter"]
 			if vr == "" {
 				vr = "trust-vr"
@@ -243,8 +243,8 @@ func (p *parser) interfaceNAT(ctx context.Context, s *config.Session) error {
 				continue
 			}
 			seen[id] = true
-			original, target := flow.Range{First: mapped, Last: mapped}, flow.Range{First: real, Last: real}
-			set, _ := flow.NewSet(target)
+			original, target := flow.AddressRange{First: mapped, Last: mapped}, flow.AddressRange{First: real, Last: real}
+			set, _ := flow.NewAddressSet(target)
 			targetInterface := routeInterface(ctx, fw, ir.Scope, set)
 			n := fm.DynamicNATRecord{Object: object(id, rest[0], ""), Match: base, Order: fm.NATOrder{Stage: 0, Position: len(d.StaticNATs) + len(d.DynamicNATs), Section: "vip"}, SourceMode: fm.NoTranslation, DestinationMode: fm.StaticIP, Destination: []fm.Mapping{{Original: original, Translated: target, Mode: fm.Constant}}}
 			n.Match.Destinations = []fm.AddressRef{p.nativeAddress(&d, "VIP("+mapped.String()+")", original, row.Span)}
@@ -312,7 +312,7 @@ func (p *parser) embeddedNAT(ctx context.Context, s *config.Session) error {
 				n.Unsupported = append(n.Unsupported, "policy destination NAT requires explicit resolved addresses")
 			} else {
 				for _, v := range destinations.Ranges() {
-					n.Destination = append(n.Destination, fm.Mapping{Original: v, Translated: flow.Range{First: target, Last: target}, Mode: fm.Constant})
+					n.Destination = append(n.Destination, fm.Mapping{Original: v, Translated: flow.AddressRange{First: target, Last: target}, Mode: fm.Constant})
 				}
 			}
 			n.DestinationMode = fm.StaticIP

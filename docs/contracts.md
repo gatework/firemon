@@ -247,7 +247,7 @@ synchronous constructor with the same signature.
 Candidate construction shares the planner's counter through object-catalog,
 visibility and collision scans. `Firewall.RecordCount()` counts top-level domain
 and source-evidence records before candidate graph export; it is a visit unit,
-not a byte or nested-member count. `flow.Set.RangeCount()` and
+not a byte or nested-member count. `flow.AddressSet.RangeCount()` and
 `flow.Traffic.RegionCount()` permit rejection of oversized standards and transfer
 partitions before copied views are created. Native source-size limits and region
 limits retain their separate meanings; visits are not a peak-memory guarantee.

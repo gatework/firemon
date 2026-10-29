@@ -19,7 +19,7 @@ func requestTraffic(t *testing.T, source, destination string, sourcePort uint16)
 	t.Helper()
 	src, _ := flow.PrefixRange(netip.MustParsePrefix(source))
 	dst, _ := flow.PrefixRange(netip.MustParsePrefix(destination))
-	traffic, err := flow.NewTraffic(8, flow.Box{Source: src, Destination: dst,
+	traffic, err := flow.NewTraffic(8, flow.TrafficRegion{Source: src, Destination: dst,
 		Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: sourcePort, High: sourcePort},
 		DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255},
 	})

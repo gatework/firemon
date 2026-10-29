@@ -129,7 +129,7 @@ func crashFixture(t *testing.T, root, point string) (configuredEngine, *crashDev
 	}
 	src, _ := flow.PrefixRange(netip.MustParsePrefix("192.0.2.1/32"))
 	dst, _ := flow.PrefixRange(netip.MustParsePrefix("198.51.100.1/32"))
-	traffic, err := flow.NewTraffic(8, flow.Box{Source: src, Destination: dst, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
+	traffic, err := flow.NewTraffic(8, flow.TrafficRegion{Source: src, Destination: dst, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,7 +17,7 @@ import (
 
 func host(i int) netip.Addr { return netip.AddrFrom4([4]byte{198, 18, byte(i >> 8), byte(i)}) }
 
-func traffic(tb testing.TB, box flow.Box) flow.Traffic {
+func traffic(tb testing.TB, box flow.TrafficRegion) flow.Traffic {
 	tb.Helper()
 	v, err := flow.NewTraffic(4096, box)
 	if err != nil {
@@ -29,8 +29,8 @@ func traffic(tb testing.TB, box flow.Box) flow.Traffic {
 func request(tb testing.TB, i int, port uint16) policy.Request {
 	tb.Helper()
 	src, dst := host(i), netip.MustParseAddr("203.0.113.10")
-	return policy.Request{FromZone: "inside", ToZone: "outside", Traffic: traffic(tb, flow.Box{
-		Source: flow.Range{First: src, Last: src}, Destination: flow.Range{First: dst, Last: dst},
+	return policy.Request{FromZone: "inside", ToZone: "outside", Traffic: traffic(tb, flow.TrafficRegion{
+		Source: flow.AddressRange{First: src, Last: src}, Destination: flow.AddressRange{First: dst, Last: dst},
 		Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1234, High: 1234},
 		DestinationPort: flow.Interval{Low: port, High: port}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255},
 	})}

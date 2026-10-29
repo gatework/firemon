@@ -19,7 +19,7 @@ import (
 func outboundRequest(t *testing.T) policy.Request {
 	t.Helper()
 	src, dst := netip.MustParseAddr("10.0.0.10"), netip.MustParseAddr("198.51.100.10")
-	traffic, err := flow.NewTraffic(8, flow.Box{Source: flow.Range{First: src, Last: src}, Destination: flow.Range{First: dst, Last: dst},
+	traffic, err := flow.NewTraffic(8, flow.TrafficRegion{Source: flow.AddressRange{First: src, Last: src}, Destination: flow.AddressRange{First: dst, Last: dst},
 		Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1234, High: 1234}, DestinationPort: flow.Interval{Low: 443, High: 443},
 		ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 	if err != nil {
@@ -58,17 +58,17 @@ func TestInterfaceNATRetainsSelectedHostThroughSnapshot(t *testing.T) {
 					t.Fatal(got, err)
 				}
 				relation := got.Relations[0]
-				boxes := relation.Translated.Boxes()
+				boxes := relation.Translated.Regions()
 				want := netip.MustParseAddr("203.0.113.9")
-				if len(boxes) != 1 || boxes[0].Source != (flow.Range{First: want, Last: want}) || relation.Exact || !relation.PossibleAllocation {
+				if len(boxes) != 1 || boxes[0].Source != (flow.AddressRange{First: want, Last: want}) || relation.Exact || !relation.PossibleAllocation {
 					t.Fatal("selected interface host expanded", boxes, relation.Exact, relation.PossibleAllocation)
 				}
 				packet, err := (policy.Engine{}).QueryPacket(context.Background(), graph, policy.PacketRequest{Request: outboundRequest(t), VRF: "default"})
 				if err != nil || !packet.Complete || len(packet.Paths) != 1 {
 					t.Fatal("packet path lost selected allocation", packet, err)
 				}
-				packetBoxes := packet.Paths[0].NAT.Translated.Boxes()
-				if len(packetBoxes) != 1 || packetBoxes[0].Source != (flow.Range{First: want, Last: want}) {
+				packetBoxes := packet.Paths[0].NAT.Translated.Regions()
+				if len(packetBoxes) != 1 || packetBoxes[0].Source != (flow.AddressRange{First: want, Last: want}) {
 					t.Fatal("packet path widened source", packetBoxes)
 				}
 			}
@@ -86,7 +86,7 @@ func TestXMLInterfaceNATUsesTheSelectedAddressObjectHost(t *testing.T) {
 	if err != nil || !got.Complete || len(got.Relations) != 1 {
 		t.Fatal(got, err)
 	}
-	boxes := got.Relations[0].Translated.Boxes()
+	boxes := got.Relations[0].Translated.Regions()
 	if len(boxes) != 1 || boxes[0].Source.First.String() != "203.0.113.9" || boxes[0].Source.Last.String() != "203.0.113.9" {
 		t.Fatal("XML selected host expanded", boxes)
 	}

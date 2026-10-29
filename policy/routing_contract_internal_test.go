@@ -36,7 +36,7 @@ func TestRouteCancellationDuringFinalEqualPrefixGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	interval, _ := flow.PrefixRange(netip.MustParsePrefix("192.0.2.0/24"))
-	addresses, _ := flow.NewSet(interval)
+	addresses, _ := flow.NewAddressSet(interval)
 	// Entry, collection and post-sort checks used to finish before this point;
 	// the final same-prefix scans then returned a successful result.
 	ctx := &cancellationCheckpoint{Context: context.Background(), limit: count + 10}

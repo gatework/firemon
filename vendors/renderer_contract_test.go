@@ -163,7 +163,7 @@ func TestInertInlineAdditionDoesNotRenderDeclaration(t *testing.T) {
 		t.Run(vendor, func(t *testing.T) {
 			before, _ := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: vendor}})
 			d := before.Export()
-			d.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "orphan", Inline: true}, Ranges: []flow.Range{{First: netip.MustParseAddr("192.0.2.1"), Last: netip.MustParseAddr("192.0.2.1")}}}}
+			d.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "orphan", Inline: true}, Ranges: []flow.AddressRange{{First: netip.MustParseAddr("192.0.2.1"), Last: netip.MustParseAddr("192.0.2.1")}}}}
 			after, _ := fm.Seal(d)
 			if commands, err := renderer.Render(context.Background(), before, after, nil); err != nil || len(commands) != 0 {
 				t.Fatalf("semantic no-op: %v %v", commands, err)
@@ -184,7 +184,7 @@ func TestInertInlineAdditionDoesNotRenderDeclaration(t *testing.T) {
 func TestPANObjectCreationRejectsNativeNamespaceCollision(t *testing.T) {
 	for _, group := range []bool{false, true} {
 		t.Run(fmt.Sprint("group=", group), func(t *testing.T) {
-			existing := fm.AddressRecord{Object: fm.Object{ID: "existing", Name: "taken"}, Ranges: []flow.Range{{First: netip.MustParseAddr("192.0.2.1"), Last: netip.MustParseAddr("192.0.2.1")}}}
+			existing := fm.AddressRecord{Object: fm.Object{ID: "existing", Name: "taken"}, Ranges: []flow.AddressRange{{First: netip.MustParseAddr("192.0.2.1"), Last: netip.MustParseAddr("192.0.2.1")}}}
 			d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "paloalto"}}
 			if group {
 				d.AddressGroups = []fm.AddressGroupRecord{{Object: fm.Object{ID: "group", Name: "taken"}}}
@@ -282,7 +282,7 @@ func TestNewDeclarationRetainsNativeIdentity(t *testing.T) {
 		t.Run(vendor, func(t *testing.T) {
 			before, _ := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: vendor}})
 			d := before.Export()
-			d.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "abstract-id", Name: "native-name"}, Ranges: []flow.Range{{First: netip.MustParseAddr("192.0.2.1"), Last: netip.MustParseAddr("192.0.2.1")}}}}
+			d.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "abstract-id", Name: "native-name"}, Ranges: []flow.AddressRange{{First: netip.MustParseAddr("192.0.2.1"), Last: netip.MustParseAddr("192.0.2.1")}}}}
 			ref := fm.AddressRef{Kind: fm.AddressObject, ID: "abstract-id"}
 			d.Rules = []fm.RuleRecord{{Object: fm.Object{ID: "new", Name: "new"}, RuleSet: "security", Action: fm.Permit, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant, Match: fm.Match{Sources: []fm.AddressRef{ref}, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}}}
 			after, _ := fm.Seal(d)

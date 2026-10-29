@@ -11,15 +11,15 @@ import (
 	"github.com/gatework/firemon/flow"
 )
 
-func addressRange(value string) (flow.Range, bool) {
+func addressRange(value string) (flow.AddressRange, bool) {
 	a, b, has := strings.Cut(value, "-")
 	if !has {
 		b = a
 	}
 	return ipv4Range(a, b)
 }
-func equalSize(a, b flow.Range) bool {
-	size := func(r flow.Range) *big.Int {
+func equalSize(a, b flow.AddressRange) bool {
+	size := func(r flow.AddressRange) *big.Int {
 		lo, hi := r.First.As16(), r.Last.As16()
 		return new(big.Int).Sub(new(big.Int).SetBytes(hi[:]), new(big.Int).SetBytes(lo[:]))
 	}
@@ -41,7 +41,7 @@ func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
 			f.invalid("pool allocation mode")
 		}
 		if target, ok := ipv4Range(f.one("startip", ""), f.one("endip", "")); ok {
-			r.Ranges = []flow.Range{target}
+			r.Ranges = []flow.AddressRange{target}
 		} else {
 			f.invalid("pool range")
 		}
@@ -149,7 +149,7 @@ func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
 		}
 		a := fm.AddressRecord{Object: object(id, name, p.vdom), VIP: fm.NATRef{Kind: kind, ID: o.ID}}
 		if ok1 {
-			a.Ranges = []flow.Range{public}
+			a.Ranges = []flow.AddressRange{public}
 		}
 		a.Unsupported = slices.Clone(o.Unsupported)
 		d.Addresses = append(d.Addresses, a)

@@ -6,7 +6,7 @@ import (
 )
 
 var ErrBudget = errors.New("traffic region budget exceeded")
-var ErrBox = errors.New("invalid traffic region")
+var ErrRegion = errors.New("invalid traffic region")
 
 type Interval struct{ Low, High uint16 }
 
@@ -16,46 +16,46 @@ func (i Interval) intersection(j Interval) (Interval, bool) {
 	return x, x.Low <= x.High
 }
 
-// Box preserves the association between source, destination and service dimensions.
+// TrafficRegion preserves the association between source, destination and service dimensions.
 // A wildcard is the full interval; protocol zero remains protocol zero.
-type Box struct {
-	Source, Destination                                       Range
+type TrafficRegion struct {
+	Source, Destination                                       AddressRange
 	Protocol, SourcePort, DestinationPort, ICMPType, ICMPCode Interval
 }
 
-func (b Box) Valid() bool {
+func (b TrafficRegion) Valid() bool {
 	return b.Source.Valid() && b.Destination.Valid() && b.Source.First.BitLen() == b.Destination.First.BitLen() && b.Protocol.valid(255) && b.SourcePort.valid(65535) && b.DestinationPort.valid(65535) && b.ICMPType.valid(255) && b.ICMPCode.valid(255)
 }
-func (b Box) Intersection(c Box) (Box, bool) {
-	var r Box
+func (b TrafficRegion) Intersection(c TrafficRegion) (TrafficRegion, bool) {
+	var r TrafficRegion
 	var ok bool
 	if r.Source, ok = b.Source.Intersection(c.Source); !ok {
-		return Box{}, false
+		return TrafficRegion{}, false
 	}
 	if r.Destination, ok = b.Destination.Intersection(c.Destination); !ok {
-		return Box{}, false
+		return TrafficRegion{}, false
 	}
 	bd, cd, rd := b.dimensions(), c.dimensions(), r.dimensions()
 	for i := range bd {
 		if *rd[i], ok = bd[i].intersection(*cd[i]); !ok {
-			return Box{}, false
+			return TrafficRegion{}, false
 		}
 	}
 	return r, true
 }
-func (b *Box) dimensions() []*Interval {
+func (b *TrafficRegion) dimensions() []*Interval {
 	return []*Interval{&b.Protocol, &b.SourcePort, &b.DestinationPort, &b.ICMPType, &b.ICMPCode}
 }
 
 // subtract carves disjoint slabs around the intersection, never cross-products of projected axes.
-func (b Box) subtract(c Box, pieces *[14]Box) int {
+func (b TrafficRegion) subtract(c TrafficRegion, pieces *[14]TrafficRegion) int {
 	x, ok := b.Intersection(c)
 	if !ok {
 		pieces[0] = b
 		return 1
 	}
 	count := 0
-	emit := func(piece Box) { pieces[count] = piece; count++ }
+	emit := func(piece TrafficRegion) { pieces[count] = piece; count++ }
 	core := b
 	if core.Source.First.Compare(x.Source.First) < 0 {
 		piece := core
@@ -100,18 +100,18 @@ func (b Box) subtract(c Box, pieces *[14]Box) int {
 }
 
 // Traffic is an immutable disjoint union. Operations return no partial result on budget failure.
-type Traffic struct{ boxes []Box }
+type Traffic struct{ boxes []TrafficRegion }
 
-func NewTraffic(limit int, boxes ...Box) (Traffic, error) {
+func NewTraffic(limit int, boxes ...TrafficRegion) (Traffic, error) {
 	if limit < 1 || len(boxes) > limit {
 		return Traffic{}, ErrBudget
 	}
 	var out Traffic
 	for _, b := range boxes {
 		if !b.Valid() {
-			return Traffic{}, ErrBox
+			return Traffic{}, ErrRegion
 		}
-		pieces, err := (Traffic{boxes: []Box{b}}).Difference(out, limit)
+		pieces, err := (Traffic{boxes: []TrafficRegion{b}}).Difference(out, limit)
 		if err != nil {
 			return Traffic{}, err
 		}
@@ -123,21 +123,21 @@ func NewTraffic(limit int, boxes ...Box) (Traffic, error) {
 	return out, nil
 }
 
-// RegionCount returns the disjoint box count without copying traffic.
+// RegionCount returns the disjoint region count without copying traffic.
 func (s Traffic) RegionCount() int { return len(s.boxes) }
 
-func (s Traffic) Boxes() []Box { return slices.Clone(s.boxes) }
-func (s Traffic) Empty() bool  { return len(s.boxes) == 0 }
+func (s Traffic) Regions() []TrafficRegion { return slices.Clone(s.boxes) }
+func (s Traffic) Empty() bool              { return len(s.boxes) == 0 }
 func (s Traffic) Union(t Traffic, limit int) (Traffic, error) {
 	// Each operand is already disjoint. Normalize only the added coverage.
 	if limit < 1 || len(s.boxes)+len(t.boxes) > limit {
 		return Traffic{}, ErrBudget
 	}
-	out := s.Boxes()
+	out := s.Regions()
 	for _, b := range t.boxes {
 		// Charge each added declaration's intermediate regions as NewTraffic
 		// does. Combining all additions first could change budget failures.
-		extra, err := (Traffic{boxes: []Box{b}}).Difference(s, limit)
+		extra, err := (Traffic{boxes: []TrafficRegion{b}}).Difference(s, limit)
 		if err != nil {
 			return Traffic{}, err
 		}
@@ -152,7 +152,7 @@ func (s Traffic) Intersection(t Traffic, limit int) (Traffic, error) {
 	if limit < 1 {
 		return Traffic{}, ErrBudget
 	}
-	var out []Box
+	var out []TrafficRegion
 	for _, a := range s.boxes {
 		for _, b := range t.boxes {
 			if x, ok := a.Intersection(b); ok {
@@ -169,10 +169,10 @@ func (s Traffic) Difference(t Traffic, limit int) (Traffic, error) {
 	if limit < 1 || len(s.boxes) > limit {
 		return Traffic{}, ErrBudget
 	}
-	out := s.Boxes()
-	var next []Box
+	out := s.Regions()
+	var next []TrafficRegion
 	// At most two slabs per dimension; the bounded scratch stays on the stack.
-	var pieces [14]Box
+	var pieces [14]TrafficRegion
 	for _, b := range t.boxes {
 		next = next[:0]
 		for _, a := range out {

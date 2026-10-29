@@ -43,7 +43,7 @@ func TestPerlOracleCandidateParity(t *testing.T) {
 	}
 	for _, tc := range fixture.Cases {
 		t.Run(tc.Name, func(t *testing.T) {
-			var boxes []flow.Box
+			var boxes []flow.TrafficRegion
 			for _, src := range tc.Src {
 				for _, dst := range tc.Dst {
 					for _, srv := range tc.Srv {
@@ -51,7 +51,7 @@ func TestPerlOracleCandidateParity(t *testing.T) {
 						b, _ := flow.PrefixRange(netip.MustParsePrefix(dst))
 						parts := strings.Split(srv, "/")
 						port, _ := strconv.Atoi(parts[1])
-						boxes = append(boxes, flow.Box{Source: a, Destination: b, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: uint16(port), High: uint16(port)}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
+						boxes = append(boxes, flow.TrafficRegion{Source: a, Destination: b, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: uint16(port), High: uint16(port)}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
 					}
 				}
 			}

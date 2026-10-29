@@ -50,7 +50,7 @@ func BenchmarkRouteResolution(b *testing.B) {
 				b.Fatalf("route graph: %v", err)
 			}
 			interval, _ := flow.PrefixRange(netip.MustParsePrefix("198.19.0.0/16"))
-			addresses, _ := flow.NewSet(interval)
+			addresses, _ := flow.NewAddressSet(interval)
 			b.ReportAllocs()
 			for b.Loop() {
 				paths, err := (policy.Engine{}).ResolveRoutes(context.Background(), fw, "", addresses)

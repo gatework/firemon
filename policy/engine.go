@@ -41,15 +41,17 @@ type Request struct {
 	EgressInterface  fm.ID
 	At               time.Time
 }
-type Trace struct {
+
+// RuleDecision records the effective traffic consumed by one ordered rule.
+type RuleDecision struct {
 	Rule    fm.ID
 	Action  fm.Action
 	Traffic flow.Traffic
-	Certain bool
+	Known   bool
 }
 type Result struct {
 	Allowed, Denied, Unknown, Unmatched flow.Traffic
-	Trace                               []Trace
+	Decisions                           []RuleDecision
 	Complete                            bool
 }
 
@@ -129,7 +131,7 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 		if err != nil {
 			return Result{}, err
 		}
-		result.Trace = append(result.Trace, Trace{Rule: r.ID, Action: r.Action, Traffic: hit, Certain: certain})
+		result.Decisions = append(result.Decisions, RuleDecision{Rule: r.ID, Action: r.Action, Traffic: hit, Known: certain})
 		remaining, err = remaining.Difference(hit, limits.MaxRegions)
 		if err != nil {
 			return Result{}, err
@@ -148,10 +150,10 @@ func schedule(fw *fm.Firewall, id fm.ID, at time.Time) (bool, bool) {
 	}
 	return s.ActiveAt(at)
 }
-func allAddresses() flow.Set {
+func allAddresses() flow.AddressSet {
 	a, _ := flow.PrefixRange(netip.MustParsePrefix("0.0.0.0/0"))
 	b, _ := flow.PrefixRange(netip.MustParsePrefix("::/0"))
-	s, _ := flow.NewSet(a, b)
+	s, _ := flow.NewAddressSet(a, b)
 	return s
 }
 func zoneMatch(zones []fm.ID, any bool, q fm.ID) (bool, bool) {
@@ -233,7 +235,7 @@ func (e Engine) match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Reques
 				if err := budget.charge(); err != nil {
 					return flow.Traffic{}, false, err
 				}
-				box := flow.Box{Source: src, Destination: dst, Protocol: service.Protocol, SourcePort: service.SourcePort, DestinationPort: service.DestinationPort, ICMPType: service.ICMPType, ICMPCode: service.ICMPCode}
+				box := flow.TrafficRegion{Source: src, Destination: dst, Protocol: service.Protocol, SourcePort: service.SourcePort, DestinationPort: service.DestinationPort, ICMPType: service.ICMPType, ICMPCode: service.ICMPCode}
 				candidate, err := flow.NewTraffic(limits.MaxRegions, box)
 				if err != nil {
 					return flow.Traffic{}, false, err

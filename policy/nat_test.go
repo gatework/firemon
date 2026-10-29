@@ -10,7 +10,10 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-func rangeOf(s string) flow.Range { r, _ := flow.PrefixRange(netip.MustParsePrefix(s)); return r }
+func rangeOf(s string) flow.AddressRange {
+	r, _ := flow.PrefixRange(netip.MustParsePrefix(s))
+	return r
+}
 func TestStaticNATTranslatesOnlyMatchedSubnetWithOffset(t *testing.T) {
 	d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, StaticNATs: []fm.StaticNATRecord{{Object: fm.Object{ID: "map"}, Match: anyMatch(), Source: []fm.Mapping{{Original: rangeOf("192.0.2.0/24"), Translated: rangeOf("203.0.113.0/24"), Mode: fm.Offset}}}}}
 	fw, err := fm.Seal(d)
@@ -24,13 +27,13 @@ func TestStaticNATTranslatesOnlyMatchedSubnetWithOffset(t *testing.T) {
 	if len(res.Relations) != 1 || !res.Relations[0].Exact {
 		t.Fatal(res)
 	}
-	boxes := res.Relations[0].Translated.Boxes()
+	boxes := res.Relations[0].Translated.Regions()
 	if len(boxes) != 1 || boxes[0].Source != rangeOf("203.0.113.128/25") {
 		t.Fatal("offset translated entire declared subnet", boxes)
 	}
 }
 func TestNoNATConsumesBeforeDynamicAllocation(t *testing.T) {
-	fw, err := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, NATPools: []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.Range{rangeOf("203.0.113.0/29")}}}, DynamicNATs: []fm.DynamicNATRecord{
+	fw, err := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, NATPools: []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.AddressRange{rangeOf("203.0.113.0/29")}}}, DynamicNATs: []fm.DynamicNATRecord{
 		{Object: fm.Object{ID: "exempt"}, Match: anyMatch(), Order: fm.NATOrder{Position: 0}, SourceMode: fm.NoTranslation, DestinationMode: fm.NoTranslation},
 		{Object: fm.Object{ID: "pool"}, Match: anyMatch(), Order: fm.NATOrder{Position: 1}, SourceMode: fm.DynamicIPPort, DestinationMode: fm.NoTranslation, SourcePool: "pool"},
 	}})
@@ -82,7 +85,7 @@ func TestBidirectionalStaticReverseNeverReturnsCertainNoNAT(t *testing.T) {
 }
 
 func TestMixedHillstoneSourceAndDestinationChainsFailClosed(t *testing.T) {
-	fw, err := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, NATPools: []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.Range{rangeOf("203.0.113.1/32")}}}, DynamicNATs: []fm.DynamicNATRecord{
+	fw, err := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, NATPools: []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.AddressRange{rangeOf("203.0.113.1/32")}}}, DynamicNATs: []fm.DynamicNATRecord{
 		{Object: fm.Object{ID: "snat"}, Match: anyMatch(), Order: fm.NATOrder{Position: 0}, SourceMode: fm.DynamicIPPort, DestinationMode: fm.NoTranslation, SourcePool: "pool"},
 		{Object: fm.Object{ID: "dnat"}, Match: anyMatch(), Order: fm.NATOrder{Position: 1}, SourceMode: fm.NoTranslation, DestinationMode: fm.StaticIP, Destination: []fm.Mapping{{Original: rangeOf("198.51.100.1/32"), Translated: rangeOf("10.0.0.1/32"), Mode: fm.Constant}}},
 	}})

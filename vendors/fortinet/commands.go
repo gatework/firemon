@@ -40,7 +40,7 @@ func label(o fm.Object) string {
 	return string(o.ID)
 }
 func portText(p flow.Interval) string { return fmt.Sprintf("%d-%d", p.Low, p.High) }
-func prefixRange(r flow.Range) (netip.Prefix, bool) {
+func prefixRange(r flow.AddressRange) (netip.Prefix, bool) {
 	if !r.First.Is4() || !r.Last.Is4() {
 		return netip.Prefix{}, false
 	}

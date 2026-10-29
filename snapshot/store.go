@@ -23,7 +23,7 @@ var ErrReserved = errors.New("device has a pending operation")
 var ErrNotFound = errors.New("snapshot not found")
 
 type Head struct {
-	Networks                                              []flow.Range
+	Networks                                              []flow.AddressRange
 	LocationComplete                                      bool
 	Revision, SemanticDigest, SourceDigest, PublicationID string
 	Generation                                            uint64
@@ -362,8 +362,8 @@ func (s *Store) Acknowledge(ctx context.Context, sink string, expected, next uin
 	return s.writeManifest(m)
 }
 
-func networkSummary(fw *fm.Firewall) []flow.Range {
-	var ranges []flow.Range
+func networkSummary(fw *fm.Firewall) []flow.AddressRange {
+	var ranges []flow.AddressRange
 	for _, i := range fw.Interfaces() {
 		r := i.Record()
 		if r.Disabled {
@@ -383,6 +383,6 @@ func networkSummary(fw *fm.Firewall) []flow.Range {
 	for _, z := range fw.Zones() {
 		ranges = append(ranges, z.Record().Networks...)
 	}
-	set, _ := flow.NewSet(ranges...)
+	set, _ := flow.NewAddressSet(ranges...)
 	return set.Ranges()
 }

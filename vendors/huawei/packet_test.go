@@ -25,7 +25,7 @@ func TestPacketRoutesAfterDNATAndUsesTranslatedDestinationService(t *testing.T) 
 		t.Fatal(got, err)
 	}
 	path := got.Paths[0]
-	if path.ToZone != "trust" || path.Policy.Allowed.Empty() || path.Original.Boxes()[0].DestinationPort.Low != 8443 || path.Policy.Allowed.Boxes()[0].DestinationPort.Low != 443 || path.NAT.Translated.Boxes()[0].Destination.First.String() != "192.0.2.60" {
+	if path.ToZone != "trust" || path.Policy.Allowed.Empty() || path.Original.Regions()[0].DestinationPort.Low != 8443 || path.Policy.Allowed.Regions()[0].DestinationPort.Low != 443 || path.NAT.Translated.Regions()[0].Destination.First.String() != "192.0.2.60" {
 		t.Fatal(path)
 	}
 	wrong := parse(t, strings.Replace(raw, "service protocol tcp destination-port 443", "service protocol tcp destination-port 8443", 1))
@@ -51,7 +51,7 @@ func TestPacketEvaluatesPolicyBeforeSourceAllocation(t *testing.T) {
 		if allow {
 			want = "198.51.100.100"
 		}
-		if path.NAT.Translated.Boxes()[0].Source.First.String() != want {
+		if path.NAT.Translated.Regions()[0].Source.First.String() != want {
 			t.Fatal("source allocation before policy", path)
 		}
 	}
@@ -93,7 +93,7 @@ security-policy
 		t.Fatal(got, err)
 	}
 	p := got.Paths[0]
-	b := p.NAT.Translated.Boxes()[0]
+	b := p.NAT.Translated.Regions()[0]
 	if p.Policy.Allowed.Empty() || p.ToZone != "trust" || p.NAT.ID != "policy:pair" || len(p.NAT.Steps) != 1 || b.Source.First.String() != "192.0.2.200" || b.Destination.First.String() != "192.0.2.80" || b.DestinationPort.Low != 443 {
 		t.Fatal(p)
 	}
@@ -114,7 +114,7 @@ func TestPacketEasyIPUsesKnownEgressAndDoesNotSkipFirstMatchingRule(t *testing.T
 `, 1)
 	q := policy.PacketRequest{Request: policy.Request{FromZone: "trust", Traffic: traffic(t, "192.0.2.10/32", "203.0.113.10/32", 6, 1000, 443)}}
 	got, err := (policy.Engine{}).QueryPacket(context.Background(), parse(t, raw), q)
-	if err != nil || !got.Complete || len(got.Paths) != 1 || got.Paths[0].NAT.Translated.Boxes()[0].Source.First.String() != "198.51.100.1" || !got.Paths[0].NAT.PossibleAllocation {
+	if err != nil || !got.Complete || len(got.Paths) != 1 || got.Paths[0].NAT.Translated.Regions()[0].Source.First.String() != "198.51.100.1" || !got.Paths[0].NAT.PossibleAllocation {
 		t.Fatal(got, err)
 	}
 	noRoute := strings.Replace(raw, "ip route-static 0.0.0.0 0 198.51.100.254 preference 70\n", "", 1)

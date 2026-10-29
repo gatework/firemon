@@ -14,7 +14,7 @@ import (
 func request(t *testing.T, src, dst string) policy.Request {
 	t.Helper()
 	a, b := netip.MustParseAddr(src), netip.MustParseAddr(dst)
-	traffic, err := flow.NewTraffic(32, flow.Box{Source: flow.Range{First: a, Last: a}, Destination: flow.Range{First: b, Last: b}, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
+	traffic, err := flow.NewTraffic(32, flow.TrafficRegion{Source: flow.AddressRange{First: a, Last: a}, Destination: flow.AddressRange{First: b, Last: b}, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func request(t *testing.T, src, dst string) policy.Request {
 func TestOptimizerPreservesPairsAndMergesToFixedPoint(t *testing.T) {
 	requests := []policy.Request{request(t, "192.0.2.1", "198.51.100.1"), request(t, "192.0.2.2", "198.51.100.2")}
 	groups, err := (analysis.RequestOptimizer{}).Optimize(context.Background(), requests)
-	if err != nil || len(groups) != 1 || len(groups[0].Request.Traffic.Boxes()) != 2 {
+	if err != nil || len(groups) != 1 || len(groups[0].Request.Traffic.Regions()) != 2 {
 		t.Fatal(groups, err)
 	}
 	cross := request(t, "192.0.2.1", "198.51.100.2")
@@ -34,10 +34,10 @@ func TestOptimizerPreservesPairsAndMergesToFixedPoint(t *testing.T) {
 	}
 	requests = append(requests, cross, request(t, "192.0.2.2", "198.51.100.1"))
 	groups, err = (analysis.RequestOptimizer{}).Optimize(context.Background(), requests)
-	if err != nil || len(groups) != 1 || len(groups[0].Request.Traffic.Boxes()) != 1 || len(groups[0].Inputs) != 4 {
+	if err != nil || len(groups) != 1 || len(groups[0].Request.Traffic.Regions()) != 1 || len(groups[0].Inputs) != 4 {
 		t.Fatal("not a fixed point", groups, err)
 	}
-	if len(requests[0].Traffic.Boxes()) != 1 || requests[0].Traffic.Boxes()[0].Source.First != requests[0].Traffic.Boxes()[0].Source.Last {
+	if len(requests[0].Traffic.Regions()) != 1 || requests[0].Traffic.Regions()[0].Source.First != requests[0].Traffic.Regions()[0].Source.Last {
 		t.Fatal("input mutated")
 	}
 }

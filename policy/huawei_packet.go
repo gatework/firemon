@@ -13,16 +13,16 @@ func destinationTransform(n natTransform) natTransform {
 	return n
 }
 func (e Engine) routeDestinations(ctx context.Context, fw *fm.Firewall, vrf string, traffic flow.Traffic) ([]RoutePath, error) {
-	var destinations flow.Set
-	for _, b := range traffic.Boxes() {
-		s, _ := flow.NewSet(b.Destination)
+	var destinations flow.AddressSet
+	for _, b := range traffic.Regions() {
+		s, _ := flow.NewAddressSet(b.Destination)
 		destinations = destinations.Union(s)
 	}
 	return e.ResolveRoutes(ctx, fw, vrf, destinations)
 }
 func routedTraffic(traffic flow.Traffic, route RoutePath, limit int) (flow.Traffic, error) {
 	var out flow.Traffic
-	for _, b := range traffic.Boxes() {
+	for _, b := range traffic.Regions() {
 		t, err := restrictDestinations(b, route.Addresses, limit)
 		if err != nil {
 			return flow.Traffic{}, err

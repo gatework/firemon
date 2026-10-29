@@ -46,7 +46,7 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 			if direction == "destination" {
 				mode = fm.StaticIP
 			}
-			var items members[flow.Range]
+			var items members[flow.AddressRange]
 			var nativeID string
 			for _, b := range g.blocks {
 				w := b.Header.Words
@@ -87,7 +87,7 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 				}
 				a, ok1 := ipv4(rest[0])
 				b, ok2 := ipv4(last)
-				rr := flow.Range{First: a, Last: b}
+				rr := flow.AddressRange{First: a, Last: b}
 				return ok1 && ok2 && rr.Valid() && items.put(id, rr)
 			})
 			if err != nil {
@@ -297,14 +297,14 @@ func (p *parser) natAction(r *fm.DynamicNATRecord, w []string, pools map[fm.ID]p
 	if len(w) < 3 || len(w) > 4 {
 		return false
 	}
-	var translated flow.Range
+	var translated flow.AddressRange
 	switch w[1] {
 	case "address":
 		a, ok := ipv4(w[2])
 		if !ok {
 			return false
 		}
-		translated = flow.Range{First: a, Last: a}
+		translated = flow.AddressRange{First: a, Last: a}
 	case "address-group":
 		id := fm.ID("destination:" + w[2])
 		pool, ok := pools[id]
@@ -334,7 +334,7 @@ func (p *parser) natAction(r *fm.DynamicNATRecord, w []string, pools map[fm.ID]p
 }
 
 type endpoint struct {
-	address flow.Range
+	address flow.AddressRange
 	port    uint16
 	hasPort bool
 }
@@ -356,7 +356,7 @@ func serverEndpoint(w []string, proto uint16) (endpoint, bool) {
 			w = w[1:]
 		}
 	}
-	e.address = flow.Range{First: first, Last: last}
+	e.address = flow.AddressRange{First: first, Last: last}
 	if !e.address.Valid() || len(w) > 1 {
 		return e, false
 	}
@@ -476,6 +476,6 @@ func (p *parser) server(w []string, d *fm.Data) (*fm.StaticNATRecord, *fm.Dynami
 	return nil, &r, true
 }
 
-func addressCount(r flow.Range) uint64 {
+func addressCount(r flow.AddressRange) uint64 {
 	return uint64(binary.BigEndian.Uint32(r.Last.AsSlice())) - uint64(binary.BigEndian.Uint32(r.First.AsSlice())) + 1
 }

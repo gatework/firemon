@@ -17,7 +17,7 @@ import (
 func TestCandidateConstructionBudgetsUnreferencedCatalog(t *testing.T) {
 	d := fm.Data{Metadata: fm.Metadata{Device: "test", Vendor: "hillstone"}}
 	for i := range 100 {
-		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: fm.ID(fmt.Sprintf("unused-%d", i))}, Ranges: []flow.Range{addressRange("203.0.113.1/32")}})
+		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: fm.ID(fmt.Sprintf("unused-%d", i))}, Ranges: []flow.AddressRange{addressRange("203.0.113.1/32")}})
 	}
 	fw, err := fm.Seal(d)
 	if err != nil || !fw.Complete() {
@@ -50,8 +50,8 @@ func TestTransferRejectsOversizedTrafficBeforeCopying(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := request(t, "192.0.2.1/32")
-	box := q.Traffic.Boxes()[0]
-	boxes := make([]flow.Box, 4096)
+	box := q.Traffic.Regions()[0]
+	boxes := make([]flow.TrafficRegion, 4096)
 	for i := range boxes {
 		boxes[i] = box
 		boxes[i].DestinationPort = flow.Interval{Low: uint16(i), High: uint16(i)}

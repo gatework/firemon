@@ -42,7 +42,7 @@ func validateService(t ServiceTerm) error {
 	return nil
 }
 
-func distance(r flow.Range) *big.Int {
+func distance(r flow.AddressRange) *big.Int {
 	first, last := r.First.As16(), r.Last.As16()
 	return new(big.Int).Sub(new(big.Int).SetBytes(last[:]), new(big.Int).SetBytes(first[:]))
 }

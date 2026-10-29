@@ -39,8 +39,6 @@ type MemberUsage struct {
 	// Paths run from a direct rule reference to this member, including both.
 	Paths  [][]MemberReference
 	Unused Truth
-	// Member absence is not a proof of paired-flow equivalence or safe removal.
-	Removable bool
 }
 
 // AnalyzeMembers reports references and observational usage, without performing

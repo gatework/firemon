@@ -14,7 +14,7 @@ func (p *parser) operand(words []string, d *fm.Data) (fm.AddressRef, int, bool) 
 	if len(words) == 0 {
 		return fm.AddressRef{}, 0, false
 	}
-	var r flow.Range
+	var r flow.AddressRange
 	var err error
 	consumed := 0
 	switch words[0] {
@@ -68,7 +68,7 @@ func (p *parser) operand(words []string, d *fm.Data) (fm.AddressRef, int, bool) 
 	}
 	p.literalDraftCount = len(d.Addresses)
 	if !p.literalIDs[id] {
-		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id}, Ranges: []flow.Range{r}})
+		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id}, Ranges: []flow.AddressRange{r}})
 		p.literalIDs[id] = true
 		p.literalDraftCount = len(d.Addresses)
 	}

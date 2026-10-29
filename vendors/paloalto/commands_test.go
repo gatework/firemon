@@ -46,7 +46,7 @@ func TestPANUnsafeBroadAppendFallsBackToNewRuleBeforeNativeBlocker(t *testing.T)
 	raw := zones + "set address old ip-netmask 192.0.2.8/32\nset rulebase security rules web from inside\nset rulebase security rules web to outside\nset rulebase security rules web source old\nset rulebase security rules web destination any\nset rulebase security rules web service any\nset rulebase security rules web application any\nset rulebase security rules web action allow\nset rulebase security rules web log-start no\nset rulebase security rules web log-end no\n"
 	fw := pan(t, raw)
 	// Match the existing destination/service dimensions so source append is exact.
-	b := packet(t).Boxes()[0]
+	b := packet(t).Regions()[0]
 	b.Destination = fw.Address("old").Set().Ranges()[0]
 	// A narrow request could not safely extend a rule with unrestricted destination
 	// and service: the planner must choose a newly scoped rule instead.

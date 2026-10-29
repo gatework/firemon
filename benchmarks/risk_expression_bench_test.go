@@ -18,11 +18,11 @@ func BenchmarkRiskExpression(b *testing.B) {
 			for _, mode := range []analysis.RiskMode{analysis.Declared, analysis.Effective} {
 				b.Run(fmt.Sprintf("rules=%d/leaves=%d/mode=%d", n, leaves, mode), func(b *testing.B) {
 					fw, q := benchmarkFirewall(b, n), request(b, 0, 443)
-					box := q.Traffic.Boxes()[0]
+					box := q.Traffic.Regions()[0]
 					box.Source, _ = flow.PrefixRange(netip.MustParsePrefix("198.18.0.0/15"))
 					q.Traffic, _ = flow.NewTraffic(4096, box)
-					sources, _ := flow.NewSet(box.Source)
-					destinations, _ := flow.NewSet(box.Destination)
+					sources, _ := flow.NewAddressSet(box.Source)
+					destinations, _ := flow.NewAddressSet(box.Destination)
 					terms := []fm.ServiceTerm{{Protocol: box.Protocol, SourcePort: box.SourcePort, DestinationPort: box.DestinationPort, ICMPType: box.ICMPType, ICMPCode: box.ICMPCode}}
 					predicates := []analysis.RiskPredicate{{Dimension: analysis.Source, Relation: analysis.Within, Addresses: sources}, {Dimension: analysis.Destination, Relation: analysis.Within, Addresses: destinations}, {Dimension: analysis.Service, Relation: analysis.Within, Services: terms}}
 					expression := analysis.RiskExpression{}

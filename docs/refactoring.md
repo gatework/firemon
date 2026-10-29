@@ -51,7 +51,7 @@ account service, workflow approval platform or new vendor family.
 | `analysis.Optimizer` | `analysis.RequestOptimizer` |
 | `analysis.Translator` | `analysis.PolicyMigrator` (policy-only migration; existing NAT/time restrictions remain) |
 | `analysis.Chain` | `firemon.PolicyChain{Scope, RuleSet}` |
-| `policy.Addresses(fw, refs, any)` | `engine.ResolveAddresses(ctx, fw, refs, any)` returning `(flow.Set, bool, error)` |
+| `policy.Addresses(fw, refs, any)` | `engine.ResolveAddresses(ctx, fw, refs, any)` returning `(flow.AddressSet, bool, error)` |
 | `policy.Services(fw, refs, any)` | `engine.ResolveServices(ctx, fw, refs, any)` returning `([]firemon.ServiceTerm, bool, error)` |
 | Scalar reads through `Record()` | `ID()`, `Name()`, `Scope()`; rules also expose `Position()` and `Chain()` |
 | Different rule/NAT relationship views | `Rule.Match()`, `StaticNAT.Match()`, `DynamicNAT.Match()` return `MatchObjects` |
@@ -197,7 +197,28 @@ closed transactions retain `ErrClaim` and `ErrClosed`. These changes preserve ex
 source spans, declaration order, staged interpretation and atomic rollback.
 
 For bounded materialization, `Firewall.RecordCount()` counts top-level domain and
-evidence records, `flow.Set.RangeCount()` counts normalized address intervals and
+evidence records, `flow.AddressSet.RangeCount()` counts normalized address intervals and
 `flow.Traffic.RegionCount()` counts disjoint boxes. Candidate object traversal now
 shares the planner's visit allowance, so large catalogs may require a higher
 explicit `MaxVisits` even when few rules participate in the requested change.
+
+## Policy algorithm domain names
+
+This is a deliberate Go API break, without compatibility aliases. Native fixtures,
+CLI JSON fields and semantic snapshot format 9 remain unchanged. A frozen snapshot
+from `bc15a8b` checks decoding and its original semantic digest.
+
+| Previous API | Current API |
+| --- | --- |
+| `flow.Range` | `flow.AddressRange` |
+| `flow.Set`, `flow.NewSet` | `flow.AddressSet`, `flow.NewAddressSet` |
+| `flow.Box`, `Traffic.Boxes()`, `flow.ErrBox` | `flow.TrafficRegion`, `Traffic.Regions()`, `flow.ErrRegion` |
+| `policy.Trace`, `Result.Trace` | `policy.RuleDecision`, `Result.Decisions` |
+| `Trace.Certain` | `RuleDecision.Known` |
+| `Reclamation.Redundant` | `Reclamation.Unreachable` |
+| `Reclamation.Removable` | `Reclamation.RemovalCandidate` |
+
+`Unreachable` includes rules with empty match domains and rules whose possible
+traffic has already been consumed. `RemovalCandidate` is input to a selected
+batch proof, not deletion authorization. `MemberUsage.Removable` was removed:
+member observations report usage and cannot establish paired-flow preservation.

@@ -34,13 +34,13 @@ func (o *Route) Interface() *Interface { return o.iface }
 
 type Address struct {
 	record        AddressRecord
-	set           flow.Set
+	set           flow.AddressSet
 	vipStaticNAT  *StaticNAT
 	vipDynamicNAT *DynamicNAT
 }
 
 func (o *Address) Record() AddressRecord { return o.record.clone() }
-func (o *Address) Set() flow.Set         { return o.set }
+func (o *Address) Set() flow.AddressSet  { return o.set }
 
 // VIPStaticNAT and VIPDynamicNAT expose the declared VIP's concrete target.
 // Both are nil for an ordinary address or an unresolved VIP reference.

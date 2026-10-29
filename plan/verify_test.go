@@ -98,7 +98,7 @@ func TestReadbackRejectsUnrelatedChangesEvenWhenRequestedTrafficIsAllowed(t *tes
 	}{
 		{"logging", func(d *fm.Data) { d.Rules[0].Log = fm.Known }},
 		{"extra address", func(d *fm.Data) {
-			d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: "unapproved"}, Ranges: []flow.Range{addressRange("203.0.113.1/32")}})
+			d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: "unapproved"}, Ranges: []flow.AddressRange{addressRange("203.0.113.1/32")}})
 		}},
 		{"NAT", func(d *fm.Data) {
 			d.StaticNATs = append(d.StaticNATs, fm.StaticNATRecord{Object: fm.Object{ID: "unapproved"}, Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}, Source: []fm.Mapping{{Original: addressRange("192.0.2.0/24"), Translated: addressRange("203.0.113.0/24"), Mode: fm.Offset}}})

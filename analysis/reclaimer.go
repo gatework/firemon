@@ -59,11 +59,16 @@ type UsageObservation struct {
 	Hits                         uint64
 	CounterReset, Complete       bool
 }
+
+// Reclamation separates configuration evidence from observed usage.
+// Unreachable means no effective match in the supported future contexts,
+// including empty declarations. RemovalCandidate requires a whole-batch proof
+// in Plan before removal; it is not deletion authorization.
 type Reclamation struct {
-	Rule                                 fm.ID
-	RuleDigest                           string
-	Disabled, Expired, Redundant, Unused Truth
-	Removable                            bool
+	Rule                                   fm.ID
+	RuleDigest                             string
+	Disabled, Expired, Unreachable, Unused Truth
+	RemovalCandidate                       bool
 }
 type Reclaimer struct {
 	Planner plan.Planner
@@ -78,8 +83,8 @@ type ReclamationRequest struct {
 	MemberObservations []MemberUsageObservation
 }
 
-// Analyze keeps disabled, expired, shadowed and unused evidence separate. A
-// zero counter never makes a rule removable; Plan proves a selected whole batch.
+// Analyze keeps disabled, expired, unreachable and unused evidence separate. A
+// zero counter never makes a rule a removal candidate; Plan proves a selected whole batch.
 func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request ReclamationRequest) ([]Reclamation, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -149,7 +154,7 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 		if !result.Complete || !result.Unknown.Empty() {
 			return rows, nil
 		}
-		for _, trace := range result.Trace {
+		for _, trace := range result.Decisions {
 			if !trace.Traffic.Empty() {
 				seen[trace.Rule] = true
 			}
@@ -160,7 +165,7 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 			return nil, err
 		}
 		row := &rows[i]
-		row.Disabled, row.Expired, row.Redundant = False, False, False
+		row.Disabled, row.Expired, row.Unreachable = False, False, False
 		if rule.Disabled() {
 			row.Disabled = True
 		}
@@ -175,9 +180,9 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 			}
 		}
 		if !rule.Disabled() && row.Expired != True && !seen[rule.ID()] {
-			row.Redundant = True
+			row.Unreachable = True
 		}
-		row.Removable = !rule.Builtin() && (row.Disabled == True || row.Expired == True || row.Redundant == True)
+		row.RemovalCandidate = !rule.Builtin() && (row.Disabled == True || row.Expired == True || row.Unreachable == True)
 		if hasWindow {
 			row.Unused, err = evidence[i].unused(ctx, request.Window)
 			if err != nil {
@@ -201,7 +206,7 @@ func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, request Reclamatio
 	}
 	removable := make(map[fm.ID]bool)
 	for _, row := range rows {
-		removable[row.Rule] = row.Removable
+		removable[row.Rule] = row.RemovalCandidate
 	}
 	selected := make(map[fm.ID]bool)
 	var changes []plan.Change

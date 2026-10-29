@@ -123,27 +123,27 @@ func prefix(ip, mask string) (netip.Prefix, error) {
 	}
 	return netip.PrefixFrom(a, ones), nil
 }
-func iprange(value string) (flow.Range, error) {
+func iprange(value string) (flow.AddressRange, error) {
 	parts := strings.Split(value, "-")
 	if len(parts) == 2 {
 		a, e := netip.ParseAddr(parts[0])
 		b, e2 := netip.ParseAddr(parts[1])
-		r := flow.Range{First: a, Last: b}
+		r := flow.AddressRange{First: a, Last: b}
 		if e != nil || e2 != nil || !r.Valid() {
-			return flow.Range{}, flow.ErrRange
+			return flow.AddressRange{}, flow.ErrRange
 		}
 		return r, nil
 	}
 	if strings.Contains(value, "/") {
 		p, e := netip.ParsePrefix(value)
 		if e != nil {
-			return flow.Range{}, e
+			return flow.AddressRange{}, e
 		}
 		return flow.PrefixRange(p)
 	}
 	p, e := prefix(value, "")
 	if e != nil {
-		return flow.Range{}, e
+		return flow.AddressRange{}, e
 	}
 	return flow.PrefixRange(p)
 }

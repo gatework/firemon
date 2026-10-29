@@ -17,7 +17,7 @@ func traffic(t *testing.T, src, dst string) flow.Traffic {
 	t.Helper()
 	s, _ := flow.PrefixRange(netip.MustParsePrefix(src))
 	d, _ := flow.PrefixRange(netip.MustParsePrefix(dst))
-	x, err := flow.NewTraffic(64, flow.Box{Source: s, Destination: d, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
+	x, err := flow.NewTraffic(64, flow.TrafficRegion{Source: s, Destination: d, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestGlobalUnknownDoesNotRetainCertainDenyOrUnmatched(t *testing.T) {
 		}
 		q := traffic(t, "192.0.2.1/32", "198.51.100.1/32")
 		r, err := (policy.Engine{}).Query(context.Background(), fw, policy.Request{Traffic: q})
-		if err != nil || r.Complete || !r.Denied.Empty() || !r.Unmatched.Empty() || len(r.Trace) != 0 {
+		if err != nil || r.Complete || !r.Denied.Empty() || !r.Unmatched.Empty() || len(r.Decisions) != 0 {
 			t.Fatal("uncertain source retained a certain classification", r, err)
 		}
 	}
@@ -65,7 +65,7 @@ func TestFirstMatchDenyAndUnknownConsumeBeforeLaterPermit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !res.Allowed.Empty() || len(res.Trace) != 1 || res.Trace[0].Rule != "first" {
+			if !res.Allowed.Empty() || len(res.Decisions) != 1 || res.Decisions[0].Rule != "first" {
 				t.Fatal("first match bypassed", res)
 			}
 			if tc.unknown && res.Unknown.Empty() {
@@ -79,7 +79,7 @@ func TestTwoHalfSubnetsCoverWholeRequestWithoutSingleRuleContainment(t *testing.
 	for i, cidr := range []string{"192.0.2.0/25", "192.0.2.128/25"} {
 		r, _ := flow.PrefixRange(netip.MustParsePrefix(cidr))
 		id := fm.ID(cidr)
-		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id}, Ranges: []flow.Range{r}})
+		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id}, Ranges: []flow.AddressRange{r}})
 		m := anyMatch()
 		m.AnySource = false
 		m.Sources = []fm.AddressRef{{Kind: fm.AddressObject, ID: id}}

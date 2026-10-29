@@ -177,9 +177,9 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			return err
 		}
 		return output(out, struct {
-			Complete bool                  `json:"complete"`
-			Coverage map[string][]flow.Box `json:"coverage"`
-		}{Complete: result.Complete, Coverage: map[string][]flow.Box{"allowed": result.Allowed.Boxes(), "denied": result.Denied.Boxes(), "unknown": result.Unknown.Boxes(), "unmatched": result.Unmatched.Boxes()}})
+			Complete bool                            `json:"complete"`
+			Coverage map[string][]flow.TrafficRegion `json:"coverage"`
+		}{Complete: result.Complete, Coverage: map[string][]flow.TrafficRegion{"allowed": result.Allowed.Regions(), "denied": result.Denied.Regions(), "unknown": result.Unknown.Regions(), "unmatched": result.Unmatched.Regions()}})
 	case "nat":
 		result, err := (policy.Engine{}).QueryNAT(ctx, fw, q)
 		if err != nil {
@@ -189,18 +189,18 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			Kind                      fm.Kind
 			ID                        fm.ID
 			Steps                     []policy.NATStep
-			Original, Translated      []flow.Box
+			Original, Translated      []flow.TrafficRegion
 			Exact, PossibleAllocation bool
 		}
 		rows := make([]relation, 0, len(result.Relations))
 		for _, r := range result.Relations {
-			rows = append(rows, relation{r.Kind, r.ID, r.Steps, r.Original.Boxes(), r.Translated.Boxes(), r.Exact, r.PossibleAllocation})
+			rows = append(rows, relation{r.Kind, r.ID, r.Steps, r.Original.Regions(), r.Translated.Regions(), r.Exact, r.PossibleAllocation})
 		}
 		return output(out, struct {
 			Complete           bool
 			Relations          []relation
-			Unknown, Unmatched []flow.Box
-		}{result.Complete, rows, result.Unknown.Boxes(), result.Unmatched.Boxes()})
+			Unknown, Unmatched []flow.TrafficRegion
+		}{result.Complete, rows, result.Unknown.Regions(), result.Unmatched.Regions()})
 	case "plan":
 		renderer, err := vendors.Renderer(fw.Metadata().Vendor)
 		if err != nil {
@@ -245,5 +245,5 @@ func requestTraffic(source, destination, service string) (flow.Traffic, error) {
 	}
 	a, _ := flow.PrefixRange(src)
 	b, _ := flow.PrefixRange(dst)
-	return flow.NewTraffic(4096, flow.Box{Source: a, Destination: b, Protocol: flow.Interval{Low: protocol, High: protocol}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: uint16(port), High: uint16(port)}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
+	return flow.NewTraffic(4096, flow.TrafficRegion{Source: a, Destination: b, Protocol: flow.Interval{Low: protocol, High: protocol}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: uint16(port), High: uint16(port)}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
 }

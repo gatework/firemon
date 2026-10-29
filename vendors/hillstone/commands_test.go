@@ -19,7 +19,7 @@ func TestPlannerRendersNativeHillstoneAppendWithExactSourcePorts(t *testing.T) {
 	fw := parse(t, "address a\nip 192.0.2.1/32\nexit\naddress b\nip 198.51.100.1/32\nexit\nservice https\ntcp dst-port 443 443 src-port 1024 65535\nexit\npolicy-global\nrule id 10\nsrc-addr a\ndst-addr b\nservice https\naction permit\nexit\nexit\n")
 	src, _ := flow.PrefixRange(netip.MustParsePrefix("192.0.2.2/32"))
 	dst, _ := flow.PrefixRange(netip.MustParsePrefix("198.51.100.1/32"))
-	traffic, _ := flow.NewTraffic(32, flow.Box{Source: src, Destination: dst, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1024, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
+	traffic, _ := flow.NewTraffic(32, flow.TrafficRegion{Source: src, Destination: dst, Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 1024, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
 	result, err := (plan.Planner{Renderer: hillstone.Renderer{}}).Plan(context.Background(), fw, []policy.Request{{Traffic: traffic}})
 	if err != nil {
 		t.Fatal(err)

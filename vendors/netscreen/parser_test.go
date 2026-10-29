@@ -42,7 +42,7 @@ func traffic(t *testing.T, src, dst string, proto, sp, dp uint16) flow.Traffic {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := flow.NewTraffic(32, flow.Box{Source: a, Destination: b, Protocol: flow.Interval{Low: proto, High: proto}, SourcePort: flow.Interval{Low: sp, High: sp}, DestinationPort: flow.Interval{Low: dp, High: dp}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
+	out, err := flow.NewTraffic(32, flow.TrafficRegion{Source: a, Destination: b, Protocol: flow.Interval{Low: proto, High: proto}, SourcePort: flow.Interval{Low: sp, High: sp}, DestinationPort: flow.Interval{Low: dp, High: dp}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestPolicyTopDisableAndIPv4Any(t *testing.T) {
 	}
 	q := policy.Request{Traffic: traffic(t, "192.0.2.10/32", "198.51.100.20/32", 6, 1000, 443), FromZone: "Trust", ToZone: "Untrust"}
 	r, err := (policy.Engine{}).Query(context.Background(), fw, q)
-	if err != nil || r.Denied.Empty() || r.Trace[0].Rule != "30" {
+	if err != nil || r.Denied.Empty() || r.Decisions[0].Rule != "30" {
 		t.Fatal(r, err)
 	}
 	fw = parse(t, raw+"set policy id 30 disable\nexit\n")

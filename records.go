@@ -129,7 +129,7 @@ type NATRef struct {
 }
 type ZoneRecord struct {
 	Object
-	Networks []flow.Range
+	Networks []flow.AddressRange
 	// AddressScope is the native address-book namespace attached to this zone.
 	// Empty means the global namespace; it is independent of a routing context.
 	AddressScope string
@@ -150,11 +150,11 @@ type RouteRecord struct {
 	Interface   ID
 	Metric      uint32
 	Direct      bool
-	PolicyMatch []flow.Box
+	PolicyMatch []flow.TrafficRegion
 }
 type AddressRecord struct {
 	Object
-	Ranges []flow.Range
+	Ranges []flow.AddressRange
 	FQDN   string
 	// VIP explicitly associates this native address with its destination NAT.
 	// The zero value is an ordinary address; Scope remains the native namespace.
@@ -240,7 +240,7 @@ type NATOrder struct {
 
 // Mapping is an explicitly declared relation, never inferred from coincidentally equal set sizes.
 type Mapping struct {
-	Original, Translated flow.Range
+	Original, Translated flow.AddressRange
 	Mode                 MappingMode
 }
 type PortMapping struct {
@@ -261,7 +261,7 @@ type StaticNATRecord struct {
 }
 type NATPoolRecord struct {
 	Object
-	Ranges    []flow.Range
+	Ranges    []flow.AddressRange
 	Ports     flow.Interval
 	Interface ID
 }

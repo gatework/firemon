@@ -10,8 +10,8 @@ import (
 	"github.com/gatework/firemon/flow"
 )
 
-func rng(a, b string) flow.Range {
-	return flow.Range{First: netip.MustParseAddr(a), Last: netip.MustParseAddr(b)}
+func rng(a, b string) flow.AddressRange {
+	return flow.AddressRange{First: netip.MustParseAddr(a), Last: netip.MustParseAddr(b)}
 }
 
 func TestInvalidZoneRelationRemainsIncomplete(t *testing.T) {
@@ -34,10 +34,10 @@ func seed() fm.Data {
 			{Object: fm.Object{ID: "eth1", Scope: "vr1"}, Zone: "outside", Addresses: []netip.Prefix{netip.MustParsePrefix("192.0.2.129/25")}},
 		},
 		Routes:        []fm.RouteRecord{{Object: fm.Object{ID: "default", Scope: "vr1"}, Destination: netip.MustParsePrefix("0.0.0.0/0"), NextHop: netip.MustParseAddr("192.0.2.200")}},
-		Addresses:     []fm.AddressRecord{{Object: fm.Object{ID: "host"}, Ranges: []flow.Range{rng("192.0.2.10", "192.0.2.10")}}},
+		Addresses:     []fm.AddressRecord{{Object: fm.Object{ID: "host"}, Ranges: []flow.AddressRange{rng("192.0.2.10", "192.0.2.10")}}},
 		AddressGroups: []fm.AddressGroupRecord{{Object: fm.Object{ID: "group"}, Members: []fm.AddressRef{{Kind: fm.AddressObject, ID: "host"}}}},
 		StaticNATs:    []fm.StaticNATRecord{{Object: fm.Object{ID: "static"}, Order: fm.NATOrder{Stage: 1, Position: 2}, Source: []fm.Mapping{{Original: rng("192.0.2.0", "192.0.2.255"), Translated: rng("203.0.113.0", "203.0.113.255"), Mode: fm.Offset}}}},
-		NATPools:      []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.Range{rng("203.0.113.1", "203.0.113.5")}}},
+		NATPools:      []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.AddressRange{rng("203.0.113.1", "203.0.113.5")}}},
 		DynamicNATs:   []fm.DynamicNATRecord{{Object: fm.Object{ID: "dynamic"}, Order: fm.NATOrder{Stage: 1, Position: 1}, SourceMode: fm.DynamicIPPort, DestinationMode: fm.NoTranslation, SourcePool: "pool"}},
 	}
 }
@@ -182,7 +182,7 @@ func TestSelectedInterfaceAddressMustBelongToItsAllocationInterface(t *testing.T
 		{"wrong-mode", func(d *fm.Data) { d.DynamicNATs[0].SourceMode = fm.NoTranslation }},
 		{"unknown-interface", func(d *fm.Data) { d.Interfaces[0].Unsupported = []string{"dynamic address selection"} }},
 		{"conflicting-pool", func(d *fm.Data) {
-			d.NATPools = []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.Range{rng("198.51.100.1", "198.51.100.2")}}}
+			d.NATPools = []fm.NATPoolRecord{{Object: fm.Object{ID: "pool"}, Ranges: []flow.AddressRange{rng("198.51.100.1", "198.51.100.2")}}}
 			d.DynamicNATs[0].SourcePool = "pool"
 		}},
 	} {

@@ -118,13 +118,13 @@ func reverseStatic(n natTransform, r fm.StaticNATRecord) natTransform {
 	return n
 }
 func allTraffic(limit int) (flow.Traffic, error) {
-	var boxes []flow.Box
+	var boxes []flow.TrafficRegion
 	for _, cidr := range []string{"0.0.0.0/0", "::/0"} {
 		r, err := flow.PrefixRange(netip.MustParsePrefix(cidr))
 		if err != nil {
 			return flow.Traffic{}, err
 		}
-		boxes = append(boxes, flow.Box{Source: r, Destination: r, Protocol: flow.Interval{High: 255}, SourcePort: flow.Interval{High: 65535}, DestinationPort: flow.Interval{High: 65535}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
+		boxes = append(boxes, flow.TrafficRegion{Source: r, Destination: r, Protocol: flow.Interval{High: 255}, SourcePort: flow.Interval{High: 65535}, DestinationPort: flow.Interval{High: 65535}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
 	}
 	return flow.NewTraffic(limit, boxes...)
 }
@@ -159,7 +159,7 @@ func (e Engine) inverseMatch(ctx context.Context, fw *fm.Firewall, n natTransfor
 	if err != nil {
 		return flow.Traffic{}, false, err
 	}
-	boxes := translated.Boxes()
+	boxes := translated.Regions()
 	for i := range boxes {
 		boxes[i].Source, boxes[i].Destination = boxes[i].Destination, boxes[i].Source
 		boxes[i].SourcePort, boxes[i].DestinationPort = boxes[i].DestinationPort, boxes[i].SourcePort

@@ -182,12 +182,12 @@ func TestVIPQueriesFollowExplicitReferencesAcrossIndependentNativeIdentities(t *
 	}
 	outbound := policy.Request{Scope: "root", FromZone: "inside", ToZone: "wan1", EgressInterface: "wan1", Traffic: traffic(t, "192.0.2.20/32", "203.0.113.50/32", 6, 1000, 443)}
 	nat, err := (policy.Engine{}).QueryNAT(context.Background(), fw, outbound)
-	if err != nil || !nat.Complete || len(nat.Relations) != 1 || nat.Relations[0].ID != "native-source-map-id" || nat.Relations[0].Translated.Boxes()[0].Source.First.String() != "198.51.100.20" {
+	if err != nil || !nat.Complete || len(nat.Relations) != 1 || nat.Relations[0].ID != "native-source-map-id" || nat.Relations[0].Translated.Regions()[0].Source.First.String() != "198.51.100.20" {
 		t.Fatal("source VIP mapping followed reconstructed name or ID", nat, err)
 	}
 	packet := policy.PacketRequest{Request: policy.Request{Scope: "root", FromZone: "wan1", Traffic: traffic(t, "203.0.113.50/32", "198.51.100.21/32", 6, 1000, 2222)}, VRF: "root"}
 	got, err := (policy.Engine{}).QueryPacket(context.Background(), fw, packet)
-	if err != nil || !got.Complete || len(got.Paths) != 1 || got.Paths[0].Policy.Allowed.Empty() || got.Paths[0].NAT.Translated.Boxes()[0].Destination.First.String() != "192.0.2.21" {
+	if err != nil || !got.Complete || len(got.Paths) != 1 || got.Paths[0].Policy.Allowed.Empty() || got.Paths[0].NAT.Translated.Regions()[0].Destination.First.String() != "192.0.2.21" {
 		t.Fatal("packet lookup lost explicit port VIP identity", got, err)
 	}
 }
@@ -253,7 +253,7 @@ func TestFortinetNATFollowsOwningPolicyAndVIPSourcePriority(t *testing.T) {
 			fw := parse(t, tt.raw)
 			q := policy.Request{Scope: "root", FromZone: "inside", ToZone: "wan1", EgressInterface: "wan1", Traffic: traffic(t, tt.src+"/32", "203.0.113.50/32", 6, 1000, 443)}
 			got, err := (policy.Engine{}).QueryNAT(context.Background(), fw, q)
-			if err != nil || !got.Complete || len(got.Relations) != 1 || got.Relations[0].Translated.Boxes()[0].Source.First.String() != tt.want {
+			if err != nil || !got.Complete || len(got.Relations) != 1 || got.Relations[0].Translated.Regions()[0].Source.First.String() != tt.want {
 				t.Fatal(got, err)
 			}
 			if got.Relations[0].Exact || !got.Relations[0].PossibleAllocation {
@@ -277,7 +277,7 @@ func TestFortinetPacketRoutesTranslatedVIPAndRetainsWireRequest(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	path := got.Paths[0]
-	if path.ToZone != "inside" || path.Policy.Allowed.Empty() || path.NAT.Translated.Boxes()[0].Destination.First.String() != "192.0.2.21" || path.NAT.Translated.Boxes()[0].DestinationPort.Low != 22 || path.Original.Boxes()[0].DestinationPort.Low != 2222 {
+	if path.ToZone != "inside" || path.Policy.Allowed.Empty() || path.NAT.Translated.Regions()[0].Destination.First.String() != "192.0.2.21" || path.NAT.Translated.Regions()[0].DestinationPort.Low != 22 || path.Original.Regions()[0].DestinationPort.Low != 2222 {
 		t.Fatal(path)
 	}
 }
@@ -291,10 +291,10 @@ func TestFortinetQueryUnionsVIPRegionsForSameRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := (policy.Engine{}).Query(context.Background(), fw, policy.Request{Scope: "root", FromZone: "wan1", ToZone: "inside", Traffic: input})
-	if err != nil || !got.Complete || len(got.Trace) != 1 {
+	if err != nil || !got.Complete || len(got.Decisions) != 1 {
 		t.Fatal("one rule must retain all its effective regions", got, err)
 	}
-	if contains, err := got.Trace[0].Traffic.Contains(input, 8); err != nil || !contains {
+	if contains, err := got.Decisions[0].Traffic.Contains(input, 8); err != nil || !contains {
 		t.Fatal(err, got)
 	}
 }

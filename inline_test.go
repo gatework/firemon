@@ -9,7 +9,7 @@ import (
 
 func TestInlineValuesRetainOwnershipThroughGroupsAndNAT(t *testing.T) {
 	base := fm.Data{Metadata: fm.Metadata{Device: "synthetic", Vendor: "huawei"}}
-	literal := fm.AddressRecord{Object: fm.Object{ID: "inline", Inline: true}, Ranges: []flow.Range{rng("192.0.2.1", "192.0.2.1")}}
+	literal := fm.AddressRecord{Object: fm.Object{ID: "inline", Inline: true}, Ranges: []flow.AddressRange{rng("192.0.2.1", "192.0.2.1")}}
 	with := base.Clone()
 	with.Addresses = []fm.AddressRecord{literal}
 	digest := func(d fm.Data) string {

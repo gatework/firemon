@@ -73,7 +73,7 @@ func TestUnusedDoesNotAuthorizeDeletionAndRedundantBatchKeepsObjects(t *testing.
 	r := analysis.Reclaimer{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}
 	request := analysis.ReclamationRequest{At: at, Window: window, Revision: "current", Observations: []analysis.UsageObservation{{Identity: id, Revision: "current", RuleDigest: digest, Source: "counter", Start: window.Start, End: at, Complete: true}}}
 	rows, err := r.Analyze(context.Background(), fw, request)
-	if err != nil || rows[0].Unused != analysis.True || rows[0].Removable || rows[1].Redundant != analysis.True {
+	if err != nil || rows[0].Unused != analysis.True || rows[0].RemovalCandidate || rows[1].Unreachable != analysis.True {
 		t.Fatal(rows, err)
 	}
 	if _, err := r.Plan(context.Background(), fw, request, []fm.ID{"1"}); err == nil {

@@ -7,8 +7,8 @@ import (
 	"github.com/gatework/firemon/flow"
 )
 
-func box(src, dst string) flow.Box {
-	return flow.Box{Source: iprange(src, src), Destination: iprange(dst, dst), Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}}
+func box(src, dst string) flow.TrafficRegion {
+	return flow.TrafficRegion{Source: iprange(src, src), Destination: iprange(dst, dst), Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}}
 }
 func TestTrafficUnionDoesNotInventCrossPairs(t *testing.T) {
 	a, b := box("192.0.2.1", "198.51.100.1"), box("192.0.2.2", "198.51.100.2")

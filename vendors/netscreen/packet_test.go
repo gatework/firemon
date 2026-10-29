@@ -27,11 +27,11 @@ func TestPacketPolicyUsesOriginalAddressAndPortWithNativeDestinationZone(t *test
 			t.Fatal(tc, r, err)
 		}
 		p := r.Paths[0]
-		b := p.NAT.Translated.Boxes()
+		b := p.NAT.Translated.Regions()
 		if p.ToZone != fm.ID(tc.to) || p.Policy.Allowed.Empty() == tc.allow || len(b) != 1 || b[0].Destination.First.String() != tc.translated || b[0].DestinationPort.Low != tc.translatedPort {
 			t.Fatal(tc, p)
 		}
-		if tc.allow && p.Policy.Allowed.Boxes()[0].DestinationPort.Low != tc.port {
+		if tc.allow && p.Policy.Allowed.Regions()[0].DestinationPort.Low != tc.port {
 			t.Fatal("policy evaluated translated service", p)
 		}
 	}
@@ -67,7 +67,7 @@ func TestNATCannotSilentlyDiscardMixedDirectionTranslation(t *testing.T) {
 	}
 	if r.Complete {
 		for _, n := range r.Relations {
-			for _, b := range n.Translated.Boxes() {
+			for _, b := range n.Translated.Regions() {
 				if b.Source.First.String() == "203.0.113.5" {
 					t.Fatal("policy SNAT silently discarded by VIP", n)
 				}

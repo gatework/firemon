@@ -213,8 +213,8 @@ func srxOriginal(fw *fm.Firewall, pre NATRelation, subset flow.Traffic, limit in
 func destinationPreimage(n natTransform, original, subset flow.Traffic, limit int) (flow.Traffic, error) {
 	var err error
 	var out flow.Traffic
-	for _, b := range subset.Boxes() {
-		addresses := []flow.Range{b.Destination}
+	for _, b := range subset.Regions() {
+		addresses := []flow.AddressRange{b.Destination}
 		if len(n.destination) > 0 {
 			addresses = nil
 			for _, m := range n.destination {
