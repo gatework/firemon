@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/gatework/firemon/internal/durablefile"
 	"io"
 	"math"
 	"os"
@@ -56,7 +57,7 @@ func (l *fileLease) Load(ctx context.Context) (Record, error) {
 	}
 	return l.load(ctx)
 }
-func (l *fileLease) load(ctx context.Context) (Record, error) {
+func (l *fileLease) load(ctx context.Context) (result Record, err error) {
 	if err := ctx.Err(); err != nil {
 		return Record{}, err
 	}
@@ -67,7 +68,7 @@ func (l *fileLease) load(ctx context.Context) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
-	defer f.Close()
+	defer func() { err = errors.Join(err, f.Close()) }()
 	data, err := io.ReadAll(io.LimitReader(f, maxJournalBytes+1))
 	if err != nil {
 		return Record{}, err
@@ -144,28 +145,4 @@ func (l *fileLease) Close() error {
 	return l.unlock()
 }
 
-func writeJournal(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	f, err := os.CreateTemp(dir, ".journal-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err := f.Write(data); err != nil {
-		return errors.Join(err, f.Close())
-	}
-	if err := f.Sync(); err != nil {
-		return errors.Join(err, f.Close())
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(f.Name(), path); err != nil {
-		return err
-	}
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	return errors.Join(d.Sync(), d.Close())
-}
+func writeJournal(path string, data []byte) error { return durablefile.Replace(path, data) }

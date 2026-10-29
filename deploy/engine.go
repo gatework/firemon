@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	fm "github.com/gatework/firemon"
+	capturegraph "github.com/gatework/firemon/internal/capture"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/snapshot"
 	"slices"
@@ -390,28 +391,14 @@ func (e Engine) read(ctx context.Context, session Session, view View, r Record) 
 	if capture.Metadata.Device != r.Device || capture.Metadata.Vendor != r.Vendor || capture.Metadata.Context != r.Context {
 		return nil, errors.Join(readErr, fmt.Errorf("%w: capture identity mismatch", ErrInvalid))
 	}
-	if len(capture.Source.Text) > 16<<20 {
-		return nil, errors.Join(readErr, fmt.Errorf("%w: capture exceeds parser limit", ErrInvalid))
-	}
+	code, message := "readback-parse-failed", "native parser could not establish the captured configuration"
 	if readErr != nil {
-		metadata := capture.Metadata
-		metadata.SourceDigest, metadata.ParserVersion = "", ""
-		fw, err := fm.Seal(fm.Data{Metadata: metadata, Raw: capture.Source.Text, Diagnostics: []fm.Diagnostic{{Code: "readback-capture-failed", Message: "native configuration capture was interrupted"}}})
-		return fw, errors.Join(readErr, err)
+		code, message = "readback-capture-failed", "native configuration capture was interrupted"
 	}
-	fw, err := e.Parser.Parse(ctx, capture.Source, capture.Metadata)
-	if err != nil {
-		// Preserve failed native parsing as incomplete raw evidence, not the
-		// previous graph. Error text may contain secrets and is not persisted.
-		return fm.Seal(fm.Data{Metadata: fm.Metadata{Device: r.Device, Vendor: r.Vendor, Context: r.Context, Software: capture.Metadata.Software, CapturedAt: capture.Metadata.CapturedAt}, Raw: capture.Source.Text, Diagnostics: []fm.Diagnostic{{Code: "readback-parse-failed", Message: "native parser could not establish the captured configuration"}}})
-	}
-	if fw == nil || fw.Metadata().Device != r.Device || fw.Metadata().Vendor != r.Vendor || fw.Metadata().Context != r.Context || fw.Metadata().Software != capture.Metadata.Software || !fw.Metadata().CapturedAt.Equal(capture.Metadata.CapturedAt) || fw.Export().Raw != capture.Source.Text {
-		return nil, fmt.Errorf("%w: parser did not retain captured evidence", ErrInvalid)
-	}
-	if !capture.Source.Complete && fw.Complete() {
-		return nil, fmt.Errorf("%w: capture completeness lost", ErrInvalid)
-	}
-	return fw, nil
+	return capturegraph.Graph(ctx, e.Parser, capture.Source, capture.Metadata, readErr, ErrInvalid, capturegraph.Diagnostics{
+		Failed:     fm.Diagnostic{Code: code, Message: message},
+		Incomplete: fm.Diagnostic{Code: "readback-parse-failed", Message: "capture completeness was not established"},
+	})
 }
 func (e Engine) abortUnchanged(ctx context.Context, a *attempt, phase Phase) error {
 	r := a.get()

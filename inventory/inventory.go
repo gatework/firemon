@@ -20,7 +20,14 @@ type Result struct {
 	Complete   bool
 }
 
-func Locate(ctx context.Context, store *snapshot.Store, addresses flow.Set) (Result, error) {
+type ManifestReader interface {
+	Manifest(context.Context) (snapshot.Manifest, error)
+}
+type RevisionLoader interface {
+	Load(context.Context, string) (*fm.Firewall, error)
+}
+
+func Locate(ctx context.Context, store ManifestReader, addresses flow.Set) (Result, error) {
 	manifest, err := store.Manifest(ctx)
 	if err != nil {
 		return Result{}, err
@@ -54,7 +61,7 @@ func Locate(ctx context.Context, store *snapshot.Store, addresses flow.Set) (Res
 }
 
 // LoadBatch loads each selected immutable revision once, with no database lookup or raw reparse.
-func LoadBatch(ctx context.Context, store *snapshot.Store, result Result) (map[string]*fm.Firewall, error) {
+func LoadBatch(ctx context.Context, store RevisionLoader, result Result) (map[string]*fm.Firewall, error) {
 	loaded := make(map[string]*fm.Firewall)
 	byRevision := make(map[string]*fm.Firewall)
 	for _, hit := range result.Hits {

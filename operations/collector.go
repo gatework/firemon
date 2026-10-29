@@ -5,12 +5,13 @@ package operations
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/deploy"
+	capturegraph "github.com/gatework/firemon/internal/capture"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
 )
@@ -110,7 +111,7 @@ func (c Collector) Collect(ctx context.Context, request CollectRequest) (result 
 	closeErr := session.Close()
 	session = nil
 	readErr = errors.Join(readErr, ctx.Err())
-	if capture.Metadata.Device != request.Device || len(capture.Source.Text) > 16<<20 {
+	if capture.Metadata.Device != request.Device || len(capture.Source.Text) > config.DefaultMaxBytes {
 		return CollectResult{}, errors.Join(ErrInvalid, readErr, closeErr)
 	}
 	capture.Metadata, err = vendors.Normalize(capture.Metadata)
@@ -174,38 +175,8 @@ func priorCollection(ctx context.Context, manifest snapshot.Manifest, prior snap
 }
 
 func capturedGraph(ctx context.Context, parser deploy.Parser, capture deploy.Capture) (*fm.Firewall, error) {
-	var fw *fm.Firewall
-	parseErr := ctx.Err()
-	if parseErr == nil {
-		fw, parseErr = parser.Parse(ctx, capture.Source, capture.Metadata)
-		parseErr = errors.Join(parseErr, ctx.Err())
-	}
-	if parseErr == nil {
-		if fw == nil {
-			parseErr = ErrInvalid
-		} else {
-			metadata := fw.Metadata()
-			if metadata.Device != capture.Metadata.Device || metadata.Vendor != capture.Metadata.Vendor || metadata.Context != capture.Metadata.Context ||
-				metadata.Software != capture.Metadata.Software || !metadata.CapturedAt.Equal(capture.Metadata.CapturedAt) || fw.Export().Raw != capture.Source.Text {
-				parseErr = fmt.Errorf("%w: parser did not retain captured identity and source", ErrInvalid)
-			}
-		}
-	}
-	if parseErr != nil {
-		// Error messages may contain raw configuration or credentials. Persist
-		// only a fixed diagnostic and the original bounded capture, never the
-		// parser's partial or substituted graph.
-		metadata := capture.Metadata
-		metadata.SourceDigest, metadata.ParserVersion = "", ""
-		incomplete, err := fm.Seal(fm.Data{Metadata: metadata, Raw: capture.Source.Text, Diagnostics: []fm.Diagnostic{{
-			Code: "capture-parse-failed", Message: "native parser could not establish the captured configuration",
-		}}})
-		return incomplete, errors.Join(parseErr, err)
-	}
-	if !capture.Source.Complete && fw.Complete() {
-		d := fw.Export()
-		d.Diagnostics = append(d.Diagnostics, fm.Diagnostic{Code: "incomplete-source", Message: "capture completeness was not established"})
-		return fm.Seal(d)
-	}
-	return fw, nil
+	return capturegraph.Graph(ctx, parser, capture.Source, capture.Metadata, nil, ErrInvalid, capturegraph.Diagnostics{
+		Failed:     fm.Diagnostic{Code: "capture-parse-failed", Message: "native parser could not establish the captured configuration"},
+		Incomplete: fm.Diagnostic{Code: "incomplete-source", Message: "capture completeness was not established"},
+	})
 }

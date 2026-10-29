@@ -10,6 +10,7 @@ import (
 	"fmt"
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/internal/durablefile"
 	"io"
 	"os"
 	"path/filepath"
@@ -64,7 +65,7 @@ func Open(root string) (*Store, error) {
 func emptyManifest() Manifest {
 	return Manifest{Version: 1, Devices: make(map[string]Head), Reservations: make(map[string]Reservation), Publications: make(map[string]Publication), Acknowledged: make(map[string]uint64)}
 }
-func (s *Store) readManifest() (Manifest, error) {
+func (s *Store) readManifest() (result Manifest, err error) {
 	f, err := os.Open(filepath.Join(s.root, "manifest.json"))
 	if errors.Is(err, os.ErrNotExist) {
 		return emptyManifest(), nil
@@ -72,7 +73,7 @@ func (s *Store) readManifest() (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
-	defer f.Close()
+	defer func() { err = errors.Join(err, f.Close()) }()
 	var m Manifest
 	decoder := json.NewDecoder(io.LimitReader(f, DefaultMaxBytes))
 	decoder.DisallowUnknownFields()
@@ -96,35 +97,7 @@ func (s *Store) Manifest(ctx context.Context) (Manifest, error) {
 	}
 	return s.readManifest()
 }
-func atomicWrite(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	f, err := os.CreateTemp(dir, ".pending-")
-	if err != nil {
-		return err
-	}
-	name := f.Name()
-	defer os.Remove(name)
-	if _, err = f.Write(data); err != nil {
-		f.Close()
-		return err
-	}
-	if err = f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	if err = os.Rename(name, path); err != nil {
-		return err
-	}
-	directory, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	return directory.Sync()
-}
+func atomicWrite(path string, data []byte) error { return durablefile.Replace(path, data) }
 func (s *Store) writeManifest(m Manifest) error {
 	data, err := json.Marshal(m)
 	if err != nil {
@@ -139,7 +112,7 @@ func validRevision(revision string) bool {
 	_, err := hex.DecodeString(revision)
 	return err == nil && strings.ToLower(revision) == revision
 }
-func (s *Store) Load(ctx context.Context, revision string) (*fm.Firewall, error) {
+func (s *Store) Load(ctx context.Context, revision string) (result *fm.Firewall, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -153,7 +126,7 @@ func (s *Store) Load(ctx context.Context, revision string) (*fm.Firewall, error)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { err = errors.Join(err, f.Close()) }()
 	h := sha256.New()
 	fw, err := Decode(io.TeeReader(f, h), DefaultMaxBytes)
 	if err != nil {
@@ -199,7 +172,7 @@ type PublishResult struct {
 	Archived   bool
 }
 
-func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOptions) (PublishResult, error) {
+func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOptions) (result PublishResult, err error) {
 	if fw == nil || options.PublicationID == "" || options.KeepReservation && (!options.Live || options.Reservation == "") {
 		return PublishResult{}, fmt.Errorf("publication ID and firewall required")
 	}
@@ -217,7 +190,7 @@ func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOpt
 	if err != nil {
 		return PublishResult{}, err
 	}
-	defer unlock()
+	defer func() { err = errors.Join(err, unlock()) }()
 	m, err := s.readManifest()
 	if err != nil {
 		return PublishResult{}, err
@@ -271,7 +244,7 @@ func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOpt
 	}
 	return PublishResult{Revision: revision, Generation: m.Generation}, nil
 }
-func (s *Store) Reserve(ctx context.Context, device, expected, token string) error {
+func (s *Store) Reserve(ctx context.Context, device, expected, token string) (err error) {
 	if token == "" || device == "" {
 		return ErrReserved
 	}
@@ -279,7 +252,7 @@ func (s *Store) Reserve(ctx context.Context, device, expected, token string) err
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { err = errors.Join(err, unlock()) }()
 	m, err := s.readManifest()
 	if err != nil {
 		return err
@@ -300,12 +273,12 @@ func (s *Store) Reserve(ctx context.Context, device, expected, token string) err
 }
 
 // ReleaseUnchanged requires an independently confirmed baseline revision, never a timeout.
-func (s *Store) ReleaseUnchanged(ctx context.Context, device, token, confirmedRevision string) error {
+func (s *Store) ReleaseUnchanged(ctx context.Context, device, token, confirmedRevision string) (err error) {
 	unlock, err := lock(ctx, filepath.Join(s.root, "manifest.lock"))
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { err = errors.Join(err, unlock()) }()
 	m, err := s.readManifest()
 	if err != nil {
 		return err
@@ -351,7 +324,7 @@ func (s *Store) Archive(ctx context.Context, fw *fm.Firewall) (string, error) {
 }
 
 // Acknowledge advances a sink cursor with CAS. Sinks apply each batch idempotently before this call.
-func (s *Store) Acknowledge(ctx context.Context, sink string, expected, next uint64) error {
+func (s *Store) Acknowledge(ctx context.Context, sink string, expected, next uint64) (err error) {
 	if sink == "" || next < expected {
 		return ErrConflict
 	}
@@ -359,7 +332,7 @@ func (s *Store) Acknowledge(ctx context.Context, sink string, expected, next uin
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { err = errors.Join(err, unlock()) }()
 	m, err := s.readManifest()
 	if err != nil {
 		return err

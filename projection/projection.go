@@ -21,7 +21,14 @@ type Sink interface {
 	Apply(context.Context, Batch) error
 }
 
-func Drain(ctx context.Context, store *snapshot.Store, name string, sink Sink) error {
+// Outbox owns persisted events, immutable revisions, and cursor CAS.
+type Outbox interface {
+	Manifest(context.Context) (snapshot.Manifest, error)
+	Load(context.Context, string) (*fm.Firewall, error)
+	Acknowledge(context.Context, string, uint64, uint64) error
+}
+
+func Drain(ctx context.Context, store Outbox, name string, sink Sink) error {
 	if name == "" || sink == nil {
 		return errors.New("projection requires sink name and implementation")
 	}

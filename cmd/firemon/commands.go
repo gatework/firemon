@@ -134,6 +134,7 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 	var head snapshot.Head
 	if *revision != "" {
 		fw, err = store.Load(ctx, *revision)
+		head.Revision = *revision
 	} else {
 		fw, head, err = store.Current(ctx, *device)
 	}

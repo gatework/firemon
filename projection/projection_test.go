@@ -51,3 +51,38 @@ func TestFailedProjectionRetainsOutboxAndQueriesUsePublishedFile(t *testing.T) {
 		t.Fatal("acknowledged event replay", err)
 	}
 }
+
+type failingAck struct {
+	*snapshot.Store
+	fail bool
+}
+
+func (s *failingAck) Acknowledge(ctx context.Context, name string, expected, next uint64) error {
+	if s.fail {
+		return errors.New("cursor unavailable")
+	}
+	return s.Store.Acknowledge(ctx, name, expected, next)
+}
+func TestCommittedSinkBatchRetriesAfterAcknowledgementFailure(t *testing.T) {
+	ctx := context.Background()
+	store, _ := snapshot.Open(t.TempDir())
+	fw, _ := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "test"}})
+	if _, err := store.Publish(ctx, fw, snapshot.PublishOptions{PublicationID: "one"}); err != nil {
+		t.Fatal(err)
+	}
+	outbox := &failingAck{Store: store, fail: true}
+	sink := &sink{}
+	if err := projection.Drain(ctx, outbox, "db", sink); err == nil {
+		t.Fatal("lost cursor error")
+	}
+	outbox.fail = false
+	if err := projection.Drain(ctx, outbox, "db", sink); err != nil {
+		t.Fatal(err)
+	}
+	if len(sink.applied) != 2 || sink.applied[0].Revision != sink.applied[1].Revision || sink.applied[0].Generation != sink.applied[1].Generation {
+		t.Fatal("retry changed committed batch")
+	}
+	if err := projection.Drain(ctx, outbox, "db", sink); err != nil || len(sink.applied) != 2 {
+		t.Fatal("cursor did not advance", err)
+	}
+}
