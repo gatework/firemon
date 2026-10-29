@@ -173,6 +173,13 @@ func (f *Firewall) Metadata() Metadata { return f.data.Metadata }
 // Raw returns the immutable original configuration capture.
 func (f *Firewall) Raw() string { return f.data.Raw }
 
+// RecordCount counts top-level domain and source-evidence records without
+// materializing their views. It counts records, not bytes or nested members.
+func (f *Firewall) RecordCount() int {
+	d := &f.data
+	return len(d.Zones) + len(d.Interfaces) + len(d.Routes) + len(d.Addresses) + len(d.AddressGroups) + len(d.Services) + len(d.ServiceGroups) + len(d.Schedules) + len(d.Rules) + len(d.RuleBindings) + len(d.StaticNATs) + len(d.DynamicNATs) + len(d.NATPools) + len(d.Evidence) + len(d.Diagnostics)
+}
+
 func (f *Firewall) Export() Data { return f.data.Clone() }
 
 func (f *Firewall) Complete() bool { return len(f.diagnostics) == 0 }

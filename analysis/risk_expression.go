@@ -49,11 +49,11 @@ func (p *riskPreparation) compile(ctx context.Context, expression RiskExpression
 		if predicate.Relation < Intersects || predicate.Relation > NotEqual {
 			return preparedRiskExpression{}, ErrInvalid
 		}
-		standard, err := riskStandard(*predicate, p.limit)
+		standard, err := riskStandard(ctx, *predicate, p.limit)
 		if err != nil {
 			return preparedRiskExpression{}, err
 		}
-		count := len(standard.Boxes())
+		count := standard.RegionCount()
 		if count > p.regions {
 			return preparedRiskExpression{}, flow.ErrBudget
 		}
@@ -214,14 +214,24 @@ func riskProjection(traffic flow.Traffic, dimension Dimension, limit int) (flow.
 	return flow.NewTraffic(limit, boxes...)
 }
 
-func riskStandard(predicate RiskPredicate, limit int) (flow.Traffic, error) {
+func riskStandard(ctx context.Context, predicate RiskPredicate, limit int) (flow.Traffic, error) {
+	if err := ctx.Err(); err != nil {
+		return flow.Traffic{}, err
+	}
 	var boxes []flow.Box
 	switch predicate.Dimension {
 	case Source, Destination:
 		if predicate.Addresses.Empty() || len(predicate.Services) != 0 {
 			return flow.Traffic{}, ErrInvalid
 		}
+		if predicate.Addresses.RangeCount() > limit {
+			return flow.Traffic{}, flow.ErrBudget
+		}
+		boxes = make([]flow.Box, 0, predicate.Addresses.RangeCount())
 		for _, address := range predicate.Addresses.Ranges() {
+			if err := ctx.Err(); err != nil {
+				return flow.Traffic{}, err
+			}
 			zero := netip.IPv4Unspecified()
 			if address.First.Is6() {
 				zero = netip.IPv6Unspecified()
@@ -233,7 +243,14 @@ func riskStandard(predicate RiskPredicate, limit int) (flow.Traffic, error) {
 			return flow.Traffic{}, ErrInvalid
 		}
 		zero := netip.IPv4Unspecified()
+		if len(predicate.Services) > limit {
+			return flow.Traffic{}, flow.ErrBudget
+		}
+		boxes = make([]flow.Box, 0, len(predicate.Services))
 		for _, term := range predicate.Services {
+			if err := ctx.Err(); err != nil {
+				return flow.Traffic{}, err
+			}
 			boxes = append(boxes, flow.Box{Source: flow.Range{First: zero, Last: zero}, Destination: flow.Range{First: zero, Last: zero}, Protocol: term.Protocol, SourcePort: term.SourcePort, DestinationPort: term.DestinationPort, ICMPType: term.ICMPType, ICMPCode: term.ICMPCode})
 		}
 	default:

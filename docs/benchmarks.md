@@ -198,3 +198,18 @@ measurements are correctness overhead, not a performance improvement claim.
 Raw [before](benchmarks/2026-10-29-scanning-before.txt),
 [after](benchmarks/2026-10-29-scanning-after.txt) and
 [comparison](benchmarks/2026-10-29-scanning-comparison.txt) include allocations.
+
+After the independent review's pre-copy budget correction, six new counterbalanced
+samples rechecked the ordinary risk controls and the 1,000-rule/16-leaf expression
+cases against the same corrected-contract baseline. Declared expression time was
+25.660 → 7.052 ms (-72.52%); effective time was 33.01 → 29.57 ms (-10.42%). Ordinary
+risk again had no significant regression or allocation change. These [before](benchmarks/2026-10-29-risk-reviewed-before.txt),
+[after](benchmarks/2026-10-29-risk-reviewed-after.txt) and
+[comparison](benchmarks/2026-10-29-risk-reviewed-comparison.txt) supersede those
+risk rows only; they are not merged into the earlier samples.
+
+Candidate construction now charges catalog traversals cumulatively. The
+100-rule create benchmark consequently exceeds the default 100,000 visits;
+`BenchmarkPlan` explicitly uses 2,000,000 visits to retain its stress workload.
+A one-iteration smoke run validates that benchmark's success, not performance.
+Earlier planner timing records predate this stricter accounting.

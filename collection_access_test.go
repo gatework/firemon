@@ -20,7 +20,7 @@ func TestGraphCountsAndScheduleWindowsPreserveImmutableDeclarationOrder(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fw.RuleCount() != 1 || fw.ZoneCount() != 1 || fw.ScheduleCount() != 2 {
+	if fw.RuleCount() != 1 || fw.ZoneCount() != 1 || fw.ScheduleCount() != 2 || fw.RecordCount() != 4 {
 		t.Fatal("incorrect collection count")
 	}
 	s := fw.Schedule("s")

@@ -1,0 +1,35 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                                              │ .superpowers/sdd/2026-10-29-computation-contracts/risk-reviewed-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/risk-reviewed-after.txt │
+                                              │                                   sec/op                                   │                       sec/op                        vs base               │
+Risk/rules=10/mode=1-10                                                                                        10.19µ ± 1%                                         10.12µ ± 19%        ~ (p=0.180 n=6)
+Risk/rules=10/mode=2-10                                                                                        11.83µ ± 3%                                         11.68µ ±  1%   -1.27% (p=0.009 n=6)
+Risk/rules=100/mode=1-10                                                                                       99.58µ ± 1%                                         99.27µ ±  1%        ~ (p=0.180 n=6)
+Risk/rules=100/mode=2-10                                                                                       114.1µ ± 2%                                         114.2µ ±  1%        ~ (p=0.589 n=6)
+RiskExpression/rules=1000/leaves=16/mode=1-10                                                                 25.660m ± 1%                                         7.052m ±  3%  -72.52% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=16/mode=2-10                                                                  33.01m ± 1%                                         29.57m ±  1%  -10.42% (p=0.002 n=6)
+geomean                                                                                                        324.2µ                                              255.7µ        -21.13%
+
+                                              │ .superpowers/sdd/2026-10-29-computation-contracts/risk-reviewed-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/risk-reviewed-after.txt │
+                                              │                                    B/op                                    │                       B/op                        vs base                 │
+Risk/rules=10/mode=1-10                                                                                       18.09Ki ± 0%                                       18.09Ki ± 0%        ~ (p=1.000 n=6)
+Risk/rules=10/mode=2-10                                                                                       23.37Ki ± 0%                                       23.37Ki ± 0%        ~ (p=1.000 n=6) ¹
+Risk/rules=100/mode=1-10                                                                                      174.8Ki ± 0%                                       174.9Ki ± 0%        ~ (p=0.087 n=6)
+Risk/rules=100/mode=2-10                                                                                      215.3Ki ± 0%                                       215.3Ki ± 0%        ~ (p=0.788 n=6)
+RiskExpression/rules=1000/leaves=16/mode=1-10                                                                 43.14Mi ± 0%                                       10.16Mi ± 0%  -76.45% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=16/mode=2-10                                                                 79.69Mi ± 0%                                       68.57Mi ± 0%  -13.96% (p=0.002 n=6)
+geomean                                                                                                       621.0Ki                                            476.0Ki       -23.36%
+¹ all samples are equal
+
+                                              │ .superpowers/sdd/2026-10-29-computation-contracts/risk-reviewed-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/risk-reviewed-after.txt │
+                                              │                                 allocs/op                                  │                    allocs/op                      vs base                 │
+Risk/rules=10/mode=1-10                                                                                         250.0 ± 0%                                         250.0 ± 0%        ~ (p=1.000 n=6) ¹
+Risk/rules=10/mode=2-10                                                                                         285.0 ± 0%                                         285.0 ± 0%        ~ (p=1.000 n=6) ¹
+Risk/rules=100/mode=1-10                                                                                       2.413k ± 0%                                        2.413k ± 0%        ~ (p=1.000 n=6) ¹
+Risk/rules=100/mode=2-10                                                                                       2.634k ± 0%                                        2.634k ± 0%        ~ (p=1.000 n=6) ¹
+RiskExpression/rules=1000/leaves=16/mode=1-10                                                                  480.1k ± 0%                                        114.1k ± 0%  -76.24% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=16/mode=2-10                                                                 157.22k ± 0%                                        59.20k ± 0%  -62.34% (p=0.002 n=6)
+geomean                                                                                                        5.697k                                             3.810k       -33.12%
+¹ all samples are equal

@@ -34,11 +34,15 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	}
 	limits := p.Engine.Limits.WithDefaults()
 	visits := visitBudget(limits.MaxVisits)
-	if err := visits.take(ctx, before.RuleCount()); err != nil {
+	if err := visits.take(ctx, before.RecordCount()); err != nil {
 		return nil, err
 	}
 	d := before.Export()
-	catalog := newObjectCatalog(&d)
+	objects := len(d.Addresses) + len(d.Services)
+	catalog, err := newObjectCatalog(ctx, &d, &visits)
+	if err != nil {
+		return nil, err
+	}
 	var rules []fm.RuleRecord
 	var changes []Change
 	for index, intent := range intents {
@@ -63,42 +67,40 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 		if q.RuleSet == "" {
 			q.RuleSet = "security"
 		}
+		if q.Traffic.RegionCount() > limits.MaxRegions-len(rules) {
+			return nil, policy.ErrBudget
+		}
+		if err := visits.take(ctx, q.Traffic.RegionCount()); err != nil {
+			return nil, err
+		}
 		for _, box := range q.Traffic.Boxes() {
-			if err := visits.take(ctx, 1); err != nil {
+			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			if len(rules) >= limits.MaxRegions {
-				return nil, policy.ErrBudget
+			if err := visits.take(ctx, len(rules)); err != nil {
+				return nil, err
 			}
 			id := generatedID("fm-transfer-", struct {
 				Index int
 				Box   flow.Box
 			}{index, box})
 			for before.Rule(id) != nil || slices.ContainsFunc(rules, func(r fm.RuleRecord) bool { return r.ID == id }) {
+				if err := visits.take(ctx, len(rules)+1); err != nil {
+					return nil, err
+				}
 				id += "-new"
 			}
-			var from, to []fm.ID
-			if q.FromZone != "" {
-				from = []fm.ID{q.FromZone}
-			}
-			if q.ToZone != "" {
-				to = []fm.ID{q.ToZone}
-			}
-			m := fm.Match{Sources: []fm.AddressRef{catalog.ensureAddress(box.Source, from)}, Destinations: []fm.AddressRef{catalog.ensureAddress(box.Destination, to)}, Services: []fm.ServiceRef{catalog.ensureService(serviceOf(box))}}
-			if q.FromZone == "" {
-				m.AnyFromZone = true
-			} else {
-				m.FromZones = []fm.ID{q.FromZone}
-			}
-			if q.ToZone == "" {
-				m.AnyToZone = true
-			} else {
-				m.ToZones = []fm.ID{q.ToZone}
+			m, err := catalog.match(ctx, box, q)
+			if err != nil {
+				return nil, err
 			}
 			r := fm.RuleRecord{Object: fm.Object{ID: id, Name: string(id), Scope: q.Scope}, RuleSet: q.RuleSet, Position: len(rules), Match: m, Action: intent.Action, Log: intent.Log, LogStart: intent.LogStart, LogEnd: intent.LogEnd}
 			rules = append(rules, r)
 			changes = append(changes, Change{Kind: CreateRule, Rule: id, Sources: m.Sources, Destinations: m.Destinations, Services: m.Services})
 		}
+	}
+	if err := visits.take(ctx, len(d.Rules)); err != nil {
+		return nil, err
 	}
 	slices.SortStableFunc(d.Rules, func(a, b fm.RuleRecord) int {
 		if a.Position < b.Position {
@@ -109,6 +111,9 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 		}
 		return strings.Compare(string(a.ID), string(b.ID))
 	})
+	if err := visits.take(ctx, len(d.Rules)); err != nil {
+		return nil, err
+	}
 	for i := range d.Rules {
 		d.Rules[i].Position = i + len(rules)
 	}
@@ -128,7 +133,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	if len(commands) == 0 {
 		return nil, ErrUnsafe
 	}
-	result := &Plan{before: before, after: after, changes: changes, commands: slices.Clone(commands), proof: proof, engine: p.Engine, transfers: slices.Clone(intents), transferFrom: from, cost: Cost{NewRules: len(rules), NewObjects: len(after.Addresses()) + len(after.Services()) - len(before.Addresses()) - len(before.Services())}}
+	result := &Plan{before: before, after: after, changes: changes, commands: slices.Clone(commands), proof: proof, engine: p.Engine, transfers: slices.Clone(intents), transferFrom: from, cost: Cost{NewRules: len(rules), NewObjects: len(d.Addresses) + len(d.Services) - objects}}
 	if err := result.seal(); err != nil {
 		return nil, err
 	}

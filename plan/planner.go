@@ -110,7 +110,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		if r.Disabled || r.Builtin || r.Action != fm.Permit || r.Scope != q.Scope || r.RuleSet != q.RuleSet || r.Log == fm.Unknown || !sameZones(r.Match, q) {
 			continue
 		}
-		next, changes, cost, err := p.appendCandidate(ctx, fw, r, gap)
+		next, changes, cost, err := p.appendCandidate(ctx, fw, r, gap, &visits)
 		if err != nil {
 			if errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget) || ctx.Err() != nil {
 				return nil, err
@@ -132,7 +132,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		}
 		candidates = append(candidates, &Plan{before: fw, after: next, changes: changes, cost: cost})
 	}
-	next, changes, cost, err := createCandidate(fw, q, gap)
+	next, changes, cost, err := createCandidate(ctx, fw, q, gap, &visits)
 	if err != nil {
 		return nil, err
 	}

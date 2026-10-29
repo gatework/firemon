@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/analysis"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
@@ -46,5 +47,26 @@ func TestRiskCountsCachedNodesAcrossRules(t *testing.T) {
 	rows, err := a.Analyze(context.Background(), fw, q, definition)
 	if err != nil || len(rows) != 3 || rows[2].Value != analysis.True {
 		t.Fatalf("short circuit or independent preparation budget changed: %v, %v", rows, err)
+	}
+}
+
+func TestRiskRejectsOversizedStandardsBeforeExpanding(t *testing.T) {
+	fw := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}})
+	q := request(t, "192.0.2.1", "198.51.100.1")
+	a := analysis.RiskAnalyzer{Engine: policy.Engine{Limits: policy.Limits{MaxRegions: 1}}}
+	allocations := func(n int) float64 {
+		predicate := analysis.RiskPredicate{Dimension: analysis.Service, Relation: analysis.Intersects, Services: make([]fm.ServiceTerm, n)}
+		expression := analysis.RiskExpression{Predicate: &predicate}
+		definition := analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &expression}
+		return testing.AllocsPerRun(10, func() {
+			rows, err := a.Analyze(context.Background(), fw, q, definition)
+			if rows != nil || !errors.Is(err, flow.ErrBudget) {
+				t.Fatalf("oversized standard: %v, %v", rows, err)
+			}
+		})
+	}
+	small, large := allocations(32), allocations(4096)
+	if large > small+1 {
+		t.Fatalf("budget rejection expanded input: small=%g large=%g allocations", small, large)
 	}
 }

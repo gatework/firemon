@@ -127,7 +127,9 @@ func BenchmarkPlan(b *testing.B) {
 				if kind == "create" {
 					q = request(b, n+1, 8443)
 				}
-				planner := plan.Planner{Renderer: huawei.Renderer{}}
+				// Candidate construction now charges every catalog traversal. Keep the
+				// stress workload measurable with an explicit allowance.
+				planner := plan.Planner{Renderer: huawei.Renderer{}, Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 2_000_000}}}
 				requests := []policy.Request{q}
 				b.ReportAllocs()
 				for b.Loop() {

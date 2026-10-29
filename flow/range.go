@@ -85,6 +85,10 @@ func normalize(rs []Range) Set {
 	}
 	return Set{ranges: out}
 }
+
+// RangeCount returns the normalized interval count without copying ranges.
+func (s Set) RangeCount() int { return len(s.ranges) }
+
 func (s Set) Ranges() []Range { return slices.Clone(s.ranges) }
 func (s Set) Empty() bool     { return len(s.ranges) == 0 }
 func (s Set) ContainsAddr(a netip.Addr) bool {

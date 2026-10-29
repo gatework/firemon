@@ -195,3 +195,9 @@ Nil cursors, classifiers and `ParseFunc` callbacks, and invalid stage declaratio
 use `config.ErrInvalid`. Malformed source retains `ErrSource`; invalid claims and
 closed transactions retain `ErrClaim` and `ErrClosed`. These changes preserve exact
 source spans, declaration order, staged interpretation and atomic rollback.
+
+For bounded materialization, `Firewall.RecordCount()` counts top-level domain and
+evidence records, `flow.Set.RangeCount()` counts normalized address intervals and
+`flow.Traffic.RegionCount()` counts disjoint boxes. Candidate object traversal now
+shares the planner's visit allowance, so large catalogs may require a higher
+explicit `MaxVisits` even when few rules participate in the requested change.

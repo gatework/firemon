@@ -122,6 +122,10 @@ func NewTraffic(limit int, boxes ...Box) (Traffic, error) {
 	}
 	return out, nil
 }
+
+// RegionCount returns the disjoint box count without copying traffic.
+func (s Traffic) RegionCount() int { return len(s.boxes) }
+
 func (s Traffic) Boxes() []Box { return slices.Clone(s.boxes) }
 func (s Traffic) Empty() bool  { return len(s.boxes) == 0 }
 func (s Traffic) Union(t Traffic, limit int) (Traffic, error) {

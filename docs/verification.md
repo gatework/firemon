@@ -260,3 +260,51 @@ The completion audit additionally reproduced malformed persisted head revisions
 being reported as caller errors and mismatched manifest digests being accepted.
 Current now checks head revision syntax and binds its semantic/source digests to
 the loaded immutable graph, returning `snapshot.ErrFormat` on disagreement.
+
+## Computation and scanner contracts (2026-10-29)
+
+The [computation plan](plans/2026-10-29-computation-contracts.md) implements the
+approved breaking API cleanup and layered resource model. Delegated public
+queries/proofs retain independent limits; each parent algorithm accumulates its
+own private work across contexts, rules and candidates.
+
+- Limit defaults and O(1) graph counts/window iteration have ownership and
+  exact-boundary tests. Context generation charges windows without cloning full
+  schedule records. Incomplete risk rows cannot bypass the visit limit.
+- Convergence and migration regressions reproduced private work escaping
+  cumulative visit limits; batch planning reproduced the fixed 4,096-region
+  fallback ignoring the caller's smaller cap. Configured regions now reach
+  union, equality, universe and independent readback proofs.
+- Risk preparation has an independent finite-set oracle (256 cases in each
+  declared/effective mode), paired service tuple and first-match checks,
+  request-local concurrent reuse, aggregate standard regions, per-node cumulative
+  budgets and short circuit boundaries. The oracle passed before and after the
+  performance change; the aggregate retained-region regression failed first.
+- Scanner regressions failed first for canceled empty/long input, nil callbacks,
+  invalid stages and cancellation after classification. Current tests cover
+  UTF-8 chunk boundaries, split-rune byte fragments, CRLF multiline quotes,
+  exact physical spans, cancellation during indexing/XML text and atomic rollback.
+  All seven native approval/semantic fixtures remain unchanged.
+
+Root `GOWORK=off GOPROXY=off go test -count=1 -race ./...` and `go vet ./...`
+passed on macOS arm64 with Go 1.27.1. The nested adapter passed race/vet using a
+separate temporary workspace against the current core (race suite: 12.681 s).
+This workspace result does not establish the published dependency pin or remote
+CI; delivery evidence is recorded separately in [status](status.md). Synthetic
+performance and scanner overhead are reported in [benchmarks](benchmarks.md).
+
+The fresh independent review found two resource-bound gaps. Both were reproduced
+before correction: a zero-rule graph with 100 unreferenced addresses produced a
+plan despite `MaxVisits: 32`; an oversized transfer allocated about 499 KB per
+rejected call, and risk rejection allocations grew with input size. Candidate
+export/catalog/visibility/collision work now shares the parent counter, while
+constant-time range/region counts reject oversized inputs before copying. The
+regressions check rejection without partial plans and bounded rejection
+allocation, alongside adequate-budget success. No semantic or evidence-corruption
+finding was reported; no minor findings were deferred.
+
+After those review corrections, all 23 root test-bearing packages passed a fresh
+uncached race run; root vet and formatting also passed. The adapter's final
+current-core workspace race suite passed in 12.068 seconds, followed by vet.
+Risk controls were remeasured after the correction, and the planner stress
+benchmark was smoke-tested with its now-explicit visit allowance.
