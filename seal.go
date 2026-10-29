@@ -323,6 +323,13 @@ func Seal(data Data) (*Firewall, error) {
 		}
 		return strings.Compare(string(a.ID), string(b.ID))
 	})
+	f.orderedRules = f.Rules()
+	slices.SortStableFunc(f.orderedRules, func(a, b *Rule) int {
+		if a.Position() != b.Position() {
+			return cmpInt(a.Position(), b.Position())
+		}
+		return strings.Compare(string(a.ID()), string(b.ID()))
+	})
 	var err error
 	f.digest, err = semanticDigest(f.data)
 	if err != nil {

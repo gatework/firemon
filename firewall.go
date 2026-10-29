@@ -2,6 +2,7 @@ package firemon
 
 import (
 	"errors"
+	"iter"
 	"slices"
 )
 
@@ -9,6 +10,7 @@ var ErrGraph = errors.New("invalid firewall graph")
 
 type Firewall struct {
 	data          Data
+	orderedRules  []*Rule
 	diagnostics   []Diagnostic
 	sequence      []NATEntry
 	digest        string
@@ -181,4 +183,16 @@ func cmpInt(a, b int) int {
 		return 1
 	}
 	return 0
+}
+
+// OrderedRules visits immutable rules by native position and stable identity.
+// Rules retains source declaration order; neither view exposes index storage.
+func (f *Firewall) OrderedRules() iter.Seq[*Rule] {
+	return func(yield func(*Rule) bool) {
+		for _, rule := range f.orderedRules {
+			if !yield(rule) {
+				return
+			}
+		}
+	}
 }

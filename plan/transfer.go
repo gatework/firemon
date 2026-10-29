@@ -26,6 +26,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 		return nil, ErrUnsafe
 	}
 	d := before.Export()
+	catalog := newObjectCatalog(&d)
 	var rules []fm.RuleRecord
 	var changes []Change
 	for index, intent := range intents {
@@ -65,7 +66,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 			if q.ToZone != "" {
 				to = []fm.ID{q.ToZone}
 			}
-			m := fm.Match{Sources: []fm.AddressRef{ensureAddress(&d, box.Source, from)}, Destinations: []fm.AddressRef{ensureAddress(&d, box.Destination, to)}, Services: []fm.ServiceRef{ensureService(&d, serviceOf(box))}}
+			m := fm.Match{Sources: []fm.AddressRef{catalog.ensureAddress(box.Source, from)}, Destinations: []fm.AddressRef{catalog.ensureAddress(box.Destination, to)}, Services: []fm.ServiceRef{catalog.ensureService(serviceOf(box))}}
 			if q.FromZone == "" {
 				m.AnyFromZone = true
 			} else {

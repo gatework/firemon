@@ -67,9 +67,35 @@ func addressVisible(d *fm.Data, a fm.AddressRecord, zones []fm.ID) bool {
 	return true
 }
 
-func ensureAddress(d *fm.Data, r flow.Range, zones []fm.ID) fm.AddressRef {
-	for _, a := range d.Addresses {
-		if len(a.Ranges) == 1 && a.Ranges[0] == r && a.FQDN == "" && a.VIP == (fm.NATRef{}) && len(a.Unsupported) == 0 && addressVisible(d, a, zones) {
+// objectCatalog indexes one owned candidate draft in declaration order.
+// Visibility remains native-scope aware; equal ranges alone cannot prove reuse.
+type objectCatalog struct {
+	data      *fm.Data
+	addresses map[flow.Range][]fm.AddressRecord
+	services  map[fm.ServiceTerm]fm.ServiceRef
+}
+
+func newObjectCatalog(data *fm.Data) *objectCatalog {
+	c := &objectCatalog{data: data, addresses: make(map[flow.Range][]fm.AddressRecord), services: make(map[fm.ServiceTerm]fm.ServiceRef)}
+	for _, a := range data.Addresses {
+		if len(a.Ranges) == 1 && a.FQDN == "" && a.VIP == (fm.NATRef{}) && len(a.Unsupported) == 0 {
+			c.addresses[a.Ranges[0]] = append(c.addresses[a.Ranges[0]], a)
+		}
+	}
+	for _, s := range data.Services {
+		if s.Scope == "" && len(s.Terms) == 1 && len(s.Unsupported) == 0 {
+			if _, found := c.services[s.Terms[0]]; !found {
+				c.services[s.Terms[0]] = fm.ServiceRef{Kind: fm.ServiceObject, ID: s.ID}
+			}
+		}
+	}
+	return c
+}
+
+func (c *objectCatalog) ensureAddress(r flow.Range, zones []fm.ID) fm.AddressRef {
+	d := c.data
+	for _, a := range c.addresses[r] {
+		if addressVisible(d, a, zones) {
 			return fm.AddressRef{Kind: fm.AddressObject, ID: a.ID}
 		}
 	}
@@ -81,7 +107,9 @@ func ensureAddress(d *fm.Data, r flow.Range, zones []fm.ID) fm.AddressRef {
 		}
 		id += "-new"
 	}
-	d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: string(id)}, Ranges: []flow.Range{r}})
+	a := fm.AddressRecord{Object: fm.Object{ID: id, Name: string(id)}, Ranges: []flow.Range{r}}
+	d.Addresses = append(d.Addresses, a)
+	c.addresses[r] = append(c.addresses[r], a)
 	return fm.AddressRef{Kind: fm.AddressObject, ID: id}
 }
 
@@ -89,11 +117,10 @@ func serviceOf(b flow.Box) fm.ServiceTerm {
 	return fm.ServiceTerm{Protocol: b.Protocol, SourcePort: b.SourcePort, DestinationPort: b.DestinationPort, ICMPType: b.ICMPType, ICMPCode: b.ICMPCode}
 }
 
-func ensureService(d *fm.Data, term fm.ServiceTerm) fm.ServiceRef {
-	for _, s := range d.Services {
-		if s.Scope == "" && len(s.Terms) == 1 && s.Terms[0] == term && len(s.Unsupported) == 0 {
-			return fm.ServiceRef{Kind: fm.ServiceObject, ID: s.ID}
-		}
+func (c *objectCatalog) ensureService(term fm.ServiceTerm) fm.ServiceRef {
+	d := c.data
+	if ref, found := c.services[term]; found {
+		return ref
 	}
 	id := generatedID("fm-s-", term)
 	for _, s := range d.Services {
@@ -102,11 +129,13 @@ func ensureService(d *fm.Data, term fm.ServiceTerm) fm.ServiceRef {
 		}
 	}
 	d.Services = append(d.Services, fm.ServiceRecord{Object: fm.Object{ID: id, Name: string(id)}, Terms: []fm.ServiceTerm{term}})
+	c.services[term] = fm.ServiceRef{Kind: fm.ServiceObject, ID: id}
 	return fm.ServiceRef{Kind: fm.ServiceObject, ID: id}
 }
 
 func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.RuleRecord, gap flow.Traffic) (*fm.Firewall, []Change, Cost, error) {
 	d := fw.Export()
+	catalog := newObjectCatalog(&d)
 	objects := len(d.Addresses) + len(d.Services)
 	change := Change{Kind: AppendMembers, Rule: rule.ID}
 	src, known, err := p.Engine.ResolveAddresses(ctx, fw, rule.Match.Sources, rule.Match.AnySource)
@@ -133,7 +162,7 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 	for _, box := range gap.Boxes() {
 		addresses, _ := flow.NewSet(box.Source)
 		if !src.Contains(addresses) {
-			ref := ensureAddress(&d, box.Source, rule.Match.FromZones)
+			ref := catalog.ensureAddress(box.Source, rule.Match.FromZones)
 			if !slices.Contains(change.Sources, ref) {
 				change.Sources = append(change.Sources, ref)
 				rule.Match.Sources = append(rule.Match.Sources, ref)
@@ -142,7 +171,7 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 		}
 		addresses, _ = flow.NewSet(box.Destination)
 		if !dst.Contains(addresses) {
-			ref := ensureAddress(&d, box.Destination, rule.Match.ToZones)
+			ref := catalog.ensureAddress(box.Destination, rule.Match.ToZones)
 			if !slices.Contains(change.Destinations, ref) {
 				change.Destinations = append(change.Destinations, ref)
 				rule.Match.Destinations = append(rule.Match.Destinations, ref)
@@ -151,7 +180,7 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 		}
 		term := serviceOf(box)
 		if !slices.Contains(terms, term) && !rule.Match.AnyService {
-			ref := ensureService(&d, term)
+			ref := catalog.ensureService(term)
 			if !slices.Contains(change.Services, ref) {
 				change.Services = append(change.Services, ref)
 				rule.Match.Services = append(rule.Match.Services, ref)
@@ -175,6 +204,7 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 
 func createCandidate(fw *fm.Firewall, q policy.Request, gap flow.Traffic) (*fm.Firewall, []Change, Cost, error) {
 	d := fw.Export()
+	catalog := newObjectCatalog(&d)
 	objects := len(d.Addresses) + len(d.Services)
 	boxes := gap.Boxes()
 	var changes []Change
@@ -193,7 +223,7 @@ func createCandidate(fw *fm.Firewall, q policy.Request, gap flow.Traffic) (*fm.F
 		if q.ToZone != "" {
 			to = []fm.ID{q.ToZone}
 		}
-		m := fm.Match{Sources: []fm.AddressRef{ensureAddress(&d, box.Source, from)}, Destinations: []fm.AddressRef{ensureAddress(&d, box.Destination, to)}, Services: []fm.ServiceRef{ensureService(&d, serviceOf(box))}}
+		m := fm.Match{Sources: []fm.AddressRef{catalog.ensureAddress(box.Source, from)}, Destinations: []fm.AddressRef{catalog.ensureAddress(box.Destination, to)}, Services: []fm.ServiceRef{catalog.ensureService(serviceOf(box))}}
 		if q.FromZone == "" {
 			m.AnyFromZone = true
 		} else {

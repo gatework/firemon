@@ -8,7 +8,6 @@ import (
 	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -74,21 +73,12 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 	limits := e.Limits.defaults()
 	remaining := q.Traffic
 	result := Result{Complete: true}
-	rules := fw.Rules()
-	slices.SortStableFunc(rules, func(a, b *fm.Rule) int {
-		x, y := a.Record(), b.Record()
-		if x.Position < y.Position {
-			return -1
-		}
-		if x.Position > y.Position {
-			return 1
-		}
-		return strings.Compare(string(x.ID), string(y.ID))
-	})
+	cache := &resolutionCache{firewall: fw, remaining: limits.Combinations}
 	if q.RuleSet == "" {
 		q.RuleSet = "security"
 	}
-	for i, rule := range rules {
+	i := 0
+	for rule := range fw.OrderedRules() {
 		if err := ctx.Err(); err != nil {
 			return Result{}, err
 		}
@@ -98,6 +88,7 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 		if i >= limits.Rules {
 			return Result{}, ErrBudget
 		}
+		i++
 		r := rule.Record()
 		if r.Disabled || r.Scope != q.Scope || r.RuleSet != q.RuleSet {
 			continue
@@ -109,7 +100,7 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 				continue
 			}
 		}
-		hit, certain, err := e.Match(ctx, fw, r.Match, q, remaining)
+		hit, certain, err := e.match(ctx, fw, r.Match, q, remaining, cache)
 		if err != nil {
 			return Result{}, err
 		}
@@ -181,22 +172,21 @@ func zoneMatch(zones []fm.ID, any bool, q fm.ID) (bool, bool) {
 
 // Match returns a conservative possible match and whether that match is semantically certain.
 func (e Engine) Match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Request, input flow.Traffic) (flow.Traffic, bool, error) {
+	return e.match(ctx, fw, m, q, input, nil)
+}
+
+func (e Engine) match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Request, input flow.Traffic, cache *resolutionCache) (flow.Traffic, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return flow.Traffic{}, false, err
 	}
 	if fw == nil {
 		return flow.Traffic{}, false, ErrInvalid
 	}
-	if fw != nil {
-		if normalize := semantics(fw.Metadata().Vendor).normalizeRequest; normalize != nil {
-			q = normalize(q)
-		}
+	if normalize := semantics(fw.Metadata().Vendor).normalizeRequest; normalize != nil {
+		q = normalize(q)
 	}
 	limits := e.Limits.defaults()
-	if err := ctx.Err(); err != nil {
-		return flow.Traffic{}, false, err
-	}
-	budget := &resolutionBudget{ctx: ctx, limit: limits.Combinations}
+	budget := &resolutionBudget{ctx: ctx, limit: limits.Combinations, cache: cache}
 	relationKnown := true
 	if m.ZoneRelation != fm.AnyZoneRelation {
 		from, to := fw.Zone(q.FromZone), fw.Zone(q.ToZone)

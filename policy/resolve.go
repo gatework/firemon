@@ -9,6 +9,7 @@ import (
 type resolutionBudget struct {
 	ctx          context.Context
 	limit, spent int
+	cache        *resolutionCache
 }
 
 func (b *resolutionBudget) charge() error {
@@ -22,7 +23,7 @@ func (b *resolutionBudget) charge() error {
 	return nil
 }
 
-func resolveAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *resolutionBudget) (flow.Set, bool, error) {
+func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *resolutionBudget) (flow.Set, bool, error) {
 	if any {
 		return allAddresses(), true, nil
 	}
@@ -105,7 +106,7 @@ func allServices() []fm.ServiceTerm {
 	return []fm.ServiceTerm{{Protocol: flow.Interval{Low: 0, High: 255}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 0, High: 65535}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}}}
 }
 
-func resolveServices(fw *fm.Firewall, refs []fm.ServiceRef, any bool, budget *resolutionBudget) ([]fm.ServiceTerm, bool, error) {
+func expandServices(fw *fm.Firewall, refs []fm.ServiceRef, any bool, budget *resolutionBudget) ([]fm.ServiceTerm, bool, error) {
 	if any {
 		return allServices(), true, nil
 	}

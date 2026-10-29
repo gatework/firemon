@@ -48,35 +48,37 @@ func (b *Box) dimensions() []*Interval {
 }
 
 // subtract carves disjoint slabs around the intersection, never cross-products of projected axes.
-func (b Box) subtract(c Box) []Box {
+func (b Box) subtract(c Box, pieces *[14]Box) int {
 	x, ok := b.Intersection(c)
 	if !ok {
-		return []Box{b}
+		pieces[0] = b
+		return 1
 	}
-	var out []Box
+	count := 0
+	emit := func(piece Box) { pieces[count] = piece; count++ }
 	core := b
 	if core.Source.First.Compare(x.Source.First) < 0 {
 		piece := core
 		piece.Source.Last = x.Source.First.Prev()
-		out = append(out, piece)
+		emit(piece)
 		core.Source.First = x.Source.First
 	}
 	if x.Source.Last.Compare(core.Source.Last) < 0 {
 		piece := core
 		piece.Source.First = x.Source.Last.Next()
-		out = append(out, piece)
+		emit(piece)
 		core.Source.Last = x.Source.Last
 	}
 	if core.Destination.First.Compare(x.Destination.First) < 0 {
 		piece := core
 		piece.Destination.Last = x.Destination.First.Prev()
-		out = append(out, piece)
+		emit(piece)
 		core.Destination.First = x.Destination.First
 	}
 	if x.Destination.Last.Compare(core.Destination.Last) < 0 {
 		piece := core
 		piece.Destination.First = x.Destination.Last.Next()
-		out = append(out, piece)
+		emit(piece)
 		core.Destination.Last = x.Destination.Last
 	}
 	for i, target := range x.dimensions() {
@@ -84,17 +86,17 @@ func (b Box) subtract(c Box) []Box {
 		if axis.Low < target.Low {
 			piece := core
 			piece.dimensions()[i].High = target.Low - 1
-			out = append(out, piece)
+			emit(piece)
 			axis.Low = target.Low
 		}
 		if target.High < axis.High {
 			piece := core
 			piece.dimensions()[i].Low = target.High + 1
-			out = append(out, piece)
+			emit(piece)
 			axis.High = target.High
 		}
 	}
-	return out
+	return count
 }
 
 // Traffic is an immutable disjoint union. Operations return no partial result on budget failure.
@@ -123,7 +125,24 @@ func NewTraffic(limit int, boxes ...Box) (Traffic, error) {
 func (s Traffic) Boxes() []Box { return slices.Clone(s.boxes) }
 func (s Traffic) Empty() bool  { return len(s.boxes) == 0 }
 func (s Traffic) Union(t Traffic, limit int) (Traffic, error) {
-	return NewTraffic(limit, append(s.Boxes(), t.boxes...)...)
+	// Each operand is already disjoint. Normalize only the added coverage.
+	if limit < 1 || len(s.boxes)+len(t.boxes) > limit {
+		return Traffic{}, ErrBudget
+	}
+	out := s.Boxes()
+	for _, b := range t.boxes {
+		// Charge each added declaration's intermediate regions as NewTraffic
+		// does. Combining all additions first could change budget failures.
+		extra, err := (Traffic{boxes: []Box{b}}).Difference(s, limit)
+		if err != nil {
+			return Traffic{}, err
+		}
+		if len(out)+len(extra.boxes) > limit {
+			return Traffic{}, ErrBudget
+		}
+		out = append(out, extra.boxes...)
+	}
+	return Traffic{boxes: out}, nil
 }
 func (s Traffic) Intersection(t Traffic, limit int) (Traffic, error) {
 	if limit < 1 {
@@ -147,16 +166,22 @@ func (s Traffic) Difference(t Traffic, limit int) (Traffic, error) {
 		return Traffic{}, ErrBudget
 	}
 	out := s.Boxes()
+	var next []Box
+	// At most two slabs per dimension; the bounded scratch stays on the stack.
+	var pieces [14]Box
 	for _, b := range t.boxes {
-		var next []Box
+		next = next[:0]
 		for _, a := range out {
-			pieces := a.subtract(b)
-			if len(next)+len(pieces) > limit {
+			count := a.subtract(b, &pieces)
+			if len(next)+count > limit {
 				return Traffic{}, ErrBudget
 			}
-			next = append(next, pieces...)
+			next = append(next, pieces[:count]...)
 		}
-		out = next
+		out, next = next, out
+		if len(out) == 0 {
+			return Traffic{}, nil
+		}
 	}
 	return Traffic{out}, nil
 }

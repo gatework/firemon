@@ -180,3 +180,22 @@ func TestConvergenceRejectsCrossPairsAndInterveningDeny(t *testing.T) {
 		})
 	}
 }
+
+func TestConvergenceChargesIncompatiblePairsBeforeFiltering(t *testing.T) {
+	d := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.2", "198.51.100.1"}, {"192.0.2.3", "198.51.100.1"}}).Export()
+	for i := range d.Rules {
+		d.Rules[i].Description = string(rune('a' + i))
+	}
+	fw, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := analysis.Converger{MaxComparisons: 2}
+	if rows, err := c.Candidates(context.Background(), fw); !errors.Is(err, policy.ErrBudget) || rows != nil {
+		t.Fatalf("incompatible pairs escaped budget: %v %v", rows, err)
+	}
+	c.MaxComparisons = 3
+	if rows, err := c.Candidates(context.Background(), fw); err != nil || len(rows) != 0 {
+		t.Fatalf("exact pair budget: %v %v", rows, err)
+	}
+}

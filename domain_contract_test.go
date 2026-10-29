@@ -1,10 +1,42 @@
 package firemon_test
 
 import (
+	"slices"
 	"testing"
 
 	fm "github.com/gatework/firemon"
 )
+
+func TestOrderedRulesKeepDeclarationOrderAndOwnedContainers(t *testing.T) {
+	d := seed()
+	d.Rules = []fm.RuleRecord{
+		{Object: fm.Object{ID: "last"}, Action: fm.Permit, Position: 2},
+		{Object: fm.Object{ID: "b"}, Action: fm.Permit, Position: 1},
+		{Object: fm.Object{ID: "a"}, Action: fm.Permit, Position: 1},
+	}
+	fw, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []fm.ID
+	for rule := range fw.OrderedRules() {
+		ids = append(ids, rule.ID())
+	}
+	if !slices.Equal(ids, []fm.ID{"a", "b", "last"}) {
+		t.Fatal(ids)
+	}
+	declarations := fw.Rules()
+	if declarations[0].ID() != "last" {
+		t.Fatal("declaration order changed")
+	}
+	declarations[0] = nil
+	for rule := range fw.OrderedRules() {
+		if rule == nil {
+			t.Fatal("ordered index mutated")
+		}
+		break
+	}
+}
 
 func TestRuleAndNATShareImmutableMatchView(t *testing.T) {
 	d := seed()

@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -65,9 +64,15 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall) ([]Convergen
 		}
 	}
 	slices.SortFunc(rules, compareConvergenceRules)
+	signatures := make([]fm.RuleRecord, len(rules))
+	for i, rule := range rules {
+		signatures[i] = convergenceSignature(rule)
+	}
+	var contexts []policy.Request
+	contextsReady := false
 	var candidates []ConvergenceCandidate
 	for i, a := range rules {
-		for _, b := range rules[i+1:] {
+		for offset, b := range rules[i+1:] {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
@@ -75,18 +80,26 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall) ([]Convergen
 				return nil, policy.ErrBudget
 			}
 			budget--
-			if !reflect.DeepEqual(convergenceSignature(a), convergenceSignature(b)) {
+			if !sameConvergenceSignature(signatures[i], signatures[i+1+offset]) {
 				continue
 			}
+			if !contextsReady {
+				var err error
+				contexts, err = c.Planner.Engine.Contexts(ctx, c.From, fw)
+				if err != nil {
+					return nil, err
+				}
+				contextsReady = true
+			}
 			candidate := ConvergenceCandidate{Rules: []fm.ID{a.ID, b.ID}, Kind: CombineRules, Reason: "combine compatible declarations with whole-rulebase preservation"}
-			contained, err := c.containsRule(ctx, fw, a, b)
+			contained, err := c.containsRule(ctx, fw, a, b, contexts)
 			if err != nil {
 				return nil, err
 			}
 			if contained {
 				candidate.Kind, candidate.Reason = ContainRules, "one compatible declaration contains the other"
 			}
-			candidate.Plan, candidate.Rejection = c.Plan(ctx, fw, candidate.Rules)
+			candidate.Plan, candidate.Rejection = c.plan(ctx, fw, candidate.Rules, contexts)
 			if errors.Is(candidate.Rejection, context.Canceled) || errors.Is(candidate.Rejection, context.DeadlineExceeded) || errors.Is(candidate.Rejection, policy.ErrBudget) || errors.Is(candidate.Rejection, flow.ErrBudget) {
 				return nil, candidate.Rejection
 			}
@@ -110,11 +123,7 @@ func convergenceSignature(r fm.RuleRecord) fm.RuleRecord {
 	return r
 }
 
-func (c Converger) containsRule(ctx context.Context, fw *fm.Firewall, a, b fm.RuleRecord) (bool, error) {
-	contexts, err := c.Planner.Engine.Contexts(ctx, c.From, fw)
-	if err != nil {
-		return false, err
-	}
+func (c Converger) containsRule(ctx context.Context, fw *fm.Firewall, a, b fm.RuleRecord, contexts []policy.Request) (bool, error) {
 	budget, limit := c.Planner.Engine.Limits.Rules, c.Planner.Engine.Limits.Regions
 	if budget <= 0 {
 		budget = 100000
@@ -161,6 +170,10 @@ func (c Converger) containsRule(ctx context.Context, fw *fm.Firewall, a, b fm.Ru
 // Plan merges an explicit selection into the earliest native rule. Both the
 // declaration union and the entire resulting rulebase must be equivalent.
 func (c Converger) Plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID) (*plan.Plan, error) {
+	return c.plan(ctx, fw, ids, nil)
+}
+
+func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, contexts []policy.Request) (*plan.Plan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -183,8 +196,9 @@ func (c Converger) Plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID) (*pla
 	slices.SortFunc(rules, compareConvergenceRules)
 	merged := rules[0]
 	change := plan.Change{Kind: plan.AppendMembers, Rule: merged.ID}
+	signature := convergenceSignature(rules[0])
 	for _, r := range rules[1:] {
-		if !reflect.DeepEqual(convergenceSignature(rules[0]), convergenceSignature(r)) {
+		if !sameConvergenceSignature(signature, convergenceSignature(r)) {
 			return nil, plan.ErrUnsafe
 		}
 		for _, ref := range r.Match.Sources {
@@ -206,9 +220,12 @@ func (c Converger) Plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID) (*pla
 			}
 		}
 	}
-	contexts, err := c.Planner.Engine.Contexts(ctx, c.From, fw)
-	if err != nil {
-		return nil, err
+	if contexts == nil {
+		var err error
+		contexts, err = c.Planner.Engine.Contexts(ctx, c.From, fw)
+		if err != nil {
+			return nil, err
+		}
 	}
 	visits := 0
 	for _, q := range contexts {
@@ -277,4 +294,23 @@ func equalTraffic(a, b flow.Traffic) (bool, error) {
 	}
 	x, err = b.Difference(a, 4096)
 	return err == nil && x.Empty(), err
+}
+
+// Keep nil distinct from empty, as the previous structural comparison did.
+func equalSignatureSlice[T comparable](a, b []T) bool {
+	return (a == nil) == (b == nil) && slices.Equal(a, b)
+}
+
+func sameConvergenceSignature(a, b fm.RuleRecord) bool {
+	x, y := a.Match, b.Match
+	return a.Scope == b.Scope && a.RuleSet == b.RuleSet &&
+		a.Action == b.Action && a.Disabled == b.Disabled && a.Log == b.Log &&
+		a.LogStart == b.LogStart && a.LogEnd == b.LogEnd && a.MatchVIP == b.MatchVIP &&
+		a.Builtin == b.Builtin && a.Description == b.Description &&
+		x.AnySource == y.AnySource && x.AnyDestination == y.AnyDestination &&
+		x.AnyService == y.AnyService && x.AnyFromZone == y.AnyFromZone && x.AnyToZone == y.AnyToZone &&
+		x.Schedule == y.Schedule && x.ZoneRelation == y.ZoneRelation &&
+		equalSignatureSlice(x.FromZones, y.FromZones) && equalSignatureSlice(x.ToZones, y.ToZones) &&
+		equalSignatureSlice(x.Applications, y.Applications) && equalSignatureSlice(x.Users, y.Users) &&
+		equalSignatureSlice(x.Unsupported, y.Unsupported)
 }
