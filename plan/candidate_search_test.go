@@ -6,12 +6,38 @@ import (
 	"testing"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 )
 
 type candidateRenderer struct {
 	rejectCheapest, rejectAppends, rejectAll bool
+}
+
+type failedCandidateRenderer struct {
+	cause error
+	calls int
+}
+
+func (r *failedCandidateRenderer) Render(context.Context, *fm.Firewall, *fm.Firewall, []plan.Change) ([]string, error) {
+	r.calls++
+	return nil, r.cause
+}
+
+func TestCandidateRenderingKeepsComputationAndForeignRefusalsFatal(t *testing.T) {
+	for _, cause := range []error{
+		errors.Join(plan.ErrRender, policy.ErrBudget),
+		errors.Join(plan.ErrRender, flow.ErrBudget),
+		errors.Join(plan.ErrRender, context.Canceled),
+		&plan.RejectionError{Stage: plan.RepresentationRejection, Err: plan.ErrRender},
+	} {
+		native := &failedCandidateRenderer{cause: cause}
+		result, err := (plan.Planner{Renderer: native}).Plan(context.Background(), baseline(t), []policy.Request{request(t, "192.0.2.2/32")})
+		if result != nil || !errors.Is(err, cause) || native.calls != 1 {
+			t.Errorf("fatal failure retried: calls=%d err=%v", native.calls, err)
+		}
+	}
 }
 
 func (r candidateRenderer) Render(_ context.Context, _, _ *fm.Firewall, changes []plan.Change) ([]string, error) {

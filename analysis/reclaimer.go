@@ -204,6 +204,10 @@ func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, request Reclamatio
 	if err != nil {
 		return nil, err
 	}
+	visits := visitBudget(r.Planner.Engine.Limits.WithDefaults().MaxVisits)
+	if err := visits.take(ctx, len(rows)); err != nil {
+		return nil, err
+	}
 	removalCandidates := make(map[fm.ID]bool)
 	for _, row := range rows {
 		removalCandidates[row.Rule] = row.RemovalCandidate
@@ -211,11 +215,20 @@ func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, request Reclamatio
 	selected := make(map[fm.ID]bool)
 	var changes []plan.Change
 	for _, id := range ids {
+		if err := visits.take(ctx, 1); err != nil {
+			return nil, err
+		}
 		if selected[id] || !removalCandidates[id] {
 			return nil, plan.ErrUnsafe
 		}
 		selected[id] = true
 		changes = append(changes, plan.Change{Kind: plan.RemoveRule, Rule: id})
+	}
+	if err := visits.take(ctx, fw.RecordCount()); err != nil {
+		return nil, err
+	}
+	if err := visits.take(ctx, fw.RuleCount()); err != nil {
+		return nil, err
 	}
 	d := fw.Export()
 	d.Rules = slices.DeleteFunc(d.Rules, func(v fm.RuleRecord) bool { return selected[v.ID] })

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"runtime"
 	"testing"
 
 	"github.com/gatework/firemon/analysis"
@@ -19,6 +20,61 @@ func request(t *testing.T, src, dst string) policy.Request {
 		t.Fatal(err)
 	}
 	return policy.Request{Traffic: traffic, RuleSet: "security"}
+}
+
+func TestOptimizerRegionBudgetDoesNotDependOnInputPacking(t *testing.T) {
+	first := request(t, "192.0.2.1", "198.51.100.1")
+	second := first
+	region := first.Traffic.Regions()[0]
+	region.DestinationPort = flow.Interval{Low: 444, High: 444}
+	var err error
+	second.Traffic, err = flow.NewTraffic(2, region)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packed := first
+	packed.Traffic, err = first.Traffic.Union(second.Traffic, 2)
+	if err != nil || packed.Traffic.RegionCount() != 2 {
+		t.Fatal("fixture", err)
+	}
+	for _, inputs := range [][]policy.Request{{packed}, {first, second}} {
+		groups, err := (analysis.RequestOptimizer{MaxRegions: 1}).Optimize(context.Background(), inputs)
+		if groups != nil || !errors.Is(err, flow.ErrBudget) {
+			t.Errorf("oversized input accepted (%d requests): %v %v", len(inputs), groups, err)
+		}
+		groups, err = (analysis.RequestOptimizer{MaxRegions: 2}).Optimize(context.Background(), inputs)
+		if err != nil || len(groups) != 1 || groups[0].Request.Traffic.RegionCount() != 1 || len(groups[0].Inputs) != len(inputs) {
+			t.Fatalf("adequate budget: %v %v", groups, err)
+		}
+		if equal, err := groups[0].Request.Traffic.Equal(packed.Traffic, 4); err != nil || !equal {
+			t.Fatal("optimization changed traffic", err)
+		}
+	}
+}
+
+func TestOptimizerRejectsOversizedInputBeforeCopying(t *testing.T) {
+	q := request(t, "192.0.2.1", "198.51.100.1")
+	region := q.Traffic.Regions()[0]
+	regions := make([]flow.TrafficRegion, 1024)
+	for i := range regions {
+		regions[i] = region
+		regions[i].DestinationPort = flow.Interval{Low: uint16(i), High: uint16(i)}
+	}
+	var err error
+	q.Traffic, err = flow.NewTraffic(len(regions), regions...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var start, end runtime.MemStats
+	runtime.ReadMemStats(&start)
+	groups, err := (analysis.RequestOptimizer{MaxRegions: 1, MaxComparisons: 1}).Optimize(context.Background(), []policy.Request{q})
+	runtime.ReadMemStats(&end)
+	if groups != nil || !errors.Is(err, flow.ErrBudget) {
+		t.Errorf("input region limit not checked: groups=%v err=%v", groups, err)
+	}
+	if allocated := end.TotalAlloc - start.TotalAlloc; allocated > 16<<10 {
+		t.Fatalf("oversized traffic copied: %d bytes", allocated)
+	}
 }
 
 func TestOptimizerPreservesPairsAndMergesToFixedPoint(t *testing.T) {

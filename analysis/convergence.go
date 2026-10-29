@@ -105,6 +105,13 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Ti
 			if errors.Is(candidate.Rejection, context.Canceled) || errors.Is(candidate.Rejection, context.DeadlineExceeded) || errors.Is(candidate.Rejection, policy.ErrBudget) || errors.Is(candidate.Rejection, flow.ErrBudget) {
 				return nil, candidate.Rejection
 			}
+			if candidate.Rejection != nil {
+				// Only this attempt's direct refusal is retryable. errors.As
+				// would also find refusals nested in failed renderer dependencies.
+				if _, expected := candidate.Rejection.(*plan.RejectionError); !expected {
+					return nil, candidate.Rejection
+				}
+			}
 			candidates = append(candidates, candidate)
 		}
 	}
@@ -202,7 +209,7 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 		selected[id] = true
 		r := fw.Rule(id).Record()
 		if !eligibleForConvergence(r) {
-			return nil, plan.ErrUnsafe
+			return nil, &plan.RejectionError{Stage: plan.DeclarationRejection, Err: plan.ErrUnsafe}
 		}
 		rules = append(rules, r)
 	}
@@ -215,7 +222,7 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 			return nil, err
 		}
 		if !sameConvergenceSignature(signature, convergenceSignature(r)) {
-			return nil, plan.ErrUnsafe
+			return nil, &plan.RejectionError{Stage: plan.DeclarationRejection, Err: plan.ErrUnsafe}
 		}
 		for _, ref := range r.Match.Sources {
 			if !slices.Contains(merged.Match.Sources, ref) {
@@ -260,7 +267,7 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 				return nil, err
 			}
 			if !known {
-				return nil, plan.ErrUnsafe
+				return nil, &plan.RejectionError{Stage: plan.DeclarationRejection, Err: plan.ErrUnsafe}
 			}
 			union, err = union.Union(hit, limit)
 			if err != nil {
@@ -272,27 +279,33 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 			return nil, err
 		}
 		if !known {
-			return nil, plan.ErrUnsafe
+			return nil, &plan.RejectionError{Stage: plan.DeclarationRejection, Err: plan.ErrUnsafe}
 		}
 		if equal, err := union.Equal(hit, limit); err != nil {
 			return nil, err
 		} else if !equal {
-			return nil, plan.ErrUnsafe
+			return nil, &plan.RejectionError{Stage: plan.DeclarationRejection, Err: plan.ErrUnsafe}
 		}
 	}
-	if err := visits.take(ctx, fw.RuleCount()); err != nil {
+	if err := visits.take(ctx, fw.RecordCount()); err != nil {
 		return nil, err
 	}
 	d := fw.Export()
-	d.Rules = nil
-	for _, r := range fw.Rules() {
-		row := r.Record()
+	if err := visits.take(ctx, len(d.Rules)); err != nil {
+		return nil, err
+	}
+	kept := d.Rules[:0]
+	for _, row := range d.Rules {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if row.ID == merged.ID {
-			d.Rules = append(d.Rules, merged)
+			kept = append(kept, merged)
 		} else if !selected[row.ID] {
-			d.Rules = append(d.Rules, row)
+			kept = append(kept, row)
 		}
 	}
+	d.Rules = kept
 	var changes []plan.Change
 	if len(change.Sources)+len(change.Destinations)+len(change.Services) > 0 {
 		changes = append(changes, change)

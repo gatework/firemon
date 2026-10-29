@@ -43,8 +43,14 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 	}
 	var groups []RequestGroup
 	for index, q := range requests {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if q.Traffic.Empty() {
 			return nil, ErrInvalid
+		}
+		if q.Traffic.RegionCount() > maxRegions {
+			return nil, flow.ErrBudget
 		}
 		if q.RuleSet == "" {
 			q.RuleSet = "security"

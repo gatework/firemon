@@ -140,6 +140,9 @@ func (f *Firewall) RuleBindings() []*RuleBinding {
 
 func (f *Firewall) StaticNAT(id ID) *StaticNAT { return f.staticNATs[id] }
 
+// StaticNATCount returns the number of static translations without copying their view.
+func (f *Firewall) StaticNATCount() int { return len(f.data.StaticNATs) }
+
 func (f *Firewall) StaticNATs() []*StaticNAT {
 	out := make([]*StaticNAT, 0, len(f.data.StaticNATs))
 	for _, r := range f.data.StaticNATs {
@@ -149,6 +152,9 @@ func (f *Firewall) StaticNATs() []*StaticNAT {
 }
 
 func (f *Firewall) DynamicNAT(id ID) *DynamicNAT { return f.dynamicNATs[id] }
+
+// DynamicNATCount returns the number of dynamic translations without copying their view.
+func (f *Firewall) DynamicNATCount() int { return len(f.data.DynamicNATs) }
 
 func (f *Firewall) DynamicNATs() []*DynamicNAT {
 	out := make([]*DynamicNAT, 0, len(f.data.DynamicNATs))

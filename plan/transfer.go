@@ -118,6 +118,9 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	if err != nil {
 		return nil, err
 	}
+	if err := p.preflightReadback(ctx, before, after); err != nil {
+		return nil, err
+	}
 	proof, err := p.proveTransfers(ctx, before, after, changes, from, &visits)
 	if err != nil {
 		return nil, err

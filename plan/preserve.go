@@ -2,6 +2,8 @@ package plan
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	fm "github.com/gatework/firemon"
@@ -26,11 +28,21 @@ func (p Planner) Preserve(ctx context.Context, before, after *fm.Firewall, chang
 	if before == nil || after == nil || p.Renderer != nil && dependency.Nil(p.Renderer) {
 		return nil, ErrInvalid
 	}
+	if err := p.preflightReadback(ctx, before, after); err != nil {
+		return nil, err
+	}
+	visits := visitBudget(p.Engine.Limits.WithDefaults().MaxVisits)
+	if err := visits.takeGraphs(ctx, before, after); err != nil {
+		return nil, err
+	}
 	if err := ValidateChanges(ctx, before, after, changes); err != nil {
 		return nil, err
 	}
 	proof, err := p.Engine.Equivalent(ctx, before, after, from)
 	if err != nil {
+		if !computationFailed(err) && errors.Is(err, policy.ErrNotEquivalent) {
+			return nil, &RejectionError{Stage: PreservationRejection, Err: err}
+		}
 		return nil, err
 	}
 	result := &Plan{before: before, after: after, changes: changes, preservation: &proof, engine: p.Engine,
@@ -42,10 +54,18 @@ func (p Planner) Preserve(ctx context.Context, before, after *fm.Firewall, chang
 		}
 		result.commands, err = p.renderChanges(ctx, before, after, result.changes)
 		if err != nil {
-			return nil, err
+			if computationFailed(err) {
+				return nil, err
+			}
+			if representationRejected(err) {
+				return nil, &RejectionError{Stage: RepresentationRejection, Err: err}
+			}
+			// Preserve the cause, but never promote a renderer's own structured
+			// rejection into a refusal issued by this preservation attempt.
+			return nil, fmt.Errorf("render preserved policy changes: %w", err)
 		}
 		if len(result.commands) == 0 {
-			return nil, ErrUnsafe
+			return nil, &RejectionError{Stage: RepresentationRejection, Err: ErrUnsafe}
 		}
 		result.cost.ModifiedRules = len(changes)
 	}

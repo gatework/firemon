@@ -12,11 +12,6 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-func (p Planner) prove(ctx context.Context, before, after *fm.Firewall, q policy.Request) (Proof, error) {
-	visits := visitBudget(p.Engine.Limits.WithDefaults().MaxVisits)
-	return p.proveWithBaseline(ctx, before, after, q, nil, &visits)
-}
-
 func (p Planner) proveWithBaseline(ctx context.Context, before, after *fm.Firewall, q policy.Request, baselineResult *policy.Result, visits *visitBudget) (Proof, error) {
 	if err := ctx.Err(); err != nil {
 		return Proof{}, err

@@ -26,11 +26,19 @@ func (e Engine) PreserveNAT(ctx context.Context, before, after *fm.Firewall, fro
 	if !before.Complete() || !after.Complete() {
 		return ErrNotEquivalent
 	}
-	if len(before.StaticNATs())+len(before.DynamicNATs())+len(after.StaticNATs())+len(after.DynamicNATs()) == 0 {
+	if before.StaticNATCount() == 0 && before.DynamicNATCount() == 0 && after.StaticNATCount() == 0 && after.DynamicNATCount() == 0 {
 		return nil
+	}
+	limits := e.Limits.WithDefaults()
+	remaining := limits.MaxVisits
+	if err := chargeVisits(ctx, &remaining, before.RecordCount(), after.RecordCount()); err != nil {
+		return err
 	}
 	a, b := before.Export(), after.Export()
 	a.Rules, b.Rules = nil, nil
+	if err := chargeVisits(ctx, &remaining, len(a.Addresses), len(a.Services), len(b.Addresses), len(b.Services)); err != nil {
+		return err
+	}
 	addresses := make(map[fm.ID]bool, len(a.Addresses))
 	services := make(map[fm.ID]bool, len(a.Services))
 	for _, r := range a.Addresses {
@@ -61,21 +69,17 @@ func (e Engine) PreserveNAT(ctx context.Context, before, after *fm.Firewall, fro
 	if !native.policyBoundNAT {
 		return nil
 	}
-	if err := e.preserveNATActivation(ctx, before, after); err != nil {
+	if err := e.preserveNATActivation(ctx, before, after, &remaining); err != nil {
 		return err
 	}
 	contexts, err := e.Contexts(ctx, from, before, after)
 	if err != nil {
 		return err
 	}
-	limits := e.Limits.WithDefaults()
-	remaining := limits.MaxVisits
-	cost := len(before.Rules()) + len(after.Rules()) + len(before.NATSequence()) + len(after.NATSequence())
 	for _, q := range contexts {
-		if cost > remaining {
-			return ErrBudget
+		if err := chargeVisits(ctx, &remaining, before.RuleCount(), after.RuleCount(), before.StaticNATCount(), before.DynamicNATCount(), after.StaticNATCount(), after.DynamicNATCount()); err != nil {
+			return err
 		}
-		remaining -= cost
 		prior, err := e.QueryNAT(ctx, before, q)
 		if err != nil {
 			return err
@@ -107,7 +111,7 @@ func (e Engine) PreserveNAT(ctx context.Context, before, after *fm.Firewall, fro
 	return nil
 }
 
-func (e Engine) preserveNATActivation(ctx context.Context, before, after *fm.Firewall) error {
+func (e Engine) preserveNATActivation(ctx context.Context, before, after *fm.Firewall, remaining *int) error {
 	if before.Metadata().Vendor != after.Metadata().Vendor {
 		return ErrNotEquivalent
 	}
@@ -115,12 +119,11 @@ func (e Engine) preserveNATActivation(ctx context.Context, before, after *fm.Fir
 	if activation == nil {
 		return nil
 	}
-	budget := e.Limits.WithDefaults().MaxVisits
-	a, err := activation(e, ctx, before, &budget)
+	a, err := activation(e, ctx, before, remaining)
 	if err != nil {
 		return err
 	}
-	b, err := activation(e, ctx, after, &budget)
+	b, err := activation(e, ctx, after, remaining)
 	if err != nil {
 		return err
 	}

@@ -18,6 +18,32 @@ including the two-region IPv4/IPv6 universe. Budget/cancellation failure returns
 no partial rows or plan. Stricter accounting can reject a previously accepted
 low-budget request; raising an explicit limit does not bypass semantic proof.
 
+Lifecycle graph preparation follows the same rule: equivalence and NAT proofs,
+convergence, reclamation, preservation and readback charge `RecordCount()` before
+exporting each owned configuration view. A graph materialization includes its
+normalization; explicit identity scans and private proof passes also accumulate
+visits. NAT activation uses the enclosing proof's remaining visits. Dynamic NAT
+owner indexes are charged and built once per equivalence proof, then reused
+across all zone/time contexts; effect partitioning charges each decision. The scalar
+`StaticNATCount()` and `DynamicNATCount()` checks avoid allocating views merely to
+detect an empty translation catalog. Standalone `ValidateChanges` remains a
+semantic validator; bounded planning charges its graph inputs before calling it.
+
+Every plan creation path, including an already-covered request or unchanged
+preservation, preflights minimum normal-readback capacity before rendering.
+Baseline verification needs two baseline views; result verification needs a
+baseline view, an expected-result view and an observed-result view. This check
+does not spend current-operation visits and does not guarantee actual readback
+success: changed captures and later proof work still consume runtime budgets.
+Insufficient minimum capacity returns `policy.ErrBudget`; increase `MaxVisits`
+and replan. Snapshot format and public method signatures are unchanged.
+
+`RequestOptimizer` checks each input's `RegionCount()` before grouping or copying.
+`MaxRegions` bounds input and intermediate traffic, even when fixed-point
+coalescing could reduce the final result below the cap. Packed and split inputs
+cannot bypass this check; oversized traffic returns `flow.ErrBudget` with no
+partial groups. Exact traffic pairing and the comparison budget are unchanged.
+
 Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA share the contracts
 below. Native syntax, ordering, packet views and persistence evidence belong to
 their adapters. The host owns inventory, credentials, authorization and database
@@ -314,3 +340,22 @@ All three planning entries (`Plan`, `Transfer`, `Preserve`) pass detached nested
 change slices to Render and own copies of returned commands. A renderer retaining
 its arguments cannot alter a sealed plan or its approved digest. Cancellation
 checked after rendering rejects commands even when the renderer returns nil error.
+
+## Lifecycle candidate refusal and operational failure
+
+`plan.RejectionError` carries a `RejectionStage` and underlying `Err`. Declaration,
+preservation and representation stages identify incompatible declarations,
+failed whole-rulebase equivalence and unsupported native commands respectively.
+`Error` and `Unwrap` retain diagnostic text and `errors.Is` compatibility;
+`errors.As` retrieves stage information. Native renderers still use `ErrRender`
+as their explicit representation-refusal contract.
+
+Convergence enumeration retains only refusals produced by the current attempt.
+It checks the direct top-level type, never a nested diagnostic found by
+`errors.As`. Preserve adds ordinary operation context to unexpected renderer
+errors, so a renderer returning or wrapping `RejectionError` remains fatal even
+when its cause is `ErrRender`. Both access-request and convergence candidates
+prioritize cancellation and region/visit budget errors over representation
+refusal. Unknown renderer errors and invalid dependencies stop enumeration with
+no partial rows or plan. Empty native commands are an expected representation
+refusal. Existing attempt limits and deterministic candidate order are unchanged.

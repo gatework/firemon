@@ -391,3 +391,49 @@ unsupported native features remain unverified. Benchmark evidence is reported
 separately in [benchmarks](benchmarks.md), including the measured creation overhead.
 Publication, exact-commit CI and the standalone adapter pin are tracked in
 [status](status.md).
+
+## Lifecycle algorithm contracts (2026-10-29)
+
+The [lifecycle plan](plans/2026-10-29-lifecycle-contracts.md) follows Perl
+`Config/Ruleopti.pm` containment and `FireFlow/RuleOtimize.pm` fixed-point union
+intent, while retaining Go's multidimensional traffic, ordered policy, logging,
+future schedule and NAT proofs. Perl usage flags do not replace revision-bound
+Go evidence or authorize deletion.
+
+Failing-then-passing regressions establish:
+
+- Low-budget equivalence, NAT preservation, convergence and reclamation reject
+  unused catalogs before export. The original lifecycle cases allocated about
+  14 MB despite MaxVisits=32. Allocation guards now reject well before that copy.
+- Creation, transfer, unchanged preservation and already-covered requests check
+  minimum readback capacity before rendering. Independent oversized captures
+  fail their own visit limit before normalization or identity matching.
+- Ordinary renderer failures, wrapped business errors and missing renderers abort
+  convergence instead of becoming three successful rejection rows. Structured
+  foreign refusals, including ones caused by ErrRender, remain fatal. Mixed
+  ErrRender/budget or cancellation failures abort both candidate pipelines.
+- Packed and split requests consistently reject oversized input regions. The
+  oversized-traffic case formerly copied 123,056 bytes and failed the comparison
+  budget; it now returns flow.ErrBudget before copying. Adequate-budget union
+  equality, input association and existing cross-pair tests pass.
+
+The new rejection stages are additive; method signatures, snapshot v9, native
+renderer interfaces and the seven-vendor boundary remain unchanged. Visits are
+record units, not a byte limit. Minimum readback preflight is necessary capacity,
+not an assurance that arbitrary later captures or all proof work fit the budget.
+
+The fresh independent review found one Important pre-existing accounting gap:
+Equivalent rebuilt the dynamic NAT ownership index in every context without
+charging those private scans. A 10-zone/100-disabled-NAT fixture returned success
+across 100 contexts with all 220 visits already spent on graph preparation.
+The failing regression now rejects that limit; 420 visits suffice because each
+ownership index is charged and built once, eliminating 20,000 repeated NAT
+visits in that fixture. Rule-effect decision scans also share the remaining
+proof budget. No Critical or Minor findings were reported. Live devices,
+publication and arbitrary future readback capacity were outside source review;
+local tests and remote CI are recorded separately.
+
+After the review correction, uncached `GOWORK=off GOPROXY=off go test -race
+-count=1 ./...` passed all 25 root test-bearing packages on macOS arm64,
+Go 1.27.1. Vet, build, formatting and diff checks passed separately. No minor
+findings were deferred. No real-device or firmware interoperability was tested.

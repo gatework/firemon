@@ -64,6 +64,9 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		return nil, err
 	}
 	if gap.Empty() {
+		if err := p.preflightReadback(ctx, fw, fw); err != nil {
+			return nil, err
+		}
 		result := &Plan{before: fw, after: fw, proof: Proof{BaseDigest: fw.SemanticDigest(), ResultDigest: fw.SemanticDigest(), TargetAllowed: true, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}}
 		result.target, result.engine = q, p.Engine
 		if err := result.seal(); err != nil {

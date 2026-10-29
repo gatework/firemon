@@ -71,6 +71,9 @@ func (p Planner) tryCandidate(
 	ctx context.Context, before *fm.Firewall, draft candidate,
 	request policy.Request, baseline *policy.Result, visits *visitBudget,
 ) (*Plan, error) {
+	if err := p.preflightReadback(ctx, before, draft.after); err != nil {
+		return nil, err
+	}
 	proof, err := p.proveWithBaseline(ctx, before, draft.after, request, baseline, visits)
 	if err != nil {
 		if errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget) || ctx.Err() != nil {
@@ -80,7 +83,7 @@ func (p Planner) tryCandidate(
 	}
 	commands, err := p.renderChanges(ctx, before, draft.after, draft.changes)
 	if err != nil {
-		if !errors.Is(err, ErrRender) {
+		if !representationRejected(err) {
 			return nil, err
 		}
 		return nil, nil

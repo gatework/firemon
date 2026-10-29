@@ -41,7 +41,14 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 	if !observed.Complete() {
 		return Readback{}, ErrReadback
 	}
+	visits := visitBudget(p.engine.Limits.WithDefaults().MaxVisits)
+	if err := visits.takeGraphs(ctx, p.before, p.after, observed); err != nil {
+		return Readback{}, err
+	}
 	expected, actual := p.after.Export(), observed.Export()
+	if err := visits.take(ctx, len(p.changes)); err != nil {
+		return Readback{}, err
+	}
 	created := make(map[fm.ID]bool)
 	for _, change := range p.changes {
 		if change.Kind == CreateRule {
@@ -56,7 +63,13 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 		id    fm.ID
 	}
 	available := make(map[string][]native)
+	if err := visits.take(ctx, len(actual.Rules)); err != nil {
+		return Readback{}, err
+	}
 	for i, rule := range actual.Rules {
+		if err := ctx.Err(); err != nil {
+			return Readback{}, err
+		}
 		if p.before.Rule(rule.ID) != nil {
 			continue
 		}
@@ -65,6 +78,9 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 			return Readback{}, err
 		}
 		available[key] = append(available[key], native{i, rule.ID})
+	}
+	if err := visits.take(ctx, len(expected.Rules)); err != nil {
+		return Readback{}, err
 	}
 	for _, rule := range expected.Rules {
 		if err := ctx.Err(); err != nil {
@@ -107,10 +123,9 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 	if p.preservation != nil {
 		_, err = p.engine.Equivalent(ctx, before, got, p.preservation.From)
 	} else if len(p.transfers) > 0 {
-		visits := visitBudget(p.engine.Limits.WithDefaults().MaxVisits)
 		_, err = (Planner{Engine: p.engine}).proveTransfers(ctx, before, got, p.changes, p.transferFrom, &visits)
 	} else {
-		_, err = (Planner{Engine: p.engine}).prove(ctx, before, got, p.target)
+		_, err = (Planner{Engine: p.engine}).proveWithBaseline(ctx, before, got, p.target, nil, &visits)
 	}
 	if err != nil {
 		return Readback{}, fmt.Errorf("%w: traffic proof: %w", ErrReadback, err)
@@ -129,6 +144,10 @@ func (p *Plan) VerifyBaseline(ctx context.Context, observed *fm.Firewall) error 
 	}
 	if !observed.Complete() {
 		return ErrReadback
+	}
+	visits := visitBudget(p.engine.Limits.WithDefaults().MaxVisits)
+	if err := visits.takeGraphs(ctx, p.before, observed); err != nil {
+		return err
 	}
 	a, err := normalized(p.before.Export())
 	if err != nil {

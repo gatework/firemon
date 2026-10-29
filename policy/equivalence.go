@@ -154,34 +154,43 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 	if !before.Complete() || !after.Complete() {
 		return Equivalence{}, ErrNotEquivalent
 	}
-	if err := e.preserveNATActivation(ctx, before, after); err != nil {
+	limits := e.Limits.WithDefaults()
+	remaining := limits.MaxVisits
+	if err := chargeVisits(ctx, &remaining, before.RecordCount(), after.RecordCount()); err != nil {
 		return Equivalence{}, err
 	}
-	a, b := before.Export(), after.Export()
-	a.Rules, b.Rules = nil, nil
-	x, err := fm.Seal(a)
+	if err := e.preserveNATActivation(ctx, before, after, &remaining); err != nil {
+		return Equivalence{}, err
+	}
+	beforeCatalog, afterCatalog := before.Export(), after.Export()
+	beforeCatalog.Rules, afterCatalog.Rules = nil, nil
+	beforeOwners, err := natOwnerRules(ctx, beforeCatalog.DynamicNATs, &remaining)
 	if err != nil {
 		return Equivalence{}, err
 	}
-	y, err := fm.Seal(b)
+	afterOwners, err := natOwnerRules(ctx, afterCatalog.DynamicNATs, &remaining)
 	if err != nil {
 		return Equivalence{}, err
 	}
-	if x.SemanticDigest() != y.SemanticDigest() {
+	beforeGraph, err := fm.Seal(beforeCatalog)
+	if err != nil {
+		return Equivalence{}, err
+	}
+	afterGraph, err := fm.Seal(afterCatalog)
+	if err != nil {
+		return Equivalence{}, err
+	}
+	if beforeGraph.SemanticDigest() != afterGraph.SemanticDigest() {
 		return Equivalence{}, ErrNotEquivalent
 	}
 	contexts, err := e.Contexts(ctx, from, before, after)
 	if err != nil {
 		return Equivalence{}, err
 	}
-	limits := e.Limits.WithDefaults()
-	visits := 0
 	for _, q := range contexts {
-		cost := before.RuleCount() + after.RuleCount()
-		if cost > limits.MaxVisits-visits {
-			return Equivalence{}, ErrBudget
+		if err := chargeVisits(ctx, &remaining, before.RuleCount(), after.RuleCount()); err != nil {
+			return Equivalence{}, err
 		}
-		visits += cost
 		a, err := e.Query(ctx, before, q)
 		if err != nil {
 			return Equivalence{}, err
@@ -200,11 +209,11 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 				return Equivalence{}, ErrNotEquivalent
 			}
 		}
-		left, err := ruleEffects(before, a, limits.MaxRegions)
+		left, err := ruleEffects(ctx, before, a, beforeOwners, limits.MaxRegions, &remaining)
 		if err != nil {
 			return Equivalence{}, err
 		}
-		right, err := ruleEffects(after, b, limits.MaxRegions)
+		right, err := ruleEffects(ctx, after, b, afterOwners, limits.MaxRegions, &remaining)
 		if err != nil {
 			return Equivalence{}, err
 		}
@@ -239,15 +248,33 @@ type ruleEffect struct {
 	natOwnerRule          fm.ID
 }
 
-func ruleEffects(fw *fm.Firewall, r Result, limit int) (map[ruleEffect]flow.Traffic, error) {
-	out := make(map[ruleEffect]flow.Traffic)
-	natOwners := make(map[fm.ID]bool)
-	for _, n := range fw.DynamicNATs() {
-		if r := n.Record(); r.Rule != "" && !r.Disabled {
-			natOwners[r.Rule] = true
+// natOwnerRules indexes policy-bound translation once per proof, not once per
+// zone/time context. It consumes the already owned configuration records.
+func natOwnerRules(ctx context.Context, translations []fm.DynamicNATRecord, remaining *int) (map[fm.ID]bool, error) {
+	if err := chargeVisits(ctx, remaining, len(translations)); err != nil {
+		return nil, err
+	}
+	owners := make(map[fm.ID]bool)
+	for _, translation := range translations {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if translation.Rule != "" && !translation.Disabled {
+			owners[translation.Rule] = true
 		}
 	}
+	return owners, nil
+}
+
+func ruleEffects(ctx context.Context, fw *fm.Firewall, r Result, natOwners map[fm.ID]bool, limit int, remaining *int) (map[ruleEffect]flow.Traffic, error) {
+	if err := chargeVisits(ctx, remaining, len(r.Decisions)); err != nil {
+		return nil, err
+	}
+	out := make(map[ruleEffect]flow.Traffic)
 	for _, decision := range r.Decisions {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		rule := fw.Rule(decision.Rule).Record()
 		key := ruleEffect{action: rule.Action, log: rule.Log, logStart: rule.LogStart, logEnd: rule.LogEnd}
 		if natOwners[rule.ID] {
