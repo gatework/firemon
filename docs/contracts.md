@@ -13,7 +13,7 @@ projection. No single vendor interface combines all these responsibilities.
 | Policy | `policy.Engine.Query`, `Match`, `QueryNAT`, `QueryPacket` | Exact known partitions; unresolved traffic remains `Unknown`, independent of transport success |
 | Design | `plan.Planner.Plan`, `Transfer`, `Preserve` | Renderable target and outside-traffic proof, with preserved translation behavior |
 | Readback | `Plan.VerifyBaseline`, `Plan.Verify` | Independent parsed native configuration establishes the approved baseline/result |
-| Lifecycle | `RiskAnalyzer.Assess`, `Converger.Candidates`, `Translator.Plan`, `Reclaimer.AnalyzeMembers` | Versioned findings or proven plans; findings alone never authorize changes |
+| Lifecycle | `RiskAnalyzer.Assess`, `Converger.Candidates`, `PolicyMigrator.Plan`, `Reclaimer.AnalyzeMembers` | Versioned findings or proven plans; findings alone never authorize changes |
 | Device | `deploy.Factory.Open`, `Session` | Fresh session, explicit configuration isolation, bounded capture/execution/persistence and closure |
 | Publication | Snapshot CAS and durable operation reservation | Complete current state or explicitly unavailable state, never silent stale success |
 
@@ -41,11 +41,11 @@ owner. `Engine.PreserveNAT` therefore checks existing NAT dependencies, active
 references and effective native translation partitions, including the intended
 target traffic. Disjoint changes can pass. Query and readback invoke the same
 semantics, and readback reruns the proof. Native NAT creation/migration remains
-outside the policy-only translator's supported contract.
+outside the policy-only migrator's supported contract.
 
 ## Lifecycle evidence
 
-Migration maps `Chain{Scope, RuleSet}` independently from zones. A unique selected
+Migration maps `firemon.PolicyChain{Scope, RuleSet}` independently from zones. A unique selected
 security chain may be inferred. ACL or ambiguous targets require explicit chain
 mapping. An explicitly empty destination-zone mapping, together with an explicit
 chain mapping, represents an ingress-only target ACL; a missing map key is an

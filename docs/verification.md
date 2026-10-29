@@ -131,3 +131,34 @@ The following preserves all execution-ledger rulings and their consequences, inc
 20. Reject semantic snapshot formats before 8 rather than restore potentially unsafe old PAN graphs. Loading never reparses; callers must reimport original captures, at the cost of invalidating older stored graphs.
 
 The two Important findings are fixed. No minor review findings were deferred. These decisions and the explicit capability limits are part of the delivered contract, not claims of untested parity.
+
+
+## Domain refactor verification (2026-10-29)
+
+The [module audit and API migration](refactoring.md) and
+[implementation plan](plans/2026-10-29-domain-refactor.md) cover this iteration.
+Perl/Ruby references and real devices were not modified or executed.
+
+- Core `GOWORK=off GOPROXY=off go test -race ./...` and `go vet ./...` passed.
+- Native fixture exported data and semantic digests match e9e9b96 across all
+  seven vendors. Three baseline approval digest goldens cover reuse, append and
+  create plans. Snapshot format 9, journal records and approval encoding remain.
+- New regressions cover resolver cancellation/budgets/nil input, immutable rule
+  and NAT views, ordered iteration, transaction ownership and nested rollback,
+  native parser limits/context selection, incomplete capture/error preservation,
+  durable write failures and cross-process locks, outbox retry and historical CLI
+  inspection. Independent packet-oracle fuzzing covers all seven traffic axes.
+- Scoped parser, integration and lifecycle reviews passed. The independent final
+  Codex source review approved the integrated core through b47e97e, including
+  exact difference/union budget and ordering, bounded cache recharging, candidate
+  visibility and digest compatibility. It intentionally did not run tests during
+  the serial measurement window. No unresolved correctness findings remain.
+- Source evidence too large to retain safely and untrusted session identity are
+  rejected before publication. Parser substitution instead retains the original
+  trusted bounded capture as incomplete evidence. These are distinct boundaries.
+- Speculative cross-vendor features and unsupported native migration remain in
+  the existing capability backlog. No new concurrency, runtime dependency,
+  database or approval platform was introduced.
+
+Final remote commit, CI and separately pinned adapter evidence are recorded in
+[delivery status](status.md). Local tests alone do not establish those results.

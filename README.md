@@ -2,6 +2,8 @@
 
 Go firewall configuration and policy automation. The approved [specification](docs/spec.md) and nine-task [execution plan](docs/plans/go-firewall.md) are implemented and verified within the documented capability boundaries. See the [requirement audit and review results](docs/verification.md) and [cross-vendor business contracts](docs/contracts.md).
 
+The [domain refactoring and API migration guide](docs/refactoring.md) records the module audit, Perl responsibility mapping, shared contracts and development conventions.
+
 The firewall graph includes interfaces, routes, zones, addresses and groups, services and groups, schedules, security rules, **StaticNAT**, **DynamicNAT**, and NAT pools. Vendor execution order is retained separately from object identity.
 
 This branch converts the original Ruby gem skeleton to Go while retaining Git history. The Ruby and Perl Algosec implementations are reference implementations, not runtime dependencies.

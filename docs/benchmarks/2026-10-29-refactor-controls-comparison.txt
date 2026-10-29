@@ -1,0 +1,90 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                           │ before-controls.txt │ after-controls.txt │
+                           │                       sec/op                       │           sec/op            vs base               │
+Snapshot/encode/rules=10                                           62.43µ ±  8%                 62.66µ ±  5%        ~ (p=0.699 n=6)
+Snapshot/decode/rules=10                                           135.9µ ± 19%                 138.0µ ±  8%        ~ (p=0.180 n=6)
+Snapshot/encode/rules=100                                          301.3µ ± 14%                 285.3µ ±  8%        ~ (p=0.132 n=6)
+Snapshot/decode/rules=100                                          655.4µ ± 19%                 658.5µ ± 36%        ~ (p=0.485 n=6)
+Snapshot/encode/rules=1000                                         2.547m ± 16%                 2.541m ±  3%        ~ (p=0.937 n=6)
+Snapshot/decode/rules=1000                                         6.524m ±  8%                 6.655m ± 11%        ~ (p=0.699 n=6)
+NAT/huawei/rules=10                                                13.89µ ±  5%                 14.00µ ±  8%        ~ (p=0.699 n=6)
+NAT/huawei/rules=100                                               135.8µ ± 10%                 135.8µ ±  4%        ~ (p=1.000 n=6)
+NAT/huawei/rules=1000                                              1.397m ± 11%                 1.408m ± 12%        ~ (p=0.818 n=6)
+Parse/huawei/rules=10                                              148.9µ ± 11%                 124.4µ ±  2%  -16.50% (p=0.002 n=6)
+Parse/huawei/rules=100                                             1.206m ±  8%                 1.063m ±  1%  -11.83% (p=0.002 n=6)
+Parse/huawei/rules=1000                                            13.73m ±  7%                 12.35m ±  4%  -10.04% (p=0.004 n=6)
+Parse/paloalto/rules=10                                            200.4µ ±  3%                 194.0µ ±  4%        ~ (p=0.093 n=6)
+Parse/paloalto/rules=100                                           1.691m ±  5%                 1.647m ±  3%   -2.62% (p=0.026 n=6)
+Parse/paloalto/rules=1000                                          18.91m ±  8%                 18.65m ±  6%        ~ (p=0.589 n=6)
+Parse/srx/rules=10                                                 149.7µ ±  3%                 140.1µ ±  6%   -6.43% (p=0.009 n=6)
+Parse/srx/rules=100                                                1.311m ±  2%                 1.231m ± 16%        ~ (p=0.065 n=6)
+Parse/srx/rules=1000                                               13.63m ±  5%                 13.31m ± 26%        ~ (p=0.589 n=6)
+geomean                                                            725.5µ                       700.3µ         -3.46%
+
+                           │ before-controls.txt │ after-controls.txt │
+                           │                        B/s                         │            B/s              vs base               │
+Snapshot/encode/rules=10                                          163.4Mi ±  7%                162.8Mi ±  4%        ~ (p=0.699 n=6)
+Snapshot/decode/rules=10                                          75.08Mi ± 16%                73.95Mi ±  7%        ~ (p=0.169 n=6)
+Snapshot/encode/rules=100                                         195.4Mi ± 12%                206.1Mi ±  7%        ~ (p=0.132 n=6)
+Snapshot/decode/rules=100                                         89.72Mi ± 16%                89.30Mi ± 26%        ~ (p=0.485 n=6)
+Snapshot/encode/rules=1000                                        217.4Mi ± 14%                218.0Mi ±  3%        ~ (p=0.937 n=6)
+Snapshot/decode/rules=1000                                        84.87Mi ±  7%                83.20Mi ± 12%        ~ (p=0.699 n=6)
+Parse/huawei/rules=10                                             15.25Mi ± 10%                18.26Mi ±  2%  +19.73% (p=0.002 n=6)
+Parse/huawei/rules=100                                            16.41Mi ±  7%                18.61Mi ±  2%  +13.43% (p=0.002 n=6)
+Parse/huawei/rules=1000                                           14.42Mi ±  7%                16.03Mi ±  4%  +11.18% (p=0.004 n=6)
+Parse/paloalto/rules=10                                           20.48Mi ±  3%                21.15Mi ±  4%        ~ (p=0.093 n=6)
+Parse/paloalto/rules=100                                          23.08Mi ±  5%                23.70Mi ±  3%   +2.69% (p=0.024 n=6)
+Parse/paloalto/rules=1000                                         20.98Mi ±  8%                21.26Mi ±  6%        ~ (p=0.589 n=6)
+Parse/srx/rules=10                                                30.53Mi ±  3%                32.63Mi ±  6%   +6.87% (p=0.009 n=6)
+Parse/srx/rules=100                                               32.63Mi ±  2%                34.74Mi ± 13%        ~ (p=0.065 n=6)
+Parse/srx/rules=1000                                              31.58Mi ±  5%                32.33Mi ± 21%        ~ (p=0.589 n=6)
+geomean                                                           43.99Mi                      45.93Mi         +4.42%
+
+                           │ before-controls.txt │ after-controls.txt │
+                           │                        B/op                        │           B/op            vs base                 │
+Snapshot/encode/rules=10                                           73.65Ki ± 0%               73.65Ki ± 0%        ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=10                                           182.0Ki ± 0%               182.9Ki ± 0%   +0.52% (p=0.002 n=6)
+Snapshot/encode/rules=100                                          464.4Ki ± 0%               464.4Ki ± 0%        ~ (p=1.000 n=6)
+Snapshot/decode/rules=100                                          976.8Ki ± 0%               985.5Ki ± 0%   +0.90% (p=0.002 n=6)
+Snapshot/encode/rules=1000                                         4.398Mi ± 0%               4.398Mi ± 0%   -0.00% (p=0.002 n=6)
+Snapshot/decode/rules=1000                                         9.051Mi ± 4%               8.957Mi ± 3%        ~ (p=0.669 n=6)
+NAT/huawei/rules=10                                                24.38Ki ± 0%               24.12Ki ± 0%   -1.03% (p=0.002 n=6)
+NAT/huawei/rules=100                                               220.5Ki ± 0%               220.2Ki ± 0%   -0.11% (p=0.002 n=6)
+NAT/huawei/rules=1000                                              2.101Mi ± 0%               2.100Mi ± 0%   -0.01% (p=0.002 n=6)
+Parse/huawei/rules=10                                              431.9Ki ± 0%               330.6Ki ± 0%  -23.46% (p=0.002 n=6)
+Parse/huawei/rules=100                                             3.596Mi ± 0%               2.680Mi ± 0%  -25.48% (p=0.002 n=6)
+Parse/huawei/rules=1000                                            41.77Mi ± 3%               35.02Mi ± 2%  -16.15% (p=0.002 n=6)
+Parse/paloalto/rules=10                                            423.9Ki ± 0%               391.6Ki ± 0%   -7.62% (p=0.002 n=6)
+Parse/paloalto/rules=100                                           3.469Mi ± 1%               3.208Mi ± 1%   -7.54% (p=0.002 n=6)
+Parse/paloalto/rules=1000                                          40.95Mi ± 3%               40.33Mi ± 3%        ~ (p=0.818 n=6)
+Parse/srx/rules=10                                                 305.5Ki ± 0%               274.2Ki ± 0%  -10.22% (p=0.002 n=6)
+Parse/srx/rules=100                                                2.457Mi ± 0%               2.224Mi ± 0%   -9.49% (p=0.002 n=6)
+Parse/srx/rules=1000                                               29.54Mi ± 5%               27.65Mi ± 2%   -6.41% (p=0.002 n=6)
+geomean                                                            1.339Mi                    1.253Mi        -6.41%
+¹ all samples are equal
+
+                           │ before-controls.txt │ after-controls.txt │
+                           │                     allocs/op                      │        allocs/op          vs base                 │
+Snapshot/encode/rules=10                                             238.0 ± 0%                 238.0 ± 0%        ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=10                                            2.213k ± 0%                2.234k ± 0%   +0.95% (p=0.002 n=6)
+Snapshot/encode/rules=100                                           1.229k ± 0%                1.229k ± 0%        ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=100                                           7.002k ± 0%                7.203k ± 0%   +2.87% (p=0.002 n=6)
+Snapshot/encode/rules=1000                                          11.13k ± 0%                11.13k ± 0%        ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=1000                                          54.74k ± 0%                56.74k ± 0%   +3.65% (p=0.002 n=6)
+NAT/huawei/rules=10                                                  316.0 ± 0%                 314.0 ± 0%   -0.63% (p=0.002 n=6)
+NAT/huawei/rules=100                                                2.839k ± 0%                2.837k ± 0%   -0.07% (p=0.002 n=6)
+NAT/huawei/rules=1000                                               28.04k ± 0%                28.04k ± 0%   -0.01% (p=0.002 n=6)
+Parse/huawei/rules=10                                               2.189k ± 0%                1.791k ± 0%  -18.18% (p=0.002 n=6)
+Parse/huawei/rules=100                                              16.78k ± 0%                13.69k ± 0%  -18.45% (p=0.002 n=6)
+Parse/huawei/rules=1000                                             161.9k ± 0%                131.8k ± 0%  -18.58% (p=0.002 n=6)
+Parse/paloalto/rules=10                                             2.556k ± 0%                2.377k ± 0%   -7.00% (p=0.002 n=6)
+Parse/paloalto/rules=100                                            21.39k ± 0%                19.95k ± 0%   -6.71% (p=0.002 n=6)
+Parse/paloalto/rules=1000                                           208.8k ± 0%                194.8k ± 0%   -6.71% (p=0.002 n=6)
+Parse/srx/rules=10                                                  2.384k ± 0%                2.196k ± 0%   -7.89% (p=0.002 n=6)
+Parse/srx/rules=100                                                 19.74k ± 0%                18.30k ± 0%   -7.30% (p=0.002 n=6)
+Parse/srx/rules=1000                                                192.7k ± 0%                178.7k ± 0%   -7.28% (p=0.002 n=6)
+geomean                                                             8.394k                     7.945k        -5.34%
+¹ all samples are equal

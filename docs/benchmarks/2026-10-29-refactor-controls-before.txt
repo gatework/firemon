@@ -1,0 +1,138 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    1866	     61289 ns/op	 174.57 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     892	    131371 ns/op	  81.44 MB/s	  186328 B/op	    2213 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     428	    281815 ns/op	 218.80 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     190	    633204 ns/op	  97.38 MB/s	 1000142 B/op	    7002 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      48	   2464281 ns/op	 235.61 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6310208 ns/op	  92.01 MB/s	 9086740 B/op	   54738 allocs/op
+BenchmarkNAT/huawei/rules=10              	    8457	     14080 ns/op	   24960 B/op	     316 allocs/op
+BenchmarkNAT/huawei/rules=100             	     904	    132004 ns/op	  225744 B/op	    2839 allocs/op
+BenchmarkNAT/huawei/rules=1000            	      88	   1353200 ns/op	 2202609 B/op	   28042 allocs/op
+BenchmarkParse/huawei/rules=10            	     796	    146502 ns/op	  16.25 MB/s	  442235 B/op	    2189 allocs/op
+BenchmarkParse/huawei/rules=100           	     100	   1145179 ns/op	  18.11 MB/s	 3760704 B/op	   16781 allocs/op
+BenchmarkParse/huawei/rules=1000          	       8	  13832062 ns/op	  15.01 MB/s	44568145 B/op	  161909 allocs/op
+BenchmarkParse/paloalto/rules=10          	     567	    205553 ns/op	  20.93 MB/s	  434037 B/op	    2556 allocs/op
+BenchmarkParse/paloalto/rules=100         	      69	   1676245 ns/op	  24.42 MB/s	 3631988 B/op	   21388 allocs/op
+BenchmarkParse/paloalto/rules=1000        	       6	  18425153 ns/op	  22.57 MB/s	44314369 B/op	  208829 allocs/op
+BenchmarkParse/srx/rules=10               	     789	    149416 ns/op	  32.07 MB/s	  312803 B/op	    2384 allocs/op
+BenchmarkParse/srx/rules=100              	      99	   1301653 ns/op	  34.45 MB/s	 2576520 B/op	   19741 allocs/op
+BenchmarkParse/srx/rules=1000             	       8	  13868000 ns/op	  32.54 MB/s	30979930 B/op	  192735 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    2040	     61787 ns/op	 173.16 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     888	    135537 ns/op	  78.94 MB/s	  186328 B/op	    2213 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     410	    312140 ns/op	 197.54 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     181	    656665 ns/op	  93.90 MB/s	 1000244 B/op	    7002 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      45	   2560837 ns/op	 226.73 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6413268 ns/op	  90.53 MB/s	 9602720 B/op	   54742 allocs/op
+BenchmarkNAT/huawei/rules=10              	    8190	     13829 ns/op	   24960 B/op	     316 allocs/op
+BenchmarkNAT/huawei/rules=100             	     903	    135416 ns/op	  225744 B/op	    2839 allocs/op
+BenchmarkNAT/huawei/rules=1000            	      73	   1386852 ns/op	 2202609 B/op	   28042 allocs/op
+BenchmarkParse/huawei/rules=10            	     799	    149130 ns/op	  15.97 MB/s	  442235 B/op	    2189 allocs/op
+BenchmarkParse/huawei/rules=100           	     100	   1165455 ns/op	  17.80 MB/s	 3776074 B/op	   16782 allocs/op
+BenchmarkParse/huawei/rules=1000          	       8	  13615130 ns/op	  15.25 MB/s	44568258 B/op	  161911 allocs/op
+BenchmarkParse/paloalto/rules=10          	     601	    198609 ns/op	  21.67 MB/s	  434035 B/op	    2556 allocs/op
+BenchmarkParse/paloalto/rules=100         	      70	   1691286 ns/op	  24.20 MB/s	 3658222 B/op	   21390 allocs/op
+BenchmarkParse/paloalto/rules=1000        	       6	  19015257 ns/op	  21.87 MB/s	42938208 B/op	  208814 allocs/op
+BenchmarkParse/srx/rules=10               	     768	    144924 ns/op	  33.07 MB/s	  312805 B/op	    2384 allocs/op
+BenchmarkParse/srx/rules=100              	      98	   1315210 ns/op	  34.09 MB/s	 2576555 B/op	   19741 allocs/op
+BenchmarkParse/srx/rules=1000             	       8	  13575557 ns/op	  33.24 MB/s	30980011 B/op	  192736 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    2055	     62130 ns/op	 172.20 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     874	    138057 ns/op	  77.50 MB/s	  186328 B/op	    2213 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     411	    290458 ns/op	 212.29 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     182	    654159 ns/op	  94.26 MB/s	 1000232 B/op	    7002 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      46	   2575679 ns/op	 225.42 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6535190 ns/op	  88.84 MB/s	 9860707 B/op	   54745 allocs/op
+BenchmarkNAT/huawei/rules=10              	    8302	     13933 ns/op	   24960 B/op	     316 allocs/op
+BenchmarkNAT/huawei/rules=100             	     885	    136192 ns/op	  225744 B/op	    2839 allocs/op
+BenchmarkNAT/huawei/rules=1000            	      85	   1393889 ns/op	 2202609 B/op	   28042 allocs/op
+BenchmarkParse/huawei/rules=10            	     790	    148467 ns/op	  16.04 MB/s	  442236 B/op	    2189 allocs/op
+BenchmarkParse/huawei/rules=100           	      93	   1204543 ns/op	  17.22 MB/s	 3782394 B/op	   16782 allocs/op
+BenchmarkParse/huawei/rules=1000          	       8	  12804323 ns/op	  16.21 MB/s	43535772 B/op	  161896 allocs/op
+BenchmarkParse/paloalto/rules=10          	     602	    199903 ns/op	  21.53 MB/s	  434035 B/op	    2556 allocs/op
+BenchmarkParse/paloalto/rules=100         	      70	   1691222 ns/op	  24.20 MB/s	 3636278 B/op	   21388 allocs/op
+BenchmarkParse/paloalto/rules=1000        	       6	  18795743 ns/op	  22.13 MB/s	42938204 B/op	  208814 allocs/op
+BenchmarkParse/srx/rules=10               	     818	    146117 ns/op	  32.80 MB/s	  312801 B/op	    2384 allocs/op
+BenchmarkParse/srx/rules=100              	      98	   1311472 ns/op	  34.19 MB/s	 2576554 B/op	   19741 allocs/op
+BenchmarkParse/srx/rules=1000             	       8	  12981875 ns/op	  34.76 MB/s	30979960 B/op	  192736 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    2040	     62724 ns/op	 170.57 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     882	    135011 ns/op	  79.25 MB/s	  186328 B/op	    2213 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     400	    342183 ns/op	 180.20 MB/s	  475592 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     144	    776927 ns/op	  79.36 MB/s	 1000789 B/op	    7002 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      46	   2527472 ns/op	 229.72 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6513594 ns/op	  89.14 MB/s	 9344735 B/op	   54740 allocs/op
+BenchmarkNAT/huawei/rules=10              	    8545	     13845 ns/op	   24960 B/op	     316 allocs/op
+BenchmarkNAT/huawei/rules=100             	     912	    132039 ns/op	  225744 B/op	    2839 allocs/op
+BenchmarkNAT/huawei/rules=1000            	     100	   1399903 ns/op	 2202609 B/op	   28042 allocs/op
+BenchmarkParse/huawei/rules=10            	     794	    148765 ns/op	  16.01 MB/s	  442236 B/op	    2189 allocs/op
+BenchmarkParse/huawei/rules=100           	     100	   1225415 ns/op	  16.93 MB/s	 3772233 B/op	   16782 allocs/op
+BenchmarkParse/huawei/rules=1000          	       8	  13841703 ns/op	  15.00 MB/s	44051956 B/op	  161902 allocs/op
+BenchmarkParse/paloalto/rules=10          	     577	    199765 ns/op	  21.54 MB/s	  434037 B/op	    2556 allocs/op
+BenchmarkParse/paloalto/rules=100         	      68	   1777267 ns/op	  23.03 MB/s	 3638866 B/op	   21389 allocs/op
+BenchmarkParse/paloalto/rules=1000        	       6	  20495132 ns/op	  20.29 MB/s	42250240 B/op	  208809 allocs/op
+BenchmarkParse/srx/rules=10               	     672	    150172 ns/op	  31.91 MB/s	  312813 B/op	    2384 allocs/op
+BenchmarkParse/srx/rules=100              	     100	   1302386 ns/op	  34.43 MB/s	 2576484 B/op	   19741 allocs/op
+BenchmarkParse/srx/rules=1000             	       8	  12957214 ns/op	  34.83 MB/s	30979966 B/op	  192736 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    2026	     62895 ns/op	 170.11 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     858	    136257 ns/op	  78.52 MB/s	  186330 B/op	    2213 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     421	    287552 ns/op	 214.43 MB/s	  475592 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     187	    636432 ns/op	  96.88 MB/s	 1000175 B/op	    7002 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      46	   2532894 ns/op	 229.23 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6569380 ns/op	  88.38 MB/s	 9602722 B/op	   54742 allocs/op
+BenchmarkNAT/huawei/rules=10              	    8449	     13775 ns/op	   24960 B/op	     316 allocs/op
+BenchmarkNAT/huawei/rules=100             	     667	    150032 ns/op	  225744 B/op	    2839 allocs/op
+BenchmarkNAT/huawei/rules=1000            	      74	   1478766 ns/op	 2202608 B/op	   28042 allocs/op
+BenchmarkParse/huawei/rules=10            	     760	    158250 ns/op	  15.05 MB/s	  442238 B/op	    2189 allocs/op
+BenchmarkParse/huawei/rules=100           	     100	   1206648 ns/op	  17.19 MB/s	 3760706 B/op	   16781 allocs/op
+BenchmarkParse/huawei/rules=1000          	       8	  13628901 ns/op	  15.23 MB/s	42503892 B/op	  161888 allocs/op
+BenchmarkParse/paloalto/rules=10          	     546	    203562 ns/op	  21.14 MB/s	  434038 B/op	    2556 allocs/op
+BenchmarkParse/paloalto/rules=100         	      70	   1691710 ns/op	  24.20 MB/s	 3619815 B/op	   21387 allocs/op
+BenchmarkParse/paloalto/rules=1000        	       6	  17878160 ns/op	  23.26 MB/s	42938216 B/op	  208815 allocs/op
+BenchmarkParse/srx/rules=10               	     786	    152447 ns/op	  31.43 MB/s	  312804 B/op	    2384 allocs/op
+BenchmarkParse/srx/rules=100              	      94	   1333305 ns/op	  33.63 MB/s	 2576702 B/op	   19741 allocs/op
+BenchmarkParse/srx/rules=1000             	       8	  14162562 ns/op	  31.87 MB/s	29431560 B/op	  192717 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    1809	     67227 ns/op	 159.15 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     811	    161600 ns/op	  66.21 MB/s	  186333 B/op	    2213 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     366	    317846 ns/op	 193.99 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     159	    758993 ns/op	  81.24 MB/s	 1000536 B/op	    7002 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      37	   2945959 ns/op	 197.09 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      15	   7015344 ns/op	  82.76 MB/s	 9379125 B/op	   54740 allocs/op
+BenchmarkNAT/huawei/rules=10              	    8313	     14559 ns/op	   24960 B/op	     316 allocs/op
+BenchmarkNAT/huawei/rules=100             	     720	    146787 ns/op	  225744 B/op	    2839 allocs/op
+BenchmarkNAT/huawei/rules=1000            	      75	   1556260 ns/op	 2202609 B/op	   28042 allocs/op
+BenchmarkParse/huawei/rules=10            	     728	    164850 ns/op	  14.44 MB/s	  442241 B/op	    2189 allocs/op
+BenchmarkParse/huawei/rules=100           	     100	   1299537 ns/op	  15.96 MB/s	 3768389 B/op	   16781 allocs/op
+BenchmarkParse/huawei/rules=1000          	       8	  13980870 ns/op	  14.85 MB/s	43019807 B/op	  161891 allocs/op
+BenchmarkParse/paloalto/rules=10          	     585	    200803 ns/op	  21.43 MB/s	  434036 B/op	    2556 allocs/op
+BenchmarkParse/paloalto/rules=100         	      72	   1704192 ns/op	  24.02 MB/s	 3639172 B/op	   21388 allocs/op
+BenchmarkParse/paloalto/rules=1000        	       6	  19165694 ns/op	  21.70 MB/s	42250170 B/op	  208808 allocs/op
+BenchmarkParse/srx/rules=10               	     819	    149983 ns/op	  31.95 MB/s	  312801 B/op	    2384 allocs/op
+BenchmarkParse/srx/rules=100              	     100	   1309570 ns/op	  34.24 MB/s	 2576486 B/op	   19741 allocs/op
+BenchmarkParse/srx/rules=1000             	       8	  13683292 ns/op	  32.98 MB/s	29947695 B/op	  192724 allocs/op
+PASS

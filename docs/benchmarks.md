@@ -56,3 +56,45 @@ The before runtime is commit `ccc3430`; benchmark sources are captured by `2a43b
 benchstat -filter '.name:Plan .fullname:/create/' \
   docs/benchmarks/2026-10-29-before.txt docs/benchmarks/2026-10-29-after.txt
 ```
+
+
+## Domain refactor measurements (2026-10-29)
+
+The e9e9b96 baseline binary and b47e97e result used Go 1.27.1, darwin/arm64,
+Apple M5, `-test.cpu=1 -test.benchtime=100ms -test.count=6`, run serially without
+concurrent tests. The complete matrix retains 75 comparable workloads and adds
+8 lifecycle workloads (convergence, risk and shared-group member usage).
+
+| Workload | Before | After | Allocation change |
+| --- | --- | --- | --- |
+| ASA parse, 1,000 rules | 37.25 ms; 190.89 MiB | 11.28 ms; 24.68 MiB | -87.07% bytes/op |
+| Huawei query, 1,000 rules | 1.495 ms; 2.036 MiB | 1.325 ms; 1.658 MiB | -18.57% bytes/op |
+| Create plan, 100 rules | 232.16 ms; 627.2 MiB | 85.19 ms; 119.3 MiB | -80.99% bytes/op |
+| Huawei packet, 1,000 rules | 4.373 ms; 6.202 MiB | 3.897 ms; 5.444 MiB | -12.22% bytes/op |
+
+Allocation profiling attributed the ASA hotspot to literal address-directory
+clones and planning primarily to repeated traffic subtraction allocations. The
+changes index literal identities, transfer owned parse drafts, reuse bounded
+query expansions, avoid record cloning during sorting, and reuse exact difference
+buffers. They do not remove proof, resource charging or unknown evidence.
+
+Raw evidence: [before](benchmarks/2026-10-29-refactor-before.txt),
+[after](benchmarks/2026-10-29-refactor-after.txt),
+[benchstat comparison](benchmarks/2026-10-29-refactor-comparison.txt).
+An earlier run overlapping compilation/tests was discarded.
+
+The full serial run showed timing increases in otherwise unchanged snapshot
+encoding and several small native workloads. A counterbalanced follow-up alternated
+before/after execution order for each of six samples, using the same frozen
+binaries. It found no significant snapshot, NAT, SRX or large PAN timing regression:
+[control before](benchmarks/2026-10-29-refactor-controls-before.txt),
+[control after](benchmarks/2026-10-29-refactor-controls-after.txt),
+[control comparison](benchmarks/2026-10-29-refactor-controls-comparison.txt).
+Snapshot decoding does allocate about two additional zone-reference slices per
+rule (about 3.7% more allocations at 1,000 rules) to expose the unified immutable
+match view. Encoding allocations and persisted bytes remain unchanged. This is
+an explicit representation cost, not a claim that every metric improves.
+
+These are synthetic local measurements, not firmware interoperability, worst-case
+latency or a service-level guarantee. Benchmarks assert their semantic results;
+short timing windows remain sensitive to host load and thermal conditions.
