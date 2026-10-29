@@ -122,14 +122,14 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	if err != nil {
 		return nil, err
 	}
-	commands, err := p.Renderer.Render(ctx, before, after, changes)
+	commands, err := p.renderChanges(ctx, before, after, changes)
 	if err != nil {
 		return nil, err
 	}
 	if len(commands) == 0 {
 		return nil, ErrUnsafe
 	}
-	result := &Plan{before: before, after: after, changes: changes, commands: slices.Clone(commands), proof: proof, engine: p.Engine, transfers: slices.Clone(intents), transferFrom: from, cost: Cost{NewRules: len(rules), NewObjects: len(d.Addresses) + len(d.Services) - objects}}
+	result := &Plan{before: before, after: after, changes: changes, commands: commands, proof: proof, engine: p.Engine, transfers: slices.Clone(intents), transferFrom: from, cost: Cost{NewRules: len(rules), NewObjects: len(d.Addresses) + len(d.Services) - objects}}
 	if err := result.seal(); err != nil {
 		return nil, err
 	}

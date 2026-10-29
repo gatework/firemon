@@ -309,3 +309,8 @@ reject creation that aliases an existing rule name even when graph IDs differ.
 Numeric native rule allocation remains renderer-owned. Existing valid cross-scope
 names remain loadable; this change does not add a blanket name restriction to Seal.
 The public DTOs, snapshot v9 format, CLI JSON and Renderer signature are unchanged.
+
+All three planning entries (`Plan`, `Transfer`, `Preserve`) pass detached nested
+change slices to Render and own copies of returned commands. A renderer retaining
+its arguments cannot alter a sealed plan or its approved digest. Cancellation
+checked after rendering rejects commands even when the renderer returns nil error.

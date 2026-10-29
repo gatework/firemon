@@ -2,7 +2,6 @@ package plan
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	fm "github.com/gatework/firemon"
@@ -41,14 +40,13 @@ func (p Planner) Preserve(ctx context.Context, before, after *fm.Firewall, chang
 		if p.Renderer == nil {
 			return nil, ErrInvalid
 		}
-		result.commands, err = p.Renderer.Render(ctx, before, after, result.Changes())
+		result.commands, err = p.renderChanges(ctx, before, after, result.changes)
 		if err != nil {
 			return nil, err
 		}
 		if len(result.commands) == 0 {
 			return nil, ErrUnsafe
 		}
-		result.commands = slices.Clone(result.commands)
 		result.cost.ModifiedRules = len(changes)
 	}
 	if err := result.seal(); err != nil {

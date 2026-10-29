@@ -78,25 +78,19 @@ func (p Planner) tryCandidate(
 		}
 		return nil, nil
 	}
-	commands, err := p.Renderer.Render(ctx, before, draft.after, cloneChanges(draft.changes))
+	commands, err := p.renderChanges(ctx, before, draft.after, draft.changes)
 	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
 		if !errors.Is(err, ErrRender) {
 			return nil, err
 		}
 		return nil, nil
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
 	}
 	if len(commands) == 0 {
 		return nil, nil
 	}
 	result := &Plan{
 		before: before, after: draft.after, changes: draft.changes, cost: draft.cost,
-		proof: proof, commands: slices.Clone(commands), target: request, engine: p.Engine,
+		proof: proof, commands: commands, target: request, engine: p.Engine,
 	}
 	if err := result.seal(); err != nil {
 		return nil, err
