@@ -350,14 +350,9 @@ func Seal(data Data) (*Firewall, error) {
 		}
 	}
 	for _, r := range f.Rules() {
-		r.sources, r.sourceGroups = f.addressRefs(r.record.ID, r.record.Match.Sources)
-		r.destinations, r.destinationGroups = f.addressRefs(r.record.ID, r.record.Match.Destinations)
-		r.services, r.serviceGroups = f.serviceRefs(r.record.ID, r.record.Match.Services)
-		if id := r.record.Match.Schedule; id != "" {
-			r.schedule = f.schedules[id]
-			if r.schedule == nil {
-				f.issue(r.record.ID, "missing-schedule", string(id))
-			}
+		r.match = f.matchObjects(r.record.ID, r.record.Match)
+		if id := r.record.Match.Schedule; id != "" && r.match.schedule == nil {
+			f.issue(r.record.ID, "missing-schedule", string(id))
 		}
 		f.validateMatch(r.record.ID, r.record.Match)
 		if !r.record.Action.Valid() {

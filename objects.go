@@ -75,22 +75,21 @@ type Schedule struct{ record ScheduleRecord }
 func (o *Schedule) Record() ScheduleRecord { return o.record.clone() }
 
 type Rule struct {
-	record                          RuleRecord
-	sources, destinations           []*Address
-	sourceGroups, destinationGroups []*AddressGroup
-	services                        []*Service
-	serviceGroups                   []*ServiceGroup
-	schedule                        *Schedule
+	record RuleRecord
+	match  MatchObjects
 }
 
 func (o *Rule) Record() RuleRecord                 { return o.record.clone() }
-func (o *Rule) Sources() []*Address                { return slices.Clone(o.sources) }
-func (o *Rule) Destinations() []*Address           { return slices.Clone(o.destinations) }
-func (o *Rule) SourceGroups() []*AddressGroup      { return slices.Clone(o.sourceGroups) }
-func (o *Rule) DestinationGroups() []*AddressGroup { return slices.Clone(o.destinationGroups) }
-func (o *Rule) Services() []*Service               { return slices.Clone(o.services) }
-func (o *Rule) ServiceGroups() []*ServiceGroup     { return slices.Clone(o.serviceGroups) }
-func (o *Rule) Schedule() *Schedule                { return o.schedule }
+func (o *Rule) Match() MatchObjects                { return o.match }
+func (o *Rule) Sources() []*Address                { return o.match.Sources() }
+func (o *Rule) Destinations() []*Address           { return o.match.Destinations() }
+func (o *Rule) SourceGroups() []*AddressGroup      { return o.match.SourceGroups() }
+func (o *Rule) DestinationGroups() []*AddressGroup { return o.match.DestinationGroups() }
+func (o *Rule) Services() []*Service               { return o.match.Services() }
+func (o *Rule) ServiceGroups() []*ServiceGroup     { return o.match.ServiceGroups() }
+func (o *Rule) Schedule() *Schedule                { return o.match.Schedule() }
+func (o *Rule) Position() int                      { return o.record.Position }
+func (o *Rule) Chain() PolicyChain                 { return o.record.Chain() }
 
 type RuleBinding struct {
 	record RuleBindingRecord
@@ -135,7 +134,7 @@ type NATPool struct {
 func (o *NATPool) Record() NATPoolRecord { return o.record.clone() }
 func (o *NATPool) Interface() *Interface { return o.iface }
 
-// MatchObjects exposes resolved references while keeping each NAT's native declaration intact.
+// MatchObjects exposes resolved references while keeping each rule or NAT's native declaration intact.
 // Container accessors return copies; all referenced domain objects are immutable and shared.
 type MatchObjects struct {
 	sources, destinations           []*Address
@@ -157,3 +156,55 @@ func (m MatchObjects) ToZones() []*Zone                   { return slices.Clone(
 func (m MatchObjects) Schedule() *Schedule                { return m.schedule }
 func (n *StaticNAT) Match() MatchObjects                  { return n.match }
 func (n *DynamicNAT) Match() MatchObjects                 { return n.match }
+
+func (o *Zone) ID() ID        { return o.record.ID }
+func (o *Zone) Name() string  { return o.record.Name }
+func (o *Zone) Scope() string { return o.record.Scope }
+
+func (o *Interface) ID() ID        { return o.record.ID }
+func (o *Interface) Name() string  { return o.record.Name }
+func (o *Interface) Scope() string { return o.record.Scope }
+
+func (o *Route) ID() ID        { return o.record.ID }
+func (o *Route) Name() string  { return o.record.Name }
+func (o *Route) Scope() string { return o.record.Scope }
+
+func (o *Address) ID() ID        { return o.record.ID }
+func (o *Address) Name() string  { return o.record.Name }
+func (o *Address) Scope() string { return o.record.Scope }
+
+func (o *AddressGroup) ID() ID        { return o.record.ID }
+func (o *AddressGroup) Name() string  { return o.record.Name }
+func (o *AddressGroup) Scope() string { return o.record.Scope }
+
+func (o *Service) ID() ID        { return o.record.ID }
+func (o *Service) Name() string  { return o.record.Name }
+func (o *Service) Scope() string { return o.record.Scope }
+
+func (o *ServiceGroup) ID() ID        { return o.record.ID }
+func (o *ServiceGroup) Name() string  { return o.record.Name }
+func (o *ServiceGroup) Scope() string { return o.record.Scope }
+
+func (o *Schedule) ID() ID        { return o.record.ID }
+func (o *Schedule) Name() string  { return o.record.Name }
+func (o *Schedule) Scope() string { return o.record.Scope }
+
+func (o *Rule) ID() ID        { return o.record.ID }
+func (o *Rule) Name() string  { return o.record.Name }
+func (o *Rule) Scope() string { return o.record.Scope }
+
+func (o *RuleBinding) ID() ID        { return o.record.ID }
+func (o *RuleBinding) Name() string  { return o.record.Name }
+func (o *RuleBinding) Scope() string { return o.record.Scope }
+
+func (o *StaticNAT) ID() ID        { return o.record.ID }
+func (o *StaticNAT) Name() string  { return o.record.Name }
+func (o *StaticNAT) Scope() string { return o.record.Scope }
+
+func (o *DynamicNAT) ID() ID        { return o.record.ID }
+func (o *DynamicNAT) Name() string  { return o.record.Name }
+func (o *DynamicNAT) Scope() string { return o.record.Scope }
+
+func (o *NATPool) ID() ID        { return o.record.ID }
+func (o *NATPool) Name() string  { return o.record.Name }
+func (o *NATPool) Scope() string { return o.record.Scope }

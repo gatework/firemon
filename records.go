@@ -404,3 +404,9 @@ func (d Data) Clone() Data {
 	d.NATPools = cloneRecords(d.NATPools, NATPoolRecord.clone)
 	return d
 }
+
+// PolicyChain identifies a native ordered rule set within its namespace.
+// Zones, egress selection and evaluation time are separate query dimensions.
+type PolicyChain struct{ Scope, RuleSet string }
+
+func (r RuleRecord) Chain() PolicyChain { return PolicyChain{Scope: r.Scope, RuleSet: r.RuleSet} }
