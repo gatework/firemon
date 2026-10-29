@@ -47,7 +47,8 @@ type RuleDecision struct {
 	Rule    fm.ID
 	Action  fm.Action
 	Traffic flow.Traffic
-	Known   bool
+	// Known requires an established match, active schedule and valid action.
+	Known bool
 }
 type Result struct {
 	Allowed, Denied, Unknown, Unmatched flow.Traffic
@@ -121,8 +122,8 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 		if scheduleKnown && !scheduleActive {
 			continue
 		}
-		matchKnown = matchKnown && scheduleKnown
-		if !matchKnown || !ruleRecord.Action.Valid() {
+		decisionKnown := matchKnown && scheduleKnown && ruleRecord.Action.Valid()
+		if !decisionKnown {
 			result.Unknown, err = result.Unknown.Union(matchedTraffic, limits.MaxRegions)
 			result.Complete = false
 		} else if ruleRecord.Action == fm.Permit {
@@ -133,7 +134,7 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 		if err != nil {
 			return Result{}, err
 		}
-		result.Decisions = append(result.Decisions, RuleDecision{Rule: ruleRecord.ID, Action: ruleRecord.Action, Traffic: matchedTraffic, Known: matchKnown})
+		result.Decisions = append(result.Decisions, RuleDecision{Rule: ruleRecord.ID, Action: ruleRecord.Action, Traffic: matchedTraffic, Known: decisionKnown})
 		// Potential unknown matches consume before later rules, just like known matches.
 		remainingTraffic, err = remainingTraffic.Difference(matchedTraffic, limits.MaxRegions)
 		if err != nil {

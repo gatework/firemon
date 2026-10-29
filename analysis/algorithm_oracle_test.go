@@ -23,7 +23,7 @@ func TestOrderedPolicyAgainstPacketOracle(t *testing.T) {
 		whole.Source.Last, whole.Destination.Last = last.source, last.destination
 		whole.Protocol.High, whole.SourcePort.High, whole.DestinationPort.High, whole.ICMPType.High, whole.ICMPCode.High = 17, 1, 1, 1, 1
 		at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		for _, scenario := range []string{"earlier deny", "unknown match", "disabled", "schedule start", "schedule end", "unknown schedule", "position tie", "multiple coverage", "paired service"} {
+		for _, scenario := range []string{"earlier deny", "unknown match", "unknown action", "invalid action", "unresolved address", "unmatched", "disabled", "schedule start", "schedule end", "unknown schedule", "position tie", "multiple coverage", "paired service"} {
 			t.Run(fmt.Sprintf("ipv6=%v/%s", ipv6, scenario), func(t *testing.T) {
 				data := fm.Data{Metadata: fm.Metadata{Device: "oracle", Vendor: "hillstone"}, Rules: []fm.RuleRecord{oracleRule("early", 0, fm.Deny), oracleRule("later", 1, fm.Permit)}}
 				early := &data.Rules[0]
@@ -32,6 +32,14 @@ func TestOrderedPolicyAgainstPacketOracle(t *testing.T) {
 				data.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "source"}, Ranges: []flow.AddressRange{{First: first.source, Last: first.source}}}}
 				queryAt := at
 				switch scenario {
+				case "unknown action":
+					early.Action = fm.UnknownAction
+				case "invalid action":
+					early.Action = fm.Action(255)
+				case "unresolved address":
+					early.Match.Sources = append(early.Match.Sources, fm.AddressRef{Kind: fm.AddressObject, ID: "missing"})
+				case "unmatched":
+					data.Rules = data.Rules[:1]
 				case "unknown match":
 					early.Match.Unsupported = []string{"unresolved application"}
 				case "disabled":
@@ -242,4 +250,68 @@ type oracleRenderer struct{}
 
 func (oracleRenderer) Render(context.Context, *fm.Firewall, *fm.Firewall, []plan.Change) ([]string, error) {
 	return []string{"synthetic proof test"}, nil
+}
+
+func TestReclamationFutureContextsAgainstPacketOracle(t *testing.T) {
+	ctx := context.Background()
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	start, end := at.Add(time.Hour), at.Add(2*time.Hour)
+	pair := [2]string{"192.0.2.0", "192.0.3.0"}
+	data := graph(t, [][2]string{pair, pair, pair, pair}).Export()
+	data.Schedules = []fm.ScheduleRecord{
+		{Object: fm.Object{ID: "expired"}, Windows: []fm.TimeWindow{{Start: at.Add(-time.Hour), End: at}}},
+		{Object: fm.Object{ID: "future"}, Windows: []fm.TimeWindow{{Start: start, End: end}}},
+	}
+	data.Rules[0].Match.Schedule = "expired"
+	data.Rules[1].Match.Schedule, data.Rules[2].Match.Schedule = "future", "future"
+	data.Rules[3].Match.Sources = nil // Empty match domain is unreachable, without being shadowed.
+	fw := oracleSeal(t, data)
+	reclaimer := analysis.Reclaimer{Planner: plan.Planner{Renderer: oracleRenderer{}}}
+	request := analysis.ReclamationRequest{At: at}
+	rows, err := reclaimer.Analyze(ctx, fw, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected := []fm.ID{}
+	for _, row := range rows {
+		if row.Rule == "2" && (row.Unreachable != analysis.False || row.RemovalCandidate) {
+			t.Fatal("future rule treated as unreachable", row)
+		}
+		if row.Rule == "4" && (row.Disabled != analysis.False || row.Expired != analysis.False || row.Unreachable != analysis.True) {
+			t.Fatal("empty domain classification", row)
+		}
+		if row.RemovalCandidate {
+			selected = append(selected, row.Rule)
+		}
+	}
+	if !slices.Equal(selected, []fm.ID{"1", "3", "4"}) {
+		t.Fatal("wrong batch", selected)
+	}
+	candidate, err := reclaimer.Plan(ctx, fw, request, selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, instant := range []time.Time{at, start.Add(-time.Nanosecond), start, end.Add(-time.Nanosecond), end, end.Add(time.Hour)} {
+		assertOraclePreservation(t, fw, candidate.After(), instant, nil, false)
+	}
+	if invalid, err := reclaimer.Plan(ctx, fw, request, []fm.ID{"2", "3"}); err == nil || invalid != nil {
+		t.Fatal("batch removed future coverage", err)
+	}
+}
+
+func TestLifecycleCannotRemoveNATOwner(t *testing.T) {
+	data := graph(t, [][2]string{{"192.0.2.0", "192.0.3.0"}, {"192.0.2.0", "192.0.3.0"}}).Export()
+	data.Metadata.Vendor = "netscreen"
+	data.DynamicNATs = []fm.DynamicNATRecord{{Object: fm.Object{ID: "policy:2"}, Rule: "2", Match: data.Rules[1].Match, Order: fm.NATOrder{Section: "policy"}, SourceMode: fm.NoTranslation, DestinationMode: fm.NoTranslation}}
+	fw := oracleSeal(t, data)
+	if !fw.Complete() {
+		t.Fatal("incomplete NAT owner fixture", fw.Diagnostics())
+	}
+	planner := plan.Planner{Renderer: oracleRenderer{}}
+	if candidate, err := (analysis.Converger{Planner: planner}).Plan(context.Background(), fw, []fm.ID{"1", "2"}, time.Time{}); err == nil || candidate != nil {
+		t.Fatal("convergence deleted NAT owner", err)
+	}
+	if candidate, err := (analysis.Reclaimer{Planner: planner}).Plan(context.Background(), fw, analysis.ReclamationRequest{}, []fm.ID{"2"}); err == nil || candidate != nil {
+		t.Fatal("reclamation deleted NAT owner", err)
+	}
 }
