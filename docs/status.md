@@ -24,7 +24,35 @@ Unrecognized source and unsupported semantics remain incomplete; do not describe
 
 The user-confirmed scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. H3C, Topsec, Neteye and other vendors are deferred.
 
-## Candidate contract delivery (2026-10-29)
+## Lifecycle contract delivery (2026-10-29)
+
+Core [`0d50959`](https://github.com/gatework/firemon/commit/0d50959d0a4d12b543fac8a3c1a5a52a02dd663c)
+implements the [lifecycle plan](plans/2026-10-29-lifecycle-contracts.md).
+SSH publication to public `gatework/firemon` main completed; its
+[exact-commit CI](https://github.com/gatework/firemon/actions/runs/40881901589)
+passed formatting, vet and race tests. Final local uncached race tests passed
+all 25 root test-bearing packages; vet, build and formatting passed separately.
+
+Lifecycle graph copies and independent observations are charged before export;
+all plan creation paths preflight minimum readback capacity. Convergence and
+access-request candidates preserve fatal error provenance; expected refusals
+carry declaration, preservation or representation stages. Request optimization
+checks input regions before grouping. The independent review's one Important
+private NAT accounting gap was reproduced and fixed: ownership indexes are now
+built once per equivalence proof. No Critical or deferred Minor findings remain.
+
+The optional adapter pins published core `v0.0.0-20261029132556-0d50959d0a4d`;
+connector remains `v0.0.0-20261026235641-c68c42b4bbcf`. Standalone
+`GOWORK=off GOPROXY=off` uncached race tests passed (5.588 s), together with vet,
+build and module verification. Module lookup confirms the published core cache
+entry with no replacement. Public CI excludes this private-dependency adapter.
+
+[Contracts](contracts.md) describe stricter low-budget rejection and additive
+`RejectionError` diagnostics. Snapshot v9 and method signatures remain unchanged.
+Minimum readback preflight is necessary capacity, not guaranteed future proof
+completion. No release or real-device validation is claimed.
+
+## Previous candidate contract delivery (2026-10-29)
 
 Core [`9294f45`](https://github.com/gatework/firemon/commit/9294f4532eb246c057e0465ec6ff570c5f670bc2)
 implements the [candidate plan](plans/2026-10-29-candidate-contracts.md), including

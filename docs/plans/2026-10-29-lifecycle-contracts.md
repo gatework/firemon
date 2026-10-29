@@ -44,7 +44,7 @@
 - [x] Reproduce packed versus split requests bypassing MaxRegions.
 - [x] Check RegionCount before grouping/copying; retain strict intermediate Union limits and exact fixed-point coalescing.
 - [x] Verify sufficient-budget traffic equality, source/destination association, input ownership and oversized input allocations.
-- [ ] Run go test -race -count=1 ./..., go vet ./..., go build ./..., and a fresh whole-change review. Record evidence and ship to the previously authorized Go remote after verification.
+- [x] Run go test -race -count=1 ./..., go vet ./..., go build ./..., and a fresh whole-change review. Record evidence and ship to the previously authorized Go remote after verification.
 
 ## Review focus
 

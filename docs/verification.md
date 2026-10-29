@@ -437,3 +437,9 @@ After the review correction, uncached `GOWORK=off GOPROXY=off go test -race
 -count=1 ./...` passed all 25 root test-bearing packages on macOS arm64,
 Go 1.27.1. Vet, build, formatting and diff checks passed separately. No minor
 findings were deferred. No real-device or firmware interoperability was tested.
+
+Published core `0d50959` passed its [exact-commit Go CI](https://github.com/gatework/firemon/actions/runs/40881901589)
+after SSH push to `gatework/firemon` main. The adapter pins this published core
+and passed standalone uncached race tests (5.588 s), vet, build and module
+verification with GOWORK disabled, GOPROXY off and no replacement. Its connector
+pin is unchanged. See [delivery status](status.md) for the exact module versions.
