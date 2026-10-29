@@ -24,7 +24,34 @@ Unrecognized source and unsupported semantics remain incomplete; do not describe
 
 The user-confirmed scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. H3C, Topsec, Neteye and other vendors are deferred.
 
-## Computation and scanner delivery (2026-10-29)
+## Core policy algorithm delivery (2026-10-29)
+
+Core [`6ec81b00be2a02ce0ab1f378c9bcaf1361c6399f`](https://github.com/gatework/firemon/commit/6ec81b00be2a02ce0ab1f378c9bcaf1361c6399f)
+implements the [algorithm plan](plans/2026-10-29-policy-algorithm-contracts.md).
+SSH publication to public `gatework/firemon` main and exact remote SHA read-back
+succeeded. Its [exact-commit CI](https://github.com/gatework/firemon/actions/runs/40861058742)
+passed formatting, vet and race tests on Ubuntu with Go 1.26.
+
+The independent final source review found no Critical, Important or Minor issues
+and declined no behaviors. Local uncached root build, race tests across 23 packages,
+vet and formatting passed. A 30-second flow-algebra fuzz run passed 1,290,834 cases.
+The independent packet reference, unknown-action correction, future-context and
+whole-batch proofs are detailed in [verification](verification.md).
+
+The optional adapter pins published core `v0.0.0-20261029104925-6ec81b00be2a` and
+connector `v0.0.0-20261026235641-c68c42b4bbcf`. After tidy, standalone
+`GOWORK=off GOPROXY=off` build, uncached race tests (5.880 s), vet and module
+verification passed. Module lookup confirmed published cache versions with no
+`Replace`. Public root CI excludes the private-dependency adapter.
+
+The Go API rename is deliberate and has no legacy aliases; see
+[the migration table](refactoring.md#policy-algorithm-domain-names). Frozen v9
+snapshot decoding, its original semantic digest, CLI JSON and seven-vendor
+fixtures remain stable. Six serial benchmark samples per case show unchanged
+allocations and small timing increases; no speedup is claimed. Real-device and
+broader firmware compatibility remain unverified.
+
+## Previous computation and scanner delivery (2026-10-29)
 
 Core [`2e301195fa86c0a93bef9276f71ef6855b11a4cb`](https://github.com/gatework/firemon/commit/2e301195fa86c0a93bef9276f71ef6855b11a4cb)
 implements the [computation plan](plans/2026-10-29-computation-contracts.md),

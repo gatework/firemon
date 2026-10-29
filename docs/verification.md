@@ -346,3 +346,12 @@ race tests and vet through the current-core workspace (race suite: 6.003 seconds
 These are local/offline checks; published dependency and exact-commit CI evidence
 is tracked separately in [status](status.md). Benchmarks are recorded in
 [the measurement log](benchmarks.md).
+
+Final independent review of `bc15a8b..6ec81b0` found zero Critical, Important or
+Minor issues, with no declined-to-judge behaviors. Its separate uncached
+analysis/flow/policy/plan/snapshot/CLI tests passed. Final local uncached root
+race tests passed all 23 test-bearing packages, alongside build/vet/formatting;
+current-core adapter workspace checks passed separately (10.813 s). The published
+core pin then passed standalone adapter build/race (5.880 s)/vet/module verification
+with GOWORK disabled and no replacement. Exact core CI and delivery are linked
+from [status](status.md). No execution rulings or minor findings were deferred.

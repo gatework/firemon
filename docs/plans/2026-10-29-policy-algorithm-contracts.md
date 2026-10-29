@@ -3,6 +3,10 @@
 Spec: ../spec.md. This implements the approved follow-up plan. Baseline:
 `bc15a8b43224f3af007faed9d9a4f3255f6efd8d`.
 
+Implementation, independent review and local verification are complete.
+[Delivery evidence](../status.md#core-policy-algorithm-delivery-2026-10-29) records
+the published core, standalone adapter pin and exact core CI separately.
+
 ## Global constraints
 
 Use Perl Searcher, Designer, Ruleopti, Audit and Cleaner as business references,
