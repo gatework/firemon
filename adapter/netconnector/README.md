@@ -2,6 +2,8 @@
 
 This separate module implements the same `deploy.Factory` and `deploy.Session` contract for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA using the pinned private `github.com/gatework/go-net-connector` dependency. The root module remains independent of the connector. No private dependency source or local `replace` directive is included.
 
+The published core pin is `v0.0.0-20261029031126-c9d9f251ed20`. See the [API migration guide](../../docs/refactoring.md) for the domain refactor and [delivery status](../../docs/status.md) for its standalone versioned-consumer verification.
+
 The host supplies identity, credentials and transport options through `Factory.Resolve`. `Factory.Open` creates a fresh device for each initial connection, independent readback and recovery. `Profile(vendor)` exposes the supported native profile; SRX, Huawei, Hillstone, Fortinet and PAN reuse the pinned connector profiles with narrowly scoped adapter adjustments. ASA and ScreenOS profiles are provided here. `New` transfers ownership of an already constructed device on success; its caller must set bounded transport limits and a validated profile.
 
 `Metadata.Context` identifies the selected native configuration domain and is retained through capture, parsing, planning and journal recovery. Fortinet requires an explicit VDOM, including `root`. All other profiles require an empty `Metadata.Context` and operate in their default native domain. Nonempty labels are rejected by `New` before dialing or capture because this adapter does not select ASA contexts, PAN vsys or Junos logical systems. A connected identity or domain mismatch never becomes a successful readback.

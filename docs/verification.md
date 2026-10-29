@@ -148,6 +148,10 @@ Perl/Ruby references and real devices were not modified or executed.
   native parser limits/context selection, incomplete capture/error preservation,
   durable write failures and cross-process locks, outbox retry and historical CLI
   inspection. Independent packet-oracle fuzzing covers all seven traffic axes.
+- Final bounded fuzz runs passed: flow 209,323 executions in 10 seconds; Huawei
+  26, Fortinet 17,589 and Netscreen 50,983 executions in five seconds each. The
+  low Huawei count reflects the retained complex corpus, not broad grammar
+  coverage; none of these runs establishes full native syntax coverage.
 - Scoped parser, integration and lifecycle reviews passed. The independent final
   Codex source review approved the integrated core through b47e97e, including
   exact difference/union budget and ordering, bounded cache recharging, candidate

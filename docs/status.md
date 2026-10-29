@@ -1,6 +1,6 @@
 # Implementation status
 
-The approved nine-task implementation plan has passed its local checks and independent final review corrections. The [requirement audit](verification.md) records the evidence and implementation decisions. The capabilities below define the delivered scope; broader native grammar and firmware parity remain unproven. No real device, SQL database or release validation has been performed.
+The approved implementation and domain refactoring plans have passed their local checks and independent reviews. The [requirement audit](verification.md) records the evidence and implementation decisions. The capabilities below define the delivered scope; broader native grammar and firmware parity remain unproven. No real device, SQL database or release validation has been performed.
 
 | Area | Current evidence | Explicit limits and future coverage |
 | --- | --- | --- |
@@ -24,7 +24,36 @@ Unrecognized source and unsupported semantics remain incomplete; do not describe
 
 The user-confirmed scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. H3C, Topsec, Neteye and other vendors are deferred.
 
-## Operations remediation delivery
+## Domain refactoring delivery (2026-10-29)
+
+Core [`c9d9f251ed20cd35ed9fd75743740dab96683b45`](https://github.com/gatework/firemon/commit/c9d9f251ed20cd35ed9fd75743740dab96683b45)
+was pushed through SSH to public `gatework/firemon` on `main`; the remote SHA was
+read back and matched. Its [Go workflow](https://github.com/gatework/firemon/actions/runs/40811038503)
+passed formatting, vet and race tests on Ubuntu. Local root race/vet passed
+across 23 tested packages. The independent final source review found no unresolved
+correctness issues.
+
+The optional adapter now pins core `v0.0.0-20261029031126-c9d9f251ed20` and connector
+`v0.0.0-20261026235641-c68c42b4bbcf`. After `go mod tidy`, its standalone
+`GOWORK=off GOPROXY=off go test -count=1 -race ./...` passed (5.604 seconds), as did
+`go vet ./...` and `go mod verify`. `go list -m -json` confirmed both published
+module-cache versions without a `Replace` field. Its profile alias regression
+covers the seven supported vendors and rejects H3C. Public root CI does not test
+this nested module's private dependency.
+
+The [module audit and API migration](refactoring.md) describe the shared domain
+contracts, parser ownership and lifecycle naming changes. Snapshot semantic
+format remains 9; this refactor does not require reimporting an existing v9 store.
+Native fixture exports, semantic digests and baseline plan approval goldens remain
+unchanged. The [benchmark record](benchmarks.md) includes serial before/after
+samples, counterbalanced controls and the small snapshot decoding allocation cost
+of the shared match view. These are synthetic measurements, not device or
+production-capacity evidence.
+
+## Previous operations remediation delivery
+
+The following records the earlier operations remediation, before the domain
+refactor and adapter pin above.
 
 The operations core [`af1f854b08e6b5117a43d137c91408af3e91d7de`](https://github.com/gatework/firemon/commit/af1f854b08e6b5117a43d137c91408af3e91d7de)
 was pushed to public `gatework/firemon` on `main`. The remote SHA was read back

@@ -57,14 +57,14 @@ var _ deploy.Session = (*Session)(nil)
 
 // New transfers ownership on success. The caller retains ownership on error.
 func New(device *connector.Device, metadata fm.Metadata, options Options) (*Session, error) {
-	if device == nil || strings.TrimSpace(metadata.Device) == "" || nativeVendor(metadata.Vendor) == "" || nativeVendor(device.ProfileName()) != nativeVendor(metadata.Vendor) {
+	if device == nil || strings.TrimSpace(metadata.Device) == "" || domainVendor(metadata.Vendor) == "" || domainVendor(device.ProfileName()) != domainVendor(metadata.Vendor) {
 		return nil, ErrInvalid
 	}
 	options, err := options.normalized()
 	if err != nil {
 		return nil, err
 	}
-	metadata.Vendor = nativeVendor(metadata.Vendor)
+	metadata.Vendor = domainVendor(metadata.Vendor)
 	if metadata.Vendor == "fortinet" && !vdomName.MatchString(metadata.Context) || metadata.Vendor != "fortinet" && metadata.Context != "" {
 		return nil, ErrInvalid
 	}
@@ -90,7 +90,8 @@ func (options Options) normalized() (Options, error) {
 	return options, nil
 }
 
-func nativeVendor(name string) string {
+// domainVendor converts connector profile aliases to the seven domain vendor names.
+func domainVendor(name string) string {
 	switch name {
 	case "asa", "cisco_asa":
 		return "asa"

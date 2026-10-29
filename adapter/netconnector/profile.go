@@ -14,7 +14,7 @@ import (
 // SRX accepts configuration prompts because the adapter owns its exclusive
 // candidate session. It does not enable legacy SSH recovery.
 func Profile(vendor string) (connector.Profile, error) {
-	switch nativeVendor(vendor) {
+	switch domainVendor(vendor) {
 	case "hillstone":
 		return vendors.Profile("hillstone")
 	case "paloalto":
@@ -27,7 +27,7 @@ func Profile(vendor string) (connector.Profile, error) {
 		p.CommandPrompt = regexp.MustCompile(`(?:\A|[\r\n])[^\s@]+@[^\s>#]+[>#][ \t]*\z`)
 		return p, nil
 	case "fortinet":
-		return vendors.Profile(nativeVendor(vendor))
+		return vendors.Profile(domainVendor(vendor))
 	case "huawei":
 		p, err := vendors.Profile("huawei")
 		// USG persists with save and a native confirmation interaction. Do not
