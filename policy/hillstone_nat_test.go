@@ -3,10 +3,11 @@ package policy_test
 import (
 	"context"
 	"errors"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
-	"testing"
 )
 
 func bnat() fm.StaticNATRecord {

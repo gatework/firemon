@@ -1,9 +1,10 @@
 package flow_test
 
 import (
-	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"testing"
+
+	"github.com/gatework/firemon/flow"
 )
 
 func address(s string) netip.Addr    { return netip.MustParseAddr(s) }

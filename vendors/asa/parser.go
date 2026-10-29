@@ -4,14 +4,15 @@ package asa
 import (
 	"context"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/flow"
 	"net"
 	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/flow"
 )
 
 type block struct {

@@ -8,13 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
-	"github.com/gatework/firemon/internal/durablefile"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/internal/durablefile"
 )
 
 var ErrConflict = errors.New("snapshot revision conflict")

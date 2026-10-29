@@ -3,8 +3,9 @@ package config
 import (
 	"context"
 	"errors"
-	fm "github.com/gatework/firemon"
 	"testing"
+
+	fm "github.com/gatework/firemon"
 )
 
 func TestClosedTransactionCannotAccumulateEffects(t *testing.T) {

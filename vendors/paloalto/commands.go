@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
-	"github.com/gatework/firemon/plan"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/plan"
 )
 
 var ErrRender = errors.New("unsupported PAN command representation")

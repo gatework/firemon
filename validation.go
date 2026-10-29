@@ -2,10 +2,11 @@ package firemon
 
 import (
 	"fmt"
-	"github.com/gatework/firemon/flow"
 	"math/big"
 	"net/netip"
 	"slices"
+
+	"github.com/gatework/firemon/flow"
 )
 
 func (f *Firewall) validateMatch(owner ID, m Match) {

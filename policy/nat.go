@@ -3,10 +3,11 @@ package policy
 import (
 	"context"
 	"errors"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
 	"math/big"
 	"net/netip"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
 )
 
 var ErrNAT = errors.New("NAT semantics are not established for this operation")

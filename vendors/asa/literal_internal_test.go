@@ -1,8 +1,9 @@
 package asa
 
 import (
-	fm "github.com/gatework/firemon"
 	"testing"
+
+	fm "github.com/gatework/firemon"
 )
 
 func TestLiteralIdentityIncludesCommittedAndCurrentDraft(t *testing.T) {

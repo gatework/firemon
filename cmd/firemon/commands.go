@@ -6,6 +6,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"net/netip"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
@@ -13,12 +20,6 @@ import (
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
-	"io"
-	"net/netip"
-	"os"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func output(w io.Writer, v any) error {

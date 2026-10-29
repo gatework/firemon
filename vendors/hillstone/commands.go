@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"unicode"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
-	"strconv"
-	"unicode"
 )
 
 var ErrRender = errors.New("unsupported Hillstone command representation")

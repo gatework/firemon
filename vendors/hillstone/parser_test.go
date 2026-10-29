@@ -3,12 +3,13 @@ package hillstone_test
 import (
 	"context"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/vendors/hillstone"
 	"os"
 	"strings"
 	"testing"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/vendors/hillstone"
 )
 
 func parse(t *testing.T, text string) *fm.Firewall {

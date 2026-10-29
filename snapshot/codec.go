@@ -8,8 +8,9 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	fm "github.com/gatework/firemon"
 	"io"
+
+	fm "github.com/gatework/firemon"
 )
 
 const DefaultMaxBytes int64 = 128 << 20

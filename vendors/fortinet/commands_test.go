@@ -7,7 +7,6 @@ import (
 	"time"
 
 	fm "github.com/gatework/firemon"
-
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/vendors/fortinet"

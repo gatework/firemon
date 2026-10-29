@@ -1,12 +1,13 @@
 package firemon_test
 
 import (
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"strings"
 	"testing"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
 )
 
 func rng(a, b string) flow.Range {

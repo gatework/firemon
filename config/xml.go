@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	fm "github.com/gatework/firemon"
 	"io"
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	fm "github.com/gatework/firemon"
 )
 
 // XMLNode retains native ancestry, attributes and exact byte evidence. Claims

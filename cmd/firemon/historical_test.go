@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/snapshot"
-	"testing"
 )
 
 func TestHistoricalInspectReportsRequestedRevision(t *testing.T) {

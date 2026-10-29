@@ -2,13 +2,14 @@ package asa_test
 
 import (
 	"context"
+	"net/netip"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/vendors/asa"
-	"net/netip"
-	"testing"
 )
 
 const interfaces = "interface i\n nameif inside\n ip address 192.0.2.1 255.255.255.0\n!\ninterface o\n nameif outside\n ip address 203.0.113.1 255.255.255.0\n!\n"

@@ -3,10 +3,11 @@ package paloalto
 import (
 	"context"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
 	"slices"
 	"strings"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
 )
 
 type xmlInput struct {

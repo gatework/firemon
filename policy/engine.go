@@ -4,11 +4,12 @@ package policy
 import (
 	"context"
 	"errors"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"slices"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
 )
 
 var ErrInvalid = errors.New("policy: invalid input")

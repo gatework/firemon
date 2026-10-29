@@ -8,13 +8,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/gatework/firemon/internal/durablefile"
 	"io"
 	"math"
 	"os"
 	"path/filepath"
 	"slices"
 	"sync"
+
+	"github.com/gatework/firemon/internal/durablefile"
 )
 
 const maxJournalBytes = 4 << 20

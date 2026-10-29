@@ -2,10 +2,11 @@ package flow_test
 
 import (
 	"errors"
-	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"reflect"
 	"testing"
+
+	"github.com/gatework/firemon/flow"
 )
 
 // Exhaust all 128 packets in a two-value, seven-dimensional domain. Integer

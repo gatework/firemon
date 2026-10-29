@@ -2,12 +2,13 @@ package paloalto_test
 
 import (
 	"context"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/vendors/paloalto"
 	"os"
 	"strings"
 	"testing"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/vendors/paloalto"
 )
 
 func TestPANRejectAndDropActionsRemainDistinctDeclarations(t *testing.T) {

@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/policy"
 	"maps"
 	"slices"
 	"strings"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/policy"
 )
 
 var ErrReadback = errors.New("readback does not establish the approved configuration")

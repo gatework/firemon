@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+
 	fm "github.com/gatework/firemon"
 )
 

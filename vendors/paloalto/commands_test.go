@@ -2,12 +2,13 @@ package paloalto_test
 
 import (
 	"context"
+	"strings"
+	"testing"
+
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/vendors/paloalto"
-	"strings"
-	"testing"
 )
 
 func TestPANNewRuleCommandsRoundTripThroughIndependentNativeParser(t *testing.T) {

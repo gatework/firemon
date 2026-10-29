@@ -3,11 +3,12 @@ package hillstone
 import (
 	"context"
 	"fmt"
+	"slices"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
-	"slices"
 )
 
 func (p *parser) resolve(ctx context.Context, name string) ([]flow.Range, bool, error) {

@@ -5,11 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"slices"
+	"strings"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
-	"slices"
-	"strings"
 )
 
 func sameZones(m fm.Match, q policy.Request) bool {

@@ -2,13 +2,14 @@ package paloalto
 
 import (
 	"context"
+	"net/netip"
+	"slices"
+	"strings"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
-	"net/netip"
-	"slices"
-	"strings"
 )
 
 func (p *parser) addressRef(name string, d *fm.Data) fm.AddressRef {

@@ -3,12 +3,13 @@ package plan_test
 import (
 	"context"
 	"errors"
+	"net/netip"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
-	"net/netip"
-	"testing"
 )
 
 type renderer struct{ rejectAppend, rejectEarlierAppends bool }

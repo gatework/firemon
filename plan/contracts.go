@@ -4,10 +4,11 @@ package plan
 import (
 	"context"
 	"errors"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/policy"
 	"slices"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/policy"
 )
 
 var ErrUnsafe = errors.New("no proven renderable policy plan")

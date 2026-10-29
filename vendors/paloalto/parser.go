@@ -4,14 +4,15 @@ package paloalto
 import (
 	"context"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/flow"
 )
 
 type row struct {

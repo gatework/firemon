@@ -3,8 +3,9 @@ package snapshot_test
 import (
 	"context"
 	"errors"
-	"github.com/gatework/firemon/snapshot"
 	"testing"
+
+	"github.com/gatework/firemon/snapshot"
 )
 
 func TestArchiveRetainsEvidenceWithoutChangingCurrentOrOutbox(t *testing.T) {

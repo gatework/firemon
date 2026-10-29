@@ -3,12 +3,13 @@ package paloalto_test
 import (
 	"bytes"
 	"context"
+	"strings"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors/paloalto"
-	"strings"
-	"testing"
 )
 
 func TestNativeXMLAndSetHaveSameGraphAndRetainOriginalXMLEvidence(t *testing.T) {

@@ -2,11 +2,12 @@ package policy
 
 import (
 	"context"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"strconv"
 	"strings"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
 )
 
 // asaNAT's sections are priority groups, not successive rewrites. The first

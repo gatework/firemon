@@ -3,9 +3,10 @@ package config
 import (
 	"context"
 	"fmt"
-	fm "github.com/gatework/firemon"
 	"strings"
 	"unicode"
+
+	fm "github.com/gatework/firemon"
 )
 
 type Statement struct {

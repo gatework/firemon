@@ -4,10 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"slices"
 	"strings"
+
+	"github.com/gatework/firemon/flow"
 )
 
 func add[T any](m map[ID]*T, o Object, v *T) error {

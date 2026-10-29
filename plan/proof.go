@@ -5,11 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/netip"
+	"time"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
-	"net/netip"
-	"time"
 )
 
 func universe() flow.Traffic {

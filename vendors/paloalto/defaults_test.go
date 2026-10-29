@@ -2,13 +2,14 @@ package paloalto_test
 
 import (
 	"context"
+	"net/netip"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/vendors/paloalto"
-	"net/netip"
-	"testing"
 )
 
 const zones = "set network interface ethernet eth1 layer3 ip 192.0.2.1/24\nset network interface ethernet eth2 layer3 ip 198.51.100.1/24\nset zone inside network layer3 eth1\nset zone outside network layer3 eth2\n"

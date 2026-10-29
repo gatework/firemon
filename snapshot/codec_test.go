@@ -5,11 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/snapshot"
-	"net/netip"
-	"testing"
 )
 
 func graph(t *testing.T, device, raw string, complete bool) *fm.Firewall {

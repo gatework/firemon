@@ -3,9 +3,10 @@ package deploy_test
 import (
 	"context"
 	"errors"
-	"github.com/gatework/firemon/deploy"
 	"testing"
 	"time"
+
+	"github.com/gatework/firemon/deploy"
 )
 
 func TestFileJournalOwnsOperationAcrossInstancesAndRestoresReceipts(t *testing.T) {

@@ -2,10 +2,11 @@ package policy
 
 import (
 	"context"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
 	"slices"
 	"strings"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
 )
 
 type RoutePath struct {

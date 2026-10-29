@@ -3,10 +3,11 @@ package projection_test
 import (
 	"context"
 	"errors"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/projection"
 	"github.com/gatework/firemon/snapshot"
-	"testing"
 )
 
 type sink struct {

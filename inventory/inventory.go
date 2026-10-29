@@ -3,10 +3,11 @@ package inventory
 
 import (
 	"context"
+	"sort"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/snapshot"
-	"sort"
 )
 
 type Hit struct {

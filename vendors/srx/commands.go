@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
-	"slices"
-	"strconv"
 )
 
 var ErrRender = errors.New("unsupported Junos command representation")

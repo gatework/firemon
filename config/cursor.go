@@ -4,10 +4,11 @@ package config
 import (
 	"errors"
 	"fmt"
-	fm "github.com/gatework/firemon"
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	fm "github.com/gatework/firemon"
 )
 
 var ErrSource = errors.New("invalid configuration source")

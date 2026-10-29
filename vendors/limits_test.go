@@ -3,10 +3,11 @@ package vendors_test
 import (
 	"context"
 	"errors"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/vendors"
-	"testing"
 )
 
 func TestAllNativeParsersHonorSelectedLimits(t *testing.T) {

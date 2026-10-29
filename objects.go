@@ -1,8 +1,9 @@
 package firemon
 
 import (
-	"github.com/gatework/firemon/flow"
 	"slices"
+
+	"github.com/gatework/firemon/flow"
 )
 
 type Zone struct {

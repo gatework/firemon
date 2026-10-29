@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
+	"sync"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/deploy"
@@ -11,9 +15,6 @@ import (
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
-	"net/netip"
-	"sync"
-	"testing"
 )
 
 type testRenderer struct{}

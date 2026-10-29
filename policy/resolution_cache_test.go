@@ -3,10 +3,11 @@ package policy
 import (
 	"context"
 	"errors"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"testing"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
 )
 
 func TestResolutionReusePreservesBudgetAndGraphIsolation(t *testing.T) {

@@ -3,10 +3,11 @@ package config_test
 import (
 	"context"
 	"errors"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
 	"strings"
 	"testing"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
 )
 
 func source(t *testing.T, s string) *config.Cursor {

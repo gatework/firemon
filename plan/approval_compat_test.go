@@ -3,9 +3,10 @@ package plan_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
-	"testing"
 )
 
 func TestApprovalDigestRemainsCompatible(t *testing.T) {

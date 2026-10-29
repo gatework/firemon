@@ -6,13 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
+	"sync"
+	"time"
+
 	fm "github.com/gatework/firemon"
 	capturegraph "github.com/gatework/firemon/internal/capture"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/snapshot"
-	"slices"
-	"sync"
-	"time"
 )
 
 type attempt struct {

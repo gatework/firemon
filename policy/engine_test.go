@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
-	"github.com/gatework/firemon/policy"
 	"net/netip"
 	"testing"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/policy"
 )
 
 func traffic(t *testing.T, src, dst string) flow.Traffic {

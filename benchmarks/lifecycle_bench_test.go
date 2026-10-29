@@ -3,11 +3,12 @@ package benchmarks_test
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/analysis"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/vendors/huawei"
-	"testing"
 )
 
 func BenchmarkConvergence(b *testing.B) {

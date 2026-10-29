@@ -2,12 +2,13 @@ package inventory_test
 
 import (
 	"context"
+	"net/netip"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/inventory"
 	"github.com/gatework/firemon/snapshot"
-	"net/netip"
-	"testing"
 )
 
 func TestLocationUsesManifestAndUnknownDeviceCannotDisappear(t *testing.T) {

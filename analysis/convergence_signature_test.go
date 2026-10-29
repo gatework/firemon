@@ -1,9 +1,10 @@
 package analysis
 
 import (
-	fm "github.com/gatework/firemon"
 	"reflect"
 	"testing"
+
+	fm "github.com/gatework/firemon"
 )
 
 func TestConvergenceSignatureMatchesStructuralCompatibility(t *testing.T) {

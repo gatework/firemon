@@ -2,11 +2,12 @@ package asa_test
 
 import (
 	"context"
+	"os"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/vendors/asa"
-	"os"
-	"testing"
 )
 
 func TestASAParsesInterfacesACLBindingsAndDistinctNATCatalogs(t *testing.T) {

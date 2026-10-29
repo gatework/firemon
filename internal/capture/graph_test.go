@@ -3,10 +3,11 @@ package capture
 import (
 	"context"
 	"errors"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
 	"testing"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
 )
 
 type parseFunc func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error)

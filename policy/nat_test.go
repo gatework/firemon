@@ -2,11 +2,12 @@ package policy_test
 
 import (
 	"context"
+	"net/netip"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
-	"net/netip"
-	"testing"
 )
 
 func rangeOf(s string) flow.Range { r, _ := flow.PrefixRange(netip.MustParsePrefix(s)); return r }

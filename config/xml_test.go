@@ -3,9 +3,10 @@ package config_test
 import (
 	"context"
 	"errors"
-	"github.com/gatework/firemon/config"
 	"strings"
 	"testing"
+
+	"github.com/gatework/firemon/config"
 )
 
 func TestXMLScannerRetainsNativeHierarchyAndUnclaimedByteEvidence(t *testing.T) {

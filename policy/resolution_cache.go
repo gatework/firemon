@@ -1,10 +1,11 @@
 package policy
 
 import (
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
 	"strconv"
 	"strings"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
 )
 
 // resolutionCache belongs to one rule-query invocation and one immutable graph.

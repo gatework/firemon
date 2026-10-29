@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
-	"slices"
 )
 
 type Planner struct {

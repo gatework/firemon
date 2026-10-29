@@ -6,13 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/flow"
 	"math/big"
 	"net/netip"
 	"slices"
 	"strings"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/flow"
 )
 
 func pair(value string) (string, string, bool) {

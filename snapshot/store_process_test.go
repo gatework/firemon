@@ -3,10 +3,11 @@ package snapshot_test
 import (
 	"context"
 	"errors"
-	"github.com/gatework/firemon/snapshot"
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/gatework/firemon/snapshot"
 )
 
 func TestReservationFromSeparateProcessIsVisible(t *testing.T) {

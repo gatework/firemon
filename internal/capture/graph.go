@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 )

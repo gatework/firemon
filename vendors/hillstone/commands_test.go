@@ -2,14 +2,15 @@ package hillstone_test
 
 import (
 	"context"
+	"net/netip"
+	"strings"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/vendors/hillstone"
-	"net/netip"
-	"strings"
-	"testing"
 )
 
 func TestPlannerRendersNativeHillstoneAppendWithExactSourcePorts(t *testing.T) {

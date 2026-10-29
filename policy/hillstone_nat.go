@@ -2,8 +2,9 @@ package policy
 
 import (
 	"context"
-	fm "github.com/gatework/firemon"
 	"strings"
+
+	fm "github.com/gatework/firemon"
 )
 
 // hillstoneNAT selects DNAT and SNAT independently on the original packet, with

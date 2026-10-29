@@ -4,15 +4,16 @@ package hillstone
 import (
 	"context"
 	"fmt"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/flow"
 	"net"
 	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/flow"
 )
 
 const ParserVersion = "hillstone-go-2"

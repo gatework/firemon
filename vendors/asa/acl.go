@@ -2,11 +2,12 @@ package asa
 
 import (
 	"context"
+	"slices"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
-	"slices"
 )
 
 func (p *parser) operand(words []string, d *fm.Data) (fm.AddressRef, int, bool) {

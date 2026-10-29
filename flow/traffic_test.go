@@ -2,8 +2,9 @@ package flow_test
 
 import (
 	"errors"
-	"github.com/gatework/firemon/flow"
 	"testing"
+
+	"github.com/gatework/firemon/flow"
 )
 
 func box(src, dst string) flow.Box {

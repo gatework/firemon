@@ -2,10 +2,11 @@
 package firemon
 
 import (
-	"github.com/gatework/firemon/flow"
 	"net/netip"
 	"slices"
 	"time"
+
+	"github.com/gatework/firemon/flow"
 )
 
 type ID string

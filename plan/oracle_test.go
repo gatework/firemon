@@ -3,17 +3,18 @@ package plan_test
 import (
 	"context"
 	"encoding/json"
+	"net/netip"
+	"os"
+	"strconv"
+	"strings"
+	"testing"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/vendors/hillstone"
-	"net/netip"
-	"os"
-	"strconv"
-	"strings"
-	"testing"
 )
 
 func TestPerlOracleCandidateParity(t *testing.T) {
