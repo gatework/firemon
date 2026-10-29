@@ -1,7 +1,6 @@
 package snapshot
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -200,12 +199,11 @@ func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOpt
 		return PublishResult{}, ErrInvalid
 	}
 
-	var buf bytes.Buffer
-	if err := Encode(&buf, fw); err != nil {
+	object, err := encodeBlob(fw)
+	if err != nil {
 		return PublishResult{}, err
 	}
-	sum := sha256.Sum256(buf.Bytes())
-	revision := hex.EncodeToString(sum[:])
+	revision := object.revision
 	device := fw.Metadata().Device
 	unlock, err := lock(ctx, filepath.Join(s.root, "manifest.lock"))
 	if err != nil {
@@ -234,14 +232,7 @@ func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOpt
 		return PublishResult{}, ErrReserved
 	}
 	// A crash before manifest replacement leaves only an unreferenced immutable blob.
-	path := filepath.Join(s.root, "objects", revision+".gob")
-	if existing, err := os.ReadFile(path); err == nil {
-		if !bytes.Equal(existing, buf.Bytes()) {
-			return PublishResult{}, ErrFormat
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return PublishResult{}, err
-	} else if err = atomicWrite(path, buf.Bytes()); err != nil {
+	if err := s.storeBlob(ctx, object); err != nil {
 		return PublishResult{}, err
 	}
 	if !fw.Complete() && !options.Live {
@@ -334,23 +325,14 @@ func (s *Store) Archive(ctx context.Context, fw *fm.Firewall) (string, error) {
 	if err := s.validate(ctx); err != nil {
 		return "", err
 	}
-	var buf bytes.Buffer
-	if err := Encode(&buf, fw); err != nil {
+	object, err := encodeBlob(fw)
+	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(buf.Bytes())
-	revision := hex.EncodeToString(sum[:])
-	path := filepath.Join(s.root, "objects", revision+".gob")
-	if existing, err := os.ReadFile(path); err == nil {
-		if !bytes.Equal(existing, buf.Bytes()) {
-			return "", ErrFormat
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	} else if err := atomicWrite(path, buf.Bytes()); err != nil {
+	if err := s.storeBlob(ctx, object); err != nil {
 		return "", err
 	}
-	return revision, ctx.Err()
+	return object.revision, ctx.Err()
 }
 
 // Acknowledge advances a sink cursor with CAS. Sinks apply each batch idempotently before this call.
