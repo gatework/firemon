@@ -87,7 +87,7 @@ func (e Engine) PreserveNAT(ctx context.Context, before, after *fm.Firewall, fro
 		if !prior.Complete || !next.Complete || !prior.Unknown.Empty() || !next.Unknown.Empty() {
 			return ErrNotEquivalent
 		}
-		if same, err := equivalentTraffic(prior.Unmatched, next.Unmatched, limits.MaxRegions); err != nil {
+		if same, err := prior.Unmatched.Equal(next.Unmatched, limits.MaxRegions); err != nil {
 			return err
 		} else if !same {
 			return ErrNotEquivalent

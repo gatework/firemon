@@ -3,6 +3,8 @@ package policy
 import (
 	"context"
 
+	"github.com/gatework/firemon/flow"
+
 	fm "github.com/gatework/firemon"
 )
 
@@ -19,7 +21,7 @@ func (e Engine) AppendCanPreserve(ctx context.Context, before, after *fm.Firewal
 	if !semantics(before.Metadata().Vendor).linearPolicy {
 		return true, nil
 	}
-	all, err := allTraffic(e.Limits.WithDefaults().MaxRegions)
+	all, err := flow.AllTraffic(e.Limits.WithDefaults().MaxRegions)
 	if err != nil {
 		return false, err
 	}

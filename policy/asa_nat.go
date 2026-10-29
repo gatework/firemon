@@ -2,7 +2,6 @@ package policy
 
 import (
 	"context"
-	"net/netip"
 	"strconv"
 	"strings"
 
@@ -117,24 +116,13 @@ func reverseStatic(n natTransform, r fm.StaticNATRecord) natTransform {
 	n.known = n.known && known
 	return n
 }
-func allTraffic(limit int) (flow.Traffic, error) {
-	var boxes []flow.TrafficRegion
-	for _, cidr := range []string{"0.0.0.0/0", "::/0"} {
-		r, err := flow.PrefixRange(netip.MustParsePrefix(cidr))
-		if err != nil {
-			return flow.Traffic{}, err
-		}
-		boxes = append(boxes, flow.TrafficRegion{Source: r, Destination: r, Protocol: flow.Interval{High: 255}, SourcePort: flow.Interval{High: 65535}, DestinationPort: flow.Interval{High: 65535}, ICMPType: flow.Interval{High: 255}, ICMPCode: flow.Interval{High: 255}})
-	}
-	return flow.NewTraffic(limit, boxes...)
-}
 
 // inverseMatch constructs the inverse domain from the complete forward match,
 // including paired ports and both address axes. Swapping untransformed selectors
 // alone would incorrectly discard public-address matches.
 func (e Engine) inverseMatch(ctx context.Context, fw *fm.Firewall, n natTransform, q Request, input flow.Traffic) (flow.Traffic, bool, error) {
 	limit := e.Limits.WithDefaults().MaxRegions
-	all, err := allTraffic(limit)
+	all, err := flow.AllTraffic(limit)
 	if err != nil {
 		return flow.Traffic{}, false, err
 	}

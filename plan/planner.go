@@ -87,7 +87,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		}
 	}
 	all := q
-	all.Traffic, err = universe(limits.MaxRegions)
+	all.Traffic, err = flow.AllTraffic(limits.MaxRegions)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		return 0
 	})
 	for _, candidate := range candidates {
-		proof, err := p.proveWithPrior(ctx, fw, candidate.after, q, &prior, &visits)
+		proof, err := p.proveWithBaseline(ctx, fw, candidate.after, q, &prior, &visits)
 		if err != nil {
 			if errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget) || ctx.Err() != nil {
 				return nil, err

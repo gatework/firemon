@@ -142,7 +142,7 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 	if err != nil {
 		return nil, err
 	}
-	seen := make(map[fm.ID]bool)
+	hasEffectiveMatch := make(map[fm.ID]bool)
 	for _, q := range contexts {
 		if err := budget.take(ctx, len(rules)); err != nil {
 			return nil, err
@@ -154,9 +154,9 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 		if !result.Complete || !result.Unknown.Empty() {
 			return rows, nil
 		}
-		for _, trace := range result.Decisions {
-			if !trace.Traffic.Empty() {
-				seen[trace.Rule] = true
+		for _, decision := range result.Decisions {
+			if !decision.Traffic.Empty() {
+				hasEffectiveMatch[decision.Rule] = true
 			}
 		}
 	}
@@ -179,7 +179,7 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 				}
 			}
 		}
-		if !rule.Disabled() && row.Expired != True && !seen[rule.ID()] {
+		if !rule.Disabled() && row.Expired != True && !hasEffectiveMatch[rule.ID()] {
 			row.Unreachable = True
 		}
 		row.RemovalCandidate = !rule.Builtin() && (row.Disabled == True || row.Expired == True || row.Unreachable == True)
@@ -204,14 +204,14 @@ func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, request Reclamatio
 	if err != nil {
 		return nil, err
 	}
-	removable := make(map[fm.ID]bool)
+	removalCandidates := make(map[fm.ID]bool)
 	for _, row := range rows {
-		removable[row.Rule] = row.RemovalCandidate
+		removalCandidates[row.Rule] = row.RemovalCandidate
 	}
 	selected := make(map[fm.ID]bool)
 	var changes []plan.Change
 	for _, id := range ids {
-		if selected[id] || !removable[id] {
+		if selected[id] || !removalCandidates[id] {
 			return nil, plan.ErrUnsafe
 		}
 		selected[id] = true

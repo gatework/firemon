@@ -59,7 +59,7 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Ti
 			return nil, err
 		}
 		r := rule.Record()
-		if !r.Builtin && r.Log != fm.Unknown && r.LogStart != fm.Unknown && r.LogEnd != fm.Unknown && len(r.Unsupported) == 0 {
+		if eligibleForConvergence(r) {
 			rules = append(rules, r)
 		}
 	}
@@ -118,6 +118,16 @@ func compareConvergenceRules(a, b fm.RuleRecord) int {
 	return strings.Compare(string(a.ID), string(b.ID))
 }
 
+// eligibleForConvergence checks declarations before comparing merge constraints.
+// Compatibility and containment are only candidate filters; Plan still proves
+// the declaration union and the complete ordered rulebase.
+func eligibleForConvergence(rule fm.RuleRecord) bool {
+	loggingKnown := rule.Log != fm.Unknown && rule.LogStart != fm.Unknown && rule.LogEnd != fm.Unknown
+	return !rule.Builtin && loggingKnown && len(rule.Unsupported) == 0
+}
+
+// convergenceSignature excludes only identity, position and member lists.
+// Members are unioned separately, then checked for accidental cross-pairs.
 func convergenceSignature(r fm.RuleRecord) fm.RuleRecord {
 	r.Object = fm.Object{Scope: r.Scope}
 	r.Position = 0
@@ -191,7 +201,7 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 		}
 		selected[id] = true
 		r := fw.Rule(id).Record()
-		if r.Builtin || r.Log == fm.Unknown || r.LogStart == fm.Unknown || r.LogEnd == fm.Unknown || len(r.Unsupported) > 0 {
+		if !eligibleForConvergence(r) {
 			return nil, plan.ErrUnsafe
 		}
 		rules = append(rules, r)
@@ -264,7 +274,7 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 		if !known {
 			return nil, plan.ErrUnsafe
 		}
-		if equal, err := equalTraffic(union, hit, limit); err != nil {
+		if equal, err := union.Equal(hit, limit); err != nil {
 			return nil, err
 		} else if !equal {
 			return nil, plan.ErrUnsafe
@@ -295,15 +305,6 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 		return nil, err
 	}
 	return c.Planner.Preserve(ctx, fw, after, changes, from)
-}
-
-func equalTraffic(a, b flow.Traffic, limit int) (bool, error) {
-	x, err := a.Difference(b, limit)
-	if err != nil || !x.Empty() {
-		return false, err
-	}
-	x, err = b.Difference(a, limit)
-	return err == nil && x.Empty(), err
 }
 
 // Keep nil distinct from empty, as the previous structural comparison did.

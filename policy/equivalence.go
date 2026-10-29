@@ -118,7 +118,7 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 	}
 	slices.Sort(zoneIDs)
 	slices.SortFunc(times, time.Time.Compare)
-	all, err := allTraffic(limits.MaxRegions)
+	all, err := flow.AllTraffic(limits.MaxRegions)
 	if err != nil {
 		return nil, err
 	}
@@ -194,17 +194,17 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 			return Equivalence{}, ErrNotEquivalent
 		}
 		for _, pair := range [][2]flow.Traffic{{a.Allowed, b.Allowed}, {a.Denied, b.Denied}, {a.Unmatched, b.Unmatched}} {
-			if ok, err := equivalentTraffic(pair[0], pair[1], limits.MaxRegions); err != nil {
+			if ok, err := pair[0].Equal(pair[1], limits.MaxRegions); err != nil {
 				return Equivalence{}, err
 			} else if !ok {
 				return Equivalence{}, ErrNotEquivalent
 			}
 		}
-		left, err := effects(before, a, limits.MaxRegions)
+		left, err := ruleEffects(before, a, limits.MaxRegions)
 		if err != nil {
 			return Equivalence{}, err
 		}
-		right, err := effects(after, b, limits.MaxRegions)
+		right, err := ruleEffects(after, b, limits.MaxRegions)
 		if err != nil {
 			return Equivalence{}, err
 		}
@@ -217,7 +217,7 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 
 func equivalentPartitions[K comparable](left, right map[K]flow.Traffic, limit int) error {
 	for key, traffic := range left {
-		if same, err := equivalentTraffic(traffic, right[key], limit); err != nil {
+		if same, err := traffic.Equal(right[key], limit); err != nil {
 			return err
 		} else if !same {
 			return ErrNotEquivalent
@@ -232,41 +232,32 @@ func equivalentPartitions[K comparable](left, right map[K]flow.Traffic, limit in
 	return nil
 }
 
-func equivalentTraffic(a, b flow.Traffic, limit int) (bool, error) {
-	x, err := a.Difference(b, limit)
-	if err != nil || !x.Empty() {
-		return false, err
-	}
-	x, err = b.Difference(a, limit)
-	return err == nil && x.Empty(), err
+type ruleEffect struct {
+	action                fm.Action
+	log, logStart, logEnd fm.Status
+	unknownLoggingRule    fm.ID
+	natOwnerRule          fm.ID
 }
 
-type effect struct {
-	action          fm.Action
-	log, start, end fm.Status
-	uncertain       fm.ID
-	natOwner        fm.ID
-}
-
-func effects(fw *fm.Firewall, r Result, limit int) (map[effect]flow.Traffic, error) {
-	out := make(map[effect]flow.Traffic)
-	owners := make(map[fm.ID]bool)
+func ruleEffects(fw *fm.Firewall, r Result, limit int) (map[ruleEffect]flow.Traffic, error) {
+	out := make(map[ruleEffect]flow.Traffic)
+	natOwners := make(map[fm.ID]bool)
 	for _, n := range fw.DynamicNATs() {
 		if r := n.Record(); r.Rule != "" && !r.Disabled {
-			owners[r.Rule] = true
+			natOwners[r.Rule] = true
 		}
 	}
-	for _, t := range r.Decisions {
-		rule := fw.Rule(t.Rule).Record()
-		key := effect{action: rule.Action, log: rule.Log, start: rule.LogStart, end: rule.LogEnd}
-		if owners[rule.ID] {
-			key.natOwner = rule.ID
+	for _, decision := range r.Decisions {
+		rule := fw.Rule(decision.Rule).Record()
+		key := ruleEffect{action: rule.Action, log: rule.Log, logStart: rule.LogStart, logEnd: rule.LogEnd}
+		if natOwners[rule.ID] {
+			key.natOwnerRule = rule.ID
 		}
 		if rule.Log == fm.Unknown || rule.LogStart == fm.Unknown || rule.LogEnd == fm.Unknown {
-			key.uncertain = rule.ID
+			key.unknownLoggingRule = rule.ID
 		}
 		var err error
-		out[key], err = out[key].Union(t.Traffic, limit)
+		out[key], err = out[key].Union(decision.Traffic, limit)
 		if err != nil {
 			return nil, err
 		}

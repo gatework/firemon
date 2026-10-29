@@ -100,61 +100,61 @@ func (b TrafficRegion) subtract(c TrafficRegion, pieces *[14]TrafficRegion) int 
 }
 
 // Traffic is an immutable disjoint union. Operations return no partial result on budget failure.
-type Traffic struct{ boxes []TrafficRegion }
+type Traffic struct{ regions []TrafficRegion }
 
-func NewTraffic(limit int, boxes ...TrafficRegion) (Traffic, error) {
-	if limit < 1 || len(boxes) > limit {
+func NewTraffic(limit int, regions ...TrafficRegion) (Traffic, error) {
+	if limit < 1 || len(regions) > limit {
 		return Traffic{}, ErrBudget
 	}
 	var out Traffic
-	for _, b := range boxes {
+	for _, b := range regions {
 		if !b.Valid() {
 			return Traffic{}, ErrRegion
 		}
-		pieces, err := (Traffic{boxes: []TrafficRegion{b}}).Difference(out, limit)
+		pieces, err := (Traffic{regions: []TrafficRegion{b}}).Difference(out, limit)
 		if err != nil {
 			return Traffic{}, err
 		}
-		if len(out.boxes)+len(pieces.boxes) > limit {
+		if len(out.regions)+len(pieces.regions) > limit {
 			return Traffic{}, ErrBudget
 		}
-		out.boxes = append(out.boxes, pieces.boxes...)
+		out.regions = append(out.regions, pieces.regions...)
 	}
 	return out, nil
 }
 
 // RegionCount returns the disjoint region count without copying traffic.
-func (s Traffic) RegionCount() int { return len(s.boxes) }
+func (s Traffic) RegionCount() int { return len(s.regions) }
 
-func (s Traffic) Regions() []TrafficRegion { return slices.Clone(s.boxes) }
-func (s Traffic) Empty() bool              { return len(s.boxes) == 0 }
+func (s Traffic) Regions() []TrafficRegion { return slices.Clone(s.regions) }
+func (s Traffic) Empty() bool              { return len(s.regions) == 0 }
 func (s Traffic) Union(t Traffic, limit int) (Traffic, error) {
 	// Each operand is already disjoint. Normalize only the added coverage.
-	if limit < 1 || len(s.boxes)+len(t.boxes) > limit {
+	if limit < 1 || len(s.regions)+len(t.regions) > limit {
 		return Traffic{}, ErrBudget
 	}
 	out := s.Regions()
-	for _, b := range t.boxes {
+	for _, b := range t.regions {
 		// Charge each added declaration's intermediate regions as NewTraffic
 		// does. Combining all additions first could change budget failures.
-		extra, err := (Traffic{boxes: []TrafficRegion{b}}).Difference(s, limit)
+		extra, err := (Traffic{regions: []TrafficRegion{b}}).Difference(s, limit)
 		if err != nil {
 			return Traffic{}, err
 		}
-		if len(out)+len(extra.boxes) > limit {
+		if len(out)+len(extra.regions) > limit {
 			return Traffic{}, ErrBudget
 		}
-		out = append(out, extra.boxes...)
+		out = append(out, extra.regions...)
 	}
-	return Traffic{boxes: out}, nil
+	return Traffic{regions: out}, nil
 }
 func (s Traffic) Intersection(t Traffic, limit int) (Traffic, error) {
 	if limit < 1 {
 		return Traffic{}, ErrBudget
 	}
 	var out []TrafficRegion
-	for _, a := range s.boxes {
-		for _, b := range t.boxes {
+	for _, a := range s.regions {
+		for _, b := range t.regions {
 			if x, ok := a.Intersection(b); ok {
 				if len(out) >= limit {
 					return Traffic{}, ErrBudget
@@ -166,14 +166,14 @@ func (s Traffic) Intersection(t Traffic, limit int) (Traffic, error) {
 	return Traffic{out}, nil
 }
 func (s Traffic) Difference(t Traffic, limit int) (Traffic, error) {
-	if limit < 1 || len(s.boxes) > limit {
+	if limit < 1 || len(s.regions) > limit {
 		return Traffic{}, ErrBudget
 	}
 	out := s.Regions()
 	var next []TrafficRegion
 	// At most two slabs per dimension; the bounded scratch stays on the stack.
 	var pieces [14]TrafficRegion
-	for _, b := range t.boxes {
+	for _, b := range t.regions {
 		next = next[:0]
 		for _, a := range out {
 			count := a.subtract(b, &pieces)
@@ -192,4 +192,17 @@ func (s Traffic) Difference(t Traffic, limit int) (Traffic, error) {
 func (s Traffic) Contains(t Traffic, limit int) (bool, error) {
 	rest, err := t.Difference(s, limit)
 	return err == nil && rest.Empty(), err
+}
+
+// Equal reports whether both traffic sets contain exactly the same packets.
+// It first subtracts other from the receiver and stops on a difference or error.
+// Only then does it check the reverse difference. The budget also applies to
+// empty-set comparisons; it is never bypassed by an identity shortcut.
+func (s Traffic) Equal(other Traffic, limit int) (bool, error) {
+	remaining, err := s.Difference(other, limit)
+	if err != nil || !remaining.Empty() {
+		return false, err
+	}
+	remaining, err = other.Difference(s, limit)
+	return err == nil && remaining.Empty(), err
 }

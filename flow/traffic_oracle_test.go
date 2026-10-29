@@ -76,8 +76,10 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 			}
 			return true
 		}
+		wantEqual := true
 		for packet := range 128 {
 			inX, inY := contains(boxes[0], packet) || contains(boxes[1], packet), contains(boxes[2], packet) || contains(boxes[3], packet)
+			wantEqual = wantEqual && inX == inY
 			for _, tc := range []struct {
 				got  flow.Traffic
 				want bool
@@ -92,6 +94,14 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 					t.Fatalf("packet %d: got %d matches, want %v", packet, matches, tc.want)
 				}
 			}
+		}
+		equal, err := x.Equal(y, 4096)
+		if err != nil || equal != wantEqual {
+			t.Fatalf("equal=%v want %v: %v", equal, wantEqual, err)
+		}
+		reverse, err := y.Equal(x, 4096)
+		if err != nil || reverse != wantEqual {
+			t.Fatalf("reverse equality=%v want %v: %v", reverse, wantEqual, err)
 		}
 		if !reflect.DeepEqual(beforeX, x.Regions()) || !reflect.DeepEqual(beforeY, y.Regions()) {
 			t.Fatal("operand mutated")

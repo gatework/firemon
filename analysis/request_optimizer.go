@@ -18,7 +18,7 @@ type RequestGroup struct {
 type RequestOptimizer struct{ MaxComparisons, MaxRegions int }
 
 // Optimize groups identical contexts while retaining exact paired traffic. Its
-// fixed-point coalescing joins boxes only across one adjacent/overlapping axis.
+// fixed-point coalescing joins traffic regions only across one adjacent/overlapping axis.
 func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Request) ([]RequestGroup, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -27,7 +27,7 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 		return nil, ErrInvalid
 	}
 	comparisons := o.MaxComparisons
-	regions := (policy.Limits{MaxRegions: o.MaxRegions}).WithDefaults().MaxRegions
+	maxRegions := (policy.Limits{MaxRegions: o.MaxRegions}).WithDefaults().MaxRegions
 	if comparisons <= 0 {
 		comparisons = 20000
 	}
@@ -57,7 +57,7 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 			if !q.SameContext(groups[i].Request) {
 				continue
 			}
-			merged, err := groups[i].Request.Traffic.Union(q.Traffic, regions)
+			merged, err := groups[i].Request.Traffic.Union(q.Traffic, maxRegions)
 			if err != nil {
 				return nil, err
 			}
@@ -71,17 +71,17 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 		}
 	}
 	for i := range groups {
-		boxes := groups[i].Request.Traffic.Regions()
+		regions := groups[i].Request.Traffic.Regions()
 		for {
 			merged := false
-			for a := 0; a < len(boxes) && !merged; a++ {
-				for b := a + 1; b < len(boxes); b++ {
+			for a := 0; a < len(regions) && !merged; a++ {
+				for b := a + 1; b < len(regions); b++ {
 					if err := charge(); err != nil {
 						return nil, err
 					}
-					if box, ok := joinBoxes(boxes[a], boxes[b]); ok {
-						boxes[a] = box
-						boxes = append(boxes[:b], boxes[b+1:]...)
+					if region, ok := mergeAdjacentRegions(regions[a], regions[b]); ok {
+						regions[a] = region
+						regions = append(regions[:b], regions[b+1:]...)
 						merged = true
 						break
 					}
@@ -92,7 +92,7 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 			}
 		}
 		var err error
-		groups[i].Request.Traffic, err = flow.NewTraffic(regions, boxes...)
+		groups[i].Request.Traffic, err = flow.NewTraffic(maxRegions, regions...)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +100,7 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 	return groups, nil
 }
 
-func joinBoxes(a, b flow.TrafficRegion) (flow.TrafficRegion, bool) {
+func mergeAdjacentRegions(a, b flow.TrafficRegion) (flow.TrafficRegion, bool) {
 	out := a
 	differences := 0
 	for i, pair := range [][2]flow.AddressRange{{a.Source, b.Source}, {a.Destination, b.Destination}} {

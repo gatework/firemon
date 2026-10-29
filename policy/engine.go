@@ -76,68 +76,71 @@ func (e Engine) Query(ctx context.Context, fw *fm.Firewall, q Request) (Result, 
 // declaration; it cannot alter the immutable graph or native order.
 func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, selectRule func(fm.RuleRecord) (fm.RuleRecord, bool)) (Result, error) {
 	limits := e.Limits.WithDefaults()
-	remaining := q.Traffic
+	remainingTraffic := q.Traffic
 	result := Result{Complete: true}
 	cache := &resolutionCache{firewall: fw, remaining: limits.MaxCombinations}
 	if q.RuleSet == "" {
 		q.RuleSet = "security"
 	}
-	i := 0
+	visitedRules := 0
 	for rule := range fw.OrderedRules() {
 		if err := ctx.Err(); err != nil {
 			return Result{}, err
 		}
-		if remaining.Empty() {
+		if remainingTraffic.Empty() {
 			break
 		}
-		if i >= limits.MaxVisits {
+		if visitedRules >= limits.MaxVisits {
 			return Result{}, ErrBudget
 		}
-		i++
-		r := rule.Record()
-		if r.Disabled || r.Scope != q.Scope || r.RuleSet != q.RuleSet {
+		visitedRules++
+		// Eligibility precedes declaration matching; order is native rule order.
+		ruleRecord := rule.Record()
+		if ruleRecord.Disabled || ruleRecord.Scope != q.Scope || ruleRecord.RuleSet != q.RuleSet {
 			continue
 		}
 		if selectRule != nil {
 			var include bool
-			r, include = selectRule(r)
+			ruleRecord, include = selectRule(ruleRecord)
 			if !include {
 				continue
 			}
 		}
-		hit, certain, err := e.match(ctx, fw, r.Match, q, remaining, cache)
+		matchedTraffic, matchKnown, err := e.match(ctx, fw, ruleRecord.Match, q, remainingTraffic, cache)
 		if err != nil {
 			return Result{}, err
 		}
-		if hit.Empty() {
+		if matchedTraffic.Empty() {
 			continue
 		}
-		if len(r.Unsupported) > 0 {
-			certain = false
+		if len(ruleRecord.Unsupported) > 0 {
+			matchKnown = false
 		}
-		active, known := schedule(fw, r.Match.Schedule, q.At)
-		if known && !active {
+		// Known inactive schedules do not consume traffic.
+		scheduleActive, scheduleKnown := schedule(fw, ruleRecord.Match.Schedule, q.At)
+		if scheduleKnown && !scheduleActive {
 			continue
 		}
-		certain = certain && known
-		if !certain || !r.Action.Valid() {
-			result.Unknown, err = result.Unknown.Union(hit, limits.MaxRegions)
+		matchKnown = matchKnown && scheduleKnown
+		if !matchKnown || !ruleRecord.Action.Valid() {
+			result.Unknown, err = result.Unknown.Union(matchedTraffic, limits.MaxRegions)
 			result.Complete = false
-		} else if r.Action == fm.Permit {
-			result.Allowed, err = result.Allowed.Union(hit, limits.MaxRegions)
+		} else if ruleRecord.Action == fm.Permit {
+			result.Allowed, err = result.Allowed.Union(matchedTraffic, limits.MaxRegions)
 		} else {
-			result.Denied, err = result.Denied.Union(hit, limits.MaxRegions)
+			result.Denied, err = result.Denied.Union(matchedTraffic, limits.MaxRegions)
 		}
 		if err != nil {
 			return Result{}, err
 		}
-		result.Decisions = append(result.Decisions, RuleDecision{Rule: r.ID, Action: r.Action, Traffic: hit, Known: certain})
-		remaining, err = remaining.Difference(hit, limits.MaxRegions)
+		result.Decisions = append(result.Decisions, RuleDecision{Rule: ruleRecord.ID, Action: ruleRecord.Action, Traffic: matchedTraffic, Known: matchKnown})
+		// Potential unknown matches consume before later rules, just like known matches.
+		remainingTraffic, err = remainingTraffic.Difference(matchedTraffic, limits.MaxRegions)
 		if err != nil {
 			return Result{}, err
 		}
 	}
-	result.Unmatched = remaining
+	result.Unmatched = remainingTraffic
 	return result, nil
 }
 func schedule(fw *fm.Firewall, id fm.ID, at time.Time) (bool, bool) {
@@ -197,61 +200,61 @@ func (e Engine) match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Reques
 			return flow.Traffic{}, true, nil
 		}
 	}
-	from, fk := zoneMatch(m.FromZones, m.AnyFromZone, q.FromZone)
-	to, tk := zoneMatch(m.ToZones, m.AnyToZone, q.ToZone)
-	if !from || !to {
+	fromZoneMatches, fromZoneKnown := zoneMatch(m.FromZones, m.AnyFromZone, q.FromZone)
+	toZoneMatches, toZoneKnown := zoneMatch(m.ToZones, m.AnyToZone, q.ToZone)
+	if !fromZoneMatches || !toZoneMatches {
 		return flow.Traffic{}, true, nil
 	}
-	sources, sk, err := resolveAddresses(fw, m.Sources, m.AnySource, budget)
+	sourceAddresses, sourceKnown, err := resolveAddresses(fw, m.Sources, m.AnySource, budget)
 	if err != nil {
 		return flow.Traffic{}, false, err
 	}
-	destinations, dk, err := resolveAddresses(fw, m.Destinations, m.AnyDestination, budget)
+	destinationAddresses, destinationKnown, err := resolveAddresses(fw, m.Destinations, m.AnyDestination, budget)
 	if err != nil {
 		return flow.Traffic{}, false, err
 	}
-	services, vk, err := resolveServices(fw, m.Services, m.AnyService, budget)
+	serviceTerms, serviceKnown, err := resolveServices(fw, m.Services, m.AnyService, budget)
 	if err != nil {
 		return flow.Traffic{}, false, err
 	}
 	for _, id := range append(slices.Clone(m.FromZones), m.ToZones...) {
 		zone := fw.Zone(id)
 		if zone == nil || len(zone.Record().Unsupported) > 0 {
-			fk = false
+			fromZoneKnown = false
 		}
 	}
 
-	known := relationKnown && fk && tk && sk && dk && vk && len(m.Unsupported) == 0 && len(m.Applications) == 0 && len(m.Users) == 0
-	var out flow.Traffic
-	for _, src := range sources.Ranges() {
-		for _, dst := range destinations.Ranges() {
+	matchKnown := relationKnown && fromZoneKnown && toZoneKnown && sourceKnown && destinationKnown && serviceKnown && len(m.Unsupported) == 0 && len(m.Applications) == 0 && len(m.Users) == 0
+	var matchedTraffic flow.Traffic
+	for _, src := range sourceAddresses.Ranges() {
+		for _, dst := range destinationAddresses.Ranges() {
 			if src.First.BitLen() != dst.First.BitLen() {
 				continue
 			}
-			for _, service := range services {
+			for _, service := range serviceTerms {
 				if err := ctx.Err(); err != nil {
 					return flow.Traffic{}, false, err
 				}
 				if err := budget.charge(); err != nil {
 					return flow.Traffic{}, false, err
 				}
-				box := flow.TrafficRegion{Source: src, Destination: dst, Protocol: service.Protocol, SourcePort: service.SourcePort, DestinationPort: service.DestinationPort, ICMPType: service.ICMPType, ICMPCode: service.ICMPCode}
-				candidate, err := flow.NewTraffic(limits.MaxRegions, box)
+				region := flow.TrafficRegion{Source: src, Destination: dst, Protocol: service.Protocol, SourcePort: service.SourcePort, DestinationPort: service.DestinationPort, ICMPType: service.ICMPType, ICMPCode: service.ICMPCode}
+				candidate, err := flow.NewTraffic(limits.MaxRegions, region)
 				if err != nil {
 					return flow.Traffic{}, false, err
 				}
-				hit, err := input.Intersection(candidate, limits.MaxRegions)
+				intersection, err := input.Intersection(candidate, limits.MaxRegions)
 				if err != nil {
 					return flow.Traffic{}, false, err
 				}
-				out, err = out.Union(hit, limits.MaxRegions)
+				matchedTraffic, err = matchedTraffic.Union(intersection, limits.MaxRegions)
 				if err != nil {
 					return flow.Traffic{}, false, err
 				}
 			}
 		}
 	}
-	return out, known, nil
+	return matchedTraffic, matchKnown, nil
 }
 
 // Chain returns the native chain without changing the request's wire representation.

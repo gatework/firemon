@@ -204,7 +204,7 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 			}
 			// Every intended partition must retain its complete declaration. A
 			// conflicting earlier transfer must not silently consume any of it.
-			if same, err := equal(hit, owned[r.ID], limits.MaxRegions); err != nil {
+			if same, err := hit.Equal(owned[r.ID], limits.MaxRegions); err != nil {
 				return Proof{}, err
 			} else if !same {
 				return Proof{}, ErrUnsafe
@@ -214,44 +214,47 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 				return Proof{}, err
 			}
 		}
-		if err := preservedOutside(ctx, prior, next, target, limits.MaxRegions, visits); err != nil {
+		if err := preserveOutsideTargetOwnership(ctx, prior, next, target, limits.MaxRegions, visits); err != nil {
 			return Proof{}, err
 		}
 	}
 	return Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), TargetAllowed: allPermit, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}, nil
 }
 
-func preservedOutside(ctx context.Context, prior, next policy.Result, target flow.Traffic, limit int, visits *visitBudget) error {
-	if err := visits.take(ctx, len(next.Decisions)+len(prior.Decisions)); err != nil {
+// preserveOutsideTargetOwnership retains each rule's effective traffic outside
+// the target. This is stricter than equality of allowed/denied outcomes: logging
+// and native rule ownership must not move to a different rule.
+func preserveOutsideTargetOwnership(ctx context.Context, baselineResult, candidateResult policy.Result, target flow.Traffic, limit int, visits *visitBudget) error {
+	if err := visits.take(ctx, len(candidateResult.Decisions)+len(baselineResult.Decisions)); err != nil {
 		return err
 	}
-	traces := make(map[fm.ID]flow.Traffic)
-	for _, trace := range next.Decisions {
+	remainingRuleTraffic := make(map[fm.ID]flow.Traffic)
+	for _, decision := range candidateResult.Decisions {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		traces[trace.Rule] = trace.Traffic
+		remainingRuleTraffic[decision.Rule] = decision.Traffic
 	}
-	for _, trace := range prior.Decisions {
+	for _, decision := range baselineResult.Decisions {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		a, err := trace.Traffic.Difference(target, limit)
+		baselineTraffic, err := decision.Traffic.Difference(target, limit)
 		if err != nil {
 			return err
 		}
-		b, err := traces[trace.Rule].Difference(target, limit)
+		candidateTraffic, err := remainingRuleTraffic[decision.Rule].Difference(target, limit)
 		if err != nil {
 			return err
 		}
-		if same, err := equal(a, b, limit); err != nil {
+		if same, err := baselineTraffic.Equal(candidateTraffic, limit); err != nil {
 			return err
 		} else if !same {
 			return ErrUnsafe
 		}
-		delete(traces, trace.Rule)
+		delete(remainingRuleTraffic, decision.Rule)
 	}
-	for _, traffic := range traces {
+	for _, traffic := range remainingRuleTraffic {
 		if err := visits.take(ctx, 1); err != nil {
 			return err
 		}
@@ -263,15 +266,15 @@ func preservedOutside(ctx context.Context, prior, next policy.Result, target flo
 			return ErrUnsafe
 		}
 	}
-	a, err := prior.Unmatched.Difference(target, limit)
+	baselineTraffic, err := baselineResult.Unmatched.Difference(target, limit)
 	if err != nil {
 		return err
 	}
-	b, err := next.Unmatched.Difference(target, limit)
+	candidateTraffic, err := candidateResult.Unmatched.Difference(target, limit)
 	if err != nil {
 		return err
 	}
-	if same, err := equal(a, b, limit); err != nil {
+	if same, err := baselineTraffic.Equal(candidateTraffic, limit); err != nil {
 		return err
 	} else if !same {
 		return ErrUnsafe
