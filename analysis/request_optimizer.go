@@ -26,12 +26,10 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 	if len(requests) == 0 || len(requests) > 100 {
 		return nil, ErrInvalid
 	}
-	comparisons, regions := o.MaxComparisons, o.MaxRegions
+	comparisons := o.MaxComparisons
+	regions := (policy.Limits{MaxRegions: o.MaxRegions}).WithDefaults().MaxRegions
 	if comparisons <= 0 {
 		comparisons = 20000
-	}
-	if regions <= 0 {
-		regions = 4096
 	}
 	charge := func() error {
 		if err := ctx.Err(); err != nil {

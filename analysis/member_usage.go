@@ -57,7 +57,7 @@ func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall, request 
 	if err != nil {
 		return nil, err
 	}
-	budget := r.usageBudget()
+	budget := visitBudget(r.Planner.Engine.Limits.WithDefaults().MaxVisits)
 	if err := budget.take(ctx, len(request.MemberObservations)); err != nil {
 		return nil, err
 	}
@@ -109,8 +109,11 @@ func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall, request 
 		}
 		return nil
 	}
+	if err := budget.take(ctx, fw.RuleCount()); err != nil {
+		return nil, err
+	}
 	for _, rule := range fw.Rules() {
-		if err := budget.take(ctx, 1); err != nil {
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		record := rule.Record()

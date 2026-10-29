@@ -28,6 +28,8 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 	if !fw.Complete() {
 		return nil, ErrUnsafe
 	}
+	limits := p.Engine.Limits.WithDefaults()
+	visits := visitBudget(limits.MaxVisits)
 	maxCandidates := p.MaxCandidates
 	if maxCandidates <= 0 {
 		maxCandidates = 128
@@ -37,11 +39,14 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		q.RuleSet = "security"
 	}
 	for _, r := range requests[1:] {
+		if err := visits.take(ctx, 1); err != nil {
+			return nil, err
+		}
 		if !r.SameContext(q) {
 			return nil, fmt.Errorf("%w: batch contexts differ", ErrInvalid)
 		}
 		var err error
-		q.Traffic, err = q.Traffic.Union(r.Traffic, 4096)
+		q.Traffic, err = q.Traffic.Union(r.Traffic, limits.MaxRegions)
 		if err != nil {
 			return nil, err
 		}
@@ -53,7 +58,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 	if !evaluation.Complete || !evaluation.Unknown.Empty() {
 		return nil, ErrUnsafe
 	}
-	gap, err := q.Traffic.Difference(evaluation.Allowed, 4096)
+	gap, err := q.Traffic.Difference(evaluation.Allowed, limits.MaxRegions)
 	if err != nil {
 		return nil, err
 	}
@@ -69,14 +74,23 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		return nil, fmt.Errorf("%w: renderer required", ErrInvalid)
 	}
 	// A permanent change cannot be proven across unmodeled time or condition transitions.
+	if err := visits.take(ctx, fw.RuleCount()); err != nil {
+		return nil, err
+	}
 	for _, r := range fw.Rules() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		v := r.Record()
 		if v.Match.Schedule != "" || len(v.Match.Applications) > 0 || len(v.Match.Users) > 0 {
 			return nil, ErrUnsafe
 		}
 	}
 	all := q
-	all.Traffic = universe()
+	all.Traffic, err = universe(limits.MaxRegions)
+	if err != nil {
+		return nil, err
+	}
 	prior, err := p.Engine.Query(ctx, fw, all)
 	if err != nil {
 		return nil, err
@@ -85,14 +99,12 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		return nil, ErrUnsafe
 	}
 	var candidates []*Plan
-	visits := 0
+	if err := visits.take(ctx, fw.RuleCount()); err != nil {
+		return nil, err
+	}
 	for _, rule := range fw.Rules() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
-		}
-		visits++
-		if visits > 100000 {
-			return nil, policy.ErrBudget
 		}
 		r := rule.Record()
 		if r.Disabled || r.Builtin || r.Action != fm.Permit || r.Scope != q.Scope || r.RuleSet != q.RuleSet || r.Log == fm.Unknown || !sameZones(r.Match, q) {
@@ -138,7 +150,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		return 0
 	})
 	for _, candidate := range candidates {
-		proof, err := p.proveWithPrior(ctx, fw, candidate.after, q, &prior)
+		proof, err := p.proveWithPrior(ctx, fw, candidate.after, q, &prior, &visits)
 		if err != nil {
 			if errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget) || ctx.Err() != nil {
 				return nil, err

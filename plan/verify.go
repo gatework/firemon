@@ -107,7 +107,8 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 	if p.preservation != nil {
 		_, err = p.engine.Equivalent(ctx, before, got, p.preservation.From)
 	} else if len(p.transfers) > 0 {
-		_, err = (Planner{Engine: p.engine}).proveTransfers(ctx, before, got, p.changes, p.transferFrom)
+		visits := visitBudget(p.engine.Limits.WithDefaults().MaxVisits)
+		_, err = (Planner{Engine: p.engine}).proveTransfers(ctx, before, got, p.changes, p.transferFrom, &visits)
 	} else {
 		_, err = (Planner{Engine: p.engine}).prove(ctx, before, got, p.target)
 	}

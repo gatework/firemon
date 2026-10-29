@@ -32,6 +32,11 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	if !before.Complete() {
 		return nil, ErrUnsafe
 	}
+	limits := p.Engine.Limits.WithDefaults()
+	visits := visitBudget(limits.MaxVisits)
+	if err := visits.take(ctx, before.RuleCount()); err != nil {
+		return nil, err
+	}
 	d := before.Export()
 	catalog := newObjectCatalog(&d)
 	var rules []fm.RuleRecord
@@ -59,7 +64,10 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 			q.RuleSet = "security"
 		}
 		for _, box := range q.Traffic.Boxes() {
-			if len(rules) >= 4096 {
+			if err := visits.take(ctx, 1); err != nil {
+				return nil, err
+			}
+			if len(rules) >= limits.MaxRegions {
 				return nil, policy.ErrBudget
 			}
 			id := generatedID("fm-transfer-", struct {
@@ -109,7 +117,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	if err != nil {
 		return nil, err
 	}
-	proof, err := p.proveTransfers(ctx, before, after, changes, from)
+	proof, err := p.proveTransfers(ctx, before, after, changes, from, &visits)
 	if err != nil {
 		return nil, err
 	}
@@ -127,12 +135,15 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	return result, nil
 }
 
-func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall, changes []Change, from time.Time) (Proof, error) {
+func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall, changes []Change, from time.Time, visits *visitBudget) (Proof, error) {
 	if err := p.Engine.PreserveNAT(ctx, before, after, from); err != nil {
 		return Proof{}, err
 	}
 	contexts, err := p.Engine.Contexts(ctx, from, before, after)
 	if err != nil {
+		return Proof{}, err
+	}
+	if err := visits.take(ctx, len(changes)); err != nil {
 		return Proof{}, err
 	}
 	allPermit := true
@@ -143,16 +154,12 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 		}
 		allPermit = allPermit && r.Action() == fm.Permit
 	}
-	budget := p.Engine.Limits.MaxVisits
-	if budget <= 0 {
-		budget = 100000
-	}
-	cost := len(before.Rules()) + len(after.Rules()) + len(changes)
+	limits := p.Engine.Limits.WithDefaults()
+	cost := before.RuleCount() + after.RuleCount() + len(changes)
 	for _, q := range contexts {
-		if cost > budget {
-			return Proof{}, policy.ErrBudget
+		if err := visits.take(ctx, cost); err != nil {
+			return Proof{}, err
 		}
-		budget -= cost
 		prior, err := p.Engine.Query(ctx, before, q)
 		if err != nil {
 			return Proof{}, err
@@ -164,12 +171,21 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 		if !prior.Complete || !next.Complete || !prior.Unknown.Empty() || !next.Unknown.Empty() {
 			return Proof{}, ErrUnsafe
 		}
+		if err := visits.take(ctx, len(next.Trace)); err != nil {
+			return Proof{}, err
+		}
 		owned := make(map[fm.ID]flow.Traffic)
 		for _, trace := range next.Trace {
+			if err := ctx.Err(); err != nil {
+				return Proof{}, err
+			}
 			owned[trace.Rule] = trace.Traffic
 		}
 		var target flow.Traffic
 		for _, change := range changes {
+			if err := ctx.Err(); err != nil {
+				return Proof{}, err
+			}
 			r := after.Rule(change.Rule).Record()
 			if r.Scope != q.Scope || r.RuleSet != q.RuleSet {
 				continue
@@ -183,38 +199,47 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 			}
 			// Every intended partition must retain its complete declaration. A
 			// conflicting earlier transfer must not silently consume any of it.
-			if same, err := equal(hit, owned[r.ID]); err != nil {
+			if same, err := equal(hit, owned[r.ID], limits.MaxRegions); err != nil {
 				return Proof{}, err
 			} else if !same {
 				return Proof{}, ErrUnsafe
 			}
-			target, err = target.Union(hit, 4096)
+			target, err = target.Union(hit, limits.MaxRegions)
 			if err != nil {
 				return Proof{}, err
 			}
 		}
-		if err := preservedOutside(prior, next, target); err != nil {
+		if err := preservedOutside(ctx, prior, next, target, limits.MaxRegions, visits); err != nil {
 			return Proof{}, err
 		}
 	}
 	return Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), TargetAllowed: allPermit, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}, nil
 }
 
-func preservedOutside(prior, next policy.Result, target flow.Traffic) error {
+func preservedOutside(ctx context.Context, prior, next policy.Result, target flow.Traffic, limit int, visits *visitBudget) error {
+	if err := visits.take(ctx, len(next.Trace)+len(prior.Trace)); err != nil {
+		return err
+	}
 	traces := make(map[fm.ID]flow.Traffic)
 	for _, trace := range next.Trace {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		traces[trace.Rule] = trace.Traffic
 	}
 	for _, trace := range prior.Trace {
-		a, err := trace.Traffic.Difference(target, 4096)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		a, err := trace.Traffic.Difference(target, limit)
 		if err != nil {
 			return err
 		}
-		b, err := traces[trace.Rule].Difference(target, 4096)
+		b, err := traces[trace.Rule].Difference(target, limit)
 		if err != nil {
 			return err
 		}
-		if same, err := equal(a, b); err != nil {
+		if same, err := equal(a, b, limit); err != nil {
 			return err
 		} else if !same {
 			return ErrUnsafe
@@ -222,7 +247,10 @@ func preservedOutside(prior, next policy.Result, target flow.Traffic) error {
 		delete(traces, trace.Rule)
 	}
 	for _, traffic := range traces {
-		outside, err := traffic.Difference(target, 4096)
+		if err := visits.take(ctx, 1); err != nil {
+			return err
+		}
+		outside, err := traffic.Difference(target, limit)
 		if err != nil {
 			return err
 		}
@@ -230,15 +258,15 @@ func preservedOutside(prior, next policy.Result, target flow.Traffic) error {
 			return ErrUnsafe
 		}
 	}
-	a, err := prior.Unmatched.Difference(target, 4096)
+	a, err := prior.Unmatched.Difference(target, limit)
 	if err != nil {
 		return err
 	}
-	b, err := next.Unmatched.Difference(target, 4096)
+	b, err := next.Unmatched.Difference(target, limit)
 	if err != nil {
 		return err
 	}
-	if same, err := equal(a, b); err != nil {
+	if same, err := equal(a, b, limit); err != nil {
 		return err
 	} else if !same {
 		return ErrUnsafe

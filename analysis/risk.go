@@ -82,14 +82,9 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 	if fw == nil || q.Traffic.Empty() || strings.TrimSpace(definition.ID) == "" || strings.TrimSpace(definition.Version) == "" || (definition.Mode != Declared && definition.Mode != Effective) {
 		return nil, ErrInvalid
 	}
-	limit := a.Engine.Limits.MaxRegions
-	if limit <= 0 {
-		limit = 4096
-	}
-	comparisons := a.Engine.Limits.MaxCombinations
-	if comparisons <= 0 {
-		comparisons = 4096
-	}
+	limits := a.Engine.Limits.WithDefaults()
+	limit, comparisons := limits.MaxRegions, limits.MaxCombinations
+	budget := visitBudget(limits.MaxVisits)
 	if definition.Expression == nil {
 		if definition.Traffic.Empty() || definition.Relation < Intersects || definition.Relation > NotEqual {
 			return nil, ErrInvalid
@@ -115,8 +110,14 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 	if q.RuleSet == "" {
 		q.RuleSet = "security"
 	}
+	if err := budget.take(ctx, fw.RuleCount()); err != nil {
+		return nil, err
+	}
 	var rows []RiskFinding
 	for _, rule := range fw.Rules() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if rule.Chain() == q.Chain() {
 			rows = append(rows, RiskFinding{PolicyID: definition.ID, PolicyVersion: definition.Version, GraphDigest: fw.SemanticDigest(), Rule: rule.ID(), Mode: definition.Mode})
 		}
@@ -140,16 +141,12 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 			effective[trace.Rule] = trace.Traffic
 		}
 	}
-	budget := a.Engine.Limits.MaxVisits
-	if budget <= 0 {
-		budget = 100000
-	}
 	for i := range rows {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if i >= budget {
-			return nil, policy.ErrBudget
+		if err := budget.take(ctx, 1); err != nil {
+			return nil, err
 		}
 		r := fw.Rule(rows[i].Rule).Record()
 		if !r.Action.Valid() || len(r.Unsupported) > 0 {

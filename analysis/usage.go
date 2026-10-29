@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/policy"
 )
 
 func (r ReclamationRequest) validate() (bool, error) {
@@ -18,26 +17,6 @@ func (r ReclamationRequest) validate() (bool, error) {
 		return false, ErrInvalid
 	}
 	return hasWindow, nil
-}
-
-type usageBudget int
-
-func (r Reclaimer) usageBudget() usageBudget {
-	limit := r.Planner.Engine.Limits.MaxVisits
-	if limit <= 0 {
-		limit = 100000
-	}
-	return usageBudget(limit)
-}
-func (b *usageBudget) take(ctx context.Context, count int) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if count > int(*b) {
-		return policy.ErrBudget
-	}
-	*b -= usageBudget(count)
-	return nil
 }
 
 // usageEvidence owns only the intervals for one identity in this request.

@@ -44,6 +44,13 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 	if len(source.StaticNATs())+len(source.DynamicNATs())+len(target.StaticNATs())+len(target.DynamicNATs()) > 0 {
 		return nil, plan.ErrUnsafe
 	}
+	limits := t.Planner.Engine.Limits.WithDefaults()
+	visits := visitBudget(limits.MaxVisits)
+	for _, count := range []int{len(request.Zones), len(request.Pairs), len(request.Rules), source.RuleCount(), len(request.Chains)} {
+		if err := visits.take(ctx, count); err != nil {
+			return nil, err
+		}
+	}
 	seenTargets := make(map[fm.ID]bool)
 	for from, to := range request.Zones {
 		if source.Zone(from) == nil || to != "" && (target.Zone(to) == nil || seenTargets[to]) || to == "" && len(request.Chains) == 0 {
@@ -69,9 +76,6 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 		selected[id] = true
 	}
 	rules := source.Rules()
-	if len(rules) > 100000 {
-		return nil, policy.ErrBudget
-	}
 	contexts, err := t.Planner.Engine.Contexts(ctx, request.At, source)
 	if err != nil {
 		return nil, err
@@ -79,22 +83,30 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 	for from, to := range request.Chains {
 		found := false
 		for _, q := range contexts {
+			if err := visits.take(ctx, 1); err != nil {
+				return nil, err
+			}
 			found = found || from == (q.Chain())
 		}
-		if !found || strings.TrimSpace(to.RuleSet) == "" || !targetChainExists(target, to) {
+		exists, err := targetChainExists(ctx, target, to, &visits)
+		if err != nil {
+			return nil, err
+		}
+		if !found || strings.TrimSpace(to.RuleSet) == "" || !exists {
 			return nil, ErrInvalid
 		}
 	}
 	var intents []plan.RuleIntent
-	visits := 0
 	for _, q := range contexts {
+		if err := visits.take(ctx, 1); err != nil {
+			return nil, err
+		}
 		if !q.At.Equal(request.At) || !seenPairs[ZonePair{q.FromZone, q.ToZone}] {
 			continue
 		}
-		if len(rules) > 100000-visits {
-			return nil, policy.ErrBudget
+		if err := visits.take(ctx, len(rules)); err != nil {
+			return nil, err
 		}
-		visits += len(rules)
 		// Time-varying shadowing also changes a selected rule's future effective
 		// partitions, so reject any schedule in this source chain for now.
 		for _, rule := range rules {
@@ -108,6 +120,9 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 		}
 		if !result.Complete || !result.Unknown.Empty() {
 			return nil, plan.ErrUnsafe
+		}
+		if err := visits.take(ctx, len(result.Trace)); err != nil {
+			return nil, err
 		}
 		for _, trace := range result.Trace {
 			r := source.Rule(trace.Rule).Record()
@@ -125,7 +140,7 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 			if r.Disabled || r.Log == fm.Unknown || r.LogStart == fm.Unknown || r.LogEnd == fm.Unknown {
 				return nil, plan.ErrUnsafe
 			}
-			chain, err := targetChain(target, q.Chain(), request.Chains)
+			chain, err := targetChain(ctx, target, q.Chain(), request.Chains, &visits)
 			if err != nil {
 				return nil, err
 			}
@@ -140,10 +155,13 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 	// only a single unambiguous effect; do not invent a cross-chain precedence.
 	for i, a := range intents {
 		for _, b := range intents[:i] {
+			if err := visits.take(ctx, 1); err != nil {
+				return nil, err
+			}
 			if !a.Request.SameContext(b.Request) {
 				continue
 			}
-			hit, err := a.Request.Traffic.Intersection(b.Request.Traffic, 4096)
+			hit, err := a.Request.Traffic.Intersection(b.Request.Traffic, limits.MaxRegions)
 			if err != nil {
 				return nil, err
 			}
@@ -155,23 +173,25 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 	return t.Planner.Transfer(ctx, target, intents, request.At)
 }
 
-func targetChainExists(target *fm.Firewall, chain fm.PolicyChain) bool {
+func targetChainExists(ctx context.Context, target *fm.Firewall, chain fm.PolicyChain, visits *visitBudget) (bool, error) {
 	if selected := target.Metadata().Context; selected != "" && selected != chain.Scope {
-		return false
+		return false, nil
 	}
-	rules := target.Rules()
-	if len(rules) == 0 {
-		return chain == (fm.PolicyChain{Scope: target.Metadata().Context, RuleSet: "security"})
+	if target.RuleCount() == 0 {
+		return chain == (fm.PolicyChain{Scope: target.Metadata().Context, RuleSet: "security"}), nil
 	}
-	for _, rule := range rules {
+	for rule := range target.OrderedRules() {
+		if err := visits.take(ctx, 1); err != nil {
+			return false, err
+		}
 		if chain == rule.Chain() {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
-func targetChain(target *fm.Firewall, source fm.PolicyChain, chains map[fm.PolicyChain]fm.PolicyChain) (fm.PolicyChain, error) {
+func targetChain(ctx context.Context, target *fm.Firewall, source fm.PolicyChain, chains map[fm.PolicyChain]fm.PolicyChain, visits *visitBudget) (fm.PolicyChain, error) {
 	if chain, ok := chains[source]; ok {
 		return chain, nil
 	}
@@ -181,7 +201,10 @@ func targetChain(target *fm.Firewall, source fm.PolicyChain, chains map[fm.Polic
 	selectedScope := target.Metadata().Context
 	chain := fm.PolicyChain{Scope: selectedScope, RuleSet: "security"}
 	found := false
-	for _, rule := range target.Rules() {
+	for rule := range target.OrderedRules() {
+		if err := visits.take(ctx, 1); err != nil {
+			return fm.PolicyChain{}, err
+		}
 		if selectedScope != "" && rule.Scope() != selectedScope {
 			continue
 		}
@@ -191,7 +214,11 @@ func targetChain(target *fm.Firewall, source fm.PolicyChain, chains map[fm.Polic
 		}
 		chain, found = candidate, true
 	}
-	if !targetChainExists(target, chain) {
+	exists, err := targetChainExists(ctx, target, chain, visits)
+	if err != nil {
+		return fm.PolicyChain{}, err
+	}
+	if !exists {
 		return fm.PolicyChain{}, ErrInvalid
 	}
 	return chain, nil

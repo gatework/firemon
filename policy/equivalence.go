@@ -27,6 +27,17 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 		return nil, err
 	}
 	limits := e.Limits.WithDefaults()
+	remaining := limits.MaxVisits
+	charge := func(count int) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if count > remaining {
+			return ErrBudget
+		}
+		remaining -= count
+		return nil
+	}
 	chains := make(map[fm.PolicyChain]bool)
 	zones := make(map[fm.ID]bool)
 	times := []time.Time{from}
@@ -40,22 +51,37 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 		if !fw.Complete() {
 			return nil, ErrNotEquivalent
 		}
-		for _, r := range fw.Rules() {
-			record := r.Record()
-			chains[record.Chain()] = true
+		for _, count := range []int{fw.RuleCount(), fw.ZoneCount(), fw.ScheduleCount()} {
+			if err := charge(count); err != nil {
+				return nil, err
+			}
+		}
+		for rule := range fw.OrderedRules() {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			chains[rule.Chain()] = true
 		}
 		for _, z := range fw.Zones() {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			zones[z.ID()] = true
 		}
 		for _, schedule := range fw.Schedules() {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			if from.IsZero() {
 				return nil, ErrNotEquivalent
 			}
-			r := schedule.Record()
-			if len(r.Unsupported) > 0 || len(r.Recurring) > 0 {
+			if schedule.HasUnsupported() || schedule.HasRecurrence() {
 				return nil, ErrNotEquivalent
 			}
-			for _, w := range r.Windows {
+			for w := range schedule.Windows() {
+				if err := charge(1); err != nil {
+					return nil, err
+				}
 				for _, at := range []time.Time{w.Start, w.End} {
 					if at.Before(from) {
 						continue
@@ -151,7 +177,7 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 	limits := e.Limits.WithDefaults()
 	visits := 0
 	for _, q := range contexts {
-		cost := len(before.Rules()) + len(after.Rules())
+		cost := before.RuleCount() + after.RuleCount()
 		if cost > limits.MaxVisits-visits {
 			return Equivalence{}, ErrBudget
 		}

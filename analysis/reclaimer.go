@@ -91,14 +91,14 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 	if err != nil {
 		return nil, err
 	}
-	budget := r.usageBudget()
+	budget := visitBudget(r.Planner.Engine.Limits.WithDefaults().MaxVisits)
 	if err := budget.take(ctx, len(request.Observations)); err != nil {
 		return nil, err
 	}
-	rules := fw.Rules()
-	if err := budget.take(ctx, len(rules)); err != nil {
+	if err := budget.take(ctx, fw.RuleCount()); err != nil {
 		return nil, err
 	}
+	rules := fw.Rules()
 	rows := make([]Reclamation, 0, len(rules))
 	for _, rule := range rules {
 		if err := ctx.Err(); err != nil {

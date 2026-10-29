@@ -1,5 +1,23 @@
 # Cross-vendor business contracts
 
+## Layered computation limits
+
+`policy.Limits.WithDefaults()` resolves `MaxRegions`, `MaxVisits` and
+`MaxCombinations` once at an algorithm boundary. Nonpositive values retain the
+defaults 4096, 100000 and 4096. Each analysis or planning algorithm accumulates
+visits across its own passes, contexts and private proof helpers. Delegated
+public policy queries and equivalence proofs independently receive the same
+maxima; this is not a global deadline or a shared whole-operation work quota.
+Candidate and pair-comparison limits are separate from visits.
+
+Graph collection counts are charged before copied views are materialized.
+Context enumeration charges rules, zones, schedules and each absolute window;
+risk findings remain bounded even when incomplete evidence returns unknown.
+Planning algebra and independent readback use the configured region limit,
+including the two-region IPv4/IPv6 universe. Budget/cancellation failure returns
+no partial rows or plan. Stricter accounting can reject a previously accepted
+low-budget request; raising an explicit limit does not bypass semantic proof.
+
 Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA share the contracts
 below. Native syntax, ordering, packet views and persistence evidence belong to
 their adapters. The host owns inventory, credentials, authorization and database

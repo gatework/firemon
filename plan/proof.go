@@ -13,7 +13,7 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-func universe() flow.Traffic {
+func universe(limit int) (flow.Traffic, error) {
 	full := flow.Interval{Low: 0, High: 65535}
 	octet := flow.Interval{Low: 0, High: 255}
 	var boxes []flow.Box
@@ -21,26 +21,33 @@ func universe() flow.Traffic {
 		r, _ := flow.PrefixRange(netip.MustParsePrefix(cidr))
 		boxes = append(boxes, flow.Box{Source: r, Destination: r, Protocol: octet, SourcePort: full, DestinationPort: full, ICMPType: octet, ICMPCode: octet})
 	}
-	result, _ := flow.NewTraffic(4096, boxes...)
-	return result
+	return flow.NewTraffic(limit, boxes...)
 }
 
-func equal(a, b flow.Traffic) (bool, error) {
-	x, err := a.Difference(b, 4096)
+func equal(a, b flow.Traffic, limit int) (bool, error) {
+	x, err := a.Difference(b, limit)
 	if err != nil || !x.Empty() {
 		return false, err
 	}
-	x, err = b.Difference(a, 4096)
+	x, err = b.Difference(a, limit)
 	return err == nil && x.Empty(), err
 }
 
 func (p Planner) prove(ctx context.Context, before, after *fm.Firewall, q policy.Request) (Proof, error) {
-	return p.proveWithPrior(ctx, before, after, q, nil)
+	visits := visitBudget(p.Engine.Limits.WithDefaults().MaxVisits)
+	return p.proveWithPrior(ctx, before, after, q, nil, &visits)
 }
 
-func (p Planner) proveWithPrior(ctx context.Context, before, after *fm.Firewall, q policy.Request, prior *policy.Result) (Proof, error) {
+func (p Planner) proveWithPrior(ctx context.Context, before, after *fm.Firewall, q policy.Request, prior *policy.Result, visits *visitBudget) (Proof, error) {
+	if err := ctx.Err(); err != nil {
+		return Proof{}, err
+	}
 	if before == nil || after == nil || !before.Complete() || !after.Complete() {
 		return Proof{}, ErrUnsafe
+	}
+	limit := p.Engine.Limits.WithDefaults().MaxRegions
+	if err := visits.take(ctx, after.RuleCount()); err != nil {
+		return Proof{}, err
 	}
 	if err := p.Engine.PreserveNAT(ctx, before, after, q.At); err != nil {
 		return Proof{}, err
@@ -49,7 +56,7 @@ func (p Planner) proveWithPrior(ctx context.Context, before, after *fm.Firewall,
 	if err != nil {
 		return Proof{}, err
 	}
-	covered, err := target.Allowed.Contains(q.Traffic, 4096)
+	covered, err := target.Allowed.Contains(q.Traffic, limit)
 	if err != nil {
 		return Proof{}, err
 	}
@@ -57,13 +64,22 @@ func (p Planner) proveWithPrior(ctx context.Context, before, after *fm.Firewall,
 		return Proof{}, ErrUnsafe
 	}
 	all := q
-	all.Traffic = universe()
+	all.Traffic, err = universe(limit)
+	if err != nil {
+		return Proof{}, err
+	}
 	if prior == nil {
+		if err := visits.take(ctx, before.RuleCount()); err != nil {
+			return Proof{}, err
+		}
 		result, err := p.Engine.Query(ctx, before, all)
 		if err != nil {
 			return Proof{}, err
 		}
 		prior = &result
+	}
+	if err := visits.take(ctx, after.RuleCount()); err != nil {
+		return Proof{}, err
 	}
 	next, err := p.Engine.Query(ctx, after, all)
 	if err != nil {
@@ -72,52 +88,9 @@ func (p Planner) proveWithPrior(ctx context.Context, before, after *fm.Firewall,
 	if !prior.Complete || !next.Complete {
 		return Proof{}, ErrUnsafe
 	}
-	// Compare effective rule ownership too: equal permit coverage alone does not preserve logging/order.
-	traces := make(map[fm.ID]flow.Traffic)
-	for _, trace := range next.Trace {
-		traces[trace.Rule] = trace.Traffic
-	}
-	for _, trace := range prior.Trace {
-		old, err := trace.Traffic.Difference(q.Traffic, 4096)
-		if err != nil {
-			return Proof{}, err
-		}
-		new, err := traces[trace.Rule].Difference(q.Traffic, 4096)
-		if err != nil {
-			return Proof{}, err
-		}
-		same, err := equal(old, new)
-		if err != nil {
-			return Proof{}, err
-		}
-		if !same {
-			return Proof{}, ErrUnsafe
-		}
-		delete(traces, trace.Rule)
-	}
-	for _, trace := range traces {
-		outside, err := trace.Difference(q.Traffic, 4096)
-		if err != nil {
-			return Proof{}, err
-		}
-		if !outside.Empty() {
-			return Proof{}, ErrUnsafe
-		}
-	}
-	old, err := prior.Unmatched.Difference(q.Traffic, 4096)
-	if err != nil {
+	// Preserve effective ownership outside the target, including logging/order.
+	if err := preservedOutside(ctx, *prior, next, q.Traffic, limit, visits); err != nil {
 		return Proof{}, err
-	}
-	new, err := next.Unmatched.Difference(q.Traffic, 4096)
-	if err != nil {
-		return Proof{}, err
-	}
-	same, err := equal(old, new)
-	if err != nil {
-		return Proof{}, err
-	}
-	if !same {
-		return Proof{}, ErrUnsafe
 	}
 	return Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), TargetAllowed: true, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}, nil
 }

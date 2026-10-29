@@ -48,21 +48,24 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Ti
 	if budget <= 0 {
 		budget = 4096
 	}
-	ruleBudget := c.Planner.Engine.Limits.MaxVisits
-	if ruleBudget <= 0 {
-		ruleBudget = 100000
-	}
-	if len(fw.Rules()) > ruleBudget {
-		return nil, policy.ErrBudget
+	limits := c.Planner.Engine.Limits.WithDefaults()
+	visits := visitBudget(limits.MaxVisits)
+	if err := visits.take(ctx, fw.RuleCount()); err != nil {
+		return nil, err
 	}
 	var rules []fm.RuleRecord
-	for _, rule := range fw.Rules() {
+	for rule := range fw.OrderedRules() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		r := rule.Record()
 		if !r.Builtin && r.Log != fm.Unknown && r.LogStart != fm.Unknown && r.LogEnd != fm.Unknown && len(r.Unsupported) == 0 {
 			rules = append(rules, r)
 		}
 	}
-	slices.SortFunc(rules, compareConvergenceRules)
+	if err := visits.take(ctx, len(rules)); err != nil {
+		return nil, err
+	}
 	signatures := make([]fm.RuleRecord, len(rules))
 	for i, rule := range rules {
 		signatures[i] = convergenceSignature(rule)
@@ -91,14 +94,14 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Ti
 				contextsReady = true
 			}
 			candidate := ConvergenceCandidate{Rules: []fm.ID{a.ID, b.ID}, Kind: CombineRules, Reason: "combine compatible declarations with whole-rulebase preservation"}
-			contained, err := c.containsRule(ctx, fw, a, b, contexts)
+			contained, err := c.containsRule(ctx, fw, a, b, contexts, &visits)
 			if err != nil {
 				return nil, err
 			}
 			if contained {
 				candidate.Kind, candidate.Reason = ContainRules, "one compatible declaration contains the other"
 			}
-			candidate.Plan, candidate.Rejection = c.plan(ctx, fw, candidate.Rules, from, contexts)
+			candidate.Plan, candidate.Rejection = c.plan(ctx, fw, candidate.Rules, from, contexts, &visits)
 			if errors.Is(candidate.Rejection, context.Canceled) || errors.Is(candidate.Rejection, context.DeadlineExceeded) || errors.Is(candidate.Rejection, policy.ErrBudget) || errors.Is(candidate.Rejection, flow.ErrBudget) {
 				return nil, candidate.Rejection
 			}
@@ -122,23 +125,19 @@ func convergenceSignature(r fm.RuleRecord) fm.RuleRecord {
 	return r
 }
 
-func (c Converger) containsRule(ctx context.Context, fw *fm.Firewall, a, b fm.RuleRecord, contexts []policy.Request) (bool, error) {
-	budget, limit := c.Planner.Engine.Limits.MaxVisits, c.Planner.Engine.Limits.MaxRegions
-	if budget <= 0 {
-		budget = 100000
-	}
-	if limit <= 0 {
-		limit = 4096
-	}
+func (c Converger) containsRule(ctx context.Context, fw *fm.Firewall, a, b fm.RuleRecord, contexts []policy.Request, visits *visitBudget) (bool, error) {
+	limit := c.Planner.Engine.Limits.WithDefaults().MaxRegions
 	aContains, bContains := true, true
 	for _, q := range contexts {
+		if err := visits.take(ctx, 1); err != nil {
+			return false, err
+		}
 		if q.Scope != a.Scope || q.RuleSet != a.RuleSet {
 			continue
 		}
-		if budget < 2 {
-			return false, policy.ErrBudget
+		if err := visits.take(ctx, 2); err != nil {
+			return false, err
 		}
-		budget -= 2
 		x, knownA, err := c.Planner.Engine.Match(ctx, fw, a.Match, q, q.Traffic)
 		if err != nil {
 			return false, err
@@ -169,15 +168,20 @@ func (c Converger) containsRule(ctx context.Context, fw *fm.Firewall, a, b fm.Ru
 // Plan merges an explicit selection into the earliest native rule. Both the
 // declaration union and the entire resulting rulebase must be equivalent.
 func (c Converger) Plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from time.Time) (*plan.Plan, error) {
-	return c.plan(ctx, fw, ids, from, nil)
+	visits := visitBudget(c.Planner.Engine.Limits.WithDefaults().MaxVisits)
+	return c.plan(ctx, fw, ids, from, nil, &visits)
 }
 
-func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from time.Time, contexts []policy.Request) (*plan.Plan, error) {
+func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from time.Time, contexts []policy.Request, visits *visitBudget) (*plan.Plan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if fw == nil || !fw.Complete() || len(ids) < 2 || len(ids) > 100 {
 		return nil, ErrInvalid
+	}
+	limit := c.Planner.Engine.Limits.WithDefaults().MaxRegions
+	if err := visits.take(ctx, len(ids)); err != nil {
+		return nil, err
 	}
 	selected := make(map[fm.ID]bool)
 	var rules []fm.RuleRecord
@@ -197,6 +201,9 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 	change := plan.Change{Kind: plan.AppendMembers, Rule: merged.ID}
 	signature := convergenceSignature(rules[0])
 	for _, r := range rules[1:] {
+		if err := visits.take(ctx, len(r.Match.Sources)+len(r.Match.Destinations)+len(r.Match.Services)); err != nil {
+			return nil, err
+		}
 		if !sameConvergenceSignature(signature, convergenceSignature(r)) {
 			return nil, plan.ErrUnsafe
 		}
@@ -226,17 +233,18 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 			return nil, err
 		}
 	}
-	visits := 0
 	for _, q := range contexts {
+		if err := visits.take(ctx, 1); err != nil {
+			return nil, err
+		}
 		if q.Scope != merged.Scope || q.RuleSet != merged.RuleSet {
 			continue
 		}
+		if err := visits.take(ctx, len(rules)+1); err != nil {
+			return nil, err
+		}
 		var union flow.Traffic
 		for _, r := range rules {
-			visits++
-			if visits > 100000 {
-				return nil, policy.ErrBudget
-			}
 			hit, known, err := c.Planner.Engine.Match(ctx, fw, r.Match, q, q.Traffic)
 			if err != nil {
 				return nil, err
@@ -244,7 +252,7 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 			if !known {
 				return nil, plan.ErrUnsafe
 			}
-			union, err = union.Union(hit, 4096)
+			union, err = union.Union(hit, limit)
 			if err != nil {
 				return nil, err
 			}
@@ -256,11 +264,14 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 		if !known {
 			return nil, plan.ErrUnsafe
 		}
-		if equal, err := equalTraffic(union, hit); err != nil {
+		if equal, err := equalTraffic(union, hit, limit); err != nil {
 			return nil, err
 		} else if !equal {
 			return nil, plan.ErrUnsafe
 		}
+	}
+	if err := visits.take(ctx, fw.RuleCount()); err != nil {
+		return nil, err
 	}
 	d := fw.Export()
 	d.Rules = nil
@@ -286,12 +297,12 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 	return c.Planner.Preserve(ctx, fw, after, changes, from)
 }
 
-func equalTraffic(a, b flow.Traffic) (bool, error) {
-	x, err := a.Difference(b, 4096)
+func equalTraffic(a, b flow.Traffic, limit int) (bool, error) {
+	x, err := a.Difference(b, limit)
 	if err != nil || !x.Empty() {
 		return false, err
 	}
-	x, err = b.Difference(a, 4096)
+	x, err = b.Difference(a, limit)
 	return err == nil && x.Empty(), err
 }
 
