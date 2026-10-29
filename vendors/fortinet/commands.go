@@ -115,10 +115,11 @@ func natOwner(fw *fm.Firewall, id fm.ID) bool {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	changes, err := render.Prepare(ctx, "fortinet", before, after, changes)
+	batch, err := render.Prepare(ctx, "fortinet", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
+	changes = batch.Changes()
 	if len(changes) == 0 {
 		return nil, nil
 	}
@@ -133,7 +134,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := address.Record()
-		if before.Address(r.ID) != nil {
+		if before.Address(r.ID) != nil || !batch.DeclaresAddress(r.ID) {
 			continue
 		}
 		name, err := quoted(r.Name)
@@ -151,7 +152,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := service.Record()
-		if before.Service(r.ID) != nil {
+		if before.Service(r.ID) != nil || !batch.DeclaresService(r.ID) {
 			continue
 		}
 		name, err := quoted(r.Name)
@@ -166,12 +167,11 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 	}
 	used := make(map[fm.ID]bool)
 	first := fm.ID("")
-	position := int(^uint(0) >> 1)
-	for _, rule := range before.Rules() {
+	for rule := range before.OrderedRules() {
 		r := rule.Record()
 		used[r.ID] = true
-		if !r.Builtin && r.Position < position && after.Rule(r.ID) != nil {
-			first, position = r.ID, r.Position
+		if !r.Builtin && first == "" && after.Rule(r.ID) != nil {
+			first = r.ID
 		}
 	}
 	allocated := make(map[fm.ID]fm.ID)

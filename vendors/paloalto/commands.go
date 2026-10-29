@@ -45,10 +45,11 @@ func portText(p flow.Interval) string {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	changes, err := render.Prepare(ctx, "paloalto", before, after, changes)
+	batch, err := render.Prepare(ctx, "paloalto", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
+	changes = batch.Changes()
 	if len(changes) == 0 {
 		return nil, nil
 	}
@@ -58,7 +59,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := a.Record()
-		if before.Address(r.ID) != nil {
+		if before.Address(r.ID) != nil || !batch.DeclaresAddress(r.ID) {
 			continue
 		}
 		if len(r.Ranges) != 1 || r.FQDN != "" || r.Scope != "" || len(r.Unsupported) > 0 {
@@ -81,7 +82,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := s.Record()
-		if before.Service(r.ID) != nil {
+		if before.Service(r.ID) != nil || !batch.DeclaresService(r.ID) {
 			continue
 		}
 		if len(r.Terms) != 1 || r.Scope != "" || len(r.Unsupported) > 0 {
@@ -156,6 +157,14 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		prefix := "set rulebase security rules " + name
 		switch change.Kind {
 		case plan.CreateRule:
+			for _, side := range []struct {
+				field string
+				any   bool
+			}{{"source", r.Match.AnySource}, {"destination", r.Match.AnyDestination}, {"service", r.Match.AnyService}} {
+				if side.any {
+					commands = append(commands, prefix+" "+side.field+" any")
+				}
+			}
 			action := map[fm.Action]string{fm.Permit: "allow", fm.Deny: "deny", fm.Drop: "drop", fm.ResetClient: "reset-client", fm.ResetServer: "reset-server", fm.ResetBoth: "reset-both"}[r.Action]
 			if action == "" || r.Disabled || r.Match.Schedule != "" || len(r.Match.Applications) > 0 || len(r.Match.Users) > 0 || len(r.Match.Unsupported) > 0 || r.Match.ZoneRelation != fm.AnyZoneRelation {
 				return nil, ErrRender

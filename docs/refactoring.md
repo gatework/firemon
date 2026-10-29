@@ -144,3 +144,24 @@ support and real-device verification remain the explicitly documented backlog.
 
 See [benchmark evidence](benchmarks.md) and [verification](verification.md) for
 measured results and the distinction between local, remote CI and real-device proof.
+
+## Boundary contract migration
+
+The [boundary plan](plans/2026-10-29-boundary-contracts.md) keeps Render and lifecycle
+method signatures. Direct native rendering now validates the complete declared
+configuration delta, identity and completeness. Custom renderers must wrap
+`plan.ErrRender` for unsupported representations if Planner should try another
+candidate; all other renderer errors propagate. `plan.ValidateChanges` is available
+to custom implementations. Preserve rejects unlisted deltas even for empty changes.
+
+Snapshot callers should classify invalid arguments with `snapshot.ErrInvalid`;
+`ErrFormat` describes persisted/decoded corruption, and lower I/O causes are
+preserved. Journal callers distinguish `deploy.ErrJournalFormat` from operation
+conflict. Empty roots and zero/nil store handles are invalid. These are error
+contract changes, not a snapshot/journal format migration; existing semantic-v9
+snapshots and operation receipts remain readable.
+
+Usage analysis now applies the existing Rules budget to observations and traversal,
+so hosts submitting large evidence batches must set an adequate explicit limit.
+Both evidence lists require a valid request window when present. Rule and member
+analyses retain their distinct evidence and deletion-authority semantics.

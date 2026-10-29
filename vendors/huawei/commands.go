@@ -111,10 +111,11 @@ func serviceText(fw *fm.Firewall, ref fm.ServiceRef) ([]string, error) {
 	return []string{name}, err
 }
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	changes, err := render.Prepare(ctx, "huawei", before, after, changes)
+	batch, err := render.Prepare(ctx, "huawei", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
+	changes = batch.Changes()
 	if len(changes) == 0 {
 		return nil, nil
 	}
@@ -124,7 +125,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := a.Record()
-		if before.Address(r.ID) != nil {
+		if before.Address(r.ID) != nil || !batch.DeclaresAddress(r.ID) {
 			continue
 		}
 		name, err := quoted(r.Name)
@@ -146,7 +147,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := service.Record()
-		if before.Service(r.ID) != nil {
+		if before.Service(r.ID) != nil || !batch.DeclaresService(r.ID) {
 			continue
 		}
 		name, err := quoted(r.Name)
@@ -186,11 +187,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 	}
 	first := fm.ID("")
-	position := int(^uint(0) >> 1)
-	for _, r := range before.Rules() {
+	for r := range before.OrderedRules() {
 		v := r.Record()
-		if !v.Builtin && v.Position < position && after.Rule(v.ID) != nil {
-			first, position = v.ID, v.Position
+		if !v.Builtin && first == "" && after.Rule(v.ID) != nil {
+			first = v.ID
 		}
 	}
 	var created []string

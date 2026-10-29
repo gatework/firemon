@@ -42,10 +42,11 @@ func ports(r flow.Interval) string {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	changes, err := render.Prepare(ctx, "asa", before, after, changes)
+	batch, err := render.Prepare(ctx, "asa", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
+	changes = batch.Changes()
 	if len(changes) == 0 {
 		return nil, nil
 	}
@@ -55,7 +56,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := address.Record()
-		if before.Address(r.ID) != nil {
+		if before.Address(r.ID) != nil || !batch.DeclaresAddress(r.ID) {
 			continue
 		}
 		if len(r.Ranges) != 1 || r.FQDN != "" || r.Scope != "" || len(r.Unsupported) > 0 {
@@ -77,7 +78,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := service.Record()
-		if before.Service(r.ID) != nil {
+		if before.Service(r.ID) != nil || !batch.DeclaresService(r.ID) {
 			continue
 		}
 		if len(r.Terms) != 1 || r.Scope != "" || len(r.Unsupported) > 0 {

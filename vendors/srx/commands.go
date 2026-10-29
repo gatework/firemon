@@ -128,10 +128,11 @@ func applicationName(fw *fm.Firewall, ref fm.ServiceRef) (string, error) {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	changes, err := render.Prepare(ctx, "srx", before, after, changes)
+	batch, err := render.Prepare(ctx, "srx", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
+	changes = batch.Changes()
 	if len(changes) == 0 {
 		return nil, nil
 	}
@@ -141,7 +142,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := a.Record()
-		if before.Address(r.ID) != nil {
+		if before.Address(r.ID) != nil || !batch.DeclaresAddress(r.ID) {
 			continue
 		}
 		if r.Scope != "" || r.ID != fm.ID(r.Name) || len(r.Ranges) != 1 || r.FQDN != "" || len(r.Unsupported) > 0 {
@@ -163,7 +164,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		r := s.Record()
-		if before.Service(r.ID) != nil {
+		if before.Service(r.ID) != nil || !batch.DeclaresService(r.ID) {
 			continue
 		}
 		if r.Scope != "" || r.ID != fm.ID(r.Name) || len(r.Terms) != 1 || len(r.Unsupported) > 0 {
@@ -192,8 +193,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			commands = append(commands, prefix+" "+side.field+" "+portText(side.port))
 		}
 	}
-	ordered := before.Rules()
-	slices.SortStableFunc(ordered, func(a, b *fm.Rule) int { return a.Record().Position - b.Record().Position })
+	ordered := slices.Collect(before.OrderedRules())
 	for _, change := range changes {
 		if err := ctx.Err(); err != nil {
 			return nil, err

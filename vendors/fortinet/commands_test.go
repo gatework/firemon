@@ -150,3 +150,38 @@ func TestFortinetRemoveDisabledPolicyHasIndependentReadback(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestFortinetMoveAnchorUsesIdentityOnPositionTie(t *testing.T) {
+	original := parse(t, fixture(t, "basic"))
+	d := original.Export()
+	old := original.Rule("10").Record()
+	old.Position = 0
+	second := old
+	second.ID = "20"
+	second.Name = "20"
+	d.Rules = []fm.RuleRecord{second, old}
+	before, err := fm.Seal(d)
+	if err != nil || !before.Complete() {
+		t.Fatal(err, before.Diagnostics())
+	}
+	added := old
+	added.ID = "created"
+	added.Name = "created"
+	added.Position = -1
+	added.Log = fm.Irrelevant
+	added.LogStart = fm.Irrelevant
+	added.LogEnd = fm.Irrelevant
+	d.Rules = append(d.Rules, added)
+	after, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := []plan.Change{{Kind: plan.CreateRule, Rule: added.ID, Sources: added.Match.Sources, Destinations: added.Match.Destinations, Services: added.Match.Services}}
+	commands, err := (fortinet.Renderer{}).Render(context.Background(), before, after, changes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(commands, "\n"), "move 1 before 10") {
+		t.Fatalf("wrong tied native anchor: %v", commands)
+	}
+}

@@ -96,7 +96,7 @@ func ValidateChanges(ctx context.Context, before, after *fm.Firewall, changes []
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if before.Address(object.ID()) == nil && !addresses[object.ID()] {
+		if before.Address(object.ID()) == nil && !addresses[object.ID()] && !object.Record().Inline {
 			return fmt.Errorf("%w: unrelated address addition", ErrInvalid)
 		}
 	}
@@ -104,7 +104,7 @@ func ValidateChanges(ctx context.Context, before, after *fm.Firewall, changes []
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if before.Service(object.ID()) == nil && !services[object.ID()] {
+		if before.Service(object.ID()) == nil && !services[object.ID()] && !object.Record().Inline {
 			return fmt.Errorf("%w: unrelated service addition", ErrInvalid)
 		}
 	}

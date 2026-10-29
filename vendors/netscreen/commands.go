@@ -1,6 +1,7 @@
 package netscreen
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/netip"
@@ -112,10 +113,11 @@ func ownsNAT(fw *fm.Firewall, id fm.ID) bool {
 // Render produces configuration commands only. Persisting configuration belongs
 // to the deployment session's independently verified save operation.
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	changes, err := render.Prepare(ctx, "netscreen", before, after, changes)
+	batch, err := render.Prepare(ctx, "netscreen", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
+	changes = batch.Changes()
 	if len(changes) == 0 {
 		return nil, nil
 	}
@@ -125,7 +127,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		a := address.Record()
-		if before.Address(a.ID) != nil {
+		if before.Address(a.ID) != nil || !batch.DeclaresAddress(a.ID) {
 			continue
 		}
 		zone := "Global"
@@ -154,7 +156,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, err
 		}
 		s := service.Record()
-		if before.Service(s.ID) != nil {
+		if before.Service(s.ID) != nil || !batch.DeclaresService(s.ID) {
 			continue
 		}
 		name, err := quoted(s.Name)
@@ -206,7 +208,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 	}
 	slices.SortStableFunc(created, func(a, b plan.Change) int {
-		return after.Rule(b.Rule).Record().Position - after.Rule(a.Rule).Record().Position
+		if n := cmp.Compare(after.Rule(b.Rule).Position(), after.Rule(a.Rule).Position()); n != 0 {
+			return n
+		}
+		return cmp.Compare(b.Rule, a.Rule)
 	})
 	index := 0
 	for i := range ordered {

@@ -210,3 +210,53 @@ the user's authorized SSH delivery directly to `gatework/firemon`, preserving
 separate reviewable commits. A separate PR/merge approval cycle was not added;
 reversal would require reverting those public commits. The Ruby worktree remains
 unchanged.
+
+## Boundary contract verification (2026-10-29)
+
+The [boundary plan](plans/2026-10-29-boundary-contracts.md) adds shared strict native
+rendering, request-local usage indexing and persistence input/failure contracts.
+
+- RED regressions demonstrated cancellation misclassification on all seven direct
+  and registered renderers, undeclared Preserve renames and hidden renderer errors.
+  Additional native regressions cover discarded creation conditions, explicit
+  Hillstone any members and unsupported insertion order. Existing independent
+  readback, native fixtures, whole-rulebase proofs and approval goldens remain green.
+- Rule/member evidence uses a shared evaluator. Existing lifecycle tests and a
+  deterministic 250-case discrete coverage oracle check tri-state evidence;
+  cancellation during interval sorting, incomplete graph traversal, budget
+  exhaustion and unchanged request data are covered.
+- Codec tests first reproduced accepted short writes, discarded I/O causes and
+  nil-stream panics. Store tests verify invalid inputs create no lock/manifest
+  artifacts. Journal tests distinguish corruption from ownership conflicts and
+  reject overwriting corrupt records. Existing cross-process reservation, CAS,
+  outbox and deployment recovery tests remain green.
+- Root `go test -race ./...`, `go vet ./...` and diff checks passed after all three
+  batches. Current-core adapter workspace race/vet passed separately (6.194s).
+  Final standalone published-pin and remote CI evidence is recorded in delivery
+  status after publication.
+
+Serial local benchmarks ran six samples per case on Go 1.27.1, darwin/arm64,
+Apple M5, using 100ms measurement windows. The 1000-rule/16-sample workload fell
+from 95.541ms to 1.882ms (-98.03%); its allocated bytes increased 11.37% for the
+bounded request-local index. The 10-rule/2-sample timing difference was not
+statistically significant; bytes increased 24.92%. Raw
+[before](benchmarks/2026-10-29-usage-before.txt),
+[after](benchmarks/2026-10-29-usage-after.txt) and
+[comparison](benchmarks/2026-10-29-usage-comparison.txt) reports retain the complete
+matrix. These measurements do not establish real-device or production throughput.
+
+Independent source review of `b506b54..afb43b4` found four Important rendering
+contract gaps: native name collisions, missing PAN wildcard selectors, accepted
+empty selectors, and inconsistent position-tie ordering. Its orphan-inline finding
+was raised from Minor to Important because the specification explicitly permits
+that semantic no-op. All five were reproduced with failing regressions and fixed
+in one pass; native identity checks also reject newly declared objects that cannot
+roundtrip their graph identity. Tests cover named groups, independent PAN parsing,
+ScreenOS top ordering, SRX/Huawei/Fortinet anchors and inline declaration omission.
+No minor findings were deferred. The reviewer did not certify firmware behavior,
+remote CI, adapter pins or benchmarks; those remain separate evidence categories.
+
+The completion audit additionally reproduced malformed persisted head revisions
+being reported as caller errors and mismatched manifest digests being accepted.
+Current now checks head revision syntax and binds its semantic/source digests to
+the loaded immutable graph, returning `snapshot.ErrFormat` on disagreement.

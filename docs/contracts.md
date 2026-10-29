@@ -198,3 +198,12 @@ invalid inputs use `deploy.ErrInvalid`, while lease ownership, closed leases and
 sequence conflicts remain `deploy.ErrJournalConflict`. Corrupt journals are never
 replaced by a fresh operation. These classifications do not release reservations,
 change write receipts, or permit replay during recovery.
+
+Rendering also verifies native namespace identity: a new rule or declaration
+cannot reuse a native name that targets a different existing object. Global
+object declarations must retain the identity reconstructed by the native parser;
+scoped adapters validate their own native identity scheme. Empty selectors are
+rejected when no native empty representation exists; wildcard selectors are
+explicit. Position ties use the graph's position-plus-ID order for creation and
+surviving-rule insertion anchors. Unreferenced supported inline values remain
+semantically inert and never become standalone native declarations.
