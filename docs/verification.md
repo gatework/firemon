@@ -308,3 +308,41 @@ uncached race run; root vet and formatting also passed. The adapter's final
 current-core workspace race suite passed in 12.068 seconds, followed by vet.
 Risk controls were remeasured after the correction, and the planner stress
 benchmark was smoke-tested with its now-explicit visit allowance.
+
+## Core policy algorithm reference and evidence (2026-10-29)
+
+The [algorithm plan](plans/2026-10-29-policy-algorithm-contracts.md) separates test
+reference, public naming, structural changes and the unknown-action behavior fix.
+Perl Searcher supplies reuse/append/create intent and append-member cost; Ruleopti
+supplies containment/merge candidate intent; Cleaner supplies observational usage.
+Hash iteration, protocol-zero wildcard encoding and independent-axis cross-pair
+expansion are not carried into the Go algorithms.
+
+The test-only packet reference in `analysis/packet_oracle_test.go` compares raw
+DTO fields directly and independently sorts rule position/ID. Expected outcomes
+never call production set algebra, matching or preservation helpers. Its finite
+IPv4/IPv6 domain covers addresses, protocol 0/1/6/17, both ports and ICMP type/code.
+Query tests check all four result partitions and per-rule ownership/known status.
+Plan and lifecycle checks enumerate packets before/after changes, including
+cross-pair requests, earlier deny, logging, deterministic cost ties, future
+schedule boundaries, whole-batch reclamation and empty declarations. Native
+renderer syntax remains covered separately by seven-vendor fixtures.
+
+Controlled mutations to deny classification and request union failed the new
+reference tests; restored code passed. Unknown and invalid actions each reproduced
+`Known: true` for unknown traffic before correction, in both address families.
+The correction makes decision evidence depend on the action as well as matching
+and schedule evidence, without changing conservative unknown coverage.
+
+A frozen synthetic v9 gob created at `bc15a8b` still decodes with the original
+semantic digest, and CLI query JSON retains its exact keys, field structure and
+null empty partitions. Existing vendor/approval fixtures remain unchanged. Shared
+algebra tests cover full IPv4/IPv6 endpoints, protocol/port maxima, equality
+short-circuit direction, empty sets and budget failure. A 30-second packet-algebra
+fuzz run completed 1,290,834 executions without failure.
+
+Local root build, race tests and vet passed; the optional adapter passed build,
+race tests and vet through the current-core workspace (race suite: 6.003 seconds).
+These are local/offline checks; published dependency and exact-commit CI evidence
+is tracked separately in [status](status.md). Benchmarks are recorded in
+[the measurement log](benchmarks.md).

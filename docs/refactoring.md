@@ -198,7 +198,7 @@ source spans, declaration order, staged interpretation and atomic rollback.
 
 For bounded materialization, `Firewall.RecordCount()` counts top-level domain and
 evidence records, `flow.AddressSet.RangeCount()` counts normalized address intervals and
-`flow.Traffic.RegionCount()` counts disjoint boxes. Candidate object traversal now
+`flow.Traffic.RegionCount()` counts disjoint traffic regions. Candidate object traversal now
 shares the planner's visit allowance, so large catalogs may require a higher
 explicit `MaxVisits` even when few rules participate in the requested change.
 
@@ -222,3 +222,8 @@ from `bc15a8b` checks decoding and its original semantic digest.
 traffic has already been consumed. `RemovalCandidate` is input to a selected
 batch proof, not deletion authorization. `MemberUsage.Removable` was removed:
 member observations report usage and cannot establish paired-flow preservation.
+
+`RuleDecision.Known` now includes action validity. Unknown actions retain unknown
+coverage and cannot produce a known decision. Shared `flow.AllTraffic` and
+`Traffic.Equal` replace duplicate universes and equality helpers without changing
+comparison direction or budgets.

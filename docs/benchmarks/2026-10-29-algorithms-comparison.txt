@@ -1,0 +1,113 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                              │ docs/benchmarks/2026-10-29-algorithms-before.txt │ docs/benchmarks/2026-10-29-algorithms-after.txt │
+                              │                      sec/op                      │          sec/op            vs base              │
+Query/asa/rules=10-10                                               6.048µ ± 33%                6.117µ ± 20%       ~ (p=0.240 n=6)
+Query/asa/rules=100-10                                              60.30µ ±  7%                58.26µ ±  1%       ~ (p=0.394 n=6)
+Query/asa/rules=1000-10                                             656.7µ ±  1%                657.7µ ±  1%       ~ (p=0.937 n=6)
+Query/fortinet/rules=10-10                                          10.75µ ±  1%                10.87µ ±  1%  +1.14% (p=0.002 n=6)
+Query/fortinet/rules=100-10                                         100.2µ ±  1%                100.8µ ±  0%       ~ (p=0.093 n=6)
+Query/fortinet/rules=1000-10                                        1.114m ±  1%                1.124m ±  1%       ~ (p=0.065 n=6)
+Query/hillstone/rules=10-10                                         9.440µ ±  1%                9.506µ ±  0%       ~ (p=0.065 n=6)
+Query/hillstone/rules=100-10                                        92.25µ ±  0%                92.90µ ±  0%  +0.71% (p=0.002 n=6)
+Query/hillstone/rules=1000-10                                       1.019m ±  2%                1.020m ±  1%       ~ (p=0.818 n=6)
+Query/huawei/rules=10-10                                            9.620µ ±  1%                9.777µ ±  1%  +1.63% (p=0.004 n=6)
+Query/huawei/rules=100-10                                           94.38µ ±  1%                95.73µ ±  0%  +1.43% (p=0.002 n=6)
+Query/huawei/rules=1000-10                                          1.020m ±  2%                1.036m ±  1%  +1.60% (p=0.026 n=6)
+Query/netscreen/rules=10-10                                         6.848µ ±  0%                6.993µ ±  1%  +2.11% (p=0.002 n=6)
+Query/netscreen/rules=100-10                                        63.37µ ±  1%                64.77µ ±  1%  +2.20% (p=0.002 n=6)
+Query/netscreen/rules=1000-10                                       729.3µ ±  1%                730.9µ ±  1%       ~ (p=0.240 n=6)
+Query/paloalto/rules=10-10                                          9.270µ ±  1%                9.397µ ±  1%  +1.37% (p=0.002 n=6)
+Query/paloalto/rules=100-10                                         90.93µ ±  2%                91.99µ ±  1%  +1.17% (p=0.041 n=6)
+Query/paloalto/rules=1000-10                                        1.003m ±  1%                1.023m ± 42%  +2.01% (p=0.041 n=6)
+Query/srx/rules=10-10                                               9.369µ ±  1%                9.652µ ±  2%  +3.03% (p=0.002 n=6)
+Query/srx/rules=100-10                                              91.91µ ±  1%                92.83µ ±  1%  +1.01% (p=0.004 n=6)
+Query/srx/rules=1000-10                                             990.7µ ±  1%               1000.8µ ±  1%  +1.02% (p=0.002 n=6)
+Plan/reuse/rules=10-10                                              11.74µ ±  0%                11.97µ ±  1%  +1.96% (p=0.002 n=6)
+Plan/reuse/rules=100-10                                             98.74µ ±  3%                99.95µ ±  0%       ~ (p=0.065 n=6)
+Plan/reuse/rules=1000-10                                            1.100m ± 13%                1.051m ±  1%       ~ (p=0.065 n=6)
+Plan/create/rules=10-10                                             1.143m ±  1%                1.154m ±  0%  +0.96% (p=0.015 n=6)
+Plan/create/rules=100-10                                            73.55m ±  1%                73.86m ±  2%       ~ (p=0.093 n=6)
+Convergence/rules=4-10                                              1.626m ±  2%                1.661m ±  0%  +2.12% (p=0.002 n=6)
+Convergence/rules=10-10                                             38.16m ±  1%                38.91m ±  1%  +1.98% (p=0.002 n=6)
+Risk/rules=10/mode=1-10                                             9.954µ ±  1%               10.126µ ±  0%  +1.73% (p=0.002 n=6)
+Risk/rules=10/mode=2-10                                             11.73µ ±  0%                11.93µ ±  1%  +1.68% (p=0.002 n=6)
+Risk/rules=100/mode=1-10                                            101.3µ ±  3%                101.1µ ±  2%       ~ (p=0.937 n=6)
+Risk/rules=100/mode=2-10                                            115.0µ ±  2%                116.4µ ±  1%       ~ (p=0.065 n=6)
+geomean                                                             140.1µ                      141.4µ        +0.91%
+
+                              │ docs/benchmarks/2026-10-29-algorithms-before.txt │ docs/benchmarks/2026-10-29-algorithms-after.txt │
+                              │                       B/op                       │          B/op            vs base                │
+Query/asa/rules=10-10                                               11.68Ki ± 0%              11.68Ki ± 0%       ~ (p=1.000 n=6)
+Query/asa/rules=100-10                                              99.57Ki ± 0%              99.57Ki ± 0%       ~ (p=1.000 n=6)
+Query/asa/rules=1000-10                                             1.101Mi ± 0%              1.101Mi ± 0%       ~ (p=0.385 n=6)
+Query/fortinet/rules=10-10                                          20.82Ki ± 0%              20.82Ki ± 0%       ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=100-10                                         180.3Ki ± 0%              180.3Ki ± 0%       ~ (p=1.000 n=6)
+Query/fortinet/rules=1000-10                                        1.916Mi ± 0%              1.916Mi ± 0%       ~ (p=0.169 n=6)
+Query/hillstone/rules=10-10                                         16.27Ki ± 0%              16.27Ki ± 0%       ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=100-10                                        147.1Ki ± 0%              147.1Ki ± 0%       ~ (p=1.000 n=6)
+Query/hillstone/rules=1000-10                                       1.567Mi ± 0%              1.567Mi ± 0%       ~ (p=0.983 n=6)
+Query/huawei/rules=10-10                                            17.21Ki ± 0%              17.21Ki ± 0%       ~ (p=1.000 n=6) ¹
+Query/huawei/rules=100-10                                           156.4Ki ± 0%              156.4Ki ± 0%       ~ (p=1.000 n=6)
+Query/huawei/rules=1000-10                                          1.658Mi ± 0%              1.658Mi ± 0%       ~ (p=0.799 n=6)
+Query/netscreen/rules=10-10                                         13.27Ki ± 0%              13.27Ki ± 0%       ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=100-10                                        113.8Ki ± 0%              113.8Ki ± 0%       ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=1000-10                                       1.239Mi ± 0%              1.239Mi ± 0%       ~ (p=0.325 n=6)
+Query/paloalto/rules=10-10                                          14.68Ki ± 0%              14.68Ki ± 0%       ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=100-10                                         131.4Ki ± 0%              131.4Ki ± 0%       ~ (p=1.000 n=6)
+Query/paloalto/rules=1000-10                                        1.414Mi ± 0%              1.414Mi ± 0%       ~ (p=0.606 n=6)
+Query/srx/rules=10-10                                               15.68Ki ± 0%              15.68Ki ± 0%       ~ (p=1.000 n=6) ¹
+Query/srx/rules=100-10                                              140.8Ki ± 0%              140.8Ki ± 0%       ~ (p=0.455 n=6)
+Query/srx/rules=1000-10                                             1.506Mi ± 0%              1.506Mi ± 0%       ~ (p=0.448 n=6)
+Plan/reuse/rules=10-10                                              19.53Ki ± 0%              19.53Ki ± 0%       ~ (p=0.807 n=6)
+Plan/reuse/rules=100-10                                             159.0Ki ± 0%              159.0Ki ± 0%       ~ (p=0.797 n=6)
+Plan/reuse/rules=1000-10                                            1.662Mi ± 0%              1.662Mi ± 0%  +0.01% (p=0.026 n=6)
+Plan/create/rules=10-10                                             2.209Mi ± 0%              2.205Mi ± 0%  -0.19% (p=0.015 n=6)
+Plan/create/rules=100-10                                            144.2Mi ± 2%              143.6Mi ± 2%       ~ (p=0.394 n=6)
+Convergence/rules=4-10                                              3.119Mi ± 0%              3.117Mi ± 0%       ~ (p=0.223 n=6)
+Convergence/rules=10-10                                             55.80Mi ± 0%              55.88Mi ± 0%       ~ (p=0.093 n=6)
+Risk/rules=10/mode=1-10                                             18.09Ki ± 0%              18.09Ki ± 0%       ~ (p=1.000 n=6) ¹
+Risk/rules=10/mode=2-10                                             23.37Ki ± 0%              23.37Ki ± 0%       ~ (p=1.000 n=6) ¹
+Risk/rules=100/mode=1-10                                            174.8Ki ± 0%              174.8Ki ± 0%       ~ (p=1.000 n=6)
+Risk/rules=100/mode=2-10                                            215.3Ki ± 0%              215.3Ki ± 0%       ~ (p=1.000 n=6)
+geomean                                                             240.6Ki                   240.5Ki       -0.02%
+¹ all samples are equal
+
+                              │ docs/benchmarks/2026-10-29-algorithms-before.txt │ docs/benchmarks/2026-10-29-algorithms-after.txt │
+                              │                    allocs/op                     │        allocs/op         vs base                │
+Query/asa/rules=10-10                                                 182.0 ± 0%                182.0 ± 0%       ~ (p=1.000 n=6) ¹
+Query/asa/rules=100-10                                               1.628k ± 0%               1.628k ± 0%       ~ (p=1.000 n=6) ¹
+Query/asa/rules=1000-10                                              16.04k ± 0%               16.04k ± 0%       ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=10-10                                            331.0 ± 0%                331.0 ± 0%       ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=100-10                                          2.953k ± 0%               2.953k ± 0%       ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=1000-10                                         29.07k ± 0%               29.07k ± 0%       ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=10-10                                           228.0 ± 0%                228.0 ± 0%       ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=100-10                                         2.124k ± 0%               2.124k ± 0%       ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=1000-10                                        21.04k ± 0%               21.04k ± 0%       ~ (p=1.000 n=6) ¹
+Query/huawei/rules=10-10                                              228.0 ± 0%                228.0 ± 0%       ~ (p=1.000 n=6) ¹
+Query/huawei/rules=100-10                                            2.124k ± 0%               2.124k ± 0%       ~ (p=1.000 n=6) ¹
+Query/huawei/rules=1000-10                                           21.04k ± 0%               21.04k ± 0%       ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=10-10                                           231.0 ± 0%                231.0 ± 0%       ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=100-10                                         2.037k ± 0%               2.037k ± 0%       ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=1000-10                                        20.05k ± 0%               20.05k ± 0%       ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=10-10                                            228.0 ± 0%                228.0 ± 0%       ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=100-10                                          2.124k ± 0%               2.124k ± 0%       ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=1000-10                                         21.04k ± 0%               21.04k ± 0%       ~ (p=1.000 n=6) ¹
+Query/srx/rules=10-10                                                 228.0 ± 0%                228.0 ± 0%       ~ (p=1.000 n=6) ¹
+Query/srx/rules=100-10                                               2.124k ± 0%               2.124k ± 0%       ~ (p=1.000 n=6) ¹
+Query/srx/rules=1000-10                                              21.04k ± 0%               21.04k ± 0%       ~ (p=1.000 n=6) ¹
+Plan/reuse/rules=10-10                                                237.0 ± 0%                237.0 ± 0%       ~ (p=1.000 n=6) ¹
+Plan/reuse/rules=100-10                                              2.134k ± 0%               2.134k ± 0%       ~ (p=1.000 n=6) ¹
+Plan/reuse/rules=1000-10                                             21.05k ± 0%               21.05k ± 0%  +0.00% (p=0.015 n=6)
+Plan/create/rules=10-10                                              9.562k ± 0%               9.559k ± 0%  -0.03% (p=0.015 n=6)
+Plan/create/rules=100-10                                             448.1k ± 0%               448.1k ± 0%       ~ (p=0.589 n=6)
+Convergence/rules=4-10                                               15.02k ± 0%               15.02k ± 0%       ~ (p=0.173 n=6)
+Convergence/rules=10-10                                              218.6k ± 0%               218.7k ± 0%  +0.03% (p=0.041 n=6)
+Risk/rules=10/mode=1-10                                               250.0 ± 0%                250.0 ± 0%       ~ (p=1.000 n=6) ¹
+Risk/rules=10/mode=2-10                                               285.0 ± 0%                285.0 ± 0%       ~ (p=1.000 n=6) ¹
+Risk/rules=100/mode=1-10                                             2.413k ± 0%               2.413k ± 0%       ~ (p=1.000 n=6) ¹
+Risk/rules=100/mode=2-10                                             2.634k ± 0%               2.634k ± 0%       ~ (p=1.000 n=6) ¹
+geomean                                                              2.936k                    2.936k       -0.00%
+¹ all samples are equal

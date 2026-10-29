@@ -213,3 +213,23 @@ Candidate construction now charges catalog traversals cumulatively. The
 `BenchmarkPlan` explicitly uses 2,000,000 visits to retain its stress workload.
 A one-iteration smoke run validates that benchmark's success, not performance.
 Earlier planner timing records predate this stricter accounting.
+
+## Core algorithm naming and proof refactor (2026-10-29)
+
+Baseline `bc15a8b` versus behavior-fixed core `cafd175`, Go 1.27.1,
+darwin/arm64, Apple M5. Both binaries were compiled with the same toolchain;
+query (all seven vendors), planning, convergence and risk used six serial samples
+per case, `-test.benchtime=100ms -test.benchmem`. No concurrent test or benchmark
+workload ran during measurement. Subsequent consumer-local identifier renames do
+not alter algorithm logic.
+
+[Baseline](benchmarks/2026-10-29-algorithms-before.txt),
+[after](benchmarks/2026-10-29-algorithms-after.txt), and
+[benchstat comparison](benchmarks/2026-10-29-algorithms-comparison.txt) retain all
+32 cases. Allocations per operation and allocated bytes are unchanged. Aggregate
+time geomean increased 0.91%; significant individual timing increases range from
+0.71% to 3.03%, including about 2% for convergence. Other cases are statistically
+indistinguishable at these sample sizes. The two serial blocks do not isolate
+run-order/host drift from code cost, so no speedup or causal overhead claim is
+made. This pass improves evidence reliability and names; it does not claim a
+performance optimization or production-capacity result.

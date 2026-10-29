@@ -34,7 +34,7 @@ An append proven to change effective ownership outside the request is rejected b
 
 ## Lifecycle and online
 
-Request optimization by exact fixed point; convergence with full-plan proof; translation by effective partitions and explicit zone mappings; declared/effective risk; separate redundant/disabled/expired/unused reclamation with revision-bound contiguous hit evidence.
+Request optimization by exact fixed point; convergence with full-plan proof; translation by effective partitions and explicit zone mappings; declared/effective risk; separate unreachable/disabled/expired/unused reclamation with revision-bound contiguous hit evidence.
 
 Validate stored revision, authorize exact plan, reserve, acquire native configuration isolation, capture and verify a fresh baseline, persist command receipts, confirm save/commit, independently read back, parse/prove, publish, project. No uncertain write replay; no expiry-based reservation release. Recovery reads state independently. Transport, authorization and journal are injected. Optional private connector adapter belongs in a separate module; root offline builds remain independent. Implementation approval alone does not authorize private source publication, real-device access, push, commit or release. The user's subsequent explicit instruction authorized commits and pushes to the new public `gatework/firemon` repository; it did not authorize releases or device operations.
 

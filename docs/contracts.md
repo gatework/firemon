@@ -251,3 +251,23 @@ not a byte or nested-member count. `flow.AddressSet.RangeCount()` and
 `flow.Traffic.RegionCount()` permit rejection of oversized standards and transfer
 partitions before copied views are created. Native source-size limits and region
 limits retain their separate meanings; visits are not a peak-memory guarantee.
+
+## Ordered policy decisions and reclamation evidence
+
+`policy.Result.Decisions` contains `RuleDecision` entries for traffic consumed by
+each native rule. `Known` requires a resolved match, an established active schedule
+and a valid action. Unknown actions still consume possible matching traffic and
+produce unknown coverage; a later permit cannot establish that traffic as allowed.
+
+`flow.AddressRange`, `AddressSet` and `TrafficRegion` name the domain directly.
+`flow.AllTraffic` owns the two-family universe used by query and lifecycle proofs.
+`Traffic.Equal` checks receiver-minus-other first, then the reverse, retaining
+short-circuit and region-budget errors. Empty traffic is a valid set, not a reason
+to bypass an invalid budget.
+
+Reclamation keeps `Disabled`, `Expired`, `Unreachable` and `Unused` independent.
+`RemovalCandidate` selects a rule for a whole-batch preservation proof; it does not
+make member counters or absent logs a removal authorization. Empty declarations
+can be unreachable without an earlier shadowing rule. Future absolute schedule
+boundaries and NAT-owning rules still participate in proof. Member usage has no
+removal flag.
