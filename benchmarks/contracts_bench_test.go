@@ -53,7 +53,7 @@ func BenchmarkRouteResolution(b *testing.B) {
 			addresses, _ := flow.NewSet(interval)
 			b.ReportAllocs()
 			for b.Loop() {
-				paths, err := policy.Routes(context.Background(), fw, "", addresses, 4096)
+				paths, err := (policy.Engine{}).ResolveRoutes(context.Background(), fw, "", addresses)
 				if err != nil || len(paths) != n+1 {
 					b.Fatalf("routes=%d: %v", len(paths), err)
 				}

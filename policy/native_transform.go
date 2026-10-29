@@ -42,7 +42,7 @@ func huaweiTransform(n *natTransform) {
 		iface := n.dynamic.Interface()
 		n.known = n.known && iface != nil
 		if iface != nil {
-			n.known = n.known && !iface.Record().Disabled && len(iface.Record().Unsupported) == 0 && len(iface.Record().Addresses) == 1
+			n.known = n.known && !iface.Disabled() && len(iface.Record().Unsupported) == 0 && len(iface.Record().Addresses) == 1
 		}
 	}
 }

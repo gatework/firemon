@@ -189,7 +189,7 @@ func normalized(d fm.Data) (*fm.Firewall, error) {
 		}
 		return strings.Compare(string(a.ID), string(b.ID))
 	})
-	positions := make(map[[4]string]int)
+	positions := make(map[policy.RuleChain]int)
 	for i := range d.Rules {
 		r := &d.Rules[i]
 		order := policy.NativeRuleOrder(d.Metadata.Vendor, *r)

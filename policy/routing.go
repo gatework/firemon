@@ -16,7 +16,12 @@ type RoutePath struct {
 	Known     bool
 }
 
-// Routes partitions addresses by native longest-prefix route evidence within one VRF.
+// ResolveRoutes partitions addresses by native longest-prefix route evidence within one VRF.
+func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set) ([]RoutePath, error) {
+	return Routes(ctx, fw, vrf, addresses, e.Limits.defaults().Regions)
+}
+
+// Routes temporarily supports the native parser migration.
 func Routes(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set, limit int) ([]RoutePath, error) {
 	if limit < 1 {
 		return nil, ErrBudget
@@ -157,7 +162,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 	}
 	for _, box := range q.Traffic.Boxes() {
 		destinations, _ := flow.NewSet(box.Destination)
-		pre, err := Routes(ctx, fw, q.VRF, destinations, limits.Regions)
+		pre, err := e.ResolveRoutes(ctx, fw, q.VRF, destinations)
 		if err != nil {
 			return PacketResult{}, err
 		}
@@ -174,7 +179,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			}
 			request := q.Request
 			request.Traffic = original
-			request.ToZone = route.Zone.Record().ID
+			request.ToZone = route.Zone.ID()
 			nat, err := e.QueryNAT(ctx, fw, request)
 			if err != nil {
 				return PacketResult{}, err
@@ -194,7 +199,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					part, _ := flow.NewSet(translated.Destination)
 					dest = dest.Union(part)
 				}
-				post, err := Routes(ctx, fw, q.VRF, dest, limits.Regions)
+				post, err := e.ResolveRoutes(ctx, fw, q.VRF, dest)
 				if err != nil {
 					return PacketResult{}, err
 				}
@@ -213,7 +218,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 						continue
 					}
 					request.Traffic = portion
-					request.ToZone = path.Zone.Record().ID
+					request.ToZone = path.Zone.ID()
 					evaluated, err := e.Query(ctx, fw, request)
 					if err != nil {
 						return PacketResult{}, err

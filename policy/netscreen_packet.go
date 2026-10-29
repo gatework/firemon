@@ -16,9 +16,9 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 		return PacketResult{Unknown: q.Traffic}, nil
 	}
 	if q.VRF == "" {
-		q.VRF = zone.Record().Scope
+		q.VRF = zone.Scope()
 	}
-	if q.VRF != zone.Record().Scope {
+	if q.VRF != zone.Scope() {
 		return PacketResult{Unknown: q.Traffic}, nil
 	}
 	limits := e.Limits.defaults()
@@ -79,7 +79,7 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 			if len(parts) >= limits.Regions {
 				return PacketResult{}, ErrBudget
 			}
-			parts = append(parts, part{rel, fw.Zone(request.ToZone).Record().Scope})
+			parts = append(parts, part{rel, fw.Zone(request.ToZone).Scope()})
 		}
 	}
 	remaining, err := q.Traffic.Difference(covered, limits.Regions)
@@ -114,7 +114,7 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 			set, _ := flow.NewSet(b.Destination)
 			destinations = destinations.Union(set)
 		}
-		routes, err := Routes(ctx, fw, piece.vrf, destinations, limits.Regions)
+		routes, err := e.ResolveRoutes(ctx, fw, piece.vrf, destinations)
 		if err != nil {
 			return PacketResult{}, err
 		}
@@ -144,7 +144,7 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 				continue
 			}
 			request := q.Request
-			request.Traffic, request.ToZone, request.EgressInterface = wire, route.Zone.Record().ID, route.Interface.Record().ID
+			request.Traffic, request.ToZone, request.EgressInterface = wire, route.Zone.ID(), route.Interface.ID()
 			nat, err := e.netscreenNAT(ctx, fw, request, &budget)
 			if err != nil {
 				return PacketResult{}, err
@@ -185,13 +185,13 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 	return out, nil
 }
 
-func (Engine) netscreenDestination(ctx context.Context, fw *fm.Firewall, n NATRelation, before RoutePath, limit int) (bool, error) {
+func (e Engine) netscreenDestination(ctx context.Context, fw *fm.Firewall, n NATRelation, before RoutePath, limit int) (bool, error) {
 	var destinations flow.Set
 	for _, box := range n.Translated.Boxes() {
 		s, _ := flow.NewSet(box.Destination)
 		destinations = destinations.Union(s)
 	}
-	routes, err := Routes(ctx, fw, before.Zone.Record().Scope, destinations, limit)
+	routes, err := e.ResolveRoutes(ctx, fw, before.Zone.Scope(), destinations)
 	if err != nil {
 		return false, err
 	}

@@ -12,13 +12,13 @@ func destinationTransform(n natTransform) natTransform {
 	n.source, n.sourcePorts, n.dynamic = nil, nil, nil
 	return n
 }
-func routeDestinations(ctx context.Context, fw *fm.Firewall, vrf string, traffic flow.Traffic, limit int) ([]RoutePath, error) {
+func (e Engine) routeDestinations(ctx context.Context, fw *fm.Firewall, vrf string, traffic flow.Traffic) ([]RoutePath, error) {
 	var destinations flow.Set
 	for _, b := range traffic.Boxes() {
 		s, _ := flow.NewSet(b.Destination)
 		destinations = destinations.Union(s)
 	}
-	return Routes(ctx, fw, vrf, destinations, limit)
+	return e.ResolveRoutes(ctx, fw, vrf, destinations)
 }
 func routedTraffic(traffic flow.Traffic, route RoutePath, limit int) (flow.Traffic, error) {
 	var out flow.Traffic
@@ -89,7 +89,7 @@ func (e Engine) huaweiRoutedChain(ctx context.Context, fw *fm.Firewall, q Reques
 		if err != nil {
 			return NATResult{}, err
 		}
-		routes, err := routeDestinations(ctx, fw, vrf, view, limit)
+		routes, err := e.routeDestinations(ctx, fw, vrf, view)
 		if err != nil {
 			return NATResult{}, err
 		}
@@ -114,7 +114,7 @@ func (e Engine) huaweiRoutedChain(ctx context.Context, fw *fm.Firewall, q Reques
 				}
 				continue
 			}
-			request.Traffic, request.ToZone, request.EgressInterface = original, route.Zone.Record().ID, route.Interface.Record().ID
+			request.Traffic, request.ToZone, request.EgressInterface = original, route.Zone.ID(), route.Interface.ID()
 			part, err := e.natChain(ctx, fw, request, []NATStep{step}, budget)
 			if err != nil {
 				return NATResult{}, err
@@ -211,7 +211,7 @@ func (e Engine) huaweiPacket(ctx context.Context, fw *fm.Firewall, q PacketReque
 		if err != nil {
 			return PacketResult{}, err
 		}
-		routes, err := routeDestinations(ctx, fw, q.VRF, view, limit)
+		routes, err := e.routeDestinations(ctx, fw, q.VRF, view)
 		if err != nil {
 			return PacketResult{}, err
 		}
@@ -231,7 +231,7 @@ func (e Engine) huaweiPacket(ctx context.Context, fw *fm.Firewall, q PacketReque
 				continue
 			}
 			request := q.Request
-			request.Traffic, request.ToZone, request.EgressInterface = actual, route.Zone.Record().ID, route.Interface.Record().ID
+			request.Traffic, request.ToZone, request.EgressInterface = actual, route.Zone.ID(), route.Interface.ID()
 			result, err := queryPolicy(request)
 			if err != nil {
 				return PacketResult{}, err

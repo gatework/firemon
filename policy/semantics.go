@@ -60,17 +60,23 @@ func (e Engine) ordinaryQuery(ctx context.Context, fw *fm.Firewall, q Request) (
 // RuleOrder identifies one independently ordered native chain. Terminal rules
 // follow every explicit rule in that chain. It is used for independent readback
 // normalization; it never changes the order of policy evaluation.
+// RuleChain identifies a native independently ordered chain within a policy chain.
+type RuleChain struct {
+	PolicyChain      fm.PolicyChain
+	FromZone, ToZone fm.ID
+}
+
 type RuleOrder struct {
-	Chain    [4]string
+	Chain    RuleChain
 	Terminal bool
 }
 
 // NativeRuleOrder retains vendor chain boundaries when comparing readback order.
 func NativeRuleOrder(vendor string, r fm.RuleRecord) RuleOrder {
 	s := semantics(vendor)
-	order := RuleOrder{Chain: [4]string{r.Scope, r.RuleSet}}
+	order := RuleOrder{Chain: RuleChain{PolicyChain: r.Chain()}}
 	if s.zonePairOrder && (!r.Builtin || s.pairBuiltins) && len(r.Match.FromZones) == 1 && len(r.Match.ToZones) == 1 && !r.Match.AnyFromZone && !r.Match.AnyToZone {
-		order.Chain[2], order.Chain[3] = string(r.Match.FromZones[0]), string(r.Match.ToZones[0])
+		order.Chain.FromZone, order.Chain.ToZone = r.Match.FromZones[0], r.Match.ToZones[0]
 	}
 	order.Terminal = s.globalDefault && r.Builtin && r.Match.AnyFromZone && r.Match.AnyToZone
 	return order

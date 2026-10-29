@@ -12,7 +12,7 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 		return PacketResult{}, err
 	}
 	zone := fw.Zone(q.FromZone)
-	if !fw.Complete() || zone == nil || len(zone.Record().Unsupported) > 0 || zone.Record().Scope != q.Scope {
+	if !fw.Complete() || zone == nil || len(zone.Record().Unsupported) > 0 || zone.Scope() != q.Scope {
 		return PacketResult{Unknown: q.Traffic}, nil
 	}
 	if q.VRF == "" {
@@ -78,7 +78,7 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			set, _ := flow.NewSet(box.Destination)
 			destinations = destinations.Union(set)
 		}
-		routes, err := Routes(ctx, fw, q.VRF, destinations, limits.Regions)
+		routes, err := e.ResolveRoutes(ctx, fw, q.VRF, destinations)
 		if err != nil {
 			return PacketResult{}, err
 		}
@@ -115,8 +115,8 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			piece.Original, piece.Translated = original, actual
 			request := q.Request
 			request.Traffic = original
-			request.ToZone = route.Zone.Record().ID
-			request.EgressInterface = route.Interface.Record().ID
+			request.ToZone = route.Zone.ID()
+			request.EgressInterface = route.Interface.ID()
 			evaluated, err := e.fortinetPolicy(ctx, fw, request, piece, &budget)
 			if err != nil {
 				return PacketResult{}, err

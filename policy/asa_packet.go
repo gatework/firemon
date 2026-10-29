@@ -139,7 +139,7 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 			}
 			paths = []RoutePath{path}
 		} else {
-			paths, err = Routes(ctx, fw, q.VRF, dest, limits.Regions)
+			paths, err = e.ResolveRoutes(ctx, fw, q.VRF, dest)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -160,7 +160,7 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				return PacketResult{}, err
 			}
 			request := q.Request
-			request.Traffic, request.ToZone = actual, path.Zone.Record().ID
+			request.Traffic, request.ToZone = actual, path.Zone.ID()
 			evaluated, err := e.asaAccess(ctx, fw, request, ingress, path.Interface)
 			if err != nil {
 				return PacketResult{}, err

@@ -107,7 +107,7 @@ func (e Engine) fortinetPost(ctx context.Context, fw *fm.Firewall, q Request, ru
 		if err := ctx.Err(); err != nil {
 			return NATResult{}, err
 		}
-		if n.Record().Rule == rule && !n.Record().Disabled {
+		if n.Record().Rule == rule && !n.Disabled() {
 			if owner != nil || n.Rule() == nil {
 				return NATResult{}, ErrNAT
 			}
@@ -117,7 +117,7 @@ func (e Engine) fortinetPost(ctx context.Context, fw *fm.Firewall, q Request, ru
 	if owner == nil {
 		return NATResult{Complete: true, Unmatched: q.Traffic}, nil
 	}
-	step := NATStep{Kind: fm.DynamicNATObject, ID: owner.Record().ID}
+	step := NATStep{Kind: fm.DynamicNATObject, ID: owner.ID()}
 	n, err := transform(fw, step)
 	if err != nil {
 		return NATResult{}, err
@@ -194,7 +194,7 @@ func fortinetEgressKnown(fw *fm.Firewall, iface *fm.Interface, q Request) bool {
 	}
 	// A zone names an interface only when that ownership is unique.
 	for _, other := range fw.Interfaces() {
-		if other.Record().Zone == r.Zone && other.Record().ID != r.ID {
+		if other.Record().Zone == r.Zone && other.ID() != r.ID {
 			return false
 		}
 	}

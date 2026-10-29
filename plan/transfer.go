@@ -131,7 +131,7 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 		if r == nil || c.Kind != CreateRule {
 			return Proof{}, ErrUnsafe
 		}
-		allPermit = allPermit && r.Record().Action == fm.Permit
+		allPermit = allPermit && r.Action() == fm.Permit
 	}
 	budget := p.Engine.Limits.Rules
 	if budget <= 0 {

@@ -30,11 +30,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		q.RuleSet = "security"
 	}
 	for _, r := range requests[1:] {
-		rs := r.RuleSet
-		if rs == "" {
-			rs = "security"
-		}
-		if r.Scope != q.Scope || rs != q.RuleSet || r.FromZone != q.FromZone || r.ToZone != q.ToZone || !r.At.Equal(q.At) || r.EgressInterface != q.EgressInterface {
+		if !r.SameContext(q) {
 			return nil, fmt.Errorf("%w: batch contexts differ", ErrUnsafe)
 		}
 		var err error

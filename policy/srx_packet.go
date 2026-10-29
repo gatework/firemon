@@ -43,7 +43,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 			s, _ := flow.NewSet(b.Destination)
 			destinations = destinations.Union(s)
 		}
-		routes, err := Routes(ctx, fw, q.VRF, destinations, limits.Regions)
+		routes, err := e.ResolveRoutes(ctx, fw, q.VRF, destinations)
 		if err != nil {
 			return PacketResult{}, err
 		}
@@ -70,7 +70,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				continue
 			}
 			request := q.Request
-			request.Traffic, request.ToZone = actual, route.Zone.Record().ID
+			request.Traffic, request.ToZone = actual, route.Zone.ID()
 			evaluated, err := e.Query(ctx, fw, request)
 			if err != nil {
 				return PacketResult{}, err

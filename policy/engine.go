@@ -144,16 +144,7 @@ func schedule(fw *fm.Firewall, id fm.ID, at time.Time) (bool, bool) {
 	if s == nil || at.IsZero() {
 		return true, false
 	}
-	r := s.Record()
-	if len(r.Unsupported) > 0 || len(r.Recurring) > 0 || len(r.Windows) == 0 {
-		return true, false
-	}
-	for _, w := range r.Windows {
-		if !at.Before(w.Start) && at.Before(w.End) {
-			return true, true
-		}
-	}
-	return false, true
+	return s.ActiveAt(at)
 }
 func allAddresses() flow.Set {
 	a, _ := flow.PrefixRange(netip.MustParsePrefix("0.0.0.0/0"))
@@ -261,3 +252,17 @@ func (e Engine) match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Reques
 
 // Chain returns the native chain without changing the request's wire representation.
 func (r Request) Chain() fm.PolicyChain { return fm.PolicyChain{Scope: r.Scope, RuleSet: r.RuleSet} }
+
+// SameContext compares policy evaluation contexts, treating an omitted rule set
+// as security. Time equality uses the instant, not location or monotonic metadata.
+func (r Request) SameContext(other Request) bool {
+	ruleSet := r.RuleSet
+	if ruleSet == "" {
+		ruleSet = "security"
+	}
+	otherRuleSet := other.RuleSet
+	if otherRuleSet == "" {
+		otherRuleSet = "security"
+	}
+	return r.Scope == other.Scope && ruleSet == otherRuleSet && r.FromZone == other.FromZone && r.ToZone == other.ToZone && r.EgressInterface == other.EgressInterface && r.At.Equal(other.At)
+}

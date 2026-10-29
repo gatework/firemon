@@ -210,7 +210,7 @@ func (e Engine) natChain(ctx context.Context, fw *fm.Firewall, q Request, steps 
 			iface := fw.Interface(n.egress)
 			certain = certain && q.EgressInterface != "" && iface != nil
 			if iface != nil {
-				certain = certain && !iface.Record().Disabled && len(iface.Record().Unsupported) == 0
+				certain = certain && !iface.Disabled() && len(iface.Record().Unsupported) == 0
 			}
 		}
 		active, timeKnown := schedule(fw, n.match.Schedule, q.At)

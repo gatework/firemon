@@ -36,7 +36,7 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 			chains[record.Chain()] = true
 		}
 		for _, z := range fw.Zones() {
-			zones[z.Record().ID] = true
+			zones[z.ID()] = true
 		}
 		for _, schedule := range fw.Schedules() {
 			if from.IsZero() {
