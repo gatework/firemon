@@ -146,8 +146,8 @@ func emptyContainer(path []string) bool {
 // finish claims a structural container only after all its descendants have been
 // consumed by targeted semantic stages. An unknown child keeps its ancestors pending.
 func (x *xmlInput) finish(ctx context.Context, s *config.Session) error {
-	states := s.Cursor.Evidence()
-	tx := s.Cursor.Begin()
+	states := s.Cursor().Evidence()
+	tx := s.Cursor().Begin()
 	tx.Ignore("XML declaration, comment or outer whitespace", x.document.Decorations...)
 	var visit func(*config.XMLNode) (bool, error)
 	visit = func(n *config.XMLNode) (bool, error) {

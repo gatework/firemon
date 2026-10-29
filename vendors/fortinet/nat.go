@@ -26,7 +26,7 @@ func equalSize(a, b flow.Range) bool {
 	return a.Valid() && b.Valid() && size(a).Cmp(size(b)) == 0
 }
 func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	err := p.each(ctx, tx, "firewall ippool", func(b *config.Block) {

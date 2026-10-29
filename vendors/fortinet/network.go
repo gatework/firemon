@@ -38,7 +38,7 @@ func prefix(values []string) (netip.Prefix, bool) {
 	return netip.PrefixFrom(a, bits), true
 }
 func (p *parser) network(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	err := p.each(ctx, tx, "system interface", func(b *config.Block) {
@@ -148,7 +148,7 @@ func (p *parser) network(ctx context.Context, s *config.Session) error {
 }
 
 func (p *parser) routes(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	for _, iface := range p.data.Interfaces {

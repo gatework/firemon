@@ -48,7 +48,7 @@ func (p *parser) serviceRef(name string) fm.ServiceRef {
 	return fm.ServiceRef{Kind: fm.ServiceObject, ID: fm.ID(name)}
 }
 func (p *parser) objects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	any4, _ := flow.PrefixRange(netip.MustParsePrefix("0.0.0.0/0"))
 	anyService := serviceTerm(0)

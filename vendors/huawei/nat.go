@@ -19,7 +19,7 @@ type poolDefinition struct {
 }
 
 func (p *parser) nat(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	pools := make(map[fm.ID]poolDefinition)

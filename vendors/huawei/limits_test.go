@@ -59,7 +59,7 @@ firewall zone trust
 		t.Fatal(fw.Diagnostics())
 	}
 	for _, r := range fw.Routes() {
-		if r.Record().Scope != "blue" || r.Record().Destination.Addr().String() == "192.0.2.0" || r.Interface() != fw.Interface("GigabitEthernet1/0/1") {
+		if r.Scope() != "blue" || r.Record().Destination.Addr().String() == "192.0.2.0" || r.Interface() != fw.Interface("GigabitEthernet1/0/1") {
 			t.Fatal(r.Record())
 		}
 	}

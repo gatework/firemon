@@ -52,7 +52,7 @@ func TestScopedBooksTermPairsAndInterfaceBeforeRouteBinding(t *testing.T) {
 		t.Fatal("missing native objects", len(fw.Interfaces()), len(fw.Routes()), len(fw.Rules()))
 	}
 	iface := fw.Interface("ge-0/0/0.0")
-	if iface == nil || iface.Record().Scope != "customer" || len(iface.Routes()) != 2 {
+	if iface == nil || iface.Scope() != "customer" || len(iface.Routes()) != 2 {
 		t.Fatal("route not bound after interface pass", iface)
 	}
 	for _, route := range fw.Routes() {
@@ -61,10 +61,10 @@ func TestScopedBooksTermPairsAndInterfaceBeforeRouteBinding(t *testing.T) {
 		}
 	}
 	rule := fw.Rules()[0]
-	if rule.Record().Name != "permit-web" || rule.Record().LogEnd != fm.Known || rule.Record().LogStart != fm.Irrelevant {
+	if rule.Name() != "permit-web" || rule.Record().LogEnd != fm.Known || rule.Record().LogStart != fm.Irrelevant {
 		t.Fatal(rule.Record())
 	}
-	if fw.Rules()[0].Record().ID == fw.Rules()[1].Record().ID {
+	if fw.Rules()[0].ID() == fw.Rules()[1].ID() {
 		t.Fatal("policy IDs collapsed across zone pairs")
 	}
 	for _, tc := range []struct {
@@ -118,7 +118,7 @@ func TestScopedUnknownsAndMalformedConditionsCannotPermit(t *testing.T) {
 func TestDeactivatedPolicyAndIPv4AnyDoNotPermitIPv6(t *testing.T) {
 	raw := fixture(t) + "deactivate security policies from-zone inside to-zone outside policy permit-web\n"
 	fw := parse(t, raw)
-	if !fw.Complete() || !fw.Rules()[0].Record().Disabled {
+	if !fw.Complete() || !fw.Rules()[0].Disabled() {
 		t.Fatal(fw.Diagnostics())
 	}
 	r, err := (policy.Engine{}).Query(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.10/32", "198.51.100.20/32", 6, 1000, 443), FromZone: "inside", ToZone: "outside"})
@@ -143,7 +143,7 @@ func TestAddressBookLookupRetainsGlobalFallbackAndBuiltinShadowing(t *testing.T)
 	if err != nil || !r.Allowed.Empty() {
 		t.Fatal("shadowed builtin became unrestricted", r, err)
 	}
-	if fw.Address("fallback") == nil || fw.Address("fallback").Record().Scope != "" {
+	if fw.Address("fallback") == nil || fw.Address("fallback").Scope() != "" {
 		t.Fatal("global objects must have stable unscoped identities")
 	}
 	raw = strings.ReplaceAll(fixture(t), "match destination-address host", "match destination-address fallback")

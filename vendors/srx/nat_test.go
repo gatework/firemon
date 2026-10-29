@@ -31,7 +31,7 @@ func TestNativeNATCatalogsAndPostDestinationSourceSelection(t *testing.T) {
 		t.Fatal("NAT catalogs collapsed")
 	}
 	// The same native name is legal in independent source/destination pools.
-	if fw.NATPools()[0].Record().ID == fw.NATPools()[1].Record().ID {
+	if fw.NATPools()[0].ID() == fw.NATPools()[1].ID() {
 		t.Fatal("pool namespaces collapsed")
 	}
 	for _, tc := range []struct {

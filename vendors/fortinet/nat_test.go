@@ -96,11 +96,11 @@ func TestVIPAddressesAndGroupsRetainSelectedVDOMScope(t *testing.T) {
 	raw := fixture(t, "basic") + nativeNAT + "config firewall vipgrp\nedit public-services\nset member web-public ssh-public\nnext\nend\n"
 	fw := parse(t, raw)
 	for _, id := range []fm.ID{"vip:web-public", "vip:ssh-public"} {
-		if got := fw.Address(id).Record().Scope; got != "root" {
+		if got := fw.Address(id).Scope(); got != "root" {
 			t.Errorf("address %s scope = %q, want selected VDOM root", id, got)
 		}
 	}
-	if got := fw.AddressGroup("vip-group:public-services").Record().Scope; got != "root" {
+	if got := fw.AddressGroup("vip-group:public-services").Scope(); got != "root" {
 		t.Errorf("VIP group scope = %q, want selected VDOM root", got)
 	}
 }
@@ -118,7 +118,7 @@ next
 end
 `
 	fw := parse(t, raw)
-	if fw.Complete() || len(fw.AddressGroup("vip-group:public-services").Record().Unsupported) == 0 {
+	if fw.Complete() || !fw.AddressGroup("vip-group:public-services").HasUnsupported() {
 		t.Fatal("VIP group inferred membership from the native address ID", fw.Diagnostics())
 	}
 	if a := fw.Address("vip:ordinary"); a.Record().VIP != (fm.NATRef{}) || a.VIPStaticNAT() != nil || a.VIPDynamicNAT() != nil {

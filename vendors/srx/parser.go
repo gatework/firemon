@@ -55,7 +55,10 @@ func (native Parser) Parse(ctx context.Context, source config.Source, metadata f
 		return nil, err
 	}
 	p := &parser{rows: rows, books: make(map[string][]string)}
-	s := config.NewSession(cursor, metadata)
+	s, err := config.NewSession(cursor, metadata)
+	if err != nil {
+		return nil, err
+	}
 	stages := []config.Stage{
 		{Name: "interfaces-zones", Run: p.network},
 		{Name: "routes", Requires: []string{"interfaces-zones"}, Run: p.routes},
@@ -173,7 +176,7 @@ func diagnostic(code, message string) fm.Diagnostic {
 }
 
 func (p *parser) network(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var ifaces catalog[fm.InterfaceRecord]
 	var zones catalog[fm.ZoneRecord]
@@ -301,7 +304,7 @@ type routeDraft struct {
 }
 
 func (p *parser) routes(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var routes catalog[routeDraft]
 	for _, row := range p.rows {

@@ -79,7 +79,10 @@ func (native Parser) Parse(ctx context.Context, source config.Source, metadata f
 	if block != nil && block.Kind != "unknown" {
 		return nil, fmt.Errorf("%w: missing # after line %d", config.ErrSource, block.Header.Span.First)
 	}
-	s := config.NewSession(cursor, metadata)
+	s, err := config.NewSession(cursor, metadata)
+	if err != nil {
+		return nil, err
+	}
 	stages := []config.Stage{
 		{Name: "interfaces-zones", Run: p.network},
 		{Name: "routes", Requires: []string{"interfaces-zones"}, Run: p.routes},
@@ -208,7 +211,7 @@ func walk(ctx context.Context, tx *config.Transaction, o *fm.Object, g namedBloc
 	return nil
 }
 func (p *parser) evidence(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	for _, row := range p.lines {
 		if err := ctx.Err(); err != nil {
@@ -222,7 +225,7 @@ func (p *parser) evidence(ctx context.Context, s *config.Session) error {
 			tx.Ignore("capture metadata or system-view boundary", row.Lines()...)
 		}
 	}
-	for _, line := range s.Cursor.Lines() {
+	for _, line := range s.Cursor().Lines() {
 		if strings.TrimSpace(line.Raw) == "" {
 			tx.Ignore("blank line", line.Number)
 		}

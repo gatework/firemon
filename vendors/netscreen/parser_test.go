@@ -58,7 +58,7 @@ func TestScopedAddressesPairedServicesAndOrderedRouteBinding(t *testing.T) {
 		t.Fatal("missing objects", len(fw.Interfaces()), len(fw.Routes()), len(fw.Rules()))
 	}
 	inside := fw.Interface("ethernet0/1")
-	if inside.Record().Scope != "blue-vr" || len(inside.Routes()) != 2 {
+	if inside.Scope() != "blue-vr" || len(inside.Routes()) != 2 {
 		t.Fatal("route binding", inside.Record(), inside.Routes())
 	}
 	for _, r := range fw.Routes() {
@@ -117,7 +117,7 @@ func TestUnknownScopesAndIncompleteConditionsCannotPermit(t *testing.T) {
 			t.Fatal("unsupported context accepted", extra)
 		}
 		for _, a := range fw.Addresses() {
-			if a.Record().Name == "injected" {
+			if a.Name() == "injected" {
 				t.Fatal("nested root syntax escaped its context", extra)
 			}
 		}

@@ -15,25 +15,31 @@ type Stage struct {
 	Run      func(context.Context, *Session) error
 }
 type Session struct {
-	Cursor *Cursor
+	cursor *Cursor
 	data   fm.Data
 }
 
-func NewSession(c *Cursor, m fm.Metadata) *Session {
+func NewSession(c *Cursor, m fm.Metadata) (*Session, error) {
+	if c == nil {
+		return nil, ErrInvalid
+	}
 	sum := sha256.Sum256([]byte(c.source.Text))
 	m.SourceDigest = hex.EncodeToString(sum[:])
-	return &Session{Cursor: c, data: fm.Data{Metadata: m, Raw: c.source.Text}}
+	return &Session{cursor: c, data: fm.Data{Metadata: m, Raw: c.source.Text}}, nil
 }
+
+func (s *Session) Cursor() *Cursor { return s.cursor }
+
 func (s *Session) Commit(t *Transaction) error {
-	if t.cursor != s.Cursor {
+	if t.cursor != s.cursor {
 		return ErrClaim
 	}
 	return t.Commit(&s.data)
 }
 func (s *Session) Data() fm.Data {
 	d := s.data.Clone()
-	d.Evidence = s.Cursor.Evidence()
-	if !s.Cursor.source.Complete {
+	d.Evidence = s.cursor.Evidence()
+	if !s.cursor.source.Complete {
 		d.Diagnostics = append(d.Diagnostics, fm.Diagnostic{Code: "incomplete-source", Message: "capture completeness was not established"})
 	}
 	return d
@@ -59,29 +65,29 @@ func (s *Session) Run(ctx context.Context, stages []Stage) error {
 			return err
 		}
 		before := s.data
-		wasTracking := s.Cursor.tracking
-		undoStart := len(s.Cursor.undo)
-		s.Cursor.tracking = true
-		point := s.Cursor.Checkpoint()
+		wasTracking := s.cursor.tracking
+		undoStart := len(s.cursor.undo)
+		s.cursor.tracking = true
+		point := s.cursor.Checkpoint()
 		err := stage.Run(ctx, s)
 		if err == nil {
 			err = ctx.Err()
 		}
 		if err != nil {
 			s.data = before
-			for i := len(s.Cursor.undo) - 1; i >= undoStart; i-- {
-				u := s.Cursor.undo[i]
-				s.Cursor.evidence[u.index] = u.previous
+			for i := len(s.cursor.undo) - 1; i >= undoStart; i-- {
+				u := s.cursor.undo[i]
+				s.cursor.evidence[u.index] = u.previous
 			}
-			s.Cursor.undo = s.Cursor.undo[:undoStart]
-			s.Cursor.tracking = wasTracking
-			_ = s.Cursor.Restore(point)
+			s.cursor.undo = s.cursor.undo[:undoStart]
+			s.cursor.tracking = wasTracking
+			_ = s.cursor.Restore(point)
 			return fmt.Errorf("stage %s: %w", stage.Name, err)
 		}
 		if !wasTracking {
-			s.Cursor.undo = nil
+			s.cursor.undo = nil
 		}
-		s.Cursor.tracking = wasTracking
+		s.cursor.tracking = wasTracking
 	}
 	return nil
 }

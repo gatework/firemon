@@ -51,7 +51,11 @@ func (native Parser) Parse(ctx context.Context, source config.Source, metadata f
 	if err != nil {
 		return nil, err
 	}
-	p := &parser{session: config.NewSession(cursor, metadata), aliases: make(map[string]fm.ID)}
+	session, err := config.NewSession(cursor, metadata)
+	if err != nil {
+		return nil, err
+	}
+	p := &parser{session: session, aliases: make(map[string]fm.ID)}
 	owner := -1
 	for _, line := range statements {
 		w := line.Words
@@ -144,7 +148,7 @@ func iprange(value string) (flow.Range, error) {
 	return flow.PrefixRange(p)
 }
 func (p *parser) interfaces(_ context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	d := fm.Data{}
 	for _, b := range p.blocks {
 		if b.kind != "interface" {
@@ -259,7 +263,7 @@ func term(proto uint16, source, destination flow.Interval) fm.ServiceTerm {
 	return fm.ServiceTerm{Protocol: flow.Interval{Low: proto, High: proto}, SourcePort: source, DestinationPort: destination, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}}
 }
 func (p *parser) objects(_ context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	d := fm.Data{}
 	addressGroups := make(map[string]bool)
 	serviceGroups := make(map[string]bool)
@@ -416,7 +420,7 @@ func (p *parser) objects(_ context.Context, s *config.Session) error {
 	return nil
 }
 func (p *parser) routes(_ context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	d := fm.Data{}
 	for _, line := range p.lines {
 		w := line.Words

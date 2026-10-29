@@ -97,7 +97,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		if change.Kind == plan.RemoveRule {
 			rule := before.Rule(change.Rule)
-			if rule == nil || rule.Record().Scope != "" || rule.Record().Builtin || after.Rule(change.Rule) != nil {
+			if rule == nil || rule.Scope() != "" || rule.Builtin() || after.Rule(change.Rule) != nil {
 				return nil, ErrRender
 			}
 			if _, err := strconv.ParseUint(string(change.Rule), 10, 32); err != nil {

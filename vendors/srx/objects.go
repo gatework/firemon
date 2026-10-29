@@ -34,7 +34,7 @@ func bookPath(w []string) (scope string, rest []string, ok bool) {
 	return "", nil, false
 }
 func (p *parser) objects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var addresses catalog[fm.AddressRecord]
 	var groups catalog[fm.AddressGroupRecord]

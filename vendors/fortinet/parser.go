@@ -91,7 +91,10 @@ func (native Parser) ParseVDOM(ctx context.Context, source config.Source, metada
 	}
 	p := &parser{vdom: vdom, sections: make(map[string][]*config.Block), interfaces: make(map[fm.ID]fm.InterfaceRecord), zones: make(map[fm.ID]fm.ZoneRecord), addresses: make(map[string]fm.AddressRef), services: make(map[string]fm.ServiceRef), sourcePorts: flow.Interval{Low: 1, High: 65535}, poolModes: make(map[fm.ID]fm.TranslationMode)}
 	p.data.Metadata = metadata
-	session := config.NewSession(cursor, metadata)
+	session, err := config.NewSession(cursor, metadata)
+	if err != nil {
+		return nil, err
+	}
 	stages := []config.Stage{
 		{Name: "context", Run: func(ctx context.Context, s *config.Session) error { return p.selectContext(ctx, s, doc) }},
 		{Name: "settings", Requires: []string{"context"}, Run: p.settings},
@@ -101,10 +104,10 @@ func (native Parser) ParseVDOM(ctx context.Context, source config.Source, metada
 		{Name: "vip-pools", Requires: []string{"objects"}, Run: p.natObjects},
 		{Name: "policies", Requires: []string{"vip-pools"}, Run: p.policies},
 		{Name: "evidence", Requires: []string{"policies"}, Run: func(ctx context.Context, s *config.Session) error {
-			tx := s.Cursor.Begin()
+			tx := s.Cursor().Begin()
 			defer tx.Rollback()
-			evidence := s.Cursor.Evidence()
-			for _, line := range s.Cursor.Lines() {
+			evidence := s.Cursor().Evidence()
+			for _, line := range s.Cursor().Lines() {
 				if err := ctx.Err(); err != nil {
 					return err
 				}
@@ -140,7 +143,7 @@ func ignoreBlock(tx *config.Transaction, b *config.Block, reason string) {
 	}
 }
 func (p *parser) selectContext(ctx context.Context, s *config.Session, doc config.Document) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	supported := []string{"system global", "system settings", "system interface", "system zone", "router static", "firewall address", "firewall addrgrp", "firewall service custom", "firewall service group", "firewall vip", "firewall vipgrp", "firewall ippool", "firewall policy"}
 	p.interfaceDomains = make(map[*config.Block]string)

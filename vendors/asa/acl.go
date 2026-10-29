@@ -87,7 +87,7 @@ func (p *parser) acls(ctx context.Context, s *config.Session) error {
 	if err != nil {
 		return err
 	}
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	d := fm.Data{}
 	position := 0
 	identities := make(map[fm.ID]bool)

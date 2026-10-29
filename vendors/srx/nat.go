@@ -42,7 +42,7 @@ func nativePorts(w []string) (flow.Interval, bool) {
 }
 
 func (p *parser) nat(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var contexts catalog[natContext]
 	var pools catalog[poolDraft]

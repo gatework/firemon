@@ -8,7 +8,7 @@ import (
 )
 
 func (p *parser) settings(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	seen := make(map[string]bool)
 	for _, key := range []string{"system global", "system settings"} {

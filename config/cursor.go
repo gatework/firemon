@@ -11,6 +11,7 @@ import (
 	fm "github.com/gatework/firemon"
 )
 
+var ErrInvalid = errors.New("config: invalid input")
 var ErrSource = errors.New("invalid configuration source")
 var ErrClaim = errors.New("invalid source claim")
 var ErrClosed = errors.New("transaction already closed")

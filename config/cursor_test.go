@@ -80,9 +80,12 @@ func TestRollbackRestoresPositionAndKnownIgnoreRequiresReason(t *testing.T) {
 }
 func TestStagesValidateDependenciesAndRollbackFailedStage(t *testing.T) {
 	c := source(t, "interface eth0\n")
-	s := config.NewSession(c, fm.Metadata{Device: "test", Vendor: "test"})
+	s, err := config.NewSession(c, fm.Metadata{Device: "test", Vendor: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	stages := []config.Stage{{Name: "interfaces", Run: func(ctx context.Context, s *config.Session) error {
-		tx := s.Cursor.Begin()
+		tx := s.Cursor().Begin()
 		tx.Parse(1)
 		tx.Emit(fm.Data{Interfaces: []fm.InterfaceRecord{{Object: fm.Object{ID: "eth0"}}}})
 		if err := s.Commit(tx); err != nil {
@@ -97,7 +100,7 @@ func TestStagesValidateDependenciesAndRollbackFailedStage(t *testing.T) {
 		t.Fatal("stage rollback not atomic")
 	}
 	called := false
-	err := s.Run(context.Background(), []config.Stage{{Name: "routes", Requires: []string{"interfaces"}, Run: func(context.Context, *config.Session) error { called = true; return nil }}})
+	err = s.Run(context.Background(), []config.Stage{{Name: "routes", Requires: []string{"interfaces"}, Run: func(context.Context, *config.Session) error { called = true; return nil }}})
 	if err == nil || called {
 		t.Fatal("invalid stage graph executed")
 	}

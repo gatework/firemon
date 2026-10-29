@@ -55,7 +55,11 @@ func (native Parser) Parse(ctx context.Context, source config.Source, metadata f
 	if err != nil {
 		return nil, err
 	}
-	p := &parser{session: config.NewSession(cursor, metadata), document: document, zoneVRF: make(map[fm.ID]string), addressKinds: make(map[fm.ID]fm.Kind), serviceKinds: make(map[fm.ID]fm.Kind)}
+	session, err := config.NewSession(cursor, metadata)
+	if err != nil {
+		return nil, err
+	}
+	p := &parser{session: session, document: document, zoneVRF: make(map[fm.ID]string), addressKinds: make(map[fm.ID]fm.Kind), serviceKinds: make(map[fm.ID]fm.Kind)}
 	p.collect(document.Roots, "", "", "")
 	for _, line := range document.Lines {
 		p.lines = append(p.lines, statement{line: line})
@@ -143,7 +147,7 @@ func (p *parser) collect(blocks []*config.Block, scope, from, to string) {
 	}
 }
 func (p *parser) structure(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	tx.Emit(fm.Data{Diagnostics: p.document.Diagnostics})
 	var mark func([]*config.Block)
 	mark = func(blocks []*config.Block) {
@@ -187,7 +191,7 @@ func object(n node) fm.Object {
 	return fm.Object{ID: fm.ID(id), Name: id, Scope: n.scope, Spans: []fm.Span{n.block.Header.Span}}
 }
 func begin(s *config.Session, b *config.Block) *config.Transaction {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	tx.Parse(b.Header.Lines()...)
 	if b.Complete {
 		tx.Parse(b.End.Lines()...)
@@ -544,7 +548,7 @@ func (p *parser) routes(_ context.Context, s *config.Session) error {
 		if len(rest) > 0 {
 			continue
 		}
-		tx := s.Cursor.Begin()
+		tx := s.Cursor().Begin()
 		tx.Parse(row.line.Lines()...)
 		r.ID = config.RouteID(r)
 		tx.Emit(fm.Data{Routes: []fm.RouteRecord{r}})
@@ -558,7 +562,7 @@ func (p *parser) rules(_ context.Context, s *config.Session) error {
 	position := 0
 	records := make(map[fm.ID]fm.RuleRecord)
 	var order []fm.ID
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	for _, n := range p.nodes {
 		if n.block.Kind != "rule" {
 			continue

@@ -196,10 +196,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		if c.Kind == plan.RemoveRule {
 			r := before.Rule(c.Rule)
-			if r == nil || r.Record().Builtin || r.Record().Scope != "" || after.Rule(c.Rule) != nil {
+			if r == nil || r.Builtin() || r.Scope() != "" || after.Rule(c.Rule) != nil {
 				return nil, ErrRender
 			}
-			name, err := quoted(r.Record().Name)
+			name, err := quoted(r.Name())
 			if err != nil {
 				return nil, err
 			}
@@ -296,7 +296,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		commands = append(commands, "quit", "quit")
 	}
 	if first != "" && len(created) > 0 {
-		target, err := quoted(before.Rule(first).Record().Name)
+		target, err := quoted(before.Rule(first).Name())
 		if err != nil {
 			return nil, err
 		}

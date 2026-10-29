@@ -170,7 +170,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 	}
 	used := make(map[fm.ID]bool)
 	for _, r := range before.Rules() {
-		used[r.Record().ID] = true
+		used[r.ID()] = true
 	}
 	allocated := make(map[fm.ID]fm.ID)
 	next := 1
@@ -221,7 +221,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		if c.Kind == plan.RemoveRule {
 			id, ok := policyID(string(c.Rule))
 			r := before.Rule(id)
-			if !ok || r == nil || r.Record().Builtin || after.Rule(id) != nil {
+			if !ok || r == nil || r.Builtin() || after.Rule(id) != nil {
 				return nil, ErrRender
 			}
 			commands = append(commands, "unset policy id "+string(id))

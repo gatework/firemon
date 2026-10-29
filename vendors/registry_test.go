@@ -10,9 +10,58 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/firemon/vendors"
+	"github.com/gatework/firemon/vendors/asa"
+	"github.com/gatework/firemon/vendors/fortinet"
+	"github.com/gatework/firemon/vendors/hillstone"
+	"github.com/gatework/firemon/vendors/huawei"
+	"github.com/gatework/firemon/vendors/netscreen"
+	"github.com/gatework/firemon/vendors/paloalto"
+	"github.com/gatework/firemon/vendors/srx"
 )
+
+func TestSharedParserContractRetainsUnsupportedSource(t *testing.T) {
+	for _, tc := range []struct {
+		vendor string
+		native config.Parser
+	}{
+		{"asa", asa.Parser{}},
+		{"fortinet", fortinet.Parser{}},
+		{"hillstone", hillstone.Parser{}},
+		{"huawei", huawei.Parser{}},
+		{"netscreen", netscreen.Parser{}},
+		{"paloalto", paloalto.Parser{}},
+		{"srx", srx.Parser{}},
+	} {
+		t.Run(tc.vendor, func(t *testing.T) {
+			for _, implementation := range []struct {
+				name   string
+				parser config.Parser
+			}{{"native", tc.native}, {"registry", vendors.Parser{}}} {
+				t.Run(implementation.name, func(t *testing.T) {
+					const raw = "unknown-native-setting preserved\n"
+					fw, err := implementation.parser.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Vendor: tc.vendor, Device: "synthetic", Software: "test-version"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					d := fw.Export()
+					if fw.Complete() || fw.Raw() != raw || d.Metadata.Vendor != tc.vendor || d.Metadata.Device != "synthetic" || d.Metadata.Software != "test-version" || len(d.Evidence) != 1 || d.Evidence[0].State != fm.Pending || d.Evidence[0].Span != (fm.Span{First: 1, Last: 1}) {
+						t.Fatalf("unsupported source lost its evidence: %+v", d)
+					}
+					d.Evidence[0].State = fm.Parsed
+					if fw.Export().Evidence[0].State != fm.Pending {
+						t.Fatal("parser result shared mutable evidence")
+					}
+					ctx, cancel := context.WithCancel(context.Background())
+					cancel()
+					if _, err := implementation.parser.Parse(ctx, config.Source{Text: raw, Complete: true}, fm.Metadata{Vendor: tc.vendor}); !errors.Is(err, context.Canceled) {
+						t.Fatalf("cancellation lost: %v", err)
+					}
+				})
+			}
+		})
+	}
+}
 
 func TestNativeRegistryParsesSevenVendorsAndExistingAliases(t *testing.T) {
 	for _, tc := range []struct {
@@ -39,12 +88,12 @@ func TestNativeRegistryParsesSevenVendorsAndExistingAliases(t *testing.T) {
 				}
 				raw = string(b)
 			}
-			var parser deploy.Parser = vendors.Parser{}
+			var parser config.Parser = vendors.Parser{}
 			fw, err := parser.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic", Vendor: tc.name})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if fw.Metadata().Vendor != tc.vendor || fw.Metadata().Device != "synthetic" || fw.Export().Raw != raw || len(fw.Rules()) == 0 || fw.Complete() != tc.complete {
+			if fw.Metadata().Vendor != tc.vendor || fw.Metadata().Device != "synthetic" || fw.Raw() != raw || len(fw.Rules()) == 0 || fw.Complete() != tc.complete {
 				t.Fatalf("native graph/evidence lost: %+v, diagnostics: %+v", fw.Metadata(), fw.Diagnostics())
 			}
 			r, err := vendors.Renderer(tc.name)

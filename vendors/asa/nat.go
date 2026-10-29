@@ -131,7 +131,7 @@ func portMapping(a, b flow.Interval) ([]fm.PortMapping, bool) {
 	return []fm.PortMapping{{Original: a, Translated: b, Mode: fm.Offset}}, true
 }
 func (p *parser) nat(_ context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	d := fm.Data{}
 	for _, line := range p.lines {
 		w := line.Words

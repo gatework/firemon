@@ -183,7 +183,7 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 				d.DynamicNATs = append(d.DynamicNATs, r)
 			}
 		}
-		tx := s.Cursor.Begin()
+		tx := s.Cursor().Begin()
 		tx.Parse(row.line.Lines()...)
 		tx.Emit(d)
 		if err := s.Commit(tx); err != nil {

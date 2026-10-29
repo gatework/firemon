@@ -23,7 +23,7 @@ type serviceGroup struct {
 }
 
 func (p *parser) objects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var addresses catalog[fm.AddressRecord]
 	var groups catalog[addressGroup]

@@ -40,7 +40,7 @@ func TestFortinetScopeCannotBeInferredAcrossExplicitVDOMBoundaries(t *testing.T)
 	}
 	raw = "config vdom\nedit blue\nconfig system interface\nedit port1\nset ip 192.0.2.1 255.255.255.0\nnext\nend\nnext\nend\n"
 	fw, err = fortinet.ParseVDOM(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"}, "blue")
-	if err != nil || fw.Interface("port1") == nil || fw.Interface("port1").Record().Scope != "blue" {
+	if err != nil || fw.Interface("port1") == nil || fw.Interface("port1").Scope() != "blue" {
 		t.Fatal("local interface context", err)
 	}
 	fw, err = fortinet.ParseVDOM(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"}, "absent")

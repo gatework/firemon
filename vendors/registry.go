@@ -5,6 +5,7 @@ package vendors
 import (
 	"context"
 	"errors"
+	"slices"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
@@ -22,29 +23,50 @@ var ErrUnsupported = errors.New("vendor has no enabled native implementation")
 
 type definition struct {
 	name           string
+	aliases        []string
+	parser         func(config.Limits) config.Parser
 	renderer       plan.Renderer
 	defaultContext string
 }
 
+var definitions = []definition{
+	{
+		name: "paloalto", aliases: []string{"palo_alto"}, renderer: paloalto.Renderer{},
+		parser: func(l config.Limits) config.Parser { return paloalto.Parser{Limits: l} },
+	},
+	{
+		name: "srx", renderer: srx.Renderer{},
+		parser: func(l config.Limits) config.Parser { return srx.Parser{Limits: l} },
+	},
+	{
+		name: "huawei", renderer: huawei.Renderer{},
+		parser: func(l config.Limits) config.Parser { return huawei.Parser{Limits: l} },
+	},
+	{
+		name: "hillstone", renderer: hillstone.Renderer{},
+		parser: func(l config.Limits) config.Parser { return hillstone.Parser{Limits: l} },
+	},
+	{
+		name: "fortinet", renderer: fortinet.Renderer{}, defaultContext: "root",
+		parser: func(l config.Limits) config.Parser { return fortinet.Parser{Limits: l} },
+	},
+	{
+		name: "netscreen", aliases: []string{"screenos"}, renderer: netscreen.Renderer{},
+		parser: func(l config.Limits) config.Parser { return netscreen.Parser{Limits: l} },
+	},
+	{
+		name: "asa", renderer: asa.Renderer{},
+		parser: func(l config.Limits) config.Parser { return asa.Parser{Limits: l} },
+	},
+}
+
 func lookup(name string) (definition, error) {
-	switch name {
-	case "paloalto", "palo_alto":
-		return definition{name: "paloalto", renderer: paloalto.Renderer{}}, nil
-	case "srx":
-		return definition{name: "srx", renderer: srx.Renderer{}}, nil
-	case "huawei":
-		return definition{name: "huawei", renderer: huawei.Renderer{}}, nil
-	case "hillstone":
-		return definition{name: "hillstone", renderer: hillstone.Renderer{}}, nil
-	case "fortinet":
-		return definition{name: "fortinet", renderer: fortinet.Renderer{}, defaultContext: "root"}, nil
-	case "netscreen", "screenos":
-		return definition{name: "netscreen", renderer: netscreen.Renderer{}}, nil
-	case "asa":
-		return definition{name: "asa", renderer: asa.Renderer{}}, nil
-	default:
-		return definition{}, ErrUnsupported
+	for _, d := range definitions {
+		if d.name == name || slices.Contains(d.aliases, name) {
+			return d, nil
+		}
 	}
+	return definition{}, ErrUnsupported
 }
 
 func (d definition) metadata(m fm.Metadata) fm.Metadata {
@@ -78,23 +100,7 @@ func (p Parser) Parse(ctx context.Context, source config.Source, metadata fm.Met
 		return nil, err
 	}
 	metadata = d.metadata(metadata)
-	switch d.name {
-	case "asa":
-		return (asa.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
-	case "srx":
-		return (srx.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
-	case "paloalto":
-		return (paloalto.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
-	case "fortinet":
-		return (fortinet.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
-	case "huawei":
-		return (huawei.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
-	case "hillstone":
-		return (hillstone.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
-	case "netscreen":
-		return (netscreen.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
-	}
-	return nil, ErrUnsupported
+	return d.parser(p.Limits).Parse(ctx, source, metadata)
 }
 
 // Renderer returns the native renderer for an enabled vendor or existing alias.

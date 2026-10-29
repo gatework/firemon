@@ -60,13 +60,13 @@ func TestStaticRoutesKeepVirtualRouterNamespaceThroughSnapshot(t *testing.T) {
 	}
 	for _, graph := range []*fm.Firewall{fw, loaded} {
 		a, b := routeFor(t, graph, "vr-a", "default"), routeFor(t, graph, "vr-b", "default")
-		if a.Record().ID == b.Record().ID || a.Record().NextHop.String() != "192.0.2.254" || b.Record().NextHop.String() != "192.0.2.253" {
+		if a.ID() == b.ID() || a.Record().NextHop.String() != "192.0.2.254" || b.Record().NextHop.String() != "192.0.2.253" {
 			t.Fatal("cross-router route contamination", a.Record(), b.Record())
 		}
 		for i, vrf := range []string{"vr-a", "vr-b"} {
 			dest := netip.MustParseAddr("203.0.113.10")
 			addresses, _ := flow.NewSet(flow.Range{First: dest, Last: dest})
-			paths, err := policy.Routes(context.Background(), graph, vrf, addresses, 16)
+			paths, err := (policy.Engine{Limits: policy.Limits{Regions: 16}}).ResolveRoutes(context.Background(), graph, vrf, addresses)
 			want := graph.Interface(fm.ID(fmt.Sprintf("ethernet1/%d", i+1)))
 			if err != nil || len(paths) != 1 || !paths[0].Known || paths[0].Interface != want {
 				t.Fatal("route bound across VRF", vrf, paths, err)

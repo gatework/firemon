@@ -11,7 +11,7 @@ import (
 func policyLimit() error { return policy.ErrBudget }
 
 func (p *parser) policies(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var rules catalog[fm.RuleRecord]
 	d := fm.Data{}

@@ -58,7 +58,11 @@ func (adapter Parser) Parse(ctx context.Context, source config.Source, metadata 
 			return nil, err
 		}
 	}
-	p := &parser{session: config.NewSession(c, metadata), prefixes: make(map[fm.ID]netip.Prefix)}
+	session, err := config.NewSession(c, metadata)
+	if err != nil {
+		return nil, err
+	}
+	p := &parser{session: session, prefixes: make(map[fm.ID]netip.Prefix)}
 	for _, line := range statements {
 		w := line.Words
 		if len(w) == 0 {
@@ -173,7 +177,7 @@ func keys[T any](m map[string]T) []string {
 	return out
 }
 func (p *parser) objects(_ context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	addresses := make(map[string]fm.AddressRecord)
 	groups := make(map[string]fm.AddressGroupRecord)
 	services := make(map[string]fm.ServiceRecord)
@@ -390,7 +394,7 @@ func (p *parser) objects(_ context.Context, s *config.Session) error {
 	return s.Commit(tx)
 }
 func (p *parser) network(_ context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	interfaces := make(map[string]fm.InterfaceRecord)
 	zones := make(map[string]fm.ZoneRecord)
 	routes := make(map[string]fm.RouteRecord)

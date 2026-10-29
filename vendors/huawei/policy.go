@@ -137,7 +137,7 @@ func (p *parser) matchLine(d *fm.Data, m *fm.Match, w []string, seen map[string]
 	return true
 }
 func (p *parser) policies(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	blocks, root, err := p.ruleBlocks("security-policy")

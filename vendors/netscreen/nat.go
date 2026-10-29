@@ -73,7 +73,7 @@ func uniqueInterface(fw *fm.Firewall, zone fm.ID) *fm.Interface {
 	return out
 }
 func routeInterface(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set) *fm.Interface {
-	paths, err := policy.Routes(ctx, fw, vrf, addresses, 4096)
+	paths, err := (policy.Engine{}).ResolveRoutes(ctx, fw, vrf, addresses)
 	if err != nil || len(paths) == 0 {
 		return nil
 	}
@@ -107,7 +107,7 @@ func (p *parser) nativeAddress(d *fm.Data, name string, r flow.Range, span fm.Sp
 }
 
 func (p *parser) interfaceNAT(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	d := fm.Data{}
 	fw, err := fm.Seal(p.data)
@@ -282,7 +282,7 @@ func (p *parser) interfaceNAT(ctx context.Context, s *config.Session) error {
 }
 
 func (p *parser) embeddedNAT(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	d := fm.Data{}
 	fw, err := fm.Seal(p.data)
@@ -336,7 +336,7 @@ func (p *parser) embeddedNAT(ctx context.Context, s *config.Session) error {
 				var pool *fm.NATPool
 				for _, v := range fw.NATPools() {
 					iface := v.Interface()
-					if v.Record().Name != fields.pool || iface == nil || !slices.Contains(r.Match.ToZones, iface.Record().Zone) {
+					if v.Name() != fields.pool || iface == nil || !slices.Contains(r.Match.ToZones, iface.Record().Zone) {
 						continue
 					}
 					if pool != nil {
@@ -349,7 +349,7 @@ func (p *parser) embeddedNAT(ctx context.Context, s *config.Session) error {
 					n.Unsupported = append(n.Unsupported, "DIP is missing or ambiguous in the destination zone")
 					n.SourceMode = fm.UnknownTranslation
 				} else {
-					n.SourcePool = pool.Record().ID
+					n.SourcePool = pool.ID()
 					if uniqueInterface(fw, r.Match.ToZones[0]) != pool.Interface() {
 						n.Unsupported = append(n.Unsupported, "DIP egress interface is ambiguous within its zone")
 					}
@@ -364,7 +364,7 @@ func (p *parser) embeddedNAT(ctx context.Context, s *config.Session) error {
 				if iface == nil || len(iface.Record().Addresses) != 1 {
 					n.Unsupported = append(n.Unsupported, "interface NAT requires a unique addressed egress")
 				} else {
-					n.Interface = iface.Record().ID
+					n.Interface = iface.ID()
 				}
 			}
 		}

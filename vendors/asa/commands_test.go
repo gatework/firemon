@@ -16,7 +16,7 @@ import (
 func TestASADeclarationIdentitiesSurviveUnrelatedLineInsertion(t *testing.T) {
 	raw := interfaces + "object-group network servers\n network-object host 192.0.2.10\nobject-group service web tcp\n port-object eq 443\naccess-list IN extended permit tcp any4 object-group servers object-group web\naccess-group IN in interface inside\n"
 	a, b := parseASA(t, raw), parseASA(t, "! moved lines\n! comment\n"+raw)
-	if a.Rules()[0].Record().ID != b.Rules()[0].Record().ID || a.Rules()[0].Record().Match.Services[0] != b.Rules()[0].Record().Match.Services[0] {
+	if a.Rules()[0].ID() != b.Rules()[0].ID() || a.Rules()[0].Record().Match.Services[0] != b.Rules()[0].Record().Match.Services[0] {
 		t.Fatal("ACL identity depends on source line")
 	}
 	if !slices.Equal(a.AddressGroup("servers").Record().Members, b.AddressGroup("servers").Record().Members) || !slices.Equal(a.ServiceGroup("web").Record().Members, b.ServiceGroup("web").Record().Members) {

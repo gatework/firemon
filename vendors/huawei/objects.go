@@ -223,7 +223,7 @@ func (p *parser) literalService(d *fm.Data, terms []fm.ServiceTerm) fm.ServiceRe
 	return ref
 }
 func (p *parser) objects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	addresses, err := p.grouped("address", setHeader)

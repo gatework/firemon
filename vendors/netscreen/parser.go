@@ -63,7 +63,10 @@ func (native Parser) Parse(ctx context.Context, source config.Source, metadata f
 	}
 	p := &parser{rows: scopeRows(statements), policyNAT: make(map[fm.ID]policyNAT), intraBlocked: make(map[fm.ID]bool)}
 	p.data.Metadata = metadata
-	s := config.NewSession(cursor, metadata)
+	s, err := config.NewSession(cursor, metadata)
+	if err != nil {
+		return nil, err
+	}
 	stages := []config.Stage{
 		{Name: "interfaces-zones", Run: p.network},
 		{Name: "routes", Requires: []string{"interfaces-zones"}, Run: p.routes},
@@ -217,7 +220,7 @@ func (p *parser) commit(s *config.Session, tx *config.Transaction, d fm.Data) er
 }
 
 func (p *parser) network(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var zones catalog[fm.ZoneRecord]
 	var ifaces catalog[fm.InterfaceRecord]
@@ -341,7 +344,7 @@ func (p *parser) network(ctx context.Context, s *config.Session) error {
 }
 
 func (p *parser) routes(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var routes catalog[fm.RouteRecord]
 	for _, i := range p.data.Interfaces {

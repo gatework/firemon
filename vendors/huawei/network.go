@@ -62,7 +62,7 @@ func number(v string, min, max uint64) (uint64, bool) {
 	return n, e == nil && n >= min && n <= max
 }
 func (p *parser) network(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	groups, err := p.grouped("interface", func(w []string) (string, string, error) {
@@ -155,7 +155,7 @@ func (p *parser) network(ctx context.Context, s *config.Session) error {
 	return p.commit(s, tx, d)
 }
 func (p *parser) routes(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	seen := make(map[fm.ID]bool)

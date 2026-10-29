@@ -201,7 +201,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		if c.Kind == plan.RemoveRule {
 			old := before.Rule(c.Rule)
-			if old == nil || old.Record().Builtin || !nativePolicyID(c.Rule) || after.Rule(c.Rule) != nil {
+			if old == nil || old.Builtin() || !nativePolicyID(c.Rule) || after.Rule(c.Rule) != nil {
 				return nil, ErrRender
 			}
 			commands = append(commands, "config firewall policy", "delete "+string(c.Rule), "end")

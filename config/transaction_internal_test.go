@@ -33,7 +33,10 @@ func TestClosedTransactionCannotAccumulateEffects(t *testing.T) {
 
 func TestCanceledStageRestoresPriorDataEvidenceAndPosition(t *testing.T) {
 	c, _ := NewCursor(Source{Text: "a\nb\n", Complete: true}, Limits{})
-	s := NewSession(c, fm.Metadata{})
+	s, err := NewSession(c, fm.Metadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	first := c.Begin()
 	first.Parse(1)
 	first.Emit(fm.Data{Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "a"}}}})
@@ -41,9 +44,9 @@ func TestCanceledStageRestoresPriorDataEvidenceAndPosition(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	err := s.Run(ctx, []Stage{{Name: "cancel", Run: func(_ context.Context, s *Session) error {
-		s.Cursor.NextPending()
-		tx := s.Cursor.Begin()
+	err = s.Run(ctx, []Stage{{Name: "cancel", Run: func(_ context.Context, s *Session) error {
+		s.Cursor().NextPending()
+		tx := s.Cursor().Begin()
 		tx.Parse(2)
 		tx.Emit(fm.Data{Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "b"}}}})
 		if err := s.Commit(tx); err != nil {
@@ -67,7 +70,10 @@ func TestCanceledStageRestoresPriorDataEvidenceAndPosition(t *testing.T) {
 
 func TestTransactionAndSessionRetainCopyIsolation(t *testing.T) {
 	c, _ := NewCursor(Source{Text: "a\n", Complete: true}, Limits{})
-	s := NewSession(c, fm.Metadata{})
+	s, err := NewSession(c, fm.Metadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	d := fm.Data{Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "a", Unsupported: []string{"original"}}}}}
 	tx := c.Begin()
 	tx.Parse(1)
@@ -85,8 +91,11 @@ func TestTransactionAndSessionRetainCopyIsolation(t *testing.T) {
 
 func TestNestedStageRollbackRetainsOuterUndo(t *testing.T) {
 	c, _ := NewCursor(Source{Text: "a\nb\n", Complete: true}, Limits{})
-	s := NewSession(c, fm.Metadata{})
-	err := s.Run(context.Background(), []Stage{{Name: "outer", Run: func(ctx context.Context, s *Session) error {
+	s, err := NewSession(c, fm.Metadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s.Run(context.Background(), []Stage{{Name: "outer", Run: func(ctx context.Context, s *Session) error {
 		tx := c.Begin()
 		tx.Parse(1)
 		if err := s.Commit(tx); err != nil {

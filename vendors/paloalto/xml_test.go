@@ -30,7 +30,7 @@ func TestNativeXMLAndSetHaveSameGraphAndRetainOriginalXMLEvidence(t *testing.T) 
 	if fw.SemanticDigest() != want.SemanticDigest() {
 		t.Fatal("XML native paths changed graph semantics")
 	}
-	if fw.Export().Raw != xml || routeFor(t, fw, "default", "default").Interface() != fw.Interface("ethernet1/1") {
+	if fw.Raw() != xml || routeFor(t, fw, "default", "default").Interface() != fw.Interface("ethernet1/1") {
 		t.Fatal("source or staged route binding lost")
 	}
 	spans := fw.Address("client").Record().Spans
@@ -42,7 +42,7 @@ func TestNativeXMLAndSetHaveSameGraphAndRetainOriginalXMLEvidence(t *testing.T) 
 		t.Fatal(err)
 	}
 	restored, err := snapshot.Decode(&buf, snapshot.DefaultMaxBytes)
-	if err != nil || restored.Export().Raw != xml || routeFor(t, restored, "default", "default").Interface() != restored.Interface("ethernet1/1") {
+	if err != nil || restored.Raw() != xml || routeFor(t, restored, "default", "default").Interface() != restored.Interface("ethernet1/1") {
 		t.Fatal("XML evidence or graph identity lost in snapshot", err)
 	}
 }

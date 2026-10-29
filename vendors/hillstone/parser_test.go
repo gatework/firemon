@@ -48,7 +48,7 @@ func TestNativeStagesBindReferencesAndKeepDistinctNATObjects(t *testing.T) {
 	if !fw.Complete() {
 		t.Fatal(fw.Diagnostics())
 	}
-	if fw.Interface("eth0").Zone() != fw.Zone("inside") || fw.Interface("eth0").Record().Scope != "trust-vr" {
+	if fw.Interface("eth0").Zone() != fw.Zone("inside") || fw.Interface("eth0").Scope() != "trust-vr" {
 		t.Fatal("zone context not bound")
 	}
 	if len(fw.Routes()) != 2 || len(fw.Rules()) != 1 {
@@ -155,7 +155,7 @@ func TestNATNativeIDsAreScopedByChainAndVRF(t *testing.T) {
 	}
 	for _, id := range []fm.ID{"blue/snat:1", "blue/dnat:1", "red/snat:1"} {
 		n := fw.DynamicNAT(id)
-		if n == nil || n.Record().Name != "1" {
+		if n == nil || n.Name() != "1" {
 			t.Fatalf("missing native identity %s", id)
 		}
 	}

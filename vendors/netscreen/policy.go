@@ -14,7 +14,7 @@ type policyNAT struct {
 }
 
 func (p *parser) policies(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	defer tx.Rollback()
 	d := fm.Data{}
 	for _, row := range p.rows {

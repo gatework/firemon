@@ -109,7 +109,7 @@ func ensureSelectors(m *fm.Match) {
 	}
 }
 func (p *parser) rules(_ context.Context, s *config.Session) error {
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	rules := make(map[string]fm.RuleRecord)
 	var order []string
 	d := fm.Data{}
@@ -274,7 +274,7 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 	if err != nil {
 		return err
 	}
-	tx := s.Cursor.Begin()
+	tx := s.Cursor().Begin()
 	drafts := make(map[string]natDraft)
 	var order []string
 	d := fm.Data{}
@@ -388,8 +388,8 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 			if r.interfaceAddress != "" {
 				prefix, err := hostPrefix(r.interfaceAddress)
 				if err != nil {
-					if a := p.graph.Address(fm.ID(r.interfaceAddress)); a != nil && a.Record().FQDN == "" && len(a.Record().Unsupported) == 0 {
-						prefix = p.prefixes[a.Record().ID]
+					if a := p.graph.Address(fm.ID(r.interfaceAddress)); a != nil && a.Record().FQDN == "" && !a.HasUnsupported() {
+						prefix = p.prefixes[a.ID()]
 					}
 				}
 				if prefix.IsValid() {
