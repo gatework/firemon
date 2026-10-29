@@ -6,6 +6,7 @@ import (
 	"time"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/policy"
 )
 
@@ -20,6 +21,12 @@ func (p *Plan) Preservation() (policy.Equivalence, bool) {
 // logging are equivalent. It shares authorization/readback/deploy contracts
 // with access-request plans; it never authorizes deleting from usage alone.
 func (p Planner) Preserve(ctx context.Context, before, after *fm.Firewall, changes []Change, from time.Time) (*Plan, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if before == nil || after == nil || p.Renderer != nil && dependency.Nil(p.Renderer) {
+		return nil, ErrInvalid
+	}
 	proof, err := p.Engine.Equivalent(ctx, before, after, from)
 	if err != nil {
 		return nil, err
@@ -29,7 +36,7 @@ func (p Planner) Preserve(ctx context.Context, before, after *fm.Firewall, chang
 	result.changes = result.Changes()
 	if len(changes) > 0 {
 		if p.Renderer == nil {
-			return nil, ErrUnsafe
+			return nil, ErrInvalid
 		}
 		result.commands, err = p.Renderer.Render(ctx, before, after, result.Changes())
 		if err != nil {

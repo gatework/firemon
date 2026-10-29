@@ -11,6 +11,8 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
+var ErrInvalid = errors.New("plan: invalid input")
+
 var ErrUnsafe = errors.New("no proven renderable policy plan")
 
 type ChangeKind uint8

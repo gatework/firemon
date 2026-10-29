@@ -39,7 +39,7 @@ func (e Engine) QueryNAT(ctx context.Context, fw *fm.Firewall, q Request) (NATRe
 		return NATResult{}, err
 	}
 	if fw == nil {
-		return NATResult{}, ErrNAT
+		return NATResult{}, ErrInvalid
 	}
 	for _, d := range fw.Diagnostics() {
 		if d.Object == "" {

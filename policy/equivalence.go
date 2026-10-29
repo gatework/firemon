@@ -23,12 +23,21 @@ type Equivalence struct {
 // schedule transitions at or after from. Each time represents the entire
 // half-open interval to the next transition; there is no polling approximation.
 func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.Firewall) ([]Request, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	limits := e.Limits.defaults()
 	chains := make(map[fm.PolicyChain]bool)
 	zones := make(map[fm.ID]bool)
 	times := []time.Time{from}
 	for _, fw := range firewalls {
-		if fw == nil || !fw.Complete() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if fw == nil {
+			return nil, ErrInvalid
+		}
+		if !fw.Complete() {
 			return nil, ErrNotEquivalent
 		}
 		for _, r := range fw.Rules() {
@@ -113,7 +122,10 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 	if err := ctx.Err(); err != nil {
 		return Equivalence{}, err
 	}
-	if before == nil || after == nil || !before.Complete() || !after.Complete() {
+	if before == nil || after == nil {
+		return Equivalence{}, ErrInvalid
+	}
+	if !before.Complete() || !after.Complete() {
 		return Equivalence{}, ErrNotEquivalent
 	}
 	if err := e.preserveNATActivation(ctx, before, after); err != nil {

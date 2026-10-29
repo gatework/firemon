@@ -35,7 +35,10 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 	if err := ctx.Err(); err != nil {
 		return Readback{}, err
 	}
-	if p == nil || p.before == nil || p.after == nil || observed == nil || !observed.Complete() {
+	if p == nil || p.before == nil || p.after == nil || observed == nil {
+		return Readback{}, ErrInvalid
+	}
+	if !observed.Complete() {
 		return Readback{}, ErrReadback
 	}
 	expected, actual := p.after.Export(), observed.Export()
@@ -120,7 +123,10 @@ func (p *Plan) VerifyBaseline(ctx context.Context, observed *fm.Firewall) error 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if p == nil || p.before == nil || observed == nil || !observed.Complete() {
+	if p == nil || p.before == nil || observed == nil {
+		return ErrInvalid
+	}
+	if !observed.Complete() {
 		return ErrReadback
 	}
 	a, err := normalized(p.before.Export())

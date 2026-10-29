@@ -18,27 +18,30 @@ type RoutePath struct {
 
 // ResolveRoutes partitions addresses by native longest-prefix route evidence within one VRF.
 func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set) ([]RoutePath, error) {
-	return Routes(ctx, fw, vrf, addresses, e.Limits.defaults().Regions)
-}
-
-// Routes temporarily supports the native parser migration.
-func Routes(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set, limit int) ([]RoutePath, error) {
-	if limit < 1 {
-		return nil, ErrBudget
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
+	if fw == nil {
+		return nil, ErrInvalid
+	}
+	limits := e.Limits.defaults()
+	limit := limits.Regions
 	var routes []*fm.Route
 	for _, r := range fw.Routes() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		record := r.Record()
 		if record.Scope != vrf {
 			continue
+		}
+		if len(routes) >= limits.Rules {
+			return nil, ErrBudget
 		}
 		if len(record.PolicyMatch) > 0 {
 			return []RoutePath{{Addresses: addresses}}, nil
 		}
 		routes = append(routes, r)
-	}
-	if len(routes) > 100000 {
-		return nil, ErrBudget
 	}
 	slices.SortStableFunc(routes, func(a, b *fm.Route) int {
 		x, y := a.Record(), b.Record()
@@ -53,6 +56,9 @@ func Routes(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set
 		}
 		return strings.Compare(x.Destination.String(), y.Destination.String())
 	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	remaining := addresses
 	var result []RoutePath
 	for i := 0; i < len(routes) && !remaining.Empty(); {
@@ -139,7 +145,7 @@ func (e Engine) QueryPacket(ctx context.Context, fw *fm.Firewall, q PacketReques
 		return PacketResult{}, err
 	}
 	if fw == nil {
-		return PacketResult{}, ErrNAT
+		return PacketResult{}, ErrInvalid
 	}
 	query := semantics(fw.Metadata().Vendor).queryPacket
 	if query == nil {
@@ -310,4 +316,9 @@ func originalDestination(fw *fm.Firewall, relation NATRelation, destinations flo
 		}
 	}
 	return out, nil
+}
+
+// Routes temporarily supports native parser callers until their migration lands.
+func Routes(ctx context.Context, fw *fm.Firewall, vrf string, addresses flow.Set, limit int) ([]RoutePath, error) {
+	return (Engine{Limits: Limits{Regions: limit}}).ResolveRoutes(ctx, fw, vrf, addresses)
 }

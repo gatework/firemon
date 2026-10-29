@@ -8,6 +8,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/policy"
 )
 
@@ -18,7 +19,13 @@ type Planner struct {
 }
 
 func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Request) (*Plan, error) {
-	if fw == nil || !fw.Complete() || len(requests) == 0 || len(requests) > 100 {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if fw == nil || len(requests) == 0 || len(requests) > 100 || p.Renderer != nil && dependency.Nil(p.Renderer) {
+		return nil, ErrInvalid
+	}
+	if !fw.Complete() {
 		return nil, ErrUnsafe
 	}
 	maxCandidates := p.MaxCandidates
@@ -31,7 +38,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 	}
 	for _, r := range requests[1:] {
 		if !r.SameContext(q) {
-			return nil, fmt.Errorf("%w: batch contexts differ", ErrUnsafe)
+			return nil, fmt.Errorf("%w: batch contexts differ", ErrInvalid)
 		}
 		var err error
 		q.Traffic, err = q.Traffic.Union(r.Traffic, 4096)
@@ -59,7 +66,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		return result, nil
 	}
 	if p.Renderer == nil {
-		return nil, fmt.Errorf("%w: renderer required", ErrUnsafe)
+		return nil, fmt.Errorf("%w: renderer required", ErrInvalid)
 	}
 	// A permanent change cannot be proven across unmodeled time or condition transitions.
 	for _, r := range fw.Rules() {

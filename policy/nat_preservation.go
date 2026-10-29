@@ -20,7 +20,10 @@ func (e Engine) PreserveNAT(ctx context.Context, before, after *fm.Firewall, fro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if before == nil || after == nil || !before.Complete() || !after.Complete() {
+	if before == nil || after == nil {
+		return ErrInvalid
+	}
+	if !before.Complete() || !after.Complete() {
 		return ErrNotEquivalent
 	}
 	if len(before.StaticNATs())+len(before.DynamicNATs())+len(after.StaticNATs())+len(after.DynamicNATs()) == 0 {

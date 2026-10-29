@@ -14,7 +14,7 @@ func (e Engine) AppendCanPreserve(ctx context.Context, before, after *fm.Firewal
 		return false, err
 	}
 	if before == nil || after == nil || before.Rule(id) == nil || after.Rule(id) == nil {
-		return false, ErrNotEquivalent
+		return false, ErrInvalid
 	}
 	if !semantics(before.Metadata().Vendor).linearPolicy {
 		return true, nil

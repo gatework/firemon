@@ -8,6 +8,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/policy"
 )
 
@@ -22,7 +23,13 @@ type RuleIntent struct {
 // Transfer inserts disjoint explicit partitions, preserving every prior rule's
 // ownership outside their union across all zones/chains and future times.
 func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []RuleIntent, from time.Time) (*Plan, error) {
-	if before == nil || !before.Complete() || len(intents) == 0 || len(intents) > 100 || p.Renderer == nil {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if before == nil || len(intents) == 0 || len(intents) > 100 || dependency.Nil(p.Renderer) {
+		return nil, ErrInvalid
+	}
+	if !before.Complete() {
 		return nil, ErrUnsafe
 	}
 	d := before.Export()
@@ -33,7 +40,10 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if !intent.Action.Valid() || intent.Request.Traffic.Empty() || intent.Request.EgressInterface != "" {
+		if !intent.Action.Valid() || intent.Request.Traffic.Empty() {
+			return nil, ErrInvalid
+		}
+		if intent.Request.EgressInterface != "" {
 			return nil, ErrUnsafe
 		}
 		for _, s := range []fm.Status{intent.Log, intent.LogStart, intent.LogEnd} {
