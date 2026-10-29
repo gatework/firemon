@@ -170,9 +170,9 @@ func (e Engine) fortinetDestinations(ctx context.Context, fw *fm.Firewall, q Req
 
 // Split destination references once per rule, preserving ordinary objects while
 // retaining VIP identity across nested groups. Traversal is bounded and memoized.
-func fortinetDestRefs(fw *fm.Firewall, refs []fm.AddressRef, budget *resolutionBudget) ([]fm.AddressRef, map[fm.ID]bool, bool, error) {
+func fortinetDestRefs(fw *fm.Firewall, refs []fm.AddressRef, budget *resolutionBudget) ([]fm.AddressRef, map[fm.NATRef]bool, bool, error) {
 	var ordinary []fm.AddressRef
-	vips := make(map[fm.ID]bool)
+	vips := make(map[fm.NATRef]bool)
 	states := make(map[fm.AddressRef]uint8)
 	known := true
 	var visit func(fm.AddressRef) error
@@ -191,8 +191,12 @@ func fortinetDestRefs(fw *fm.Firewall, refs []fm.AddressRef, budget *resolutionB
 		switch ref.Kind {
 		case fm.AddressObject:
 			a := fw.Address(ref.ID)
-			if a != nil && a.Record().Scope == "vip" {
-				vips[ref.ID] = true
+			if a != nil && a.Record().VIP != (fm.NATRef{}) {
+				if a.VIPStaticNAT() == nil && a.VIPDynamicNAT() == nil {
+					known = false
+				} else {
+					vips[a.Record().VIP] = true
+				}
 			} else {
 				ordinary = append(ordinary, ref)
 			}
@@ -253,7 +257,7 @@ func (e Engine) fortinetPolicy(ctx context.Context, fw *fm.Firewall, q Request, 
 			if known && !r.Match.AnyDestination && len(normal) == 0 {
 				continue
 			}
-		} else if vips[view.ID] {
+		} else if vips[fm.NATRef{Kind: view.Kind, ID: view.ID}] {
 			r.Match.Destinations = nil
 			r.Match.AnyDestination = true
 			n, err := transform(fw, view.Steps[0])

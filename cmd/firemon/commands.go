@@ -12,13 +12,7 @@ import (
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
-	"github.com/gatework/firemon/vendors/asa"
-	"github.com/gatework/firemon/vendors/fortinet"
-	"github.com/gatework/firemon/vendors/hillstone"
-	"github.com/gatework/firemon/vendors/huawei"
-	"github.com/gatework/firemon/vendors/netscreen"
-	"github.com/gatework/firemon/vendors/paloalto"
-	"github.com/gatework/firemon/vendors/srx"
+	"github.com/gatework/firemon/vendors"
 	"io"
 	"net/netip"
 	"os"
@@ -83,35 +77,14 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 	if len(raw) > 16<<20 {
 		return config.ErrSource
 	}
-	meta := fm.Metadata{Device: *device, Software: *software}
+	meta := fm.Metadata{Device: *device, Vendor: *vendor, Context: *vdom, Software: *software}
 	if *capturedAt != "" {
 		meta.CapturedAt, err = time.Parse(time.RFC3339, *capturedAt)
 		if err != nil {
 			return err
 		}
 	}
-	var fw *fm.Firewall
-	switch *vendor {
-	case "hillstone":
-		fw, err = hillstone.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
-	case "paloalto", "palo_alto":
-		fw, err = paloalto.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
-	case "asa":
-		fw, err = asa.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
-	case "srx":
-		fw, err = srx.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
-	case "netscreen", "screenos":
-		fw, err = netscreen.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
-	case "fortinet":
-		if *vdom == "" {
-			*vdom = "root"
-		}
-		fw, err = fortinet.ParseVDOM(ctx, config.Source{Text: string(raw), Complete: *complete}, meta, *vdom)
-	case "huawei":
-		fw, err = huawei.Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
-	default:
-		return fmt.Errorf("vendor %q has no enabled parser", *vendor)
-	}
+	fw, err := (vendors.Parser{}).Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
 	if err != nil {
 		return err
 	}
@@ -186,7 +159,7 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 		return err
 	}
 	q := policy.Request{Traffic: traffic, Scope: *scope, RuleSet: *ruleset, FromZone: fm.ID(*from), ToZone: fm.ID(*to)}
-	if q.Scope == "" && fw.Metadata().Vendor == "fortinet" {
+	if q.Scope == "" {
 		q.Scope = fw.Metadata().Context
 	}
 	if *at != "" {
@@ -227,24 +200,9 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			Unknown, Unmatched []flow.Box
 		}{result.Complete, rows, result.Unknown.Boxes(), result.Unmatched.Boxes()})
 	case "plan":
-		var renderer plan.Renderer
-		switch fw.Metadata().Vendor {
-		case "hillstone":
-			renderer = hillstone.Renderer{}
-		case "paloalto":
-			renderer = paloalto.Renderer{}
-		case "asa":
-			renderer = asa.Renderer{}
-		case "srx":
-			renderer = srx.Renderer{}
-		case "netscreen":
-			renderer = netscreen.Renderer{}
-		case "fortinet":
-			renderer = fortinet.Renderer{}
-		case "huawei":
-			renderer = huawei.Renderer{}
-		default:
-			return plan.ErrUnsafe
+		renderer, err := vendors.Renderer(fw.Metadata().Vendor)
+		if err != nil {
+			return err
 		}
 		result, err := (plan.Planner{Renderer: renderer}).Plan(ctx, fw, []policy.Request{q})
 		if err != nil {

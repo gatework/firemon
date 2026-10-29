@@ -1,8 +1,60 @@
 # Implementation verification
 
-This records the requirement audit, independent review and verification of the approved [specification](spec.md) and nine-task [plan](plans/go-firewall.md). The final core correction is [`49b866f`](https://github.com/gatework/firemon/commit/49b866f6aa3cac32dbcfa355fad7450de15b4bd7). The supported vendor boundary is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. Capability-based implementation does not imply complete native grammar or firmware parity.
+This records the requirement audit, independent review and verification of the approved [specification](spec.md), original [plan](plans/go-firewall.md) and subsequent operations remediation. The original core correction was [`49b866f`](https://github.com/gatework/firemon/commit/49b866f6aa3cac32dbcfa355fad7450de15b4bd7). The supported vendor boundary is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. Capability-based implementation does not imply complete native grammar or firmware parity.
 
-## Requirement audit
+## Operations remediation on 2026-10-29
+
+The user requested execution of the review remediation and uniform cross-vendor
+business contracts. The active [remediation plan](plans/2026-10-29-operations-remediation.md)
+and [contract notes](contracts.md) extend the original audit below.
+
+| Requirement | Regression and implementation evidence |
+| --- | --- |
+| Preserve effective NAT during policy design/transfer | `plan/transfer_test.go` reproduced a permit transfer removing Fortinet SNAT while claiming NAT unchanged. `policy/nat_preservation.go` now checks catalog dependencies, activation and effective translation partitions. ScreenOS ownership, future schedule boundaries, unchanged/disjoint changes and cancellation are covered. A disjoint Fortinet transfer independently reparses native readback and rejects a capture that loses the existing SNAT. |
+| Typed VIP graph relations | Root and Fortinet tests reproduced ordinary `vip` scope misclassification, incorrect VDOM scope and acceptance of old snapshot semantics. Explicit `NATRef` and `SourceVIP` survive snapshot restoration and independently renamed IDs; ordinary planner addresses cannot reuse VIP selector semantics. Semantic format is now 9. |
+| Explicit migration contexts | Fortinet root/security and explicit ASA ingress ACL mappings generate commands that independently reparse and pass `Plan.Verify`. Missing/ambiguous mappings fail. |
+| Compound compliance predicates | `analysis/risk_test.go` covers typed per-dimension predicates, All/Any, five relations, unknown propagation, service tuple pairing and retained legacy paired-traffic behavior. |
+| Member usage and convergence discovery | Member identity includes rule, role, typed object, revision/digest and nested reference paths. Window/reset/partial evidence stays unknown; coarse positive hits outside the window do not prove in-window use. Deterministic bounded candidate discovery retains whole-rulebase proof and rejected candidates. |
+| Uniform native/application selection | `vendors/registry_test.go` exercises all seven native parsers/renderers, aliases and selected Fortinet context. CLI and `operations` reuse this boundary; `policy/semantics.go` composes native policy/NAT/packet behavior. |
+| Capture/design/deployment composition | `operations` tests cover stale/reserved preflight, incomplete/fatal parse evidence, identity/raw/firmware/time substitution, cancellation, idempotency and native capture/design/apply/readback/publication with host authorization. |
+| Configuration isolation and persistence | Device sessions explicitly implement begin/end. Exact-plan authorization precedes reservation, session creation and native isolation; the journal retains ownership through release failures and recovery. Parser firmware/time substitution was reproduced through Apply reaching device execution; capture identity checks now reject it before writes. Adapter coverage includes owned PAN locks/queued commits, exclusive Junos candidate mode and seven native profiles, with lost-save recovery and no configuration replay. |
+
+The tests above include observed failing-then-passing regressions. Fortinet
+manual/revert/unknown save modes originally reached 28 native script steps before
+persistence failure; preflight now rejects them before capture or policy writes.
+
+Current-root validation passed on macOS arm64, Go 1.27.1:
+
+```sh
+GOWORK=off GOPROXY=off go test -count=1 -race ./...
+GOWORK=off GOPROXY=off go vet ./...
+```
+
+All 21 root packages passed again after the review corrections, including the
+deployment suite (7.553 seconds). The optional adapter passed its complete race
+suite and vet against this root through a temporary external Go workspace.
+These workspace results are distinct from the published dependency-pin
+verification recorded at delivery. Local transcripts are separate from
+real-device evidence.
+
+The simplification pass retained behavior tests and shared the policy/NAT
+partition comparison. Full `ce-code-review` run
+`20261029-085656-c6ae2761` completed all nine Codex review lenses and a separate
+validator (`status: complete`, pre-fix verdict `Ready with fixes`). Five candidate
+reports reduced to three confirmed findings. The caller applied #1 and the core
+capture correction directly; the device worker applied #2/#3 to the adapter.
+
+| Finding | Reproduction and correction |
+| --- | --- |
+| #1, P1: native configuration isolation preceded authorization | A denied request opened a session and acquired a token; a failed baseline skipped the authorization callback entirely. `TestDeniedAuthorizationCannotAcquireConfigurationLock` failed in both cases, then passed after exact-plan authorization moved before reservation/session creation. Locked fresh-baseline verification remains mandatory. |
+| #2, P2: interrupted native capture lost received configuration | Native SRX/Fortinet EOF, rejection and output-limit cases persisted an empty source; generic paths could substitute pager or PAN diff output. Capture extraction now binds accepted steps or bounded failed-attempt bytes to the configuration command. Collector tests retain incomplete evidence and retry without reconnecting. Core deployment EOF/cancel tests also reproduced lost baseline/readback source; bounded local persistence now retains that observation and its reservation, followed by fresh recovery without write replay. |
+| #3, P2: unimplemented context labels were accepted | Non-Fortinet tenant labels passed session construction and reached dialing. Seven-vendor context cases now reject unsupported labels before dialing, parsing or publishing. Fortinet still requires an explicit VDOM; other native profiles use empty context for the default domain. |
+
+All three findings are addressed. Both testing gaps were added: independent
+native readback of a Fortinet transfer with retained SNAT, and future scheduled
+policy changes to NAT ownership. No review finding was rejected or deferred.
+
+## Original requirement audit
 
 | Plan task | Implemented contract and executable evidence | Current result |
 | --- | --- | --- |

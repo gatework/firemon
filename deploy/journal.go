@@ -109,7 +109,7 @@ func (l *fileLease) Save(ctx context.Context, r Record) (Record, error) {
 		}
 	} else if err != nil {
 		return Record{}, err
-	} else if prior.Sequence != r.Sequence || prior.Device != r.Device || prior.Vendor != r.Vendor || prior.PlanDigest != r.PlanDigest || prior.BaselineRevision != r.BaselineRevision {
+	} else if prior.Sequence != r.Sequence || prior.Device != r.Device || prior.Vendor != r.Vendor || prior.Context != r.Context || prior.PlanDigest != r.PlanDigest || prior.BaselineRevision != r.BaselineRevision || prior.ConfigurationToken != "" && prior.ConfigurationToken != r.ConfigurationToken || prior.ConfigurationReleased && !r.ConfigurationReleased {
 		return Record{}, ErrJournalConflict
 	}
 	r.Sequence++

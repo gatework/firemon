@@ -2,6 +2,8 @@ package deploy
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	fm "github.com/gatework/firemon"
@@ -132,7 +134,7 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	defer func() { err = errors.Join(err, lease.Close()) }()
 	prior, err := lease.Load(ctx)
 	if err == nil {
-		if prior.PlanDigest != p.Digest() || prior.BaselineRevision != expected || prior.Device != p.Before().Metadata().Device {
+		if prior.PlanDigest != p.Digest() || prior.BaselineRevision != expected || prior.Device != p.Before().Metadata().Device || prior.Context != p.Before().Metadata().Context {
 			return Result{}, ErrJournalConflict
 		}
 		if prior.Phase == Published {
@@ -144,7 +146,7 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 		return Result{}, err
 	}
 	metadata := p.Before().Metadata()
-	a := &attempt{lease: lease, record: Record{ID: operation, Device: metadata.Device, Vendor: metadata.Vendor, BaselineRevision: expected, ExpectedRevision: expected, PlanDigest: p.Digest(), Phase: Prepared}}
+	a := &attempt{lease: lease, record: Record{ID: operation, Device: metadata.Device, Vendor: metadata.Vendor, Context: metadata.Context, BaselineRevision: expected, ExpectedRevision: expected, PlanDigest: p.Digest(), Phase: Prepared}}
 	if err := a.update(ctx, func(*Record) {}); err != nil {
 		return Result{}, err
 	}
@@ -154,6 +156,9 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	}
 	if head.Revision != expected || current.SemanticDigest() != p.Before().SemanticDigest() {
 		return Result{}, errors.Join(snapshot.ErrConflict, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
+	}
+	if err := e.Authorizer.Authorize(ctx, Authorization{Operation: operation, Device: metadata.Device, BaselineRevision: expected, PlanDigest: p.Digest()}); err != nil {
+		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
 	}
 	if err := e.Store.Reserve(ctx, metadata.Device, expected, operation); err != nil {
 		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
@@ -170,18 +175,30 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 			err = errors.Join(err, session.Close())
 		}
 	}()
+	{
+		var token [24]byte
+		if _, err := rand.Read(token[:]); err != nil {
+			return Result{}, e.uncertain(ctx, a, err)
+		}
+		if err := a.update(ctx, func(r *Record) { r.ConfigurationToken = hex.EncodeToString(token[:]) }); err != nil {
+			return Result{}, errors.Join(ErrPending, err)
+		}
+		if err := session.BeginConfiguration(ctx, a.get().ConfigurationToken); err != nil {
+			return Result{}, e.uncertain(ctx, a, err)
+		}
+	}
 	baseline, err := e.read(ctx, session, Running, a.get())
 	if err != nil {
-		return Result{}, e.uncertain(ctx, a, err)
+		return Result{}, e.uncertainRunning(ctx, a, baseline, err)
 	}
 	if err := p.VerifyBaseline(ctx, baseline); err != nil {
 		return Result{}, errors.Join(ErrUncertain, err, e.observe(ctx, a, baseline))
 	}
-	if err := e.Authorizer.Authorize(ctx, Authorization{Operation: operation, Device: metadata.Device, BaselineRevision: expected, PlanDigest: p.Digest()}); err != nil {
-		return Result{}, errors.Join(err, e.abortUnchanged(ctx, a, Aborted))
-	}
 	commands := p.Commands()
 	if len(commands) == 0 {
+		if err := e.endConfiguration(ctx, session, a); err != nil {
+			return Result{}, e.uncertain(ctx, a, err)
+		}
 		if err := e.abortUnchanged(ctx, a, Published); err != nil {
 			return Result{}, err
 		}
@@ -204,6 +221,9 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 		return Result{}, e.uncertain(ctx, a, err)
 	}
 	if err := a.update(ctx, func(r *Record) { r.Phase = PersistenceConfirmed }); err != nil {
+		return Result{}, e.uncertain(ctx, a, err)
+	}
+	if err := e.endConfiguration(ctx, session, a); err != nil {
 		return Result{}, e.uncertain(ctx, a, err)
 	}
 	if err := session.Close(); err != nil {
@@ -230,7 +250,7 @@ func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (re
 	if err != nil {
 		return Result{}, err
 	}
-	if r.PlanDigest != p.Digest() || r.Device != p.Before().Metadata().Device {
+	if r.PlanDigest != p.Digest() || r.Device != p.Before().Metadata().Device || r.Context != p.Before().Metadata().Context {
 		return Result{}, ErrJournalConflict
 	}
 	if r.Phase == Published || r.Phase == Aborted {
@@ -304,9 +324,14 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 		return Result{}, e.uncertain(ctx, a, err)
 	}
 	defer func() { err = errors.Join(err, session.Close()) }()
+	if recovered {
+		if err := e.endConfiguration(ctx, session, a); err != nil {
+			return Result{}, e.uncertain(ctx, a, err)
+		}
+	}
 	observed, err := e.read(ctx, session, Running, r)
 	if err != nil {
-		return Result{}, e.uncertain(ctx, a, err)
+		return Result{}, e.uncertainRunning(ctx, a, observed, err)
 	}
 	_, afterErr := p.Verify(ctx, observed)
 	if afterErr == nil {
@@ -349,24 +374,38 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 	return Result{}, errors.Join(ErrUncertain, afterErr, e.observe(ctx, a, observed))
 }
 
-func (e Engine) read(ctx context.Context, session Session, view View, r Record) (*fm.Firewall, error) {
-	capture, err := session.Read(ctx, view)
-	if err != nil {
-		return nil, err
+func (e Engine) endConfiguration(ctx context.Context, session Session, a *attempt) error {
+	r := a.get()
+	if r.ConfigurationToken == "" || r.ConfigurationReleased {
+		return nil
 	}
-	if capture.Metadata.Device != r.Device || capture.Metadata.Vendor != r.Vendor {
-		return nil, fmt.Errorf("%w: capture identity mismatch", ErrInvalid)
+	if err := session.EndConfiguration(ctx, r.ConfigurationToken); err != nil {
+		return err
+	}
+	return a.update(ctx, func(r *Record) { r.ConfigurationReleased = true })
+}
+
+func (e Engine) read(ctx context.Context, session Session, view View, r Record) (*fm.Firewall, error) {
+	capture, readErr := session.Read(ctx, view)
+	if capture.Metadata.Device != r.Device || capture.Metadata.Vendor != r.Vendor || capture.Metadata.Context != r.Context {
+		return nil, errors.Join(readErr, fmt.Errorf("%w: capture identity mismatch", ErrInvalid))
 	}
 	if len(capture.Source.Text) > 16<<20 {
-		return nil, fmt.Errorf("%w: capture exceeds parser limit", ErrInvalid)
+		return nil, errors.Join(readErr, fmt.Errorf("%w: capture exceeds parser limit", ErrInvalid))
+	}
+	if readErr != nil {
+		metadata := capture.Metadata
+		metadata.SourceDigest, metadata.ParserVersion = "", ""
+		fw, err := fm.Seal(fm.Data{Metadata: metadata, Raw: capture.Source.Text, Diagnostics: []fm.Diagnostic{{Code: "readback-capture-failed", Message: "native configuration capture was interrupted"}}})
+		return fw, errors.Join(readErr, err)
 	}
 	fw, err := e.Parser.Parse(ctx, capture.Source, capture.Metadata)
 	if err != nil {
 		// Preserve failed native parsing as incomplete raw evidence, not the
 		// previous graph. Error text may contain secrets and is not persisted.
-		return fm.Seal(fm.Data{Metadata: fm.Metadata{Device: r.Device, Vendor: r.Vendor, Software: capture.Metadata.Software}, Raw: capture.Source.Text, Diagnostics: []fm.Diagnostic{{Code: "readback-parse-failed", Message: "native parser could not establish the captured configuration"}}})
+		return fm.Seal(fm.Data{Metadata: fm.Metadata{Device: r.Device, Vendor: r.Vendor, Context: r.Context, Software: capture.Metadata.Software, CapturedAt: capture.Metadata.CapturedAt}, Raw: capture.Source.Text, Diagnostics: []fm.Diagnostic{{Code: "readback-parse-failed", Message: "native parser could not establish the captured configuration"}}})
 	}
-	if fw == nil || fw.Metadata().Device != r.Device || fw.Metadata().Vendor != r.Vendor || fw.Export().Raw != capture.Source.Text {
+	if fw == nil || fw.Metadata().Device != r.Device || fw.Metadata().Vendor != r.Vendor || fw.Metadata().Context != r.Context || fw.Metadata().Software != capture.Metadata.Software || !fw.Metadata().CapturedAt.Equal(capture.Metadata.CapturedAt) || fw.Export().Raw != capture.Source.Text {
 		return nil, fmt.Errorf("%w: parser did not retain captured evidence", ErrInvalid)
 	}
 	if !capture.Source.Complete && fw.Complete() {
@@ -391,6 +430,18 @@ func (e Engine) abortUnchanged(ctx context.Context, a *attempt, phase Phase) err
 func (e Engine) uncertain(ctx context.Context, a *attempt, cause error) error {
 	return errors.Join(ErrUncertain, cause, a.update(ctx, func(r *Record) { r.Phase = Uncertain }))
 }
+
+func (e Engine) uncertainRunning(ctx context.Context, a *attempt, observed *fm.Firewall, cause error) error {
+	if observed == nil {
+		return e.uncertain(ctx, a, cause)
+	}
+	// Finish only local evidence persistence after cancellation. Device work is
+	// already stopped; the reservation remains until independent recovery.
+	evidenceCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return errors.Join(e.uncertain(evidenceCtx, a, cause), e.observe(evidenceCtx, a, observed))
+}
+
 func (e Engine) observe(ctx context.Context, a *attempt, fw *fm.Firewall) error {
 	d := fw.Export()
 	d.Diagnostics = append(d.Diagnostics, fm.Diagnostic{Code: "unverified-deployment", Message: "observed device state has not passed effect and persistence verification"})

@@ -3,7 +3,6 @@ package policy
 import (
 	"context"
 	"errors"
-	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -117,19 +116,8 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 	if before == nil || after == nil || !before.Complete() || !after.Complete() {
 		return Equivalence{}, ErrNotEquivalent
 	}
-	if before.Metadata().Vendor == "fortinet" || after.Metadata().Vendor == "fortinet" {
-		budget := e.Limits.defaults().Rules
-		a, err := e.fortinetActiveVIPs(ctx, before, &budget)
-		if err != nil {
-			return Equivalence{}, err
-		}
-		b, err := e.fortinetActiveVIPs(ctx, after, &budget)
-		if err != nil {
-			return Equivalence{}, err
-		}
-		if !maps.Equal(a, b) {
-			return Equivalence{}, ErrNotEquivalent
-		}
+	if err := e.preserveNATActivation(ctx, before, after); err != nil {
+		return Equivalence{}, err
 	}
 	a, b := before.Export(), after.Export()
 	a.Rules, b.Rules = nil, nil
@@ -182,21 +170,28 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 		if err != nil {
 			return Equivalence{}, err
 		}
-		for k, traffic := range left {
-			if ok, err := equivalentTraffic(traffic, right[k], limits.Regions); err != nil {
-				return Equivalence{}, err
-			} else if !ok {
-				return Equivalence{}, ErrNotEquivalent
-			}
-			delete(right, k)
-		}
-		for _, traffic := range right {
-			if !traffic.Empty() {
-				return Equivalence{}, ErrNotEquivalent
-			}
+		if err := equivalentPartitions(left, right, limits.Regions); err != nil {
+			return Equivalence{}, err
 		}
 	}
 	return Equivalence{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), From: from, Contexts: len(contexts)}, nil
+}
+
+func equivalentPartitions[K comparable](left, right map[K]flow.Traffic, limit int) error {
+	for key, traffic := range left {
+		if same, err := equivalentTraffic(traffic, right[key], limit); err != nil {
+			return err
+		} else if !same {
+			return ErrNotEquivalent
+		}
+		delete(right, key)
+	}
+	for _, traffic := range right {
+		if !traffic.Empty() {
+			return ErrNotEquivalent
+		}
+	}
+	return nil
 }
 
 func equivalentTraffic(a, b flow.Traffic, limit int) (bool, error) {

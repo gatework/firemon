@@ -2,14 +2,20 @@ package analysis_test
 
 import (
 	"context"
+	"errors"
 	"net/netip"
+	"strings"
 	"testing"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/analysis"
+	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
+	"github.com/gatework/firemon/vendors/asa"
+	"github.com/gatework/firemon/vendors/fortinet"
+	"github.com/gatework/firemon/vendors/hillstone"
 	"github.com/gatework/firemon/vendors/paloalto"
 )
 
@@ -38,6 +44,186 @@ func translationGraphs(t *testing.T) (*fm.Firewall, *fm.Firewall) {
 		t.Fatal(err)
 	}
 	return source, target
+}
+
+func TestTranslationExplicitASAIngressChainAllowsOmittedTargetDestinationZone(t *testing.T) {
+	ctx := context.Background()
+	interfaces := `interface GigabitEthernet0/0
+ nameif inside
+ security-level 100
+ ip address 192.0.2.254 255.255.255.0
+!
+interface GigabitEthernet0/1
+ nameif outside
+ security-level 0
+ ip address 198.51.100.254 255.255.255.0
+!
+`
+	parse := func(raw, device string) *fm.Firewall {
+		t.Helper()
+		fw, err := asa.Parse(ctx, config.Source{Text: raw, Complete: true}, fm.Metadata{Device: device})
+		if err != nil || !fw.Complete() {
+			t.Fatalf("ASA native capture: %v, %v", err, fw.Diagnostics())
+		}
+		return fw
+	}
+	source := parse(interfaces+"access-list IN extended permit tcp host 192.0.2.1 host 198.51.100.1 eq 443\naccess-group IN in interface inside\n", "source")
+	raw := interfaces + "access-list TARGET extended deny ip any4 any4\naccess-group TARGET in interface inside\naccess-list OTHER extended deny ip any4 any4\naccess-group OTHER in interface outside\n"
+	target := parse(raw, "target")
+	x := analysis.Translator{Planner: plan.Planner{Renderer: asa.Renderer{}}, Zones: map[fm.ID]fm.ID{"inside": "inside", "outside": ""}, Chains: map[analysis.Chain]analysis.Chain{{RuleSet: "IN"}: {RuleSet: "TARGET"}}}
+	pairs := []analysis.ZonePair{{From: "inside", To: "outside"}}
+	p, err := x.Plan(ctx, source, target, pairs, nil)
+	if err != nil {
+		t.Fatalf("explicit native ACL mapping must render: %v", err)
+	}
+	var objects, entries []string
+	inObject := false
+	for _, command := range p.Commands() {
+		switch {
+		case command == "configure terminal" || command == "end":
+		case command == "exit":
+			inObject = false
+			objects = append(objects, "!")
+		case strings.HasPrefix(command, "object "):
+			inObject = true
+			objects = append(objects, command)
+		case strings.HasPrefix(command, "access-list TARGET line 1 extended "):
+			entries = append(entries, strings.Replace(command, " line 1 ", " ", 1))
+		case inObject:
+			objects = append(objects, " "+command)
+		default:
+			t.Fatalf("unexpected ACL command: %s", command)
+		}
+	}
+	if len(entries) != 1 {
+		t.Fatalf("wrong target ACL: %v", p.Commands())
+	}
+	observed := parse(strings.Join(objects, "\n")+"\n"+strings.Join(entries, "\n")+"\n"+raw, "target")
+	if _, err := p.Verify(ctx, observed); err != nil {
+		t.Fatalf("independent ASA readback: %v", err)
+	}
+	q := request(t, "192.0.2.1", "198.51.100.1")
+	q.RuleSet, q.FromZone, q.ToZone = "TARGET", "inside", "outside"
+	r, err := (policy.Engine{}).Query(ctx, observed, q)
+	if err != nil || !r.Complete || r.Allowed.Empty() {
+		t.Fatal(r, err)
+	}
+	q.RuleSet, q.FromZone = "OTHER", "outside"
+	r, err = (policy.Engine{}).Query(ctx, observed, q)
+	if err != nil || !r.Complete || !r.Allowed.Empty() {
+		t.Fatalf("unselected ACL changed: %v, %v", r, err)
+	}
+	delete(x.Zones, "outside")
+	if _, err := x.Plan(ctx, source, target, pairs, nil); !errors.Is(err, analysis.ErrInvalid) {
+		t.Fatalf("absent destination mapping was guessed: %v", err)
+	}
+}
+
+func TestTranslationRequiresExplicitAmbiguousChainMapping(t *testing.T) {
+	source, target := translationGraphs(t)
+	d := target.Export()
+	d.Metadata.Vendor = "hillstone"
+	for i, scope := range []string{"blue", "red"} {
+		d.Rules = append(d.Rules, fm.RuleRecord{Object: fm.Object{ID: fm.ID(scope), Scope: scope}, Position: i, RuleSet: "security", Builtin: true, Action: fm.Drop, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant, Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}})
+	}
+	var err error
+	target, err = fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := analysis.Translator{Planner: plan.Planner{Renderer: hillstone.Renderer{}}, Zones: map[fm.ID]fm.ID{"inside": "trust", "outside": "untrust"}}
+	pairs := []analysis.ZonePair{{From: "inside", To: "outside"}}
+	if _, err := x.Plan(context.Background(), source, target, pairs, []fm.ID{"2"}); !errors.Is(err, analysis.ErrInvalid) {
+		t.Fatalf("ambiguous target chain must require mapping: %v", err)
+	}
+	x.Chains = map[analysis.Chain]analysis.Chain{{RuleSet: "security"}: {Scope: "red", RuleSet: "security"}}
+	p, err := x.Plan(context.Background(), source, target, pairs, []fm.ID{"2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := request(t, "192.0.2.2", "198.51.100.1")
+	q.FromZone, q.ToZone = "trust", "untrust"
+	for _, scope := range []string{"blue", "red"} {
+		q.Scope = scope
+		r, err := (policy.Engine{}).Query(context.Background(), p.After(), q)
+		if err != nil || !r.Complete || (!r.Allowed.Empty()) != (scope == "red") {
+			t.Fatalf("wrong chain %s: %v, %v", scope, r, err)
+		}
+	}
+	d.Metadata.Vendor = "asa"
+	target, err = fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x.Chains = nil
+	if _, err := x.Plan(context.Background(), source, target, pairs, []fm.ID{"2"}); !errors.Is(err, analysis.ErrInvalid) {
+		t.Fatalf("ASA chain must require mapping: %v", err)
+	}
+}
+
+func TestTranslationInfersNativeFortinetSelectedContextAndVerifiesReadback(t *testing.T) {
+	ctx := context.Background()
+	topology := `config system interface
+edit "inside"
+set vdom "root"
+set ip 192.0.2.254 255.255.255.0
+next
+edit "outside"
+set vdom "root"
+set ip 198.51.100.254 255.255.255.0
+next
+end
+`
+	native := topology + `config firewall address
+edit "client"
+set subnet 192.0.2.1 255.255.255.255
+next
+edit "server"
+set subnet 198.51.100.1 255.255.255.255
+next
+end
+config firewall service custom
+edit "https"
+set tcp-portrange 443
+next
+end
+config firewall policy
+edit 10
+set srcintf "inside"
+set dstintf "outside"
+set srcaddr "client"
+set dstaddr "server"
+set service "https"
+set action accept
+set schedule "always"
+set logtraffic disable
+next
+end
+`
+	parse := func(text, device string) *fm.Firewall {
+		t.Helper()
+		fw, err := fortinet.Parse(ctx, config.Source{Text: text, Complete: true}, fm.Metadata{Device: device})
+		if err != nil || !fw.Complete() {
+			t.Fatalf("native capture: %v, %v", err, fw.Diagnostics())
+		}
+		return fw
+	}
+	source, target := parse(native, "source"), parse(topology, "target")
+	x := analysis.Translator{Planner: plan.Planner{Renderer: fortinet.Renderer{}}, Zones: map[fm.ID]fm.ID{"inside": "inside", "outside": "outside"}}
+	p, err := x.Plan(ctx, source, target, []analysis.ZonePair{{From: "inside", To: "outside"}}, nil)
+	if err != nil {
+		t.Fatalf("native no-NAT migration must select root/security: %v", err)
+	}
+	observed := parse(topology+strings.Join(p.Commands(), "\n")+"\n", "target")
+	if _, err := p.Verify(ctx, observed); err != nil {
+		t.Fatalf("independent native readback: %v", err)
+	}
+	q := request(t, "192.0.2.1", "198.51.100.1")
+	q.Scope, q.FromZone, q.ToZone = "root", "inside", "outside"
+	r, err := (policy.Engine{}).Query(ctx, observed, q)
+	if err != nil || r.Allowed.Empty() {
+		t.Fatalf("mapped native chain has no permit: %v, %v", r, err)
+	}
 }
 
 func TestTranslationUsesEffectivePartitionsAndExplicitZoneMapping(t *testing.T) {

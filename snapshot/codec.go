@@ -14,7 +14,7 @@ import (
 
 const DefaultMaxBytes int64 = 128 << 20
 const formatVersion uint16 = 1
-const semanticVersion uint16 = 8
+const semanticVersion uint16 = 9
 
 var magic = [8]byte{'F', 'I', 'R', 'E', 'M', 'O', 'N', 0}
 var ErrFormat = errors.New("unsupported or corrupt snapshot")

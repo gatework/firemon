@@ -46,47 +46,38 @@ func (e Engine) QueryNAT(ctx context.Context, fw *fm.Firewall, q Request) (NATRe
 		}
 	}
 	budget := e.Limits.defaults().Rules
-	switch fw.Metadata().Vendor {
-	case "hillstone":
-		return e.hillstoneNAT(ctx, fw, q, &budget)
-	case "asa":
-		return e.asaNAT(ctx, fw, q, &budget)
-	case "srx":
-		return e.srxNAT(ctx, fw, q, &budget)
-	case "netscreen":
-		return e.netscreenNAT(ctx, fw, q, &budget)
-	case "fortinet":
-		return e.fortinetNAT(ctx, fw, q, &budget)
-	case "huawei":
-		return e.huaweiNAT(ctx, fw, q, &budget)
-	case "paloalto":
-		entries := fw.NATSequence()
-		if len(entries) > e.Limits.defaults().Rules {
-			return NATResult{}, ErrBudget
-		}
-		steps := make([]NATStep, 0, len(entries))
-		var stage int
-		haveStage := false
-		for _, entry := range entries {
-			if entry.Scope != q.Scope {
-				continue
-			}
-			if haveStage && entry.Order.Stage != stage {
-				return NATResult{}, ErrNAT
-			}
-			stage, haveStage = entry.Order.Stage, true
-			if entry.Kind == fm.StaticNATObject {
-				r := fw.StaticNAT(entry.ID).Record()
-				if r.Bidirectional && !r.Disabled && reverseDomainIntersects(q.Traffic, r) {
-					return NATResult{}, ErrNAT
-				}
-			}
-			steps = append(steps, NATStep{Kind: entry.Kind, ID: entry.ID})
-		}
-		return e.natChain(ctx, fw, q, steps, &budget)
-	default:
+	query := semantics(fw.Metadata().Vendor).queryNAT
+	if query == nil {
 		return NATResult{}, ErrNAT
 	}
+	return query(e, ctx, fw, q, &budget)
+}
+
+func (e Engine) paloaltoNAT(ctx context.Context, fw *fm.Firewall, q Request, budget *int) (NATResult, error) {
+	entries := fw.NATSequence()
+	if len(entries) > e.Limits.defaults().Rules {
+		return NATResult{}, ErrBudget
+	}
+	steps := make([]NATStep, 0, len(entries))
+	var stage int
+	haveStage := false
+	for _, entry := range entries {
+		if entry.Scope != q.Scope {
+			continue
+		}
+		if haveStage && entry.Order.Stage != stage {
+			return NATResult{}, ErrNAT
+		}
+		stage, haveStage = entry.Order.Stage, true
+		if entry.Kind == fm.StaticNATObject {
+			r := fw.StaticNAT(entry.ID).Record()
+			if r.Bidirectional && !r.Disabled && reverseDomainIntersects(q.Traffic, r) {
+				return NATResult{}, ErrNAT
+			}
+		}
+		steps = append(steps, NATStep{Kind: entry.Kind, ID: entry.ID})
+	}
+	return e.natChain(ctx, fw, q, steps, budget)
 }
 
 // natTransform is an ephemeral execution view of the separate typed catalogs.
@@ -103,6 +94,7 @@ type natTransform struct {
 
 func transform(fw *fm.Firewall, step NATStep) (natTransform, error) {
 	n := natTransform{known: true}
+	native := semantics(fw.Metadata().Vendor)
 	objectKnown := true
 	for _, d := range fw.Diagnostics() {
 		if d.Object == step.ID {
@@ -120,27 +112,11 @@ func transform(fw *fm.Firewall, step NATStep) (natTransform, error) {
 		n.match, n.source, n.destination = r.Match, r.Source, r.Destination
 		n.sourcePorts, n.destinationPorts = r.SourcePorts, r.DestinationPorts
 		n.disabled, n.known = r.Disabled, len(r.Unsupported) == 0 && objectKnown
-		if fw.Metadata().Vendor == "hillstone" && !r.Bidirectional {
-			n.egress = r.Interface
+		if native.staticTransform != nil {
+			native.staticTransform(&n, r)
 		}
 		if step.Reverse {
-			if fw.Metadata().Vendor == "asa" || fw.Metadata().Vendor == "srx" || fw.Metadata().Vendor == "netscreen" || fw.Metadata().Vendor == "huawei" {
-				return reverseStatic(n, r), nil
-			}
-			// StoneOS BNAT is unconditional one-to-one source mapping, with an implicit
-			// inverse destination mapping. Extra selectors have no established inverse.
-			n.known = n.known && r.Bidirectional && len(r.Source) > 0 && len(r.Destination) == 0 &&
-				len(r.SourcePorts) == 0 && len(r.DestinationPorts) == 0 && r.Interface == "" &&
-				r.Match.AnyDestination && r.Match.AnyService && r.Match.AnyFromZone && r.Match.AnyToZone &&
-				r.Match.Schedule == "" && len(r.Match.Applications) == 0 && len(r.Match.Users) == 0 && len(r.Match.Unsupported) == 0
-			n.match = fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}
-			n.source, n.destination, n.sourcePorts, n.destinationPorts = nil, nil, nil, nil
-			for _, m := range r.Source {
-				if m.Mode != fm.Offset && m.Mode != fm.Identity {
-					n.known = false
-				}
-				n.destination = append(n.destination, fm.Mapping{Original: m.Translated, Translated: m.Original, Mode: m.Mode})
-			}
+			return native.reverseStatic(n, r), nil
 		}
 	case fm.DynamicNATObject:
 		n.dynamic = fw.DynamicNAT(step.ID)
@@ -152,32 +128,8 @@ func transform(fw *fm.Firewall, step NATStep) (natTransform, error) {
 		n.sourcePorts, n.destinationPorts = r.SourcePorts, r.DestinationPorts
 		n.disabled = r.Disabled
 		n.known = len(r.Unsupported) == 0 && objectKnown && r.SourceMode != fm.UnknownTranslation && r.DestinationMode != fm.UnknownTranslation
-		// Hillstone eif constrains selection. PAN interface-address is an allocation
-		// target and is intentionally not treated as a match predicate here.
-		if fw.Metadata().Vendor == "hillstone" {
-			n.egress = r.Interface
-		}
-		if fw.Metadata().Vendor == "huawei" {
-			if r.Order.Section == "nat-policy" {
-				n.egress = r.Interface
-			}
-			for _, pool := range []*fm.NATPool{n.dynamic.SourcePool(), n.dynamic.DestinationPool()} {
-				if pool != nil {
-					n.known = n.known && len(pool.Record().Unsupported) == 0
-				}
-			}
-			if r.SourceMode == fm.InterfaceIP {
-				iface := n.dynamic.Interface()
-				n.known = n.known && iface != nil
-				if iface != nil {
-					n.known = n.known && !iface.Record().Disabled && len(iface.Record().Unsupported) == 0 && len(iface.Record().Addresses) == 1
-				}
-			}
-		}
-		if fw.Metadata().Vendor == "netscreen" && r.SourceMode == fm.InterfaceIP && len(n.sourcePorts) == 0 {
-			// ScreenOS reserves the well-known ports for both DIP and interface PAT.
-			// Allocation remains possible, not an exact observed session binding.
-			n.sourcePorts = []fm.PortMapping{{Original: flow.Interval{High: 65535}, Translated: flow.Interval{Low: 1024, High: 65535}, Mode: fm.Constant}}
+		if native.dynamicTransform != nil {
+			native.dynamicTransform(&n)
 		}
 	default:
 		return n, ErrNAT

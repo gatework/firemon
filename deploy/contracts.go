@@ -47,11 +47,26 @@ type ReceiptFunc func(context.Context, Receipt) error
 // Session implementations must stop on receipt errors, obey cancellation and
 // never replay a possibly written command. Save must confirm business persistence
 // (for example the PAN commit job), not merely observe a command prompt.
+// Candidate-based devices must provide native isolation through the configuration
+// lifecycle. Devices that edit running state directly explicitly handle this
+// lifecycle too, for example by preflighting persistence or using no-ops.
 type Session interface {
+	ConfigurationSession
 	Read(context.Context, View) (Capture, error)
 	Execute(context.Context, []string, ReceiptFunc) (Outcome, error)
 	Save(context.Context, ReceiptFunc) (Outcome, error)
 	Close() error
+}
+
+// ConfigurationSession supplies device-side candidate isolation. Begin is called
+// before the fresh baseline; its opaque ownership token is journaled first.
+// End may be called by a fresh recovery session with that token. It must never
+// remove another owner's lock, discard candidate changes, or replay writes.
+// An uncertain release must return an error. Close only releases transport
+// resources; it is not proof that an administrative device lock was removed.
+type ConfigurationSession interface {
+	BeginConfiguration(context.Context, string) error
+	EndConfiguration(context.Context, string) error
 }
 type Factory interface {
 	Open(context.Context, string) (Session, error)
@@ -68,6 +83,10 @@ func (f ParseFunc) Parse(ctx context.Context, s config.Source, m fm.Metadata) (*
 type Authorization struct {
 	Operation, Device, BaselineRevision, PlanDigest string
 }
+
+// Authorizer approves the exact operation before reservation, session creation
+// or native configuration isolation. The locked fresh baseline is still verified
+// against this approved plan before any policy command is executed.
 type Authorizer interface {
 	Authorize(context.Context, Authorization) error
 }
@@ -102,11 +121,16 @@ const (
 
 type Record struct {
 	ID, Device, Vendor, BaselineRevision, ExpectedRevision, PlanDigest string
+	Context                                                            string
 	Sequence                                                           uint64
 	Phase                                                              Phase
 	WriteStarted, Saved, Applied                                       bool
 	ObservedRevision, PublishedRevision                                string
 	Receipts                                                           []Receipt
+	// ConfigurationToken survives cancellation and process death until a
+	// successful ownership-checked EndConfiguration has been journaled.
+	ConfigurationToken    string
+	ConfigurationReleased bool
 }
 
 // A Lease is exclusive across processes for the whole operation. A crash releases

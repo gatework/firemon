@@ -68,11 +68,12 @@ type Reclamation struct {
 	Removable                            bool
 }
 type Reclaimer struct {
-	Planner      plan.Planner
-	At           time.Time
-	Revision     string
-	Window       fm.TimeWindow
-	Observations []UsageObservation
+	Planner            plan.Planner
+	At                 time.Time
+	Revision           string
+	Window             fm.TimeWindow
+	Observations       []UsageObservation
+	MemberObservations []MemberUsageObservation
 }
 
 // Analyze keeps disabled, expired, shadowed and unused evidence separate. A
@@ -187,7 +188,11 @@ func unused(observations []UsageObservation, id RuleIdentity, revision, digest s
 			continue
 		}
 		if o.Hits > 0 {
-			return False
+			if !o.Start.Before(window.Start) && !o.End.After(window.End) {
+				return False
+			}
+			uncertain = true
+			continue
 		}
 		if !o.Complete || o.CounterReset {
 			uncertain = true

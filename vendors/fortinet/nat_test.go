@@ -76,6 +76,9 @@ func TestSeparateVIPsAndPolicyNATRetainOwnerAfterSnapshot(t *testing.T) {
 	if static.Record().Destination[0].Mode != fm.Offset || dynamic.Record().DestinationPorts[0].Translated.Low != 22 {
 		t.Fatal("native mappings")
 	}
+	if fw.Address("vip:web-public").VIPStaticNAT() != static || fw.Address("vip:ssh-public").VIPDynamicNAT() != dynamic || fw.StaticNAT("vip-source:web-public").SourceVIP() != fw.Address("vip:web-public") {
+		t.Fatal("VIP graph associations were not explicit shared references")
+	}
 	var buf bytes.Buffer
 	if err := snapshot.Encode(&buf, fw); err != nil {
 		t.Fatal(err)
@@ -83,6 +86,109 @@ func TestSeparateVIPsAndPolicyNATRetainOwnerAfterSnapshot(t *testing.T) {
 	loaded, err := snapshot.Decode(&buf, snapshot.DefaultMaxBytes)
 	if err != nil || loaded.DynamicNAT("policy:21").Rule() != loaded.Rule("21") {
 		t.Fatal("restored owning policy", err)
+	}
+	if loaded.Address("vip:web-public").VIPStaticNAT() != loaded.StaticNAT("vip:web-public") || loaded.Address("vip:ssh-public").VIPDynamicNAT() != loaded.DynamicNAT("vip:ssh-public") || loaded.StaticNAT("vip-source:web-public").SourceVIP() != loaded.Address("vip:web-public") {
+		t.Fatal("VIP graph associations lost shared identity after snapshot")
+	}
+}
+
+func TestVIPAddressesAndGroupsRetainSelectedVDOMScope(t *testing.T) {
+	raw := fixture(t, "basic") + nativeNAT + "config firewall vipgrp\nedit public-services\nset member web-public ssh-public\nnext\nend\n"
+	fw := parse(t, raw)
+	for _, id := range []fm.ID{"vip:web-public", "vip:ssh-public"} {
+		if got := fw.Address(id).Record().Scope; got != "root" {
+			t.Errorf("address %s scope = %q, want selected VDOM root", id, got)
+		}
+	}
+	if got := fw.AddressGroup("vip-group:public-services").Record().Scope; got != "root" {
+		t.Errorf("VIP group scope = %q, want selected VDOM root", got)
+	}
+}
+
+func TestVIPGroupRejectsOrdinaryAddressWithVIPPrefixedNativeName(t *testing.T) {
+	raw := fixture(t, "basic") + `config firewall address
+edit "vip:ordinary"
+set subnet 198.51.100.42 255.255.255.255
+next
+end
+config firewall vipgrp
+edit "public-services"
+set member "vip:ordinary"
+next
+end
+`
+	fw := parse(t, raw)
+	if fw.Complete() || len(fw.AddressGroup("vip-group:public-services").Record().Unsupported) == 0 {
+		t.Fatal("VIP group inferred membership from the native address ID", fw.Diagnostics())
+	}
+	if a := fw.Address("vip:ordinary"); a.Record().VIP != (fm.NATRef{}) || a.VIPStaticNAT() != nil || a.VIPDynamicNAT() != nil {
+		t.Fatal("ordinary address acquired a VIP association")
+	}
+}
+
+func TestVIPQueriesFollowExplicitReferencesAcrossIndependentNativeIdentities(t *testing.T) {
+	raw := strings.Replace(fixture(t, "basic")+nativeNAT, "set mappedip \"192.0.2.20\"", "set mappedip \"192.0.2.20\"\nset nat-source-vip enable", 1)
+	raw = strings.Replace(raw, "set dstaddr \"web-public\" \"ssh-public\"", "set dstaddr \"public-services\"", 1)
+	raw += "config firewall addrgrp\nedit public-services\nset member web-public ssh-public\nnext\nend\n"
+	d := parse(t, raw).Export()
+	addressIDs := map[fm.ID]fm.ID{"vip:web-public": "public-static-address", "vip:ssh-public": "public-port-address"}
+	for i := range d.Addresses {
+		r := &d.Addresses[i]
+		if id, ok := addressIDs[r.ID]; ok {
+			r.ID, r.Name, r.VIP.ID = id, "independent-address-name", "same-native-map-id"
+		}
+	}
+	for i := range d.AddressGroups {
+		for j := range d.AddressGroups[i].Members {
+			ref := &d.AddressGroups[i].Members[j]
+			if id, ok := addressIDs[ref.ID]; ok {
+				ref.ID = id
+			}
+		}
+	}
+	for i := range d.StaticNATs {
+		r := &d.StaticNATs[i]
+		if r.ID == "vip:web-public" {
+			r.ID, r.Name = "same-native-map-id", "independent-destination-map-name"
+		}
+		if r.ID == "vip-source:web-public" {
+			r.ID, r.Name, r.SourceVIP.ID = "native-source-map-id", "independent-source-map-name", "public-static-address"
+		}
+	}
+	for i := range d.DynamicNATs {
+		if r := &d.DynamicNATs[i]; r.ID == "vip:ssh-public" {
+			r.ID, r.Name = "same-native-map-id", "independent-port-map-name"
+		}
+	}
+	fw, err := fm.Seal(d)
+	if err != nil || !fw.Complete() {
+		t.Fatal(fw, err)
+	}
+	for _, tc := range []struct {
+		name string
+		dst  string
+		port uint16
+	}{
+		{"static-vip", "198.51.100.20/32", 443},
+		{"port-vip", "198.51.100.21/32", 2222},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			q := policy.Request{Scope: "root", FromZone: "wan1", ToZone: "inside", Traffic: traffic(t, "203.0.113.50/32", tc.dst, 6, 1000, tc.port)}
+			got, err := (policy.Engine{}).Query(context.Background(), fw, q)
+			if err != nil || !got.Complete || got.Allowed.Empty() {
+				t.Fatal("VIP policy followed matching names or untyped IDs", got, err)
+			}
+		})
+	}
+	outbound := policy.Request{Scope: "root", FromZone: "inside", ToZone: "wan1", EgressInterface: "wan1", Traffic: traffic(t, "192.0.2.20/32", "203.0.113.50/32", 6, 1000, 443)}
+	nat, err := (policy.Engine{}).QueryNAT(context.Background(), fw, outbound)
+	if err != nil || !nat.Complete || len(nat.Relations) != 1 || nat.Relations[0].ID != "native-source-map-id" || nat.Relations[0].Translated.Boxes()[0].Source.First.String() != "198.51.100.20" {
+		t.Fatal("source VIP mapping followed reconstructed name or ID", nat, err)
+	}
+	packet := policy.PacketRequest{Request: policy.Request{Scope: "root", FromZone: "wan1", Traffic: traffic(t, "203.0.113.50/32", "198.51.100.21/32", 6, 1000, 2222)}, VRF: "root"}
+	got, err := (policy.Engine{}).QueryPacket(context.Background(), fw, packet)
+	if err != nil || !got.Complete || len(got.Paths) != 1 || got.Paths[0].Policy.Allowed.Empty() || got.Paths[0].NAT.Translated.Boxes()[0].Destination.First.String() != "192.0.2.21" {
+		t.Fatal("packet lookup lost explicit port VIP identity", got, err)
 	}
 }
 func TestDefaultServiceSourcePortAndGlobalOverride(t *testing.T) {

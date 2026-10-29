@@ -132,24 +132,17 @@ func (e Engine) QueryPacket(ctx context.Context, fw *fm.Firewall, q PacketReques
 	if err := ctx.Err(); err != nil {
 		return PacketResult{}, err
 	}
-	if fw != nil && fw.Metadata().Vendor == "asa" {
-		return e.asaPacket(ctx, fw, q)
-	}
-	if fw != nil && fw.Metadata().Vendor == "srx" {
-		return e.srxPacket(ctx, fw, q)
-	}
-	if fw != nil && fw.Metadata().Vendor == "netscreen" {
-		return e.netscreenPacket(ctx, fw, q)
-	}
-	if fw != nil && fw.Metadata().Vendor == "fortinet" {
-		return e.fortinetPacket(ctx, fw, q)
-	}
-	if fw != nil && fw.Metadata().Vendor == "huawei" {
-		return e.huaweiPacket(ctx, fw, q)
-	}
-	if fw == nil || fw.Metadata().Vendor != "paloalto" {
+	if fw == nil {
 		return PacketResult{}, ErrNAT
 	}
+	query := semantics(fw.Metadata().Vendor).queryPacket
+	if query == nil {
+		return PacketResult{}, ErrNAT
+	}
+	return query(e, ctx, fw, q)
+}
+
+func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest) (PacketResult, error) {
 	limits := e.Limits.defaults()
 	result := PacketResult{Complete: true}
 	if q.FromZone == "" || fw.Zone(q.FromZone) == nil {

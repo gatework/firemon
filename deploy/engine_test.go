@@ -34,6 +34,9 @@ type fakeSession struct {
 	closed bool
 }
 
+func (*fakeSession) BeginConfiguration(context.Context, string) error { return nil }
+func (*fakeSession) EndConfiguration(context.Context, string) error   { return nil }
+
 func (d *fakeDevice) Open(_ context.Context, _ string) (deploy.Session, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

@@ -19,8 +19,7 @@ import (
 var ErrRender = errors.New("unsupported FortiOS command representation")
 
 // Renderer emits commands within Metadata.Context. A deployment session must
-// establish that VDOM before executing them; Fortinet online sessions are not
-// enabled by the optional connector adapter yet.
+// establish that VDOM before executing them.
 type Renderer struct{}
 
 func quoted(value string) (string, error) {

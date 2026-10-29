@@ -2,12 +2,15 @@ package analysis_test
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"testing"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/analysis"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
+	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/vendors/hillstone"
 )
 
@@ -33,6 +36,104 @@ func graph(t *testing.T, pairs [][2]string) *fm.Firewall {
 		t.Fatal(err)
 	}
 	return fw
+}
+
+func TestConvergenceCandidatesDiscoverContainAndCombineDeterministically(t *testing.T) {
+	fw := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.1", "198.51.100.1"}, {"192.0.2.2", "198.51.100.1"}})
+	c := analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}
+	candidates, err := c.Candidates(context.Background(), fw)
+	if err != nil || len(candidates) != 3 {
+		t.Fatalf("candidate discovery: %v, %v", candidates, err)
+	}
+	for i, candidate := range candidates {
+		want := [][]fm.ID{{"1", "2"}, {"1", "3"}, {"2", "3"}}[i]
+		if !slices.Equal(candidate.Rules, want) || candidate.Plan == nil || candidate.Rejection != nil || candidate.Reason == "" {
+			t.Fatalf("candidate %d: %+v", i, candidate)
+		}
+		if i == 0 && candidate.Kind != analysis.ContainRules || i > 0 && candidate.Kind != analysis.CombineRules {
+			t.Fatalf("candidate kind %d: %+v", i, candidate)
+		}
+		if _, ok := candidate.Plan.Preservation(); !ok {
+			t.Fatal("candidate lacks whole-plan proof")
+		}
+		if _, err := candidate.Plan.Verify(context.Background(), candidate.Plan.After()); err != nil {
+			t.Fatal(err)
+		}
+		if len(candidate.Plan.After().Addresses()) != len(fw.Addresses()) {
+			t.Fatal("candidate removed shared objects")
+		}
+	}
+	d := fw.Export()
+	slices.Reverse(d.Rules)
+	reordered, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := c.Candidates(context.Background(), reordered)
+	if err != nil || len(again) != len(candidates) {
+		t.Fatal(again, err)
+	}
+	for i := range again {
+		if !slices.Equal(again[i].Rules, candidates[i].Rules) {
+			t.Fatal("storage order changed discovery")
+		}
+	}
+	if len(fw.Rules()) != 3 {
+		t.Fatal("discovery applied a plan")
+	}
+	c.MaxComparisons = 1
+	if partial, err := c.Candidates(context.Background(), fw); !errors.Is(err, policy.ErrBudget) || len(partial) != 0 {
+		t.Fatalf("budget returned partial success: %v, %v", partial, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := c.Candidates(ctx, fw); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+
+func TestConvergenceCandidatesRetainUnsafePairRejections(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		pairs [][2]string
+		deny  bool
+	}{
+		{"cross-pairs", [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.2", "198.51.100.2"}}, false},
+		{"deny-shadowing", [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.2", "198.51.100.1"}, {"192.0.2.2", "198.51.100.1"}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fw := graph(t, tc.pairs)
+			if tc.deny {
+				d := fw.Export()
+				d.Rules[1].Action = fm.Deny
+				var err error
+				fw, err = fm.Seal(d)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			rows, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Candidates(context.Background(), fw)
+			if err != nil || len(rows) != 1 || rows[0].Plan != nil || rows[0].Rejection == nil || rows[0].Reason == "" {
+				t.Fatalf("unsafe candidate should be explained: %+v, %v", rows, err)
+			}
+		})
+	}
+}
+
+func TestConvergenceCandidateFindsStrictContainment(t *testing.T) {
+	d := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.2", "198.51.100.1"}}).Export()
+	d.Rules[0].Match.Sources = append(d.Rules[0].Match.Sources, d.Rules[1].Match.Sources...)
+	fw, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Candidates(context.Background(), fw)
+	if err != nil || len(rows) != 1 || rows[0].Kind != analysis.ContainRules || rows[0].Plan == nil || rows[0].Rejection != nil {
+		t.Fatal(rows, err)
+	}
+	if rows[0].Plan.After().Rule("2") != nil || len(rows[0].Plan.After().Rule("1").Record().Match.Sources) != 2 {
+		t.Fatal("contained rule was not removed without widening")
+	}
 }
 
 func TestConvergenceProvesWholePlanAndKeepsSharedObjects(t *testing.T) {

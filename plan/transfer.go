@@ -117,6 +117,9 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 }
 
 func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall, changes []Change, from time.Time) (Proof, error) {
+	if err := p.Engine.PreserveNAT(ctx, before, after, from); err != nil {
+		return Proof{}, err
+	}
 	contexts, err := p.Engine.Contexts(ctx, from, before, after)
 	if err != nil {
 		return Proof{}, err

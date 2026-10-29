@@ -134,7 +134,7 @@ func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
 				f.invalid("VIP port mapping")
 			} else {
 				portMappings = []fm.PortMapping{{Original: original, Translated: translated, Mode: fm.Offset}}
-				service := fm.ServiceRecord{Object: object(id+":service", name, "nat:"+id), Terms: []fm.ServiceTerm{serviceTerm(proto)}}
+				service := fm.ServiceRecord{Object: object(id+":service", name, p.vdom), Terms: []fm.ServiceTerm{serviceTerm(proto)}}
 				service.Terms[0].DestinationPort = original
 				d.Services = append(d.Services, service)
 				match.AnyService = false
@@ -143,7 +143,11 @@ func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
 		}
 		f.ignore("comment", "uuid", "color")
 		f.finish()
-		a := fm.AddressRecord{Object: object(id, name, "vip")}
+		kind := fm.StaticNATObject
+		if forward {
+			kind = fm.DynamicNATObject
+		}
+		a := fm.AddressRecord{Object: object(id, name, p.vdom), VIP: fm.NATRef{Kind: kind, ID: o.ID}}
 		if ok1 {
 			a.Ranges = []flow.Range{public}
 		}
@@ -157,7 +161,7 @@ func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
 			d.StaticNATs = append(d.StaticNATs, fm.StaticNATRecord{Object: o, Match: match, Order: order, Destination: mappings, Interface: ifaceID, Disabled: disabled})
 		}
 		if !forward || forced {
-			reverse := fm.StaticNATRecord{Object: object("vip-source:"+name, name, p.vdom), Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}, Order: fm.NATOrder{Stage: 2, Position: order.Position, Section: "vip-source-interface"}, Disabled: disabled}
+			reverse := fm.StaticNATRecord{Object: object("vip-source:"+name, name, p.vdom), SourceVIP: fm.AddressRef{Kind: fm.AddressObject, ID: a.ID}, Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}, Order: fm.NATOrder{Stage: 2, Position: order.Position, Section: "vip-source-interface"}, Disabled: disabled}
 			reverse.Spans = slices.Clone(o.Spans)
 			reverse.Unsupported = slices.Clone(o.Unsupported)
 			if forward {
@@ -182,7 +186,7 @@ func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
 	var groupNames [][]string
 	err = p.each(ctx, tx, "firewall vipgrp", func(b *config.Block) {
 		name := b.Header.Words[1]
-		r := fm.AddressGroupRecord{Object: object("vip-group:"+name, name, "vip")}
+		r := fm.AddressGroupRecord{Object: object("vip-group:"+name, name, p.vdom)}
 		f := readFields(tx, b, &r.Object)
 		names := f.list("member")
 		if iface := f.one("interface", ""); iface != "" && iface != "any" {
@@ -197,10 +201,16 @@ func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
 	if err != nil {
 		return err
 	}
+	vips := make(map[fm.ID]bool, len(d.Addresses))
+	for _, a := range d.Addresses {
+		if a.VIP != (fm.NATRef{}) {
+			vips[a.ID] = true
+		}
+	}
 	for i, names := range groupNames {
 		for _, name := range names {
 			ref := p.addressRef(name)
-			if !strings.HasPrefix(string(ref.ID), "vip:") {
+			if ref.Kind != fm.AddressObject || !vips[ref.ID] {
 				d.AddressGroups[i].Unsupported = append(d.AddressGroups[i].Unsupported, "VIP group member is not a VIP")
 			}
 			d.AddressGroups[i].Members = append(d.AddressGroups[i].Members, ref)

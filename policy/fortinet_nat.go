@@ -201,7 +201,7 @@ func fortinetEgressKnown(fw *fm.Firewall, iface *fm.Interface, q Request) bool {
 	return true
 }
 
-func (e Engine) fortinetSourceTier(ctx context.Context, fw *fm.Firewall, q Request, section string, active map[fm.ID]bool, preservePorts bool, budget *int) (NATResult, error) {
+func (e Engine) fortinetSourceTier(ctx context.Context, fw *fm.Firewall, q Request, section string, active map[fm.NATRef]bool, preservePorts bool, budget *int) (NATResult, error) {
 	out := NATResult{Complete: true}
 	limit := e.Limits.defaults().Regions
 	var covered flow.Traffic
@@ -214,7 +214,14 @@ func (e Engine) fortinetSourceTier(ctx context.Context, fw *fm.Firewall, q Reque
 		}
 		*budget--
 		r := nat.Record()
-		if r.Scope != q.Scope || r.Order.Section != section || !active[fm.ID("vip:"+r.Name)] {
+		if r.Scope != q.Scope || r.Order.Section != section {
+			continue
+		}
+		vip := nat.SourceVIP()
+		if vip == nil {
+			return NATResult{Unknown: q.Traffic}, nil
+		}
+		if !active[vip.Record().VIP] {
 			continue
 		}
 		part, err := e.natChain(ctx, fw, q, []NATStep{{Kind: fm.StaticNATObject, ID: r.ID}}, budget)
@@ -284,8 +291,8 @@ func (e Engine) fortinetSourceTier(ctx context.Context, fw *fm.Firewall, q Reque
 	return out, nil
 }
 
-func (e Engine) fortinetActiveVIPs(ctx context.Context, fw *fm.Firewall, budget *int) (map[fm.ID]bool, error) {
-	active := make(map[fm.ID]bool)
+func (e Engine) fortinetActiveVIPs(ctx context.Context, fw *fm.Firewall, budget *int) (map[fm.NATRef]bool, error) {
+	active := make(map[fm.NATRef]bool)
 	resolver := &resolutionBudget{ctx: ctx, limit: e.Limits.defaults().Combinations}
 	for _, rule := range fw.Rules() {
 		if *budget <= 0 {

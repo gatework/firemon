@@ -178,7 +178,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		if len(changes) == 0 {
 			continue
 		}
-		possible, err := p.appendCanPreserve(ctx, fw, next, r, q, prior)
+		possible, err := p.Engine.AppendCanPreserve(ctx, fw, next, r.ID, q, prior)
 		if err != nil {
 			return nil, err
 		}
@@ -236,44 +236,6 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 	return nil, ErrUnsafe
 }
 
-// appendCanPreserve rejects a candidate only when its expanded match takes
-// traffic outside the request from a later rule or from unmatched traffic.
-// Earlier ownership can mask declaration cross-products, so subset tests on
-// individual dimensions alone are insufficient. This is a rejection filter;
-// every surviving candidate still needs the complete proof and native renderer.
-func (p Planner) appendCanPreserve(ctx context.Context, before, after *fm.Firewall, rule fm.RuleRecord, q policy.Request, prior policy.Result) (bool, error) {
-	// FortiOS policy lookup has VIP classes and a translated match view. Its
-	// ownership cannot be inferred from ordinary position ordering.
-	if before.Metadata().Vendor == "fortinet" {
-		return true, nil
-	}
-	expanded, known, err := p.Engine.Match(ctx, after, after.Rule(rule.ID).Record().Match, q, universe())
-	if err != nil || !known {
-		return true, err
-	}
-	outside, err := expanded.Difference(q.Traffic, 4096)
-	if err != nil {
-		return false, err
-	}
-	for _, trace := range prior.Trace {
-		if outside.Empty() {
-			return true, nil
-		}
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
-		owner := before.Rule(trace.Rule).Record()
-		if owner.Position > rule.Position || owner.Position == rule.Position && owner.ID > rule.ID {
-			continue
-		}
-		outside, err = outside.Difference(trace.Traffic, 4096)
-		if err != nil {
-			return false, err
-		}
-	}
-	return outside.Empty(), nil
-}
-
 func sameZones(m fm.Match, q policy.Request) bool {
 	from := q.FromZone == "" && m.AnyFromZone || !m.AnyFromZone && len(m.FromZones) == 1 && m.FromZones[0] == q.FromZone
 	to := q.ToZone == "" && m.AnyToZone || !m.AnyToZone && len(m.ToZones) == 1 && m.ToZones[0] == q.ToZone
@@ -305,6 +267,9 @@ func (p Planner) prove(ctx context.Context, before, after *fm.Firewall, q policy
 func (p Planner) proveWithPrior(ctx context.Context, before, after *fm.Firewall, q policy.Request, prior *policy.Result) (Proof, error) {
 	if before == nil || after == nil || !before.Complete() || !after.Complete() {
 		return Proof{}, ErrUnsafe
+	}
+	if err := p.Engine.PreserveNAT(ctx, before, after, q.At); err != nil {
+		return Proof{}, err
 	}
 	target, err := p.Engine.Query(ctx, after, q)
 	if err != nil {
@@ -458,7 +423,7 @@ func addressVisible(d *fm.Data, a fm.AddressRecord, zones []fm.ID) bool {
 
 func ensureAddress(d *fm.Data, r flow.Range, zones []fm.ID) fm.AddressRef {
 	for _, a := range d.Addresses {
-		if len(a.Ranges) == 1 && a.Ranges[0] == r && a.FQDN == "" && len(a.Unsupported) == 0 && addressVisible(d, a, zones) {
+		if len(a.Ranges) == 1 && a.Ranges[0] == r && a.FQDN == "" && a.VIP == (fm.NATRef{}) && len(a.Unsupported) == 0 && addressVisible(d, a, zones) {
 			return fm.AddressRef{Kind: fm.AddressObject, ID: a.ID}
 		}
 	}

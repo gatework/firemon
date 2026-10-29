@@ -30,6 +30,8 @@ type crashDevice struct {
 
 func (d *crashDevice) Open(context.Context, string) (deploy.Session, error) { return d, nil }
 func (d *crashDevice) Close() error                                         { return nil }
+func (*crashDevice) BeginConfiguration(context.Context, string) error       { return nil }
+func (*crashDevice) EndConfiguration(context.Context, string) error         { return nil }
 func (d *crashDevice) Read(_ context.Context, view deploy.View) (deploy.Capture, error) {
 	name := "running"
 	d.reads++

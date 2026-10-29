@@ -35,6 +35,33 @@ type RiskDefinition struct {
 	// compared. No dynamic evaluator, expression code or implicit network is used.
 	Traffic flow.Traffic
 	Actions []fm.Action
+	// Expression is an alternative to the paired Traffic/Relation standard.
+	Expression *RiskExpression
+}
+
+// Dimension identifies one rule match role. Service retains the complete
+// protocol/port/ICMP tuple; source and destination are independent address sets.
+type Dimension uint8
+
+const (
+	Source Dimension = iota + 1
+	Destination
+	Service
+)
+
+type RiskPredicate struct {
+	Dimension Dimension
+	Relation  Relation
+	Addresses flow.Set
+	Services  []fm.ServiceTerm
+}
+
+// RiskExpression has exactly one of Predicate, All (AND), or Any (OR).
+// Unknown follows three-valued logic: false dominates AND, true dominates OR.
+type RiskExpression struct {
+	Predicate *RiskPredicate
+	All       []RiskExpression
+	Any       []RiskExpression
 }
 type RiskFinding struct {
 	PolicyID, PolicyVersion, GraphDigest string
@@ -52,8 +79,29 @@ func (a RiskAnalyzer) Assess(ctx context.Context, fw *fm.Firewall, q policy.Requ
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if fw == nil || q.Traffic.Empty() || definition.Traffic.Empty() || strings.TrimSpace(definition.ID) == "" || strings.TrimSpace(definition.Version) == "" || (definition.Mode != Declared && definition.Mode != Effective) || definition.Relation < Intersects || definition.Relation > NotEqual {
+	if fw == nil || q.Traffic.Empty() || strings.TrimSpace(definition.ID) == "" || strings.TrimSpace(definition.Version) == "" || (definition.Mode != Declared && definition.Mode != Effective) {
 		return nil, ErrInvalid
+	}
+	limit := a.Engine.Limits.Regions
+	if limit <= 0 {
+		limit = 4096
+	}
+	comparisons := a.Engine.Limits.Combinations
+	if comparisons <= 0 {
+		comparisons = 4096
+	}
+	if definition.Expression == nil {
+		if definition.Traffic.Empty() || definition.Relation < Intersects || definition.Relation > NotEqual {
+			return nil, ErrInvalid
+		}
+	} else {
+		if !definition.Traffic.Empty() || definition.Relation != 0 {
+			return nil, ErrInvalid
+		}
+		validationBudget := comparisons
+		if err := validateRiskExpression(ctx, *definition.Expression, limit, &validationBudget, 0); err != nil {
+			return nil, err
+		}
 	}
 	actions := slices.Clone(definition.Actions)
 	if len(actions) == 0 {
@@ -74,7 +122,10 @@ func (a RiskAnalyzer) Assess(ctx context.Context, fw *fm.Firewall, q policy.Requ
 			rows = append(rows, RiskFinding{PolicyID: definition.ID, PolicyVersion: definition.Version, GraphDigest: fw.SemanticDigest(), Rule: r.ID, Mode: definition.Mode})
 		}
 	}
-	if !fw.Complete() {
+	if !fw.Complete() && (definition.Expression == nil || definition.Mode == Effective) {
+		return rows, nil
+	}
+	if hasUnassignedDiagnostics(fw) {
 		return rows, nil
 	}
 	effective := make(map[fm.ID]flow.Traffic)
@@ -94,10 +145,6 @@ func (a RiskAnalyzer) Assess(ctx context.Context, fw *fm.Firewall, q policy.Requ
 	if budget <= 0 {
 		budget = 100000
 	}
-	limit := a.Engine.Limits.Regions
-	if limit <= 0 {
-		limit = 4096
-	}
 	for i := range rows {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -106,25 +153,38 @@ func (a RiskAnalyzer) Assess(ctx context.Context, fw *fm.Firewall, q policy.Requ
 			return nil, policy.ErrBudget
 		}
 		r := fw.Rule(rows[i].Rule).Record()
+		if !r.Action.Valid() || len(r.Unsupported) > 0 {
+			continue
+		}
 		if !slices.Contains(actions, r.Action) {
 			rows[i].Value = False
 			continue
 		}
 		actual := effective[r.ID]
+		known := true
 		if definition.Mode == Declared {
-			var known bool
 			var err error
 			actual, known, err = a.Engine.Match(ctx, fw, r.Match, q, q.Traffic)
 			if err != nil {
 				return nil, err
 			}
-			if !known {
+			if !known && definition.Expression == nil {
 				continue
 			}
 		}
-		rows[i].Traffic = actual
-		if actual.Empty() {
+		if known {
+			rows[i].Traffic = actual
+		}
+		if known && actual.Empty() {
 			rows[i].Value = False
+			continue
+		}
+		if definition.Expression != nil {
+			value, err := a.assessExpression(ctx, fw, r, q, definition.Mode, actual, *definition.Expression, limit, &comparisons)
+			if err != nil {
+				return nil, err
+			}
+			rows[i].Value = value
 			continue
 		}
 		value, err := compareTraffic(actual, definition.Traffic, definition.Relation, limit)
@@ -137,6 +197,15 @@ func (a RiskAnalyzer) Assess(ctx context.Context, fw *fm.Firewall, q policy.Requ
 		}
 	}
 	return rows, nil
+}
+
+func hasUnassignedDiagnostics(fw *fm.Firewall) bool {
+	for _, diagnostic := range fw.Diagnostics() {
+		if diagnostic.Object == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func compareTraffic(actual, standard flow.Traffic, relation Relation, limit int) (bool, error) {

@@ -36,10 +36,21 @@ An append proven to change effective ownership outside the request is rejected b
 
 Request optimization by exact fixed point; convergence with full-plan proof; translation by effective partitions and explicit zone mappings; declared/effective risk; separate redundant/disabled/expired/unused reclamation with revision-bound contiguous hit evidence.
 
-Capture baseline, reserve, authorize exact plan, persist receipts, save/commit confirmation, independent readback, parse/prove, publish, project. No uncertain write replay; no expiry-based reservation release. Recovery reads state independently. Transport, authorization and journal are injected. Optional private connector adapter belongs in a separate module; root offline builds remain independent. Implementation approval alone does not authorize private source publication, real-device access, push, commit or release. The user's subsequent explicit instruction authorized commits and pushes to the new public `gatework/firemon` repository; it did not authorize releases or device operations.
+Validate stored revision, authorize exact plan, reserve, acquire native configuration isolation, capture and verify a fresh baseline, persist command receipts, confirm save/commit, independently read back, parse/prove, publish, project. No uncertain write replay; no expiry-based reservation release. Recovery reads state independently. Transport, authorization and journal are injected. Optional private connector adapter belongs in a separate module; root offline builds remain independent. Implementation approval alone does not authorize private source publication, real-device access, push, commit or release. The user's subsequent explicit instruction authorized commits and pushes to the new public `gatework/firemon` repository; it did not authorize releases or device operations.
 
 ## Vendor and delivery sequence
 
 The user narrowed the vendor scope on 2026-10-28 to Hillstone, Palo Alto, ASA, SRX, Netscreen, Fortinet and Huawei. H3C, Topsec, Neteye and other vendors are out of scope for now. The final vendor sequence added Fortinet, then Huawei. Each capability is supported only when fixture and semantic evidence establish it. Never advertise a parser stub as vendor parity. No web app/account/approval platform.
 
 Validation includes independent small-domain algebra oracle, fuzz/race tests, native scoped fixtures, first-match/unknown behavior, NAT offsets/ports/stages, graph identity, cursor rollback, crash/CAS/projection ordering, offline CLI and conditional adapter checks. Benchmarks report measurements separately from real-device/CI evidence.
+
+## Operations remediation
+
+The [2026-10-29 remediation](plans/2026-10-29-operations-remediation.md) strengthens
+these contracts without widening vendor scope. [Cross-vendor contracts](contracts.md)
+define shared parser/renderer selection, private policy semantic strategies,
+typed VIP associations, effective NAT preservation, explicit migration chains,
+compound audit predicates, member usage, candidate discovery and reusable
+capture/design/deployment composition. Device sessions explicitly implement
+configuration begin/end; PAN/SRX isolation is established before baseline capture.
+Snapshot semantic format 9 rejects older graphs lacking typed VIP relationships.

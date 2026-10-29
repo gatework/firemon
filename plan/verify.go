@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/policy"
 	"maps"
 	"slices"
 	"strings"
@@ -190,15 +191,10 @@ func normalized(d fm.Data) (*fm.Firewall, error) {
 	positions := make(map[[4]string]int)
 	for i := range d.Rules {
 		r := &d.Rules[i]
-		key := [4]string{r.Scope, r.RuleSet}
-		// Junos and ScreenOS order ordinary policies within each zone pair.
-		// Reordering independent pair blocks does not reorder either chain.
-		if (d.Metadata.Vendor == "srx" && !r.Builtin || d.Metadata.Vendor == "netscreen") && len(r.Match.FromZones) == 1 && len(r.Match.ToZones) == 1 && !r.Match.AnyFromZone && !r.Match.AnyToZone {
-			key[2], key[3] = string(r.Match.FromZones[0]), string(r.Match.ToZones[0])
-		}
-		r.Position = positions[key]
-		positions[key]++
-		if (d.Metadata.Vendor == "srx" || d.Metadata.Vendor == "netscreen") && r.Builtin && r.Match.AnyFromZone && r.Match.AnyToZone {
+		order := policy.NativeRuleOrder(d.Metadata.Vendor, *r)
+		r.Position = positions[order.Chain]
+		positions[order.Chain]++
+		if order.Terminal {
 			r.Position = len(d.Rules) // The global implicit default remains terminal.
 		}
 		r.Name = "" // Rule ID carries native identity; Name is its display label.

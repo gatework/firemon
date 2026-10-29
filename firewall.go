@@ -451,6 +451,7 @@ func Seal(data Data) (*Firewall, error) {
 		n.match = f.matchObjects(r.ID, r.Match)
 		f.sequence = append(f.sequence, NATEntry{Kind: DynamicNATObject, ID: r.ID, Order: r.Order, Scope: r.Scope})
 	}
+	f.bindVIPReferences()
 	slices.SortFunc(f.sequence, func(a, b NATEntry) int {
 		if c := strings.Compare(a.Scope, b.Scope); c != 0 {
 			return c
@@ -472,6 +473,42 @@ func Seal(data Data) (*Firewall, error) {
 		return nil, fmt.Errorf("%w: canonical declaration: %v", ErrGraph, err)
 	}
 	return f, nil
+}
+
+func (f *Firewall) bindVIPReferences() {
+	for _, a := range f.Addresses() {
+		r := a.record
+		if r.VIP == (NATRef{}) {
+			continue
+		}
+		switch r.VIP.Kind {
+		case StaticNATObject:
+			if n := f.staticNATs[r.VIP.ID]; n != nil && n.record.Scope == r.Scope {
+				a.vipStaticNAT = n
+			}
+		case DynamicNATObject:
+			if n := f.dynamicNATs[r.VIP.ID]; n != nil && n.record.Scope == r.Scope {
+				a.vipDynamicNAT = n
+			}
+		}
+		if a.vipStaticNAT == nil && a.vipDynamicNAT == nil {
+			f.issue(r.ID, "invalid-vip-reference", "VIP destination NAT is missing, has the wrong kind, or is outside the native scope")
+		}
+	}
+	for _, n := range f.StaticNATs() {
+		r := n.record
+		if r.SourceVIP == (AddressRef{}) {
+			continue
+		}
+		if r.SourceVIP.Kind == AddressObject {
+			if a := f.addresses[r.SourceVIP.ID]; a != nil && a.record.Scope == r.Scope && (a.vipStaticNAT != nil || a.vipDynamicNAT != nil) {
+				n.sourceVIP = a
+			}
+		}
+		if n.sourceVIP == nil {
+			f.issue(r.ID, "invalid-source-vip-reference", "source mapping VIP address is missing, has the wrong kind, is unresolved, or is outside the native scope")
+		}
+	}
 }
 func cmpInt(a, b int) int {
 	if a < b {
@@ -819,6 +856,7 @@ func trimUnreferencedInline(d *Data) {
 	}
 	for _, n := range d.StaticNATs {
 		match(n.Match)
+		addressRefs([]AddressRef{n.SourceVIP})
 	}
 	for _, n := range d.DynamicNATs {
 		match(n.Match)

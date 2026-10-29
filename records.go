@@ -120,6 +120,12 @@ type ServiceRef struct {
 	Kind Kind
 	ID   ID
 }
+
+// NATRef identifies one concrete NAT catalog. It never combines their declarations.
+type NATRef struct {
+	Kind Kind
+	ID   ID
+}
 type ZoneRecord struct {
 	Object
 	Networks []flow.Range
@@ -149,6 +155,9 @@ type AddressRecord struct {
 	Object
 	Ranges []flow.Range
 	FQDN   string
+	// VIP explicitly associates this native address with its destination NAT.
+	// The zero value is an ordinary address; Scope remains the native namespace.
+	VIP NATRef
 }
 type AddressGroupRecord struct {
 	Object
@@ -239,6 +248,9 @@ type PortMapping struct {
 }
 type StaticNATRecord struct {
 	Object
+	// SourceVIP identifies the VIP address that activates a native source mapping.
+	// The zero value is a source mapping independent of a VIP.
+	SourceVIP                     AddressRef
 	Match                         Match
 	Order                         NATOrder
 	Source, Destination           []Mapping

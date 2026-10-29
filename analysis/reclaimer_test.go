@@ -36,6 +36,7 @@ func TestUsageEvidenceRequiresRevisionGraphAndContiguousWindow(t *testing.T) {
 		{"stale-rule", func(o *analysis.UsageObservation) { o.RuleDigest = "old" }, analysis.Unknown},
 		{"missing-source", func(o *analysis.UsageObservation) { o.Source = "" }, analysis.Unknown},
 		{"hits", func(o *analysis.UsageObservation) { o.Hits = 1 }, analysis.False},
+		{"hit-time-not-localized", func(o *analysis.UsageObservation) { o.Hits = 1; o.Start = o.Start.Add(-time.Hour) }, analysis.Unknown},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o := base

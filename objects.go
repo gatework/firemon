@@ -32,12 +32,19 @@ func (o *Route) Record() RouteRecord   { return o.record.clone() }
 func (o *Route) Interface() *Interface { return o.iface }
 
 type Address struct {
-	record AddressRecord
-	set    flow.Set
+	record        AddressRecord
+	set           flow.Set
+	vipStaticNAT  *StaticNAT
+	vipDynamicNAT *DynamicNAT
 }
 
 func (o *Address) Record() AddressRecord { return o.record.clone() }
 func (o *Address) Set() flow.Set         { return o.set }
+
+// VIPStaticNAT and VIPDynamicNAT expose the declared VIP's concrete target.
+// Both are nil for an ordinary address or an unresolved VIP reference.
+func (o *Address) VIPStaticNAT() *StaticNAT   { return o.vipStaticNAT }
+func (o *Address) VIPDynamicNAT() *DynamicNAT { return o.vipDynamicNAT }
 
 type AddressGroup struct {
 	record    AddressGroupRecord
@@ -96,13 +103,15 @@ func (o *RuleBinding) Interface() *Interface     { return o.iface }
 func (o *RuleBinding) Zone() *Zone               { return o.zone }
 
 type StaticNAT struct {
-	match  MatchObjects
-	record StaticNATRecord
-	iface  *Interface
+	match     MatchObjects
+	record    StaticNATRecord
+	iface     *Interface
+	sourceVIP *Address
 }
 
 func (o *StaticNAT) Record() StaticNATRecord { return o.record.clone() }
 func (o *StaticNAT) Interface() *Interface   { return o.iface }
+func (o *StaticNAT) SourceVIP() *Address     { return o.sourceVIP }
 
 type DynamicNAT struct {
 	match                       MatchObjects
