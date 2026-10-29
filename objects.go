@@ -209,3 +209,25 @@ func (o *DynamicNAT) Scope() string { return o.record.Scope }
 func (o *NATPool) ID() ID        { return o.record.ID }
 func (o *NATPool) Name() string  { return o.record.Name }
 func (o *NATPool) Scope() string { return o.record.Scope }
+
+// HasUnsupported reports unmodeled declarations on this object, not completeness
+// of its references or of the surrounding firewall graph.
+func (o *Zone) HasUnsupported() bool         { return len(o.record.Unsupported) != 0 }
+func (o *Interface) HasUnsupported() bool    { return len(o.record.Unsupported) != 0 }
+func (o *Route) HasUnsupported() bool        { return len(o.record.Unsupported) != 0 }
+func (o *Address) HasUnsupported() bool      { return len(o.record.Unsupported) != 0 }
+func (o *AddressGroup) HasUnsupported() bool { return len(o.record.Unsupported) != 0 }
+func (o *Service) HasUnsupported() bool      { return len(o.record.Unsupported) != 0 }
+func (o *ServiceGroup) HasUnsupported() bool { return len(o.record.Unsupported) != 0 }
+func (o *Schedule) HasUnsupported() bool     { return len(o.record.Unsupported) != 0 }
+func (o *Rule) HasUnsupported() bool         { return len(o.record.Unsupported) != 0 }
+func (o *RuleBinding) HasUnsupported() bool  { return len(o.record.Unsupported) != 0 }
+func (o *StaticNAT) HasUnsupported() bool    { return len(o.record.Unsupported) != 0 }
+func (o *DynamicNAT) HasUnsupported() bool   { return len(o.record.Unsupported) != 0 }
+func (o *NATPool) HasUnsupported() bool      { return len(o.record.Unsupported) != 0 }
+func (o *Rule) Disabled() bool               { return o.record.Disabled }
+func (o *Interface) Disabled() bool          { return o.record.Disabled }
+func (o *StaticNAT) Disabled() bool          { return o.record.Disabled }
+func (o *DynamicNAT) Disabled() bool         { return o.record.Disabled }
+func (o *Rule) Builtin() bool                { return o.record.Builtin }
+func (o *Rule) Action() Action               { return o.record.Action }

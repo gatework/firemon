@@ -161,6 +161,9 @@ func (f *Firewall) NATPools() []*NATPool {
 
 func (f *Firewall) Metadata() Metadata { return f.data.Metadata }
 
+// Raw returns the immutable original configuration capture.
+func (f *Firewall) Raw() string { return f.data.Raw }
+
 func (f *Firewall) Export() Data { return f.data.Clone() }
 
 func (f *Firewall) Complete() bool { return len(f.diagnostics) == 0 }
