@@ -44,8 +44,7 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 		}
 		routes = append(routes, routeCandidate{route: r, destination: record.Destination, metric: record.Metric, key: record.Destination.String()})
 	}
-	slices.SortStableFunc(routes, compareRoutes)
-	if err := ctx.Err(); err != nil {
+	if err := sortRoutes(ctx, routes); err != nil {
 		return nil, err
 	}
 	remaining := addresses
@@ -58,6 +57,9 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 		record := routes[i]
 		j := i + 1
 		for j < len(routes) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			other := routes[j]
 			if other.destination != record.destination || other.metric != record.metric {
 				break
@@ -84,6 +86,9 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 				path.Known = false
 			}
 			for _, other := range routes[i+1 : j] {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
 				if other.route.Interface() != path.Interface || other.route.HasUnsupported() {
 					path.Known = false
 					path.Interface = nil
@@ -104,7 +109,7 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 		}
 		result = append(result, RoutePath{Addresses: remaining})
 	}
-	return result, nil
+	return result, ctx.Err()
 }
 
 type PacketRequest struct {
@@ -325,4 +330,49 @@ func compareRoutes(a, b routeCandidate) int {
 		return 1
 	}
 	return strings.Compare(a.key, b.key)
+}
+
+// sortRoutes bounds uninterrupted sorting to a small standard-library chunk.
+// Larger tables are stably merged with cancellation checkpoints; equal native
+// priorities retain declaration order, including ambiguous routes.
+func sortRoutes(ctx context.Context, routes []routeCandidate) error {
+	const chunk = 64
+	for start := 0; start < len(routes); start += chunk {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		slices.SortStableFunc(routes[start:min(start+chunk, len(routes))], compareRoutes)
+	}
+	if len(routes) <= chunk {
+		return ctx.Err()
+	}
+	buffer := make([]routeCandidate, len(routes))
+	source, target := routes, buffer
+	original := true
+	for width := chunk; width < len(routes); width *= 2 {
+		for start := 0; start < len(routes); start += 2 * width {
+			middle, end := min(start+width, len(routes)), min(start+2*width, len(routes))
+			left, right := start, middle
+			for out := start; out < end; out++ {
+				if out%chunk == 0 {
+					if err := ctx.Err(); err != nil {
+						return err
+					}
+				}
+				if left < middle && (right >= end || compareRoutes(source[left], source[right]) <= 0) {
+					target[out] = source[left]
+					left++
+				} else {
+					target[out] = source[right]
+					right++
+				}
+			}
+		}
+		source, target = target, source
+		original = !original
+	}
+	if !original {
+		copy(routes, source)
+	}
+	return ctx.Err()
 }
