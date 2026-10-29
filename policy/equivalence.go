@@ -26,7 +26,7 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	limits := e.Limits.defaults()
+	limits := e.Limits.WithDefaults()
 	chains := make(map[fm.PolicyChain]bool)
 	zones := make(map[fm.ID]bool)
 	times := []time.Time{from}
@@ -63,7 +63,7 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 					if !slices.ContainsFunc(times, func(v time.Time) bool { return v.Equal(at) }) {
 						times = append(times, at)
 					}
-					if len(times) > limits.Combinations {
+					if len(times) > limits.MaxCombinations {
 						return nil, ErrBudget
 					}
 				}
@@ -92,7 +92,7 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 	}
 	slices.Sort(zoneIDs)
 	slices.SortFunc(times, time.Time.Compare)
-	all, err := allTraffic(limits.Regions)
+	all, err := allTraffic(limits.MaxRegions)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 					if err := ctx.Err(); err != nil {
 						return nil, err
 					}
-					if len(out) >= limits.Combinations {
+					if len(out) >= limits.MaxCombinations {
 						return nil, ErrBudget
 					}
 					out = append(out, Request{Scope: key.Scope, RuleSet: key.RuleSet, FromZone: src, ToZone: dst, At: at, Traffic: all})
@@ -148,11 +148,11 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 	if err != nil {
 		return Equivalence{}, err
 	}
-	limits := e.Limits.defaults()
+	limits := e.Limits.WithDefaults()
 	visits := 0
 	for _, q := range contexts {
 		cost := len(before.Rules()) + len(after.Rules())
-		if cost > limits.Rules-visits {
+		if cost > limits.MaxVisits-visits {
 			return Equivalence{}, ErrBudget
 		}
 		visits += cost
@@ -168,21 +168,21 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 			return Equivalence{}, ErrNotEquivalent
 		}
 		for _, pair := range [][2]flow.Traffic{{a.Allowed, b.Allowed}, {a.Denied, b.Denied}, {a.Unmatched, b.Unmatched}} {
-			if ok, err := equivalentTraffic(pair[0], pair[1], limits.Regions); err != nil {
+			if ok, err := equivalentTraffic(pair[0], pair[1], limits.MaxRegions); err != nil {
 				return Equivalence{}, err
 			} else if !ok {
 				return Equivalence{}, ErrNotEquivalent
 			}
 		}
-		left, err := effects(before, a, limits.Regions)
+		left, err := effects(before, a, limits.MaxRegions)
 		if err != nil {
 			return Equivalence{}, err
 		}
-		right, err := effects(after, b, limits.Regions)
+		right, err := effects(after, b, limits.MaxRegions)
 		if err != nil {
 			return Equivalence{}, err
 		}
-		if err := equivalentPartitions(left, right, limits.Regions); err != nil {
+		if err := equivalentPartitions(left, right, limits.MaxRegions); err != nil {
 			return Equivalence{}, err
 		}
 	}

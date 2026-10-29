@@ -25,8 +25,8 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 	if fw == nil {
 		return nil, ErrInvalid
 	}
-	limits := e.Limits.defaults()
-	limit := limits.Regions
+	limits := e.Limits.WithDefaults()
+	limit := limits.MaxRegions
 	var routes []routeCandidate
 	for _, r := range fw.Routes() {
 		if err := ctx.Err(); err != nil {
@@ -36,7 +36,7 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 			continue
 		}
 		record := r.Record()
-		if len(routes) >= limits.Rules {
+		if len(routes) >= limits.MaxVisits {
 			return nil, ErrBudget
 		}
 		if len(record.PolicyMatch) > 0 {
@@ -148,14 +148,14 @@ func (e Engine) QueryPacket(ctx context.Context, fw *fm.Firewall, q PacketReques
 }
 
 func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest) (PacketResult, error) {
-	limits := e.Limits.defaults()
+	limits := e.Limits.WithDefaults()
 	result := PacketResult{Complete: true}
 	if q.FromZone == "" || fw.Zone(q.FromZone) == nil {
 		return PacketResult{Unknown: q.Traffic}, nil
 	}
 	unknown := func(t flow.Traffic) error {
 		var err error
-		result.Unknown, err = result.Unknown.Union(t, limits.Regions)
+		result.Unknown, err = result.Unknown.Union(t, limits.MaxRegions)
 		result.Complete = false
 		return err
 	}
@@ -166,7 +166,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			return PacketResult{}, err
 		}
 		for _, route := range pre {
-			original, err := restrictDestinations(box, route.Addresses, limits.Regions)
+			original, err := restrictDestinations(box, route.Addresses, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -203,7 +203,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					return PacketResult{}, err
 				}
 				for _, path := range post {
-					portion, err := originalDestination(fw, relation, path.Addresses, limits.Regions)
+					portion, err := originalDestination(fw, relation, path.Addresses, limits.MaxRegions)
 					if err != nil {
 						if err = unknown(relation.Original); err != nil {
 							return PacketResult{}, err
@@ -225,7 +225,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					if !evaluated.Complete {
 						result.Complete = false
 					}
-					if len(result.Paths) >= limits.Regions {
+					if len(result.Paths) >= limits.MaxRegions {
 						return PacketResult{}, ErrBudget
 					}
 					result.Paths = append(result.Paths, PacketPath{Original: portion, FromZone: request.FromZone, ToZone: request.ToZone, NAT: relation, Policy: evaluated})

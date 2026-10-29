@@ -15,7 +15,7 @@ func (e Engine) fortinetNAT(ctx context.Context, fw *fm.Firewall, q Request, bud
 		return NATResult{}, err
 	}
 	out := NATResult{Complete: pre.Complete, Unknown: pre.Unknown}
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	for _, view := range natParts(pre) {
 		evaluated, err := e.fortinetPolicy(ctx, fw, q, view, budget)
 		if err != nil {
@@ -144,7 +144,7 @@ func (e Engine) fortinetPost(ctx context.Context, fw *fm.Firewall, q Request, ru
 	}
 	out := NATResult{Complete: true}
 	remaining := q.Traffic
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	for _, section := range []string{"vip-source-forced", "vip-source-interface"} {
 		if section == "vip-source-interface" && owner.SourcePool() != nil {
 			continue
@@ -203,7 +203,7 @@ func fortinetEgressKnown(fw *fm.Firewall, iface *fm.Interface, q Request) bool {
 
 func (e Engine) fortinetSourceTier(ctx context.Context, fw *fm.Firewall, q Request, section string, active map[fm.NATRef]bool, preservePorts bool, budget *int) (NATResult, error) {
 	out := NATResult{Complete: true}
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	var covered flow.Traffic
 	for _, nat := range fw.StaticNATs() {
 		if err := ctx.Err(); err != nil {
@@ -293,7 +293,7 @@ func (e Engine) fortinetSourceTier(ctx context.Context, fw *fm.Firewall, q Reque
 
 func (e Engine) fortinetActiveVIPs(ctx context.Context, fw *fm.Firewall, budget *int) (map[fm.NATRef]bool, error) {
 	active := make(map[fm.NATRef]bool)
-	resolver := &resolutionBudget{ctx: ctx, limit: e.Limits.defaults().Combinations}
+	resolver := &resolutionBudget{ctx: ctx, limit: e.Limits.WithDefaults().MaxCombinations}
 	for _, rule := range fw.Rules() {
 		if *budget <= 0 {
 			return nil, ErrBudget

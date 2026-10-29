@@ -19,7 +19,7 @@ func TestReclaimerChargesRuleObservationsBeforeAnalysis(t *testing.T) {
 	fw := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}})
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	req := analysis.ReclamationRequest{At: at, Revision: "current", Window: fm.TimeWindow{Start: at.Add(-time.Hour), End: at}, Observations: make([]analysis.UsageObservation, 65)}
-	r := analysis.Reclaimer{Planner: plan.Planner{Engine: policy.Engine{Limits: policy.Limits{Rules: 64}}}}
+	r := analysis.Reclaimer{Planner: plan.Planner{Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 64}}}}
 	rows, err := r.Analyze(context.Background(), fw, req)
 	if !errors.Is(err, policy.ErrBudget) || rows != nil {
 		t.Fatalf("unbounded evidence: %v %v", rows, err)

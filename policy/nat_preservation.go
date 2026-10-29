@@ -68,8 +68,8 @@ func (e Engine) PreserveNAT(ctx context.Context, before, after *fm.Firewall, fro
 	if err != nil {
 		return err
 	}
-	limits := e.Limits.defaults()
-	remaining := limits.Rules
+	limits := e.Limits.WithDefaults()
+	remaining := limits.MaxVisits
 	cost := len(before.Rules()) + len(after.Rules()) + len(before.NATSequence()) + len(after.NATSequence())
 	for _, q := range contexts {
 		if cost > remaining {
@@ -87,20 +87,20 @@ func (e Engine) PreserveNAT(ctx context.Context, before, after *fm.Firewall, fro
 		if !prior.Complete || !next.Complete || !prior.Unknown.Empty() || !next.Unknown.Empty() {
 			return ErrNotEquivalent
 		}
-		if same, err := equivalentTraffic(prior.Unmatched, next.Unmatched, limits.Regions); err != nil {
+		if same, err := equivalentTraffic(prior.Unmatched, next.Unmatched, limits.MaxRegions); err != nil {
 			return err
 		} else if !same {
 			return ErrNotEquivalent
 		}
-		left, err := natPartitions(prior.Relations, limits.Regions)
+		left, err := natPartitions(prior.Relations, limits.MaxRegions)
 		if err != nil {
 			return err
 		}
-		right, err := natPartitions(next.Relations, limits.Regions)
+		right, err := natPartitions(next.Relations, limits.MaxRegions)
 		if err != nil {
 			return err
 		}
-		if err := equivalentPartitions(left, right, limits.Regions); err != nil {
+		if err := equivalentPartitions(left, right, limits.MaxRegions); err != nil {
 			return err
 		}
 	}
@@ -115,7 +115,7 @@ func (e Engine) preserveNATActivation(ctx context.Context, before, after *fm.Fir
 	if activation == nil {
 		return nil
 	}
-	budget := e.Limits.defaults().Rules
+	budget := e.Limits.WithDefaults().MaxVisits
 	a, err := activation(e, ctx, before, &budget)
 	if err != nil {
 		return err

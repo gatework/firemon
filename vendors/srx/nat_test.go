@@ -156,7 +156,7 @@ func TestSRXNATPreservesPairsAndChargesCumulativeBudget(t *testing.T) {
 	if !extra.Empty() || !missing.Empty() {
 		t.Fatal("invented cross pairs", actual)
 	}
-	_, err = (policy.Engine{Limits: policy.Limits{Rules: 1}}).QueryNAT(context.Background(), fw, q)
+	_, err = (policy.Engine{Limits: policy.Limits{MaxVisits: 1}}).QueryNAT(context.Background(), fw, q)
 	if !errors.Is(err, policy.ErrBudget) {
 		t.Fatal(err)
 	}

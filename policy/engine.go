@@ -16,17 +16,19 @@ var ErrInvalid = errors.New("policy: invalid input")
 
 var ErrBudget = errors.New("policy evaluation budget exceeded")
 
-type Limits struct{ Regions, Rules, Combinations int }
+// Limits bounds each evaluation algorithm independently. Nonpositive values use defaults.
+type Limits struct{ MaxRegions, MaxVisits, MaxCombinations int }
 
-func (l Limits) defaults() Limits {
-	if l.Regions <= 0 {
-		l.Regions = 4096
+// WithDefaults returns effective limits without changing the receiver.
+func (l Limits) WithDefaults() Limits {
+	if l.MaxRegions <= 0 {
+		l.MaxRegions = 4096
 	}
-	if l.Rules <= 0 {
-		l.Rules = 100000
+	if l.MaxVisits <= 0 {
+		l.MaxVisits = 100000
 	}
-	if l.Combinations <= 0 {
-		l.Combinations = 4096
+	if l.MaxCombinations <= 0 {
+		l.MaxCombinations = 4096
 	}
 	return l
 }
@@ -71,10 +73,10 @@ func (e Engine) Query(ctx context.Context, fw *fm.Firewall, q Request) (Result, 
 // queryRules evaluates one native policy view. selectRule only adapts a copied
 // declaration; it cannot alter the immutable graph or native order.
 func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, selectRule func(fm.RuleRecord) (fm.RuleRecord, bool)) (Result, error) {
-	limits := e.Limits.defaults()
+	limits := e.Limits.WithDefaults()
 	remaining := q.Traffic
 	result := Result{Complete: true}
-	cache := &resolutionCache{firewall: fw, remaining: limits.Combinations}
+	cache := &resolutionCache{firewall: fw, remaining: limits.MaxCombinations}
 	if q.RuleSet == "" {
 		q.RuleSet = "security"
 	}
@@ -86,7 +88,7 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 		if remaining.Empty() {
 			break
 		}
-		if i >= limits.Rules {
+		if i >= limits.MaxVisits {
 			return Result{}, ErrBudget
 		}
 		i++
@@ -117,18 +119,18 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 		}
 		certain = certain && known
 		if !certain || !r.Action.Valid() {
-			result.Unknown, err = result.Unknown.Union(hit, limits.Regions)
+			result.Unknown, err = result.Unknown.Union(hit, limits.MaxRegions)
 			result.Complete = false
 		} else if r.Action == fm.Permit {
-			result.Allowed, err = result.Allowed.Union(hit, limits.Regions)
+			result.Allowed, err = result.Allowed.Union(hit, limits.MaxRegions)
 		} else {
-			result.Denied, err = result.Denied.Union(hit, limits.Regions)
+			result.Denied, err = result.Denied.Union(hit, limits.MaxRegions)
 		}
 		if err != nil {
 			return Result{}, err
 		}
 		result.Trace = append(result.Trace, Trace{Rule: r.ID, Action: r.Action, Traffic: hit, Certain: certain})
-		remaining, err = remaining.Difference(hit, limits.Regions)
+		remaining, err = remaining.Difference(hit, limits.MaxRegions)
 		if err != nil {
 			return Result{}, err
 		}
@@ -177,8 +179,8 @@ func (e Engine) match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Reques
 	if normalize := semantics(fw.Metadata().Vendor).normalizeRequest; normalize != nil {
 		q = normalize(q)
 	}
-	limits := e.Limits.defaults()
-	budget := &resolutionBudget{ctx: ctx, limit: limits.Combinations, cache: cache}
+	limits := e.Limits.WithDefaults()
+	budget := &resolutionBudget{ctx: ctx, limit: limits.MaxCombinations, cache: cache}
 	relationKnown := true
 	if m.ZoneRelation != fm.AnyZoneRelation {
 		from, to := fw.Zone(q.FromZone), fw.Zone(q.ToZone)
@@ -232,15 +234,15 @@ func (e Engine) match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Reques
 					return flow.Traffic{}, false, err
 				}
 				box := flow.Box{Source: src, Destination: dst, Protocol: service.Protocol, SourcePort: service.SourcePort, DestinationPort: service.DestinationPort, ICMPType: service.ICMPType, ICMPCode: service.ICMPCode}
-				candidate, err := flow.NewTraffic(limits.Regions, box)
+				candidate, err := flow.NewTraffic(limits.MaxRegions, box)
 				if err != nil {
 					return flow.Traffic{}, false, err
 				}
-				hit, err := input.Intersection(candidate, limits.Regions)
+				hit, err := input.Intersection(candidate, limits.MaxRegions)
 				if err != nil {
 					return flow.Traffic{}, false, err
 				}
-				out, err = out.Union(hit, limits.Regions)
+				out, err = out.Union(hit, limits.MaxRegions)
 				if err != nil {
 					return flow.Traffic{}, false, err
 				}

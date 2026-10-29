@@ -46,7 +46,7 @@ func (e Engine) QueryNAT(ctx context.Context, fw *fm.Firewall, q Request) (NATRe
 			return NATResult{Unknown: q.Traffic}, nil
 		}
 	}
-	budget := e.Limits.defaults().Rules
+	budget := e.Limits.WithDefaults().MaxVisits
 	query := semantics(fw.Metadata().Vendor).queryNAT
 	if query == nil {
 		return NATResult{}, ErrNAT
@@ -56,7 +56,7 @@ func (e Engine) QueryNAT(ctx context.Context, fw *fm.Firewall, q Request) (NATRe
 
 func (e Engine) paloaltoNAT(ctx context.Context, fw *fm.Firewall, q Request, budget *int) (NATResult, error) {
 	entries := fw.NATSequence()
-	if len(entries) > e.Limits.defaults().Rules {
+	if len(entries) > e.Limits.WithDefaults().MaxVisits {
 		return NATResult{}, ErrBudget
 	}
 	steps := make([]NATStep, 0, len(entries))
@@ -161,7 +161,7 @@ func (n natTransform) apply(input flow.Traffic, limit int) (flow.Traffic, bool, 
 	return out, exact, possible, err
 }
 func (e Engine) natChain(ctx context.Context, fw *fm.Firewall, q Request, steps []NATStep, budget *int) (NATResult, error) {
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	out := NATResult{Complete: true}
 	remaining := q.Traffic
 	for _, step := range steps {

@@ -62,7 +62,7 @@ func (e Engine) netscreenNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 		return NATResult{}, err
 	}
 	out := NATResult{Complete: evaluated.Complete, Unknown: evaluated.Unknown}
-	out.Unmatched, err = evaluated.Denied.Union(evaluated.Unmatched, e.Limits.defaults().Regions)
+	out.Unmatched, err = evaluated.Denied.Union(evaluated.Unmatched, e.Limits.WithDefaults().MaxRegions)
 	if err != nil {
 		return NATResult{}, err
 	}
@@ -90,30 +90,30 @@ func (e Engine) netscreenNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 				// direction-wise composition. Retain uncertainty until established;
 				// selecting an interface mapping must not erase the other direction.
 				if owner != nil && ((!step.Reverse && owner.Record().SourceMode != fm.NoTranslation) || (step.Reverse && owner.Record().DestinationMode != fm.NoTranslation)) {
-					out.Unknown, err = out.Unknown.Union(n.Original, e.Limits.defaults().Regions)
+					out.Unknown, err = out.Unknown.Union(n.Original, e.Limits.WithDefaults().MaxRegions)
 					if err != nil {
 						return NATResult{}, err
 					}
 					out.Complete = false
 				}
-				overlap, err := shared.Intersection(n.Original, e.Limits.defaults().Regions)
+				overlap, err := shared.Intersection(n.Original, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
 					return NATResult{}, err
 				}
 				if !overlap.Empty() {
-					out.Unknown, err = out.Unknown.Union(overlap, e.Limits.defaults().Regions)
+					out.Unknown, err = out.Unknown.Union(overlap, e.Limits.WithDefaults().MaxRegions)
 					if err != nil {
 						return NATResult{}, err
 					}
 					out.Complete = false
 				}
-				shared, err = shared.Union(n.Original, e.Limits.defaults().Regions)
+				shared, err = shared.Union(n.Original, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
 					return NATResult{}, err
 				}
 			}
 		}
-		request.Traffic, err = request.Traffic.Difference(out.Unknown, e.Limits.defaults().Regions)
+		request.Traffic, err = request.Traffic.Difference(out.Unknown, e.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return NATResult{}, err
 		}
@@ -125,15 +125,15 @@ func (e Engine) netscreenNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 		if err != nil {
 			return NATResult{}, err
 		}
-		if len(out.Relations)+len(part.Relations) > e.Limits.defaults().Regions {
+		if len(out.Relations)+len(part.Relations) > e.Limits.WithDefaults().MaxRegions {
 			return NATResult{}, ErrBudget
 		}
 		out.Relations = append(out.Relations, part.Relations...)
-		out.Unknown, err = out.Unknown.Union(part.Unknown, e.Limits.defaults().Regions)
+		out.Unknown, err = out.Unknown.Union(part.Unknown, e.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return NATResult{}, err
 		}
-		out.Unmatched, err = out.Unmatched.Union(part.Unmatched, e.Limits.defaults().Regions)
+		out.Unmatched, err = out.Unmatched.Union(part.Unmatched, e.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return NATResult{}, err
 		}

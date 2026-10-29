@@ -62,7 +62,7 @@ func (e Engine) huaweiSelected(ctx context.Context, fw *fm.Firewall, q Request, 
 			return NATResult{}, ErrNAT
 		}
 	}
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	out := NATResult{Complete: true}
 	var covered flow.Traffic
 	for _, step := range servers {

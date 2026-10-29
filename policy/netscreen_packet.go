@@ -21,15 +21,15 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 	if q.VRF != zone.Scope() {
 		return PacketResult{Unknown: q.Traffic}, nil
 	}
-	limits := e.Limits.defaults()
-	budget := limits.Rules
+	limits := e.Limits.WithDefaults()
+	budget := limits.MaxVisits
 	out := PacketResult{Complete: true}
 	unknown := func(t flow.Traffic) error {
 		if t.Empty() {
 			return nil
 		}
 		var err error
-		out.Unknown, err = out.Unknown.Union(t, limits.Regions)
+		out.Unknown, err = out.Unknown.Union(t, limits.MaxRegions)
 		out.Complete = false
 		return err
 	}
@@ -65,24 +65,24 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 			return PacketResult{}, err
 		}
 		for _, rel := range pre.Relations {
-			overlap, err := covered.Intersection(rel.Original, limits.Regions)
+			overlap, err := covered.Intersection(rel.Original, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
 			if err = unknown(overlap); err != nil {
 				return PacketResult{}, err
 			}
-			covered, err = covered.Union(rel.Original, limits.Regions)
+			covered, err = covered.Union(rel.Original, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
-			if len(parts) >= limits.Regions {
+			if len(parts) >= limits.MaxRegions {
 				return PacketResult{}, ErrBudget
 			}
 			parts = append(parts, part{rel, fw.Zone(request.ToZone).Scope()})
 		}
 	}
-	remaining, err := q.Traffic.Difference(covered, limits.Regions)
+	remaining, err := q.Traffic.Difference(covered, limits.MaxRegions)
 	if err != nil {
 		return PacketResult{}, err
 	}
@@ -91,7 +91,7 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 		if err := ctx.Err(); err != nil {
 			return PacketResult{}, err
 		}
-		original, err := piece.relation.Original.Difference(out.Unknown, limits.Regions)
+		original, err := piece.relation.Original.Difference(out.Unknown, limits.MaxRegions)
 		if err != nil {
 			return PacketResult{}, err
 		}
@@ -104,7 +104,7 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 			if err != nil {
 				return PacketResult{}, err
 			}
-			view, _, _, err = n.apply(original, limits.Regions)
+			view, _, _, err = n.apply(original, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -121,11 +121,11 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 		for _, route := range routes {
 			var translated flow.Traffic
 			for _, b := range view.Boxes() {
-				t, err := restrictDestinations(b, route.Addresses, limits.Regions)
+				t, err := restrictDestinations(b, route.Addresses, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
 				}
-				translated, err = translated.Union(t, limits.Regions)
+				translated, err = translated.Union(t, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
 				}
@@ -133,7 +133,7 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 			rel := piece.relation
 			rel.Original = original
 			rel.Translated = view
-			wire, err := srxOriginal(fw, rel, translated, limits.Regions)
+			wire, err := srxOriginal(fw, rel, translated, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -165,7 +165,7 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 				if err = unknown(evaluated.Unknown); err != nil {
 					return PacketResult{}, err
 				}
-				valid, err := e.netscreenDestination(ctx, fw, n, route, limits.Regions)
+				valid, err := e.netscreenDestination(ctx, fw, n, route, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
 				}
@@ -175,7 +175,7 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 					}
 					continue
 				}
-				if len(out.Paths) >= limits.Regions {
+				if len(out.Paths) >= limits.MaxRegions {
 					return PacketResult{}, ErrBudget
 				}
 				out.Paths = append(out.Paths, PacketPath{Original: n.Original, FromZone: request.FromZone, ToZone: request.ToZone, NAT: n, Policy: evaluated})

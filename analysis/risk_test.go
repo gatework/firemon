@@ -123,7 +123,7 @@ func TestCompoundRiskRelationsAndUnknownComposition(t *testing.T) {
 		})
 	}
 	expression := analysis.RiskExpression{All: []analysis.RiskExpression{knownTrue, knownFalse}}
-	_, err = (analysis.RiskAnalyzer{Engine: policy.Engine{Limits: policy.Limits{Combinations: 2}}}).Analyze(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &expression})
+	_, err = (analysis.RiskAnalyzer{Engine: policy.Engine{Limits: policy.Limits{MaxCombinations: 2}}}).Analyze(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &expression})
 	if !errors.Is(err, policy.ErrBudget) {
 		t.Fatalf("expression budget ignored: %v", err)
 	}

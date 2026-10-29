@@ -17,7 +17,7 @@ func (e Engine) srxSteps(ctx context.Context, fw *fm.Firewall, q Request, post b
 		return nil, ErrNAT
 	}
 	entries := fw.NATSequence()
-	if len(entries) > e.Limits.defaults().Rules {
+	if len(entries) > e.Limits.WithDefaults().MaxVisits {
 		return nil, ErrBudget
 	}
 	type group struct {
@@ -128,14 +128,14 @@ func (e Engine) srxNAT(ctx context.Context, fw *fm.Firewall, q Request, budget *
 			return NATResult{}, err
 		}
 		out.Relations = append(out.Relations, post.Relations...)
-		if len(out.Relations) > e.Limits.defaults().Regions {
+		if len(out.Relations) > e.Limits.WithDefaults().MaxRegions {
 			return NATResult{}, ErrBudget
 		}
-		out.Unknown, err = out.Unknown.Union(post.Unknown, e.Limits.defaults().Regions)
+		out.Unknown, err = out.Unknown.Union(post.Unknown, e.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return NATResult{}, err
 		}
-		out.Unmatched, err = out.Unmatched.Union(post.Unmatched, e.Limits.defaults().Regions)
+		out.Unmatched, err = out.Unmatched.Union(post.Unmatched, e.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return NATResult{}, err
 		}
@@ -145,7 +145,7 @@ func (e Engine) srxNAT(ctx context.Context, fw *fm.Firewall, q Request, budget *
 }
 
 func (e Engine) srxPostNAT(ctx context.Context, fw *fm.Firewall, q Request, pre NATRelation, budget *int) (NATResult, error) {
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	steps, err := e.srxSteps(ctx, fw, q, true, budget)
 	if err != nil {
 		return NATResult{}, err

@@ -35,8 +35,8 @@ Stages retain dependency order and atomic draft/evidence rollback.
 
 `policy.RuleChain` names the native chain and its zone pair; it replaces an opaque
 array only in evaluation state. `Request.SameContext` normalizes omitted security
-rule sets and compares time by instant. `Engine.ResolveRoutes` uses `Limits.Rules`
-for selected-VRF candidates and `Limits.Regions` for output partitions. Sorting
+rule sets and compares time by instant. `Engine.ResolveRoutes` uses `Limits.MaxVisits`
+for selected-VRF candidates and `Limits.MaxRegions` for output partitions. Sorting
 preserves native ties and checks cancellation between bounded chunks and merges.
 Invalid inputs, cancellation and exhausted budgets remain errors; unsupported
 semantics remain unknown. The evaluation/planning and application boundaries
@@ -173,7 +173,7 @@ hit evidence cannot establish non-use. Only continuous complete zero-hit coverag
 establishes non-use, which still does not authorize deletion.
 
 Each call charges its consumed observation list and rule/member traversal against
-`Engine.Limits.Rules` (default 100000); rule analysis also charges every rule in
+`Engine.Limits.MaxVisits` (default 100000); rule analysis also charges every rule in
 each policy context and its result pass. Both request lists require a window if
 present, although each analysis consumes only its own evidence. Budget exhaustion
 and cancellation return no partial results. Interval sorting uses bounded chunks

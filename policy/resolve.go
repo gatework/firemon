@@ -194,7 +194,7 @@ func (e Engine) ResolveAddresses(ctx context.Context, fw *fm.Firewall, refs []fm
 	if fw == nil {
 		return flow.Set{}, false, ErrInvalid
 	}
-	return resolveAddresses(fw, refs, any, &resolutionBudget{ctx: ctx, limit: e.Limits.defaults().Combinations})
+	return resolveAddresses(fw, refs, any, &resolutionBudget{ctx: ctx, limit: e.Limits.WithDefaults().MaxCombinations})
 }
 
 // ResolveServices resolves service declarations without hiding execution errors.
@@ -206,5 +206,5 @@ func (e Engine) ResolveServices(ctx context.Context, fw *fm.Firewall, refs []fm.
 	if fw == nil {
 		return nil, false, ErrInvalid
 	}
-	return resolveServices(fw, refs, any, &resolutionBudget{ctx: ctx, limit: e.Limits.defaults().Combinations})
+	return resolveServices(fw, refs, any, &resolutionBudget{ctx: ctx, limit: e.Limits.WithDefaults().MaxCombinations})
 }

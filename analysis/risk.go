@@ -82,11 +82,11 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 	if fw == nil || q.Traffic.Empty() || strings.TrimSpace(definition.ID) == "" || strings.TrimSpace(definition.Version) == "" || (definition.Mode != Declared && definition.Mode != Effective) {
 		return nil, ErrInvalid
 	}
-	limit := a.Engine.Limits.Regions
+	limit := a.Engine.Limits.MaxRegions
 	if limit <= 0 {
 		limit = 4096
 	}
-	comparisons := a.Engine.Limits.Combinations
+	comparisons := a.Engine.Limits.MaxCombinations
 	if comparisons <= 0 {
 		comparisons = 4096
 	}
@@ -140,7 +140,7 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 			effective[trace.Rule] = trace.Traffic
 		}
 	}
-	budget := a.Engine.Limits.Rules
+	budget := a.Engine.Limits.MaxVisits
 	if budget <= 0 {
 		budget = 100000
 	}

@@ -39,7 +39,7 @@ func routedTraffic(traffic flow.Traffic, route RoutePath, limit int) (flow.Traff
 // destination-zone/egress against that rule's own post-DNAT destination. Unknown
 // candidate routing consumes its possible match and cannot fall through.
 func (e Engine) huaweiRoutedChain(ctx context.Context, fw *fm.Firewall, q Request, vrf string, steps []NATStep, budget *int) (NATResult, error) {
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	out := NATResult{Complete: true}
 	remaining := q.Traffic
 	for _, step := range steps {
@@ -172,8 +172,8 @@ func (e Engine) huaweiPacket(ctx context.Context, fw *fm.Firewall, q PacketReque
 	if q.VRF != "" && len(fw.NATSequence()) > 0 {
 		return PacketResult{Unknown: q.Traffic}, nil
 	}
-	budget := e.Limits.defaults().Rules
-	limit := e.Limits.defaults().Regions
+	budget := e.Limits.WithDefaults().MaxVisits
+	limit := e.Limits.WithDefaults().MaxRegions
 	queryPolicy := func(request Request) (Result, error) {
 		cost := len(fw.Rules())
 		if cost > budget {

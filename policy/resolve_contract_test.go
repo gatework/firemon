@@ -27,7 +27,7 @@ func TestResolutionSeparatesUnknownFromExecutionFailure(t *testing.T) {
 	if _, known, err := e.ResolveServices(context.Background(), fw, services, false); err != nil || known {
 		t.Fatalf("cycle: %v %v", known, err)
 	}
-	e.Limits.Combinations = 1
+	e.Limits.MaxCombinations = 1
 	if _, _, err := e.ResolveAddresses(context.Background(), fw, addresses, false); !errors.Is(err, policy.ErrBudget) {
 		t.Fatalf("budget: %v", err)
 	}

@@ -23,7 +23,7 @@ func (r ReclamationRequest) validate() (bool, error) {
 type usageBudget int
 
 func (r Reclaimer) usageBudget() usageBudget {
-	limit := r.Planner.Engine.Limits.Rules
+	limit := r.Planner.Engine.Limits.MaxVisits
 	if limit <= 0 {
 		limit = 100000
 	}

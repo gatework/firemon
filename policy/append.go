@@ -19,7 +19,7 @@ func (e Engine) AppendCanPreserve(ctx context.Context, before, after *fm.Firewal
 	if !semantics(before.Metadata().Vendor).linearPolicy {
 		return true, nil
 	}
-	all, err := allTraffic(e.Limits.defaults().Regions)
+	all, err := allTraffic(e.Limits.WithDefaults().MaxRegions)
 	if err != nil {
 		return false, err
 	}
@@ -27,7 +27,7 @@ func (e Engine) AppendCanPreserve(ctx context.Context, before, after *fm.Firewal
 	if err != nil || !known {
 		return true, err
 	}
-	outside, err := expanded.Difference(q.Traffic, e.Limits.defaults().Regions)
+	outside, err := expanded.Difference(q.Traffic, e.Limits.WithDefaults().MaxRegions)
 	if err != nil {
 		return false, err
 	}
@@ -47,7 +47,7 @@ func (e Engine) AppendCanPreserve(ctx context.Context, before, after *fm.Firewal
 		if r.Position > rule.Position || r.Position == rule.Position && r.ID > rule.ID {
 			continue
 		}
-		outside, err = outside.Difference(trace.Traffic, e.Limits.defaults().Regions)
+		outside, err = outside.Difference(trace.Traffic, e.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return false, err
 		}

@@ -49,10 +49,10 @@ func TestRoutesHonorEngineBudgetAndEmptyCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	addresses, _ := flow.NewSet(rangeOf("192.0.2.0/24"))
-	if _, err := (policy.Engine{Limits: policy.Limits{Rules: 1}}).ResolveRoutes(context.Background(), fw, "vr", addresses); !errors.Is(err, policy.ErrBudget) {
+	if _, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 1}}).ResolveRoutes(context.Background(), fw, "vr", addresses); !errors.Is(err, policy.ErrBudget) {
 		t.Fatalf("route budget ignored: %v", err)
 	}
-	if _, err := (policy.Engine{Limits: policy.Limits{Rules: 1}}).ResolveRoutes(context.Background(), fw, "other", addresses); err != nil {
+	if _, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 1}}).ResolveRoutes(context.Background(), fw, "other", addresses); err != nil {
 		t.Fatal("foreign VRF charged", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

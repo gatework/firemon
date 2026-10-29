@@ -21,8 +21,8 @@ func (e Engine) asaSelect(ctx context.Context, fw *fm.Firewall, q Request) ([]as
 	if err != nil {
 		return nil, flow.Traffic{}, err
 	}
-	limits := e.Limits.defaults()
-	budget := limits.Rules
+	limits := e.Limits.WithDefaults()
+	budget := limits.MaxVisits
 	remaining := q.Traffic
 	var selected []asaSelection
 	var unknown flow.Traffic
@@ -49,12 +49,12 @@ func (e Engine) asaSelect(ctx context.Context, fw *fm.Firewall, q Request) ([]as
 		if err != nil {
 			return nil, flow.Traffic{}, err
 		}
-		unknown, err = unknown.Union(r.Unknown, limits.Regions)
+		unknown, err = unknown.Union(r.Unknown, limits.MaxRegions)
 		if err != nil {
 			return nil, flow.Traffic{}, err
 		}
 		for _, relation := range r.Relations {
-			if len(selected) >= limits.Regions {
+			if len(selected) >= limits.MaxRegions {
 				return nil, flow.Traffic{}, ErrBudget
 			}
 			selected = append(selected, asaSelection{relation, request.ToZone})
@@ -62,7 +62,7 @@ func (e Engine) asaSelect(ctx context.Context, fw *fm.Firewall, q Request) ([]as
 		remaining = r.Unmatched
 	}
 	if !remaining.Empty() {
-		if len(selected) >= limits.Regions {
+		if len(selected) >= limits.MaxRegions {
 			return nil, flow.Traffic{}, ErrBudget
 		}
 		selected = append(selected, asaSelection{relation: NATRelation{Original: remaining, Translated: remaining, Exact: true}})
@@ -97,12 +97,12 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 	if err != nil {
 		return PacketResult{}, err
 	}
-	limits := e.Limits.defaults()
+	limits := e.Limits.WithDefaults()
 	result := PacketResult{Unknown: unresolved, Complete: unresolved.Empty()}
 	unknown := func(t flow.Traffic) error {
 		var err error
 		result.Complete = false
-		result.Unknown, err = result.Unknown.Union(t, limits.Regions)
+		result.Unknown, err = result.Unknown.Union(t, limits.MaxRegions)
 		return err
 	}
 	for _, selection := range selected {
@@ -121,7 +121,7 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 		// including destination service translation. Preserve each input pair.
 		aclTransform := n
 		aclTransform.source, aclTransform.sourcePorts, aclTransform.dynamic = nil, nil, nil
-		traffic, _, _, err := aclTransform.apply(relation.Original, limits.Regions)
+		traffic, _, _, err := aclTransform.apply(relation.Original, limits.MaxRegions)
 		if err != nil {
 			return PacketResult{}, err
 		}
@@ -145,7 +145,7 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 			}
 		}
 		for _, path := range paths {
-			original, err := originalDestination(fw, relation, path.Addresses, limits.Regions)
+			original, err := originalDestination(fw, relation, path.Addresses, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -155,7 +155,7 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				}
 				continue
 			}
-			actual, _, _, err := aclTransform.apply(original, limits.Regions)
+			actual, _, _, err := aclTransform.apply(original, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -172,11 +172,11 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 			}
 			selectedRelation := relation
 			selectedRelation.Original = original
-			selectedRelation.Translated, _, _, err = n.apply(original, limits.Regions)
+			selectedRelation.Translated, _, _, err = n.apply(original, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
-			if len(result.Paths) >= limits.Regions {
+			if len(result.Paths) >= limits.MaxRegions {
 				return PacketResult{}, ErrBudget
 			}
 			result.Paths = append(result.Paths, PacketPath{Original: original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: selectedRelation, Policy: evaluated})
@@ -221,7 +221,7 @@ func (e Engine) asaAccess(ctx context.Context, fw *fm.Firewall, q Request, ingre
 	if len(incoming) > 1 || len(outgoing) > 1 {
 		return Result{Unknown: q.Traffic}, nil
 	}
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	query := func(name string, traffic flow.Traffic) (Result, error) {
 		request := q
 		request.RuleSet, request.Traffic = name, traffic

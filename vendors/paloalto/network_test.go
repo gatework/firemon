@@ -66,7 +66,7 @@ func TestStaticRoutesKeepVirtualRouterNamespaceThroughSnapshot(t *testing.T) {
 		for i, vrf := range []string{"vr-a", "vr-b"} {
 			dest := netip.MustParseAddr("203.0.113.10")
 			addresses, _ := flow.NewSet(flow.Range{First: dest, Last: dest})
-			paths, err := (policy.Engine{Limits: policy.Limits{Regions: 16}}).ResolveRoutes(context.Background(), graph, vrf, addresses)
+			paths, err := (policy.Engine{Limits: policy.Limits{MaxRegions: 16}}).ResolveRoutes(context.Background(), graph, vrf, addresses)
 			want := graph.Interface(fm.ID(fmt.Sprintf("ethernet1/%d", i+1)))
 			if err != nil || len(paths) != 1 || !paths[0].Known || paths[0].Interface != want {
 				t.Fatal("route bound across VRF", vrf, paths, err)

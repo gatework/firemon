@@ -14,8 +14,8 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 	if !fw.Complete() || zone == nil || len(zone.Record().Unsupported) > 0 {
 		return PacketResult{Unknown: q.Traffic}, nil
 	}
-	limits := e.Limits.defaults()
-	budget := limits.Rules
+	limits := e.Limits.WithDefaults()
+	budget := limits.MaxVisits
 	steps, err := e.srxSteps(ctx, fw, q.Request, false, &budget)
 	if err != nil {
 		return PacketResult{}, err
@@ -30,7 +30,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 			return nil
 		}
 		var err error
-		out.Unknown, err = out.Unknown.Union(t, limits.Regions)
+		out.Unknown, err = out.Unknown.Union(t, limits.MaxRegions)
 		out.Complete = false
 		return err
 	}
@@ -50,16 +50,16 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 		for _, route := range routes {
 			var actual flow.Traffic
 			for _, b := range part.Translated.Boxes() {
-				v, err := restrictDestinations(b, route.Addresses, limits.Regions)
+				v, err := restrictDestinations(b, route.Addresses, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
 				}
-				actual, err = actual.Union(v, limits.Regions)
+				actual, err = actual.Union(v, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
 				}
 			}
-			original, err := srxOriginal(fw, part, actual, limits.Regions)
+			original, err := srxOriginal(fw, part, actual, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -75,7 +75,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 			if err != nil {
 				return PacketResult{}, err
 			}
-			unresolved, err := srxOriginal(fw, part, evaluated.Unknown, limits.Regions)
+			unresolved, err := srxOriginal(fw, part, evaluated.Unknown, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -83,14 +83,14 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				return PacketResult{}, err
 			}
 			// Keep rejected/unmatched evidence, with no hypothetical post-policy rewrite.
-			rejected, err := evaluated.Denied.Union(evaluated.Unmatched, limits.Regions)
+			rejected, err := evaluated.Denied.Union(evaluated.Unmatched, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
 			if !rejected.Empty() {
 				rel := part
 				rel.Translated = rejected
-				rel.Original, err = srxOriginal(fw, part, rejected, limits.Regions)
+				rel.Original, err = srxOriginal(fw, part, rejected, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
 				}
@@ -99,7 +99,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				if err != nil {
 					return PacketResult{}, err
 				}
-				if len(out.Paths) >= limits.Regions {
+				if len(out.Paths) >= limits.MaxRegions {
 					return PacketResult{}, ErrBudget
 				}
 				out.Paths = append(out.Paths, PacketPath{Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: denied})
@@ -124,7 +124,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 					if err != nil {
 						return PacketResult{}, err
 					}
-					view, _, _, err = n.apply(view, limits.Regions)
+					view, _, _, err = n.apply(view, limits.MaxRegions)
 					if err != nil {
 						return PacketResult{}, err
 					}
@@ -134,7 +134,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				if err != nil {
 					return PacketResult{}, err
 				}
-				if len(out.Paths) >= limits.Regions {
+				if len(out.Paths) >= limits.MaxRegions {
 					return PacketResult{}, ErrBudget
 				}
 				out.Paths = append(out.Paths, PacketPath{Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: allowed})

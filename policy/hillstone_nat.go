@@ -12,8 +12,8 @@ import (
 // their original traffic intersection, so distinct request pairs remain distinct.
 func (e Engine) hillstoneNAT(ctx context.Context, fw *fm.Firewall, q Request, budget *int) (NATResult, error) {
 	entries := fw.NATSequence()
-	limits := e.Limits.defaults()
-	if len(entries) > limits.Rules {
+	limits := e.Limits.WithDefaults()
+	if len(entries) > limits.MaxVisits {
 		return NATResult{}, ErrBudget
 	}
 	var source, destination, fixedSource, fixedDestination []NATStep
@@ -97,7 +97,7 @@ func (e Engine) hillstoneNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 		if err != nil {
 			return NATResult{}, err
 		}
-		out.Unknown, err = out.Unknown.Union(snat.Unknown, limits.Regions)
+		out.Unknown, err = out.Unknown.Union(snat.Unknown, limits.MaxRegions)
 		if err != nil {
 			return NATResult{}, err
 		}
@@ -109,7 +109,7 @@ func (e Engine) hillstoneNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 		for _, s := range pieces {
 			steps := append(append([]NATStep(nil), d.Steps...), s.Steps...)
 			if len(steps) == 0 {
-				out.Unmatched, err = out.Unmatched.Union(s.Original, limits.Regions)
+				out.Unmatched, err = out.Unmatched.Union(s.Original, limits.MaxRegions)
 				if err != nil {
 					return NATResult{}, err
 				}
@@ -125,14 +125,14 @@ func (e Engine) hillstoneNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 					return NATResult{}, err
 				}
 				var exact, possible bool
-				r.Translated, exact, possible, err = n.apply(r.Translated, limits.Regions)
+				r.Translated, exact, possible, err = n.apply(r.Translated, limits.MaxRegions)
 				if err != nil {
 					return NATResult{}, err
 				}
 				r.Exact = r.Exact && exact
 				r.PossibleAllocation = r.PossibleAllocation || possible
 			}
-			if len(out.Relations) >= limits.Regions {
+			if len(out.Relations) >= limits.MaxRegions {
 				return NATResult{}, ErrBudget
 			}
 			out.Relations = append(out.Relations, r)

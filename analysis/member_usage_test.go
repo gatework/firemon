@@ -137,7 +137,7 @@ func TestMemberUsageRequiresCompleteBoundContiguousObservations(t *testing.T) {
 	check(analysis.True)
 	request.MemberObservations[0].Start = right.Start.Add(time.Nanosecond)
 	check(analysis.Unknown)
-	r.Planner = plan.Planner{Engine: policy.Engine{Limits: policy.Limits{Rules: 2}}}
+	r.Planner = plan.Planner{Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 2}}}
 	if _, err := r.AnalyzeMembers(context.Background(), fw, request); !errors.Is(err, policy.ErrBudget) {
 		t.Fatalf("member expansion budget ignored: %v", err)
 	}

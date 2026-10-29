@@ -1,5 +1,20 @@
 # Domain refactoring and API migration
 
+## Computation limits migration
+
+`policy.Limits` now uses `MaxRegions`, `MaxVisits`, and `MaxCombinations` in
+place of `Regions`, `Rules`, and `Combinations`. Update keyed literals and field
+accesses; no aliases remain. Visits already covered routes and usage evidence,
+so the new name describes the actual work rather than only policy rules.
+`WithDefaults()` returns a copy with nonpositive fields defaulted to 4096,
+100000, and 4096 respectively. Algorithm-specific candidate/comparison caps
+remain separate. These Go API changes do not change persisted graph formats.
+
+Graph counts (`RuleCount`, `ZoneCount`, `ScheduleCount`) allow budget checks
+without materializing lists. `Schedule.Windows()` yields absolute windows by
+value in declaration order; `HasRecurrence()` reports recurring declarations.
+Existing copied views and native `OrderedRules()` retain their ordering contracts.
+
 The module audit implements the [domain review plan](plans/2026-10-29-domain-refactor.md)
 and the subsequent [contract and ownership plan](plans/2026-10-29-contracts.md).
 It refactors existing behavior; supported vendor syntax and lifecycle capabilities
@@ -71,7 +86,7 @@ context equality. These APIs preserve unknown evidence and full-plan proof.
 The old lifecycle type names and error-hiding resolver functions are removed.
 `known=false, err=nil` means declarations cannot be fully interpreted. A canceled
 context, exhausted budget or invalid graph is an execution error and must be
-propagated. Resolvers use `Engine.Limits.Combinations`; they never invent a
+propagated. Resolvers use `Engine.Limits.MaxCombinations`; they never invent a
 background context. `Match` and `Query` reject a nil firewall with `policy.ErrInvalid`.
 
 Existing package-level native `Parse` functions remain convenient default entry

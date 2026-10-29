@@ -25,7 +25,7 @@ func (e Engine) asaSteps(ctx context.Context, fw *fm.Firewall, scope string) ([]
 		return nil, ErrNAT
 	}
 	entries := fw.NATSequence()
-	if len(entries) > e.Limits.defaults().Rules {
+	if len(entries) > e.Limits.WithDefaults().MaxVisits {
 		return nil, ErrBudget
 	}
 	var steps []NATStep
@@ -133,7 +133,7 @@ func allTraffic(limit int) (flow.Traffic, error) {
 // including paired ports and both address axes. Swapping untransformed selectors
 // alone would incorrectly discard public-address matches.
 func (e Engine) inverseMatch(ctx context.Context, fw *fm.Firewall, n natTransform, q Request, input flow.Traffic) (flow.Traffic, bool, error) {
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	all, err := allTraffic(limit)
 	if err != nil {
 		return flow.Traffic{}, false, err

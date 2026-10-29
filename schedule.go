@@ -1,6 +1,24 @@
 package firemon
 
-import "time"
+import (
+	"iter"
+	"time"
+)
+
+// Windows visits absolute windows by value in declaration order. It does not
+// expose storage, and stops as soon as the consumer stops iteration.
+func (s *Schedule) Windows() iter.Seq[TimeWindow] {
+	return func(yield func(TimeWindow) bool) {
+		for _, window := range s.record.Windows {
+			if !yield(window) {
+				return
+			}
+		}
+	}
+}
+
+// HasRecurrence reports declarations whose recurring times need interpretation.
+func (s *Schedule) HasRecurrence() bool { return len(s.record.Recurring) != 0 }
 
 // ActiveAt reports activity in the schedule's half-open absolute windows.
 // An unknown schedule remains possibly active; the second value is false.

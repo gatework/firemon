@@ -138,7 +138,7 @@ func sameTraffic(t *testing.T, a, b flow.Traffic) bool {
 
 func TestNATNativePipelineBudgetCoversAllStageVisits(t *testing.T) {
 	fw, _ := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, StaticNATs: []fm.StaticNATRecord{bnat()}})
-	_, err := (policy.Engine{Limits: policy.Limits{Rules: 1}}).QueryNAT(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.5/32", "203.0.113.10/32")})
+	_, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 1}}).QueryNAT(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.5/32", "203.0.113.10/32")})
 	if !errors.Is(err, policy.ErrBudget) {
 		t.Fatalf("stage visits bypassed limit: %v", err)
 	}

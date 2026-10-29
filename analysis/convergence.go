@@ -48,7 +48,7 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Ti
 	if budget <= 0 {
 		budget = 4096
 	}
-	ruleBudget := c.Planner.Engine.Limits.Rules
+	ruleBudget := c.Planner.Engine.Limits.MaxVisits
 	if ruleBudget <= 0 {
 		ruleBudget = 100000
 	}
@@ -123,7 +123,7 @@ func convergenceSignature(r fm.RuleRecord) fm.RuleRecord {
 }
 
 func (c Converger) containsRule(ctx context.Context, fw *fm.Firewall, a, b fm.RuleRecord, contexts []policy.Request) (bool, error) {
-	budget, limit := c.Planner.Engine.Limits.Rules, c.Planner.Engine.Limits.Regions
+	budget, limit := c.Planner.Engine.Limits.MaxVisits, c.Planner.Engine.Limits.MaxRegions
 	if budget <= 0 {
 		budget = 100000
 	}

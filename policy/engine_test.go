@@ -101,7 +101,7 @@ func TestTwoHalfSubnetsCoverWholeRequestWithoutSingleRuleContainment(t *testing.
 }
 func TestRuleVisitBudgetReturnsErrorNotPartialCoverage(t *testing.T) {
 	fw := base(t, []fm.RuleRecord{{Object: fm.Object{ID: "1"}, Match: anyMatch(), Action: fm.Permit, RuleSet: "other"}, {Object: fm.Object{ID: "2"}, Match: anyMatch(), Action: fm.Permit, RuleSet: "security"}})
-	_, err := (policy.Engine{Limits: policy.Limits{Rules: 1}}).Query(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.1/32", "198.51.100.1/32")})
+	_, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 1}}).Query(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.1/32", "198.51.100.1/32")})
 	if err == nil {
 		t.Fatal("budget ignored")
 	}
@@ -127,7 +127,7 @@ func TestSharedGroupDAGIsResolvedOnceAndTraversalBudgetAppliesBeforeExpansion(t 
 	if err != nil || !known || len(terms) != 1 {
 		t.Fatalf("DAG expanded %d terms, known %v", len(terms), known)
 	}
-	_, err = (policy.Engine{Limits: policy.Limits{Combinations: 2}}).Query(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.1/32", "198.51.100.1/32")})
+	_, err = (policy.Engine{Limits: policy.Limits{MaxCombinations: 2}}).Query(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.1/32", "198.51.100.1/32")})
 	if !errors.Is(err, policy.ErrBudget) {
 		t.Fatal("unbounded pre-expansion", err)
 	}

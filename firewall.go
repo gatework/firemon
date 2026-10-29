@@ -111,6 +111,15 @@ func (f *Firewall) Schedules() []*Schedule {
 
 func (f *Firewall) Rule(id ID) *Rule { return f.rules[id] }
 
+// RuleCount returns the number of declarations without copying the rule view.
+func (f *Firewall) RuleCount() int { return len(f.data.Rules) }
+
+// ZoneCount returns the number of zones without copying their view.
+func (f *Firewall) ZoneCount() int { return len(f.data.Zones) }
+
+// ScheduleCount returns the number of schedules without copying their view.
+func (f *Firewall) ScheduleCount() int { return len(f.data.Schedules) }
+
 func (f *Firewall) Rules() []*Rule {
 	out := make([]*Rule, 0, len(f.data.Rules))
 	for _, r := range f.data.Rules {

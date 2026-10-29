@@ -13,7 +13,7 @@ import (
 // policies) their own lookup class. A public VIP address is not an ordinary
 // address match, even when its port-forward condition does not match.
 func (e Engine) fortinetQuery(ctx context.Context, fw *fm.Firewall, q Request) (Result, error) {
-	budget := e.Limits.defaults().Rules
+	budget := e.Limits.WithDefaults().MaxVisits
 	pre, err := e.fortinetDestinations(ctx, fw, q, &budget)
 	if err != nil {
 		return Result{}, err
@@ -30,7 +30,7 @@ func (e Engine) fortinetQuery(ctx context.Context, fw *fm.Firewall, q Request) (
 		if err != nil {
 			return Result{}, err
 		}
-		part, err = fortinetOriginalResult(fw, view, part, e.Limits.defaults().Regions)
+		part, err = fortinetOriginalResult(fw, view, part, e.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return Result{}, err
 		}
@@ -38,7 +38,7 @@ func (e Engine) fortinetQuery(ctx context.Context, fw *fm.Firewall, q Request) (
 			dst *flow.Traffic
 			src flow.Traffic
 		}{{&out.Allowed, part.Allowed}, {&out.Denied, part.Denied}, {&out.Unknown, part.Unknown}, {&out.Unmatched, part.Unmatched}} {
-			*pair.dst, err = pair.dst.Union(pair.src, e.Limits.defaults().Regions)
+			*pair.dst, err = pair.dst.Union(pair.src, e.Limits.WithDefaults().MaxRegions)
 			if err != nil {
 				return Result{}, err
 			}
@@ -46,12 +46,12 @@ func (e Engine) fortinetQuery(ctx context.Context, fw *fm.Firewall, q Request) (
 		for _, trace := range part.Trace {
 			key := traceKey{trace.Rule, trace.Action, trace.Certain}
 			if i, exists := traceIndexes[key]; exists {
-				out.Trace[i].Traffic, err = out.Trace[i].Traffic.Union(trace.Traffic, e.Limits.defaults().Regions)
+				out.Trace[i].Traffic, err = out.Trace[i].Traffic.Union(trace.Traffic, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
 					return Result{}, err
 				}
 			} else {
-				if len(out.Trace) >= e.Limits.defaults().Regions {
+				if len(out.Trace) >= e.Limits.WithDefaults().MaxRegions {
 					return Result{}, ErrBudget
 				}
 				traceIndexes[key] = len(out.Trace)
@@ -64,7 +64,7 @@ func (e Engine) fortinetQuery(ctx context.Context, fw *fm.Firewall, q Request) (
 }
 
 func (e Engine) fortinetDestinations(ctx context.Context, fw *fm.Firewall, q Request, budget *int) (NATResult, error) {
-	limit := e.Limits.defaults().Regions
+	limit := e.Limits.WithDefaults().MaxRegions
 	out := NATResult{Complete: true}
 	var covered flow.Traffic
 	for _, entry := range fw.NATSequence() {
@@ -237,7 +237,7 @@ func (e Engine) fortinetPolicy(ctx context.Context, fw *fm.Firewall, q Request, 
 		return Result{}, ErrBudget
 	}
 	*budget -= len(rules)
-	resolver := &resolutionBudget{ctx: ctx, limit: e.Limits.defaults().Combinations}
+	resolver := &resolutionBudget{ctx: ctx, limit: e.Limits.WithDefaults().MaxCombinations}
 	selected := make(map[fm.ID]fm.RuleRecord)
 	for _, rule := range rules {
 		r := rule.Record()
@@ -304,15 +304,15 @@ func (e Engine) fortinetPolicy(ctx context.Context, fw *fm.Firewall, q Request, 
 				if err != nil {
 					return Result{}, err
 				}
-				after, err = srxOriginal(fw, view, after, e.Limits.defaults().Regions)
+				after, err = srxOriginal(fw, view, after, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
 					return Result{}, err
 				}
-				a, err := before.Difference(after, e.Limits.defaults().Regions)
+				a, err := before.Difference(after, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
 					return Result{}, err
 				}
-				b, err := after.Difference(before, e.Limits.defaults().Regions)
+				b, err := after.Difference(before, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
 					return Result{}, err
 				}

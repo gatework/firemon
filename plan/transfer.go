@@ -143,7 +143,7 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 		}
 		allPermit = allPermit && r.Action() == fm.Permit
 	}
-	budget := p.Engine.Limits.Rules
+	budget := p.Engine.Limits.MaxVisits
 	if budget <= 0 {
 		budget = 100000
 	}

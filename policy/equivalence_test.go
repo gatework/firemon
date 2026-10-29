@@ -60,7 +60,7 @@ func TestEquivalenceChecksEveryNativeZonePairAndNATCatalog(t *testing.T) {
 	if _, err := (policy.Engine{}).Equivalent(context.Background(), a, b, time.Time{}); !errors.Is(err, policy.ErrNotEquivalent) {
 		t.Fatal("NAT catalog changed under policy equivalence", err)
 	}
-	if _, err := (policy.Engine{Limits: policy.Limits{Combinations: 2}}).Equivalent(context.Background(), a, a, time.Time{}); !errors.Is(err, policy.ErrBudget) {
+	if _, err := (policy.Engine{Limits: policy.Limits{MaxCombinations: 2}}).Equivalent(context.Background(), a, a, time.Time{}); !errors.Is(err, policy.ErrBudget) {
 		t.Fatal("context budget ignored", err)
 	}
 }

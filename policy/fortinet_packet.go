@@ -21,8 +21,8 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 	if q.VRF != q.Scope {
 		return PacketResult{Unknown: q.Traffic}, nil
 	}
-	limits := e.Limits.defaults()
-	budget := limits.Rules
+	limits := e.Limits.WithDefaults()
+	budget := limits.MaxVisits
 	local, err := fortinetLocalAddresses(ctx, fw, q.Scope, &budget)
 	if err != nil {
 		return PacketResult{}, err
@@ -37,35 +37,35 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			return nil
 		}
 		var err error
-		out.Unknown, err = out.Unknown.Union(v, limits.Regions)
+		out.Unknown, err = out.Unknown.Union(v, limits.MaxRegions)
 		out.Complete = false
 		return err
 	}
 	for _, view := range natParts(pre) {
 		var localTraffic flow.Traffic
 		for _, box := range view.Translated.Boxes() {
-			part, err := restrictDestinations(box, local, limits.Regions)
+			part, err := restrictDestinations(box, local, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
-			localTraffic, err = localTraffic.Union(part, limits.Regions)
+			localTraffic, err = localTraffic.Union(part, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
 		}
 		if !localTraffic.Empty() {
-			unknown, err := srxOriginal(fw, view, localTraffic, limits.Regions)
+			unknown, err := srxOriginal(fw, view, localTraffic, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
 			if err := markUnknown(unknown); err != nil {
 				return PacketResult{}, err
 			}
-			view.Translated, err = view.Translated.Difference(localTraffic, limits.Regions)
+			view.Translated, err = view.Translated.Difference(localTraffic, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
-			view.Original, err = view.Original.Difference(unknown, limits.Regions)
+			view.Original, err = view.Original.Difference(unknown, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -92,16 +92,16 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			budget--
 			var actual flow.Traffic
 			for _, box := range view.Translated.Boxes() {
-				part, err := restrictDestinations(box, route.Addresses, limits.Regions)
+				part, err := restrictDestinations(box, route.Addresses, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
 				}
-				actual, err = actual.Union(part, limits.Regions)
+				actual, err = actual.Union(part, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
 				}
 			}
-			original, err := srxOriginal(fw, view, actual, limits.Regions)
+			original, err := srxOriginal(fw, view, actual, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -121,7 +121,7 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			if err != nil {
 				return PacketResult{}, err
 			}
-			unknown, err := srxOriginal(fw, piece, evaluated.Unknown, limits.Regions)
+			unknown, err := srxOriginal(fw, piece, evaluated.Unknown, limits.MaxRegions)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -139,7 +139,7 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					if err != nil {
 						return PacketResult{}, err
 					}
-					unknown, err = srxOriginal(fw, piece, post.Unknown, limits.Regions)
+					unknown, err = srxOriginal(fw, piece, post.Unknown, limits.MaxRegions)
 					if err != nil {
 						return PacketResult{}, err
 					}
@@ -149,7 +149,7 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 				}
 				for _, part := range natParts(post) {
 					policyView := part.Original
-					part, err = fortinetCompose(fw, piece, part, limits.Regions)
+					part, err = fortinetCompose(fw, piece, part, limits.MaxRegions)
 					if err != nil {
 						return PacketResult{}, err
 					}
@@ -159,14 +159,14 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					} else {
 						result.Denied = policyView
 					}
-					if len(out.Paths) >= limits.Regions {
+					if len(out.Paths) >= limits.MaxRegions {
 						return PacketResult{}, ErrBudget
 					}
 					out.Paths = append(out.Paths, PacketPath{Original: part.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: part, Policy: result})
 				}
 			}
 			if !evaluated.Unmatched.Empty() {
-				unknown, err = srxOriginal(fw, piece, evaluated.Unmatched, limits.Regions)
+				unknown, err = srxOriginal(fw, piece, evaluated.Unmatched, limits.MaxRegions)
 				if err != nil {
 					return PacketResult{}, err
 				}

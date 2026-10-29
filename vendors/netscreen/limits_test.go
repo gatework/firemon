@@ -14,7 +14,7 @@ import (
 func TestNATAndPacketShareBudgetsAndRespectCancellation(t *testing.T) {
 	fw := parse(t, fixture(t, "nat"))
 	q := policy.Request{Traffic: traffic(t, "203.0.113.5/32", "198.51.100.70/32", 6, 12345, 8443), FromZone: "Untrust", ToZone: "Trust"}
-	e := policy.Engine{Limits: policy.Limits{Rules: 1}}
+	e := policy.Engine{Limits: policy.Limits{MaxVisits: 1}}
 	if _, err := e.QueryNAT(context.Background(), fw, q); !errors.Is(err, policy.ErrBudget) {
 		t.Fatal(err)
 	}

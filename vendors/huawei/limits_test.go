@@ -24,10 +24,10 @@ func TestCancellationAndCumulativeBudget(t *testing.T) {
 	if _, err := (policy.Engine{}).QueryPacket(ctx, fw, policy.PacketRequest{Request: q}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	if _, err := (policy.Engine{Limits: policy.Limits{Rules: 2}}).QueryNAT(context.Background(), fw, q); !errors.Is(err, policy.ErrBudget) {
+	if _, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 2}}).QueryNAT(context.Background(), fw, q); !errors.Is(err, policy.ErrBudget) {
 		t.Fatal(err)
 	}
-	if _, err := (policy.Engine{Limits: policy.Limits{Rules: 2}}).QueryPacket(context.Background(), fw, policy.PacketRequest{Request: q}); !errors.Is(err, policy.ErrBudget) {
+	if _, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 2}}).QueryPacket(context.Background(), fw, policy.PacketRequest{Request: q}); !errors.Is(err, policy.ErrBudget) {
 		t.Fatal(err)
 	}
 	if _, err := (huawei.Renderer{}).Render(context.Background(), fw, fw, []plan.Change{{Kind: plan.CreateRule, Rule: "absent1"}, {Kind: plan.CreateRule, Rule: "absent2"}}); err == nil {

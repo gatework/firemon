@@ -19,7 +19,7 @@ func TestRoutePartitionsSplitRequestAtLongestPrefixBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	addresses, _ := flow.NewSet(rangeOf("192.0.2.0/24"))
-	paths, err := (policy.Engine{Limits: policy.Limits{Regions: 64}}).ResolveRoutes(context.Background(), fw, "vr", addresses)
+	paths, err := (policy.Engine{Limits: policy.Limits{MaxRegions: 64}}).ResolveRoutes(context.Background(), fw, "vr", addresses)
 	if err != nil {
 		t.Fatal(err)
 	}
