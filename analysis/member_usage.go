@@ -47,30 +47,30 @@ type MemberUsage struct {
 // AnalyzeMembers reports references and observational usage, without performing
 // device IO or authorizing edits. Independent member hits cannot prove that any
 // source/destination/service combination was used; paired flows stay distinct.
-func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall) ([]MemberUsage, error) {
+func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall, request ReclamationRequest) ([]MemberUsage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if fw == nil {
 		return nil, ErrInvalid
 	}
-	hasWindow := !r.Window.Start.IsZero() || !r.Window.End.IsZero()
-	if hasWindow && (!r.Window.Start.Before(r.Window.End) || r.At.IsZero() || r.Window.End.After(r.At) || strings.TrimSpace(r.Revision) == "") {
+	hasWindow := !request.Window.Start.IsZero() || !request.Window.End.IsZero()
+	if hasWindow && (!request.Window.Start.Before(request.Window.End) || request.At.IsZero() || request.Window.End.After(request.At) || strings.TrimSpace(request.Revision) == "") {
 		return nil, ErrInvalid
 	}
-	if !hasWindow && len(r.MemberObservations) > 0 {
+	if !hasWindow && len(request.MemberObservations) > 0 {
 		return nil, ErrInvalid
 	}
 	budget := r.Planner.Engine.Limits.Rules
 	if budget <= 0 {
 		budget = 100000
 	}
-	if len(r.MemberObservations) > budget {
+	if len(request.MemberObservations) > budget {
 		return nil, policy.ErrBudget
 	}
-	budget -= len(r.MemberObservations)
+	budget -= len(request.MemberObservations)
 	observations := make(map[MemberIdentity][]UsageObservation)
-	for _, o := range r.MemberObservations {
+	for _, o := range request.MemberObservations {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -94,7 +94,7 @@ func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall) ([]Membe
 		if !exists {
 			i = len(rows)
 			index[identity] = i
-			rows = append(rows, MemberUsage{Identity: identity, Revision: r.Revision, GraphDigest: fw.SemanticDigest()})
+			rows = append(rows, MemberUsage{Identity: identity, Revision: request.Revision, GraphDigest: fw.SemanticDigest()})
 		}
 		if !slices.ContainsFunc(rows[i].Paths, func(p []MemberReference) bool { return slices.Equal(p, path) }) {
 			rows[i].Paths = append(rows[i].Paths, path)
@@ -151,7 +151,7 @@ func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall) ([]Membe
 				return nil, err
 			}
 			row := &rows[i]
-			row.Unused = unused(observations[row.Identity], row.Identity.Rule, r.Revision, row.GraphDigest, r.Window)
+			row.Unused = unused(observations[row.Identity], row.Identity.Rule, request.Revision, row.GraphDigest, request.Window)
 		}
 	}
 	return rows, nil

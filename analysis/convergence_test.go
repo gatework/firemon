@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/analysis"
@@ -41,7 +42,7 @@ func graph(t *testing.T, pairs [][2]string) *fm.Firewall {
 func TestConvergenceCandidatesDiscoverContainAndCombineDeterministically(t *testing.T) {
 	fw := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.1", "198.51.100.1"}, {"192.0.2.2", "198.51.100.1"}})
 	c := analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}
-	candidates, err := c.Candidates(context.Background(), fw)
+	candidates, err := c.Candidates(context.Background(), fw, time.Time{})
 	if err != nil || len(candidates) != 3 {
 		t.Fatalf("candidate discovery: %v, %v", candidates, err)
 	}
@@ -69,7 +70,7 @@ func TestConvergenceCandidatesDiscoverContainAndCombineDeterministically(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := c.Candidates(context.Background(), reordered)
+	again, err := c.Candidates(context.Background(), reordered, time.Time{})
 	if err != nil || len(again) != len(candidates) {
 		t.Fatal(again, err)
 	}
@@ -82,12 +83,12 @@ func TestConvergenceCandidatesDiscoverContainAndCombineDeterministically(t *test
 		t.Fatal("discovery applied a plan")
 	}
 	c.MaxComparisons = 1
-	if partial, err := c.Candidates(context.Background(), fw); !errors.Is(err, policy.ErrBudget) || len(partial) != 0 {
+	if partial, err := c.Candidates(context.Background(), fw, time.Time{}); !errors.Is(err, policy.ErrBudget) || len(partial) != 0 {
 		t.Fatalf("budget returned partial success: %v, %v", partial, err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := c.Candidates(ctx, fw); !errors.Is(err, context.Canceled) {
+	if _, err := c.Candidates(ctx, fw, time.Time{}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 }
@@ -112,7 +113,7 @@ func TestConvergenceCandidatesRetainUnsafePairRejections(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			rows, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Candidates(context.Background(), fw)
+			rows, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Candidates(context.Background(), fw, time.Time{})
 			if err != nil || len(rows) != 1 || rows[0].Plan != nil || rows[0].Rejection == nil || rows[0].Reason == "" {
 				t.Fatalf("unsafe candidate should be explained: %+v, %v", rows, err)
 			}
@@ -127,7 +128,7 @@ func TestConvergenceCandidateFindsStrictContainment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Candidates(context.Background(), fw)
+	rows, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Candidates(context.Background(), fw, time.Time{})
 	if err != nil || len(rows) != 1 || rows[0].Kind != analysis.ContainRules || rows[0].Plan == nil || rows[0].Rejection != nil {
 		t.Fatal(rows, err)
 	}
@@ -138,7 +139,7 @@ func TestConvergenceCandidateFindsStrictContainment(t *testing.T) {
 
 func TestConvergenceProvesWholePlanAndKeepsSharedObjects(t *testing.T) {
 	fw := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.2", "198.51.100.1"}})
-	p, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Plan(context.Background(), fw, []fm.ID{"2", "1"})
+	p, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Plan(context.Background(), fw, []fm.ID{"2", "1"}, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +175,7 @@ func TestConvergenceRejectsCrossPairsAndInterveningDeny(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if _, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Plan(context.Background(), fw, tc.ids); err == nil {
+			if _, err := (analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}).Plan(context.Background(), fw, tc.ids, time.Time{}); err == nil {
 				t.Fatal("unsafe convergence accepted")
 			}
 		})
@@ -191,11 +192,11 @@ func TestConvergenceChargesIncompatiblePairsBeforeFiltering(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := analysis.Converger{MaxComparisons: 2}
-	if rows, err := c.Candidates(context.Background(), fw); !errors.Is(err, policy.ErrBudget) || rows != nil {
+	if rows, err := c.Candidates(context.Background(), fw, time.Time{}); !errors.Is(err, policy.ErrBudget) || rows != nil {
 		t.Fatalf("incompatible pairs escaped budget: %v %v", rows, err)
 	}
 	c.MaxComparisons = 3
-	if rows, err := c.Candidates(context.Background(), fw); err != nil || len(rows) != 0 {
+	if rows, err := c.Candidates(context.Background(), fw, time.Time{}); err != nil || len(rows) != 0 {
 		t.Fatalf("exact pair budget: %v %v", rows, err)
 	}
 }

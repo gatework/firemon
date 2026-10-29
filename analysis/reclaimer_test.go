@@ -41,7 +41,7 @@ func TestUsageEvidenceRequiresRevisionGraphAndContiguousWindow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			o := base
 			tc.edit(&o)
-			rows, err := (analysis.Reclaimer{At: at, Window: window, Revision: "current", Observations: []analysis.UsageObservation{o}}).Analyze(context.Background(), fw)
+			rows, err := (analysis.Reclaimer{}).Analyze(context.Background(), fw, analysis.ReclamationRequest{At: at, Window: window, Revision: "current", Observations: []analysis.UsageObservation{o}})
 			if err != nil || len(rows) != 1 || rows[0].Unused != tc.want {
 				t.Fatal(rows, err)
 			}
@@ -50,13 +50,14 @@ func TestUsageEvidenceRequiresRevisionGraphAndContiguousWindow(t *testing.T) {
 	left, right := base, base
 	left.End = at.Add(-12 * time.Hour)
 	right.Start = left.End
-	r := analysis.Reclaimer{At: at, Window: window, Revision: "current", Observations: []analysis.UsageObservation{left, right}}
-	rows, err := r.Analyze(context.Background(), fw)
+	r := analysis.Reclaimer{}
+	request := analysis.ReclamationRequest{At: at, Window: window, Revision: "current", Observations: []analysis.UsageObservation{left, right}}
+	rows, err := r.Analyze(context.Background(), fw, request)
 	if err != nil || rows[0].Unused != analysis.True {
 		t.Fatal(rows, err)
 	}
-	r.Observations[1].Start = right.Start.Add(time.Nanosecond)
-	rows, err = r.Analyze(context.Background(), fw)
+	request.Observations[1].Start = right.Start.Add(time.Nanosecond)
+	rows, err = r.Analyze(context.Background(), fw, request)
 	if err != nil || rows[0].Unused != analysis.Unknown {
 		t.Fatal("gap treated as contiguous", rows, err)
 	}
@@ -68,15 +69,16 @@ func TestUnusedDoesNotAuthorizeDeletionAndRedundantBatchKeepsObjects(t *testing.
 	window := fm.TimeWindow{Start: at.Add(-time.Hour), End: at}
 	id, _ := analysis.IdentifyRule(fw, "1")
 	digest, _ := analysis.RuleDigest(fw, "1")
-	r := analysis.Reclaimer{Planner: plan.Planner{Renderer: hillstone.Renderer{}}, At: at, Window: window, Revision: "current", Observations: []analysis.UsageObservation{{Identity: id, Revision: "current", RuleDigest: digest, Source: "counter", Start: window.Start, End: at, Complete: true}}}
-	rows, err := r.Analyze(context.Background(), fw)
+	r := analysis.Reclaimer{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}
+	request := analysis.ReclamationRequest{At: at, Window: window, Revision: "current", Observations: []analysis.UsageObservation{{Identity: id, Revision: "current", RuleDigest: digest, Source: "counter", Start: window.Start, End: at, Complete: true}}}
+	rows, err := r.Analyze(context.Background(), fw, request)
 	if err != nil || rows[0].Unused != analysis.True || rows[0].Removable || rows[1].Redundant != analysis.True {
 		t.Fatal(rows, err)
 	}
-	if _, err := r.Plan(context.Background(), fw, []fm.ID{"1"}); err == nil {
+	if _, err := r.Plan(context.Background(), fw, request, []fm.ID{"1"}); err == nil {
 		t.Fatal("unused granted deletion authority")
 	}
-	p, err := r.Plan(context.Background(), fw, []fm.ID{"2"})
+	p, err := r.Plan(context.Background(), fw, request, []fm.ID{"2"})
 	if err != nil {
 		t.Fatal(err)
 	}

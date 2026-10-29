@@ -43,8 +43,9 @@ func TestMemberUsageBindsRolesAndKeepsEveryNestedReferencePath(t *testing.T) {
 	rule, _ := analysis.IdentifyRule(fw, "1")
 	identity := analysis.MemberIdentity{Rule: rule, Role: analysis.Source, Kind: fm.AddressObject, ID: "192.0.2.1"}
 	o := analysis.MemberUsageObservation{Identity: identity, Revision: "v1", GraphDigest: fw.SemanticDigest(), Source: "log-collector", Start: window.Start, End: window.End, Complete: true}
-	r := analysis.Reclaimer{At: at, Window: window, Revision: "v1", MemberObservations: []analysis.MemberUsageObservation{o}}
-	rows, err := r.AnalyzeMembers(context.Background(), fw)
+	r := analysis.Reclaimer{}
+	request := analysis.ReclamationRequest{At: at, Window: window, Revision: "v1", MemberObservations: []analysis.MemberUsageObservation{o}}
+	rows, err := r.AnalyzeMembers(context.Background(), fw, request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +72,7 @@ func TestMemberUsageBindsRolesAndKeepsEveryNestedReferencePath(t *testing.T) {
 	if len(found[service].Paths) != 1 || len(found[service].Paths[0]) != 2 || found[service].Unused != analysis.Unknown {
 		t.Fatal("nested service provenance lost", rows)
 	}
-	if _, err := r.Plan(context.Background(), fw, []fm.ID{"1"}); err == nil {
+	if _, err := r.Plan(context.Background(), fw, request, []fm.ID{"1"}); err == nil {
 		t.Fatal("member absence authorized whole-rule deletion")
 	}
 }
@@ -105,7 +106,7 @@ func TestMemberUsageRequiresCompleteBoundContiguousObservations(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			o := base
 			tc.edit(&o)
-			rows, err := (analysis.Reclaimer{At: at, Window: window, Revision: "v1", MemberObservations: []analysis.MemberUsageObservation{o}}).AnalyzeMembers(context.Background(), fw)
+			rows, err := (analysis.Reclaimer{}).AnalyzeMembers(context.Background(), fw, analysis.ReclamationRequest{At: at, Window: window, Revision: "v1", MemberObservations: []analysis.MemberUsageObservation{o}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -119,10 +120,11 @@ func TestMemberUsageRequiresCompleteBoundContiguousObservations(t *testing.T) {
 	left, right := base, base
 	left.End = window.Start.Add(30 * time.Minute)
 	right.Start = left.End
-	r := analysis.Reclaimer{At: at, Window: window, Revision: "v1", MemberObservations: []analysis.MemberUsageObservation{right, left}}
+	r := analysis.Reclaimer{}
+	request := analysis.ReclamationRequest{At: at, Window: window, Revision: "v1", MemberObservations: []analysis.MemberUsageObservation{right, left}}
 	check := func(want analysis.Truth) {
 		t.Helper()
-		rows, err := r.AnalyzeMembers(context.Background(), fw)
+		rows, err := r.AnalyzeMembers(context.Background(), fw, request)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,10 +135,10 @@ func TestMemberUsageRequiresCompleteBoundContiguousObservations(t *testing.T) {
 		}
 	}
 	check(analysis.True)
-	r.MemberObservations[0].Start = right.Start.Add(time.Nanosecond)
+	request.MemberObservations[0].Start = right.Start.Add(time.Nanosecond)
 	check(analysis.Unknown)
 	r.Planner = plan.Planner{Engine: policy.Engine{Limits: policy.Limits{Rules: 2}}}
-	if _, err := r.AnalyzeMembers(context.Background(), fw); !errors.Is(err, policy.ErrBudget) {
+	if _, err := r.AnalyzeMembers(context.Background(), fw, request); !errors.Is(err, policy.ErrBudget) {
 		t.Fatalf("member expansion budget ignored: %v", err)
 	}
 }

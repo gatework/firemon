@@ -352,7 +352,7 @@ func TestFortinetMissingIngressCannotEstablishVIPDenial(t *testing.T) {
 func TestFortinetDeclaredRiskCannotFlattenVIPToUnrestrictedAddress(t *testing.T) {
 	fw := parse(t, fixture(t, "basic")+nativeNAT)
 	q := policy.Request{Scope: "root", FromZone: "wan1", ToZone: "inside", Traffic: traffic(t, "203.0.113.50/32", "198.51.100.21/32", 6, 1000, 5555)}
-	rows, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, analysis.RiskDefinition{ID: "test", Version: "1", Mode: analysis.Declared, Relation: analysis.Intersects, Traffic: q.Traffic})
+	rows, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, analysis.RiskDefinition{ID: "test", Version: "1", Mode: analysis.Declared, Relation: analysis.Intersects, Traffic: q.Traffic})
 	if err != nil {
 		t.Fatal(err)
 	}

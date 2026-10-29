@@ -23,12 +23,12 @@ func TestRiskSeparatesDeclaredExposureFromEffectiveDenyShadowing(t *testing.T) {
 	}
 	q := request(t, "192.0.2.1", "198.51.100.1")
 	definition := analysis.RiskDefinition{ID: "management", Version: "1", Mode: analysis.Declared, Relation: analysis.Intersects, Traffic: q.Traffic}
-	rows, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition)
+	rows, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition)
 	if err != nil || len(rows) != 2 || rows[0].Value != analysis.False || rows[1].Value != analysis.True {
 		t.Fatal(rows, err)
 	}
 	definition.Mode = analysis.Effective
-	rows, err = (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition)
+	rows, err = (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition)
 	if err != nil || rows[1].Value != analysis.False || !rows[1].Traffic.Empty() || rows[1].GraphDigest != fw.SemanticDigest() {
 		t.Fatal(rows, err)
 	}
@@ -37,7 +37,7 @@ func TestRiskSeparatesDeclaredExposureFromEffectiveDenyShadowing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err = (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition)
+	rows, err = (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition)
 	if err != nil || rows[0].Value != analysis.Unknown || rows[1].Value != analysis.Unknown {
 		t.Fatal("incomplete source became a clean risk result", rows, err)
 	}
@@ -73,7 +73,7 @@ func TestCompoundRiskPreservesAndOrAndTypedServiceTuples(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			definition := analysis.RiskDefinition{ID: "compliance", Version: "2", Mode: analysis.Declared, Expression: &tc.expression}
-			rows, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition)
+			rows, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition)
 			if err != nil || len(rows) != 1 || rows[0].Value != tc.want || rows[0].PolicyVersion != "2" {
 				t.Fatalf("compound result %v, %v", rows, err)
 			}
@@ -86,7 +86,7 @@ func TestCompoundRiskRelationsAndUnknownComposition(t *testing.T) {
 	q := request(t, "192.0.2.1", "198.51.100.1")
 	for _, relation := range []analysis.Relation{analysis.Equal, analysis.NotEqual, analysis.Contains, analysis.Within, analysis.Intersects} {
 		expression := riskAddress(t, analysis.Source, relation, "192.0.2.1")
-		rows, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &expression})
+		rows, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &expression})
 		want := analysis.True
 		if relation == analysis.NotEqual {
 			want = analysis.False
@@ -116,14 +116,14 @@ func TestCompoundRiskRelationsAndUnknownComposition(t *testing.T) {
 		{"unknown-or-false", analysis.RiskExpression{Any: []analysis.RiskExpression{unknown, knownFalse}}, analysis.Unknown},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			rows, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &tc.expression})
+			rows, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &tc.expression})
 			if err != nil || rows[0].Value != tc.want {
 				t.Fatal(rows, err)
 			}
 		})
 	}
 	expression := analysis.RiskExpression{All: []analysis.RiskExpression{knownTrue, knownFalse}}
-	_, err = (analysis.RiskAnalyzer{Engine: policy.Engine{Limits: policy.Limits{Combinations: 2}}}).Assess(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &expression})
+	_, err = (analysis.RiskAnalyzer{Engine: policy.Engine{Limits: policy.Limits{Combinations: 2}}}).Analyze(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &expression})
 	if !errors.Is(err, policy.ErrBudget) {
 		t.Fatalf("expression budget ignored: %v", err)
 	}
@@ -155,17 +155,17 @@ func TestCompoundRiskKeepsServicePairsAndEffectiveOwnership(t *testing.T) {
 	cross.DestinationPort = udp.DestinationPort
 	expression := analysis.RiskExpression{Predicate: &analysis.RiskPredicate{Dimension: analysis.Service, Relation: analysis.Intersects, Services: []fm.ServiceTerm{cross}}}
 	definition := analysis.RiskDefinition{ID: "services", Version: "1", Mode: analysis.Declared, Expression: &expression}
-	rows, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition)
+	rows, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition)
 	if err != nil || rows[1].Value != analysis.False {
 		t.Fatalf("service cross-pair invented: %v, %v", rows, err)
 	}
 	expression.Predicate.Relation, expression.Predicate.Services = analysis.Equal, []fm.ServiceTerm{tcp, udp}
-	rows, err = (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition)
+	rows, err = (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition)
 	if err != nil || rows[1].Value != analysis.True {
 		t.Fatal(rows, err)
 	}
 	definition.Mode = analysis.Effective
-	rows, err = (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition)
+	rows, err = (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition)
 	if err != nil || rows[1].Value != analysis.False {
 		t.Fatalf("shadowed compound exposure: %v, %v", rows, err)
 	}
@@ -185,13 +185,13 @@ func TestCompoundRiskRejectsAmbiguousOrUntypedStandards(t *testing.T) {
 		{"wrong-dimension", analysis.RiskExpression{Predicate: &analysis.RiskPredicate{Dimension: analysis.Service, Relation: analysis.Equal, Addresses: valid.Predicate.Addresses}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &tc.expression})
+			_, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &tc.expression})
 			if !errors.Is(err, analysis.ErrInvalid) {
 				t.Fatal(err)
 			}
 		})
 	}
-	_, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Relation: analysis.Equal, Traffic: q.Traffic, Expression: &valid})
+	_, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Relation: analysis.Equal, Traffic: q.Traffic, Expression: &valid})
 	if !errors.Is(err, analysis.ErrInvalid) {
 		t.Fatal("mixed old/new definition accepted", err)
 	}
@@ -201,7 +201,7 @@ func TestCompoundRiskRejectsAmbiguousOrUntypedStandards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &valid})
+	rows, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Expression: &valid})
 	if err != nil || rows[0].Value != analysis.Unknown {
 		t.Fatal("incomplete capture became a field finding", rows, err)
 	}
@@ -212,12 +212,12 @@ func TestRiskUsesPairedTrafficAndExplicitDefinition(t *testing.T) {
 	q := request(t, "192.0.2.1", "198.51.100.1")
 	cross := request(t, "192.0.2.1", "198.51.100.2")
 	definition := analysis.RiskDefinition{ID: "pairs", Version: "1", Mode: analysis.Declared, Relation: analysis.Intersects, Traffic: cross.Traffic}
-	rows, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition)
+	rows, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition)
 	if err != nil || rows[0].Value != analysis.False {
 		t.Fatal(rows, err)
 	}
 	definition.Version = ""
-	if _, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition); err == nil {
+	if _, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition); err == nil {
 		t.Fatal("unversioned risk definition accepted")
 	}
 }

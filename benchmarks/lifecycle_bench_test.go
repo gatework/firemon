@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/analysis"
@@ -18,7 +19,7 @@ func BenchmarkConvergence(b *testing.B) {
 			c := analysis.Converger{Planner: plan.Planner{Renderer: huawei.Renderer{}}}
 			b.ReportAllocs()
 			for b.Loop() {
-				rows, err := c.Candidates(context.Background(), fw)
+				rows, err := c.Candidates(context.Background(), fw, time.Time{})
 				if err != nil || len(rows) != n*(n-1)/2 {
 					b.Fatalf("candidates=%d: %v", len(rows), err)
 				}
@@ -40,7 +41,7 @@ func BenchmarkRisk(b *testing.B) {
 				definition := analysis.RiskDefinition{ID: "exposure", Version: "1", Mode: mode, Relation: analysis.Intersects, Traffic: q.Traffic}
 				b.ReportAllocs()
 				for b.Loop() {
-					rows, err := (analysis.RiskAnalyzer{}).Assess(context.Background(), fw, q, definition)
+					rows, err := (analysis.RiskAnalyzer{}).Analyze(context.Background(), fw, q, definition)
 					if err != nil || len(rows) < n {
 						b.Fatalf("findings=%d: %v", len(rows), err)
 					}
@@ -78,7 +79,7 @@ func BenchmarkSharedGroupMemberUsage(b *testing.B) {
 			fw := sharedGroupFirewall(b, n)
 			b.ReportAllocs()
 			for b.Loop() {
-				rows, err := (analysis.Reclaimer{}).AnalyzeMembers(context.Background(), fw)
+				rows, err := (analysis.Reclaimer{}).AnalyzeMembers(context.Background(), fw, analysis.ReclamationRequest{})
 				if err != nil || len(rows) < n*(n+1) {
 					b.Fatalf("members=%d: %v", len(rows), err)
 				}
@@ -94,7 +95,7 @@ func BenchmarkSharedGroupMemberUsage(b *testing.B) {
 
 func TestLifecycleBenchmarkFixtures(t *testing.T) {
 	fw := benchmarkFirewall(t, 4)
-	rows, err := (analysis.Converger{Planner: plan.Planner{Renderer: huawei.Renderer{}}}).Candidates(context.Background(), fw)
+	rows, err := (analysis.Converger{Planner: plan.Planner{Renderer: huawei.Renderer{}}}).Candidates(context.Background(), fw, time.Time{})
 	if err != nil || len(rows) != 6 {
 		t.Fatalf("convergence fixture: %d %v", len(rows), err)
 	}
@@ -103,7 +104,7 @@ func TestLifecycleBenchmarkFixtures(t *testing.T) {
 			t.Fatalf("convergence fixture rejected: %v", row.Rejection)
 		}
 	}
-	members, err := (analysis.Reclaimer{}).AnalyzeMembers(context.Background(), sharedGroupFirewall(t, 4))
+	members, err := (analysis.Reclaimer{}).AnalyzeMembers(context.Background(), sharedGroupFirewall(t, 4), analysis.ReclamationRequest{})
 	if err != nil || len(members) < 20 {
 		t.Fatalf("shared group fixture: %d %v", len(members), err)
 	}

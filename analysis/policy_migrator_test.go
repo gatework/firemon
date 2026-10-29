@@ -70,9 +70,9 @@ interface GigabitEthernet0/1
 	source := parse(interfaces+"access-list IN extended permit tcp host 192.0.2.1 host 198.51.100.1 eq 443\naccess-group IN in interface inside\n", "source")
 	raw := interfaces + "access-list TARGET extended deny ip any4 any4\naccess-group TARGET in interface inside\naccess-list OTHER extended deny ip any4 any4\naccess-group OTHER in interface outside\n"
 	target := parse(raw, "target")
-	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: asa.Renderer{}}, Zones: map[fm.ID]fm.ID{"inside": "inside", "outside": ""}, Chains: map[fm.PolicyChain]fm.PolicyChain{{RuleSet: "IN"}: {RuleSet: "TARGET"}}}
-	pairs := []analysis.ZonePair{{From: "inside", To: "outside"}}
-	p, err := x.Plan(ctx, source, target, pairs, nil)
+	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: asa.Renderer{}}}
+	migration := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{"inside": "inside", "outside": ""}, Chains: map[fm.PolicyChain]fm.PolicyChain{{RuleSet: "IN"}: {RuleSet: "TARGET"}}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}}
+	p, err := x.Plan(ctx, source, target, migration)
 	if err != nil {
 		t.Fatalf("explicit native ACL mapping must render: %v", err)
 	}
@@ -113,8 +113,8 @@ interface GigabitEthernet0/1
 	if err != nil || !r.Complete || !r.Allowed.Empty() {
 		t.Fatalf("unselected ACL changed: %v, %v", r, err)
 	}
-	delete(x.Zones, "outside")
-	if _, err := x.Plan(ctx, source, target, pairs, nil); !errors.Is(err, analysis.ErrInvalid) {
+	delete(migration.Zones, "outside")
+	if _, err := x.Plan(ctx, source, target, migration); !errors.Is(err, analysis.ErrInvalid) {
 		t.Fatalf("absent destination mapping was guessed: %v", err)
 	}
 }
@@ -131,13 +131,13 @@ func TestTranslationRequiresExplicitAmbiguousChainMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: hillstone.Renderer{}}, Zones: map[fm.ID]fm.ID{"inside": "trust", "outside": "untrust"}}
-	pairs := []analysis.ZonePair{{From: "inside", To: "outside"}}
-	if _, err := x.Plan(context.Background(), source, target, pairs, []fm.ID{"2"}); !errors.Is(err, analysis.ErrInvalid) {
+	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: hillstone.Renderer{}}}
+	migration := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{"inside": "trust", "outside": "untrust"}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}, Rules: []fm.ID{"2"}}
+	if _, err := x.Plan(context.Background(), source, target, migration); !errors.Is(err, analysis.ErrInvalid) {
 		t.Fatalf("ambiguous target chain must require mapping: %v", err)
 	}
-	x.Chains = map[fm.PolicyChain]fm.PolicyChain{{RuleSet: "security"}: {Scope: "red", RuleSet: "security"}}
-	p, err := x.Plan(context.Background(), source, target, pairs, []fm.ID{"2"})
+	migration.Chains = map[fm.PolicyChain]fm.PolicyChain{{RuleSet: "security"}: {Scope: "red", RuleSet: "security"}}
+	p, err := x.Plan(context.Background(), source, target, migration)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,8 +155,8 @@ func TestTranslationRequiresExplicitAmbiguousChainMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	x.Chains = nil
-	if _, err := x.Plan(context.Background(), source, target, pairs, []fm.ID{"2"}); !errors.Is(err, analysis.ErrInvalid) {
+	migration.Chains = nil
+	if _, err := x.Plan(context.Background(), source, target, migration); !errors.Is(err, analysis.ErrInvalid) {
 		t.Fatalf("ASA chain must require mapping: %v", err)
 	}
 }
@@ -209,8 +209,9 @@ end
 		return fw
 	}
 	source, target := parse(native, "source"), parse(topology, "target")
-	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: fortinet.Renderer{}}, Zones: map[fm.ID]fm.ID{"inside": "inside", "outside": "outside"}}
-	p, err := x.Plan(ctx, source, target, []analysis.ZonePair{{From: "inside", To: "outside"}}, nil)
+	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: fortinet.Renderer{}}}
+	migration := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{"inside": "inside", "outside": "outside"}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}}
+	p, err := x.Plan(ctx, source, target, migration)
 	if err != nil {
 		t.Fatalf("native no-NAT migration must select root/security: %v", err)
 	}
@@ -228,8 +229,9 @@ end
 
 func TestTranslationUsesEffectivePartitionsAndExplicitZoneMapping(t *testing.T) {
 	source, target := translationGraphs(t)
-	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: paloalto.Renderer{}}, Zones: map[fm.ID]fm.ID{"inside": "trust", "outside": "untrust"}}
-	p, err := x.Plan(context.Background(), source, target, []analysis.ZonePair{{From: "inside", To: "outside"}}, nil)
+	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: paloalto.Renderer{}}}
+	migration := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{"inside": "trust", "outside": "untrust"}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}}
+	p, err := x.Plan(context.Background(), source, target, migration)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,11 +259,12 @@ func TestTranslationUsesEffectivePartitionsAndExplicitZoneMapping(t *testing.T) 
 
 func TestTranslationRejectsNATAndImplicitZoneMerging(t *testing.T) {
 	source, target := translationGraphs(t)
-	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: paloalto.Renderer{}}, Zones: map[fm.ID]fm.ID{"inside": "trust", "outside": "trust"}}
-	if _, err := x.Plan(context.Background(), source, target, []analysis.ZonePair{{From: "inside", To: "outside"}}, nil); err == nil {
+	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: paloalto.Renderer{}}}
+	migration := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{"inside": "trust", "outside": "trust"}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}}
+	if _, err := x.Plan(context.Background(), source, target, migration); err == nil {
 		t.Fatal("implicit zone merge accepted")
 	}
-	x.Zones["outside"] = "untrust"
+	migration.Zones["outside"] = "untrust"
 	d := source.Export()
 	a := netip.MustParseAddr("192.0.2.1")
 	b := netip.MustParseAddr("203.0.113.1")
@@ -270,7 +273,7 @@ func TestTranslationRejectsNATAndImplicitZoneMerging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := x.Plan(context.Background(), withNAT, target, []analysis.ZonePair{{From: "inside", To: "outside"}}, nil); err == nil {
+	if _, err := x.Plan(context.Background(), withNAT, target, migration); err == nil {
 		t.Fatal("NAT semantics silently omitted from translation")
 	}
 }

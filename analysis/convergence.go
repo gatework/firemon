@@ -16,7 +16,6 @@ import (
 
 type Converger struct {
 	Planner        plan.Planner
-	From           time.Time
 	MaxComparisons int
 }
 
@@ -38,7 +37,7 @@ type ConvergenceCandidate struct {
 // Candidates discovers compatible pairs in native order. Each returned Plan
 // carries the same whole-rulebase proof as Plan; rejected candidates retain
 // their rationale. It never applies or combines independently proven plans.
-func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall) ([]ConvergenceCandidate, error) {
+func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Time) ([]ConvergenceCandidate, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -85,7 +84,7 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall) ([]Convergen
 			}
 			if !contextsReady {
 				var err error
-				contexts, err = c.Planner.Engine.Contexts(ctx, c.From, fw)
+				contexts, err = c.Planner.Engine.Contexts(ctx, from, fw)
 				if err != nil {
 					return nil, err
 				}
@@ -99,7 +98,7 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall) ([]Convergen
 			if contained {
 				candidate.Kind, candidate.Reason = ContainRules, "one compatible declaration contains the other"
 			}
-			candidate.Plan, candidate.Rejection = c.plan(ctx, fw, candidate.Rules, contexts)
+			candidate.Plan, candidate.Rejection = c.plan(ctx, fw, candidate.Rules, from, contexts)
 			if errors.Is(candidate.Rejection, context.Canceled) || errors.Is(candidate.Rejection, context.DeadlineExceeded) || errors.Is(candidate.Rejection, policy.ErrBudget) || errors.Is(candidate.Rejection, flow.ErrBudget) {
 				return nil, candidate.Rejection
 			}
@@ -169,11 +168,11 @@ func (c Converger) containsRule(ctx context.Context, fw *fm.Firewall, a, b fm.Ru
 
 // Plan merges an explicit selection into the earliest native rule. Both the
 // declaration union and the entire resulting rulebase must be equivalent.
-func (c Converger) Plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID) (*plan.Plan, error) {
-	return c.plan(ctx, fw, ids, nil)
+func (c Converger) Plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from time.Time) (*plan.Plan, error) {
+	return c.plan(ctx, fw, ids, from, nil)
 }
 
-func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, contexts []policy.Request) (*plan.Plan, error) {
+func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from time.Time, contexts []policy.Request) (*plan.Plan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -222,7 +221,7 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, conte
 	}
 	if contexts == nil {
 		var err error
-		contexts, err = c.Planner.Engine.Contexts(ctx, c.From, fw)
+		contexts, err = c.Planner.Engine.Contexts(ctx, from, fw)
 		if err != nil {
 			return nil, err
 		}
@@ -284,7 +283,7 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, conte
 	if err != nil {
 		return nil, err
 	}
-	return c.Planner.Preserve(ctx, fw, after, changes, c.From)
+	return c.Planner.Preserve(ctx, fw, after, changes, from)
 }
 
 func equalTraffic(a, b flow.Traffic) (bool, error) {

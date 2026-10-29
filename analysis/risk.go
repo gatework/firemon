@@ -72,10 +72,10 @@ type RiskFinding struct {
 }
 type RiskAnalyzer struct{ Engine policy.Engine }
 
-// Assess evaluates one versioned standard in an explicit context/traffic scope.
+// Analyze evaluates one versioned standard in an explicit context/traffic scope.
 // Declared mode evaluates potential matches; effective mode uses first-match
 // ownership at q.At. Disabled/shadowed rules have no effective exposure.
-func (a RiskAnalyzer) Assess(ctx context.Context, fw *fm.Firewall, q policy.Request, definition RiskDefinition) ([]RiskFinding, error) {
+func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Request, definition RiskDefinition) ([]RiskFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -117,9 +117,8 @@ func (a RiskAnalyzer) Assess(ctx context.Context, fw *fm.Firewall, q policy.Requ
 	}
 	var rows []RiskFinding
 	for _, rule := range fw.Rules() {
-		r := rule.Record()
-		if r.Scope == q.Scope && r.RuleSet == q.RuleSet {
-			rows = append(rows, RiskFinding{PolicyID: definition.ID, PolicyVersion: definition.Version, GraphDigest: fw.SemanticDigest(), Rule: r.ID, Mode: definition.Mode})
+		if rule.Chain() == q.Chain() {
+			rows = append(rows, RiskFinding{PolicyID: definition.ID, PolicyVersion: definition.Version, GraphDigest: fw.SemanticDigest(), Rule: rule.ID(), Mode: definition.Mode})
 		}
 	}
 	if !fw.Complete() && (definition.Expression == nil || definition.Mode == Effective) {

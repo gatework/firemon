@@ -31,8 +31,8 @@ func IdentifyRule(fw *fm.Firewall, id fm.ID) (RuleIdentity, error) {
 	if fw == nil || fw.Rule(id) == nil {
 		return RuleIdentity{}, ErrInvalid
 	}
-	r, m := fw.Rule(id).Record(), fw.Metadata()
-	return RuleIdentity{Device: m.Device, Vendor: m.Vendor, Scope: r.Scope, RuleSet: r.RuleSet, ID: r.ID}, nil
+	rule, m := fw.Rule(id), fw.Metadata()
+	return RuleIdentity{Device: m.Device, Vendor: m.Vendor, Scope: rule.Scope(), RuleSet: rule.Chain().RuleSet, ID: rule.ID()}, nil
 }
 
 // RuleDigest binds the complete semantic graph as well as the rule identity.
@@ -68,7 +68,11 @@ type Reclamation struct {
 	Removable                            bool
 }
 type Reclaimer struct {
-	Planner            plan.Planner
+	Planner plan.Planner
+}
+
+// ReclamationRequest supplies revision-bound evidence for one lifecycle call.
+type ReclamationRequest struct {
 	At                 time.Time
 	Revision           string
 	Window             fm.TimeWindow
@@ -78,24 +82,24 @@ type Reclaimer struct {
 
 // Analyze keeps disabled, expired, shadowed and unused evidence separate. A
 // zero counter never makes a rule removable; Plan proves a selected whole batch.
-func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall) ([]Reclamation, error) {
+func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request ReclamationRequest) ([]Reclamation, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if fw == nil {
 		return nil, ErrInvalid
 	}
-	hasWindow := !r.Window.Start.IsZero() || !r.Window.End.IsZero()
-	if hasWindow && (!r.Window.Start.Before(r.Window.End) || r.At.IsZero() || r.Window.End.After(r.At) || strings.TrimSpace(r.Revision) == "") {
+	hasWindow := !request.Window.Start.IsZero() || !request.Window.End.IsZero()
+	if hasWindow && (!request.Window.Start.Before(request.Window.End) || request.At.IsZero() || request.Window.End.After(request.At) || strings.TrimSpace(request.Revision) == "") {
 		return nil, ErrInvalid
 	}
-	if !hasWindow && len(r.Observations) > 0 {
+	if !hasWindow && len(request.Observations) > 0 {
 		return nil, ErrInvalid
 	}
 	rules := fw.Rules()
 	rows := make([]Reclamation, 0, len(rules))
 	for _, rule := range rules {
-		id := rule.Record().ID
+		id := rule.ID()
 		digest, err := RuleDigest(fw, id)
 		if err != nil {
 			return nil, err
@@ -105,7 +109,7 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall) ([]Reclamation,
 	if !fw.Complete() {
 		return rows, nil
 	}
-	contexts, err := r.Planner.Engine.Contexts(ctx, r.At, fw)
+	contexts, err := r.Planner.Engine.Contexts(ctx, request.At, fw)
 	if err != nil {
 		return nil, err
 	}
@@ -136,38 +140,28 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall) ([]Reclamation,
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		v := rule.Record()
 		row := &rows[i]
 		row.Disabled, row.Expired, row.Redundant = False, False, False
-		if v.Disabled {
+		if rule.Disabled() {
 			row.Disabled = True
 		}
-		if v.Match.Schedule != "" {
-			s := fw.Schedule(v.Match.Schedule)
-			if s == nil || r.At.IsZero() {
-				row.Expired = Unknown
-			} else {
-				schedule := s.Record()
-				if len(schedule.Windows) == 0 || len(schedule.Recurring) > 0 || len(schedule.Unsupported) > 0 {
-					row.Expired = Unknown
-				} else {
+		if schedule := rule.Schedule(); schedule != nil {
+			expired, known := schedule.ExpiredAt(request.At)
+			row.Expired = Unknown
+			if known {
+				row.Expired = False
+				if expired {
 					row.Expired = True
-					for _, w := range schedule.Windows {
-						if w.End.After(r.At) {
-							row.Expired = False
-							break
-						}
-					}
 				}
 			}
 		}
-		if !v.Disabled && row.Expired != True && !seen[v.ID] {
+		if !rule.Disabled() && row.Expired != True && !seen[rule.ID()] {
 			row.Redundant = True
 		}
-		row.Removable = !v.Builtin && (row.Disabled == True || row.Expired == True || row.Redundant == True)
+		row.Removable = !rule.Builtin() && (row.Disabled == True || row.Expired == True || row.Redundant == True)
 		if hasWindow {
-			identity, _ := IdentifyRule(fw, v.ID)
-			row.Unused = unused(r.Observations, identity, r.Revision, row.RuleDigest, r.Window)
+			identity, _ := IdentifyRule(fw, rule.ID())
+			row.Unused = unused(request.Observations, identity, request.Revision, row.RuleDigest, request.Window)
 		}
 	}
 	return rows, nil
@@ -219,11 +213,11 @@ func unused(observations []UsageObservation, id RuleIdentity, revision, digest s
 	return Unknown
 }
 
-func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID) (*plan.Plan, error) {
+func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, request ReclamationRequest, ids []fm.ID) (*plan.Plan, error) {
 	if len(ids) == 0 || len(ids) > 100 {
 		return nil, ErrInvalid
 	}
-	rows, err := r.Analyze(ctx, fw)
+	rows, err := r.Analyze(ctx, fw, request)
 	if err != nil {
 		return nil, err
 	}
@@ -246,5 +240,5 @@ func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID) (*pla
 	if err != nil {
 		return nil, err
 	}
-	return r.Planner.Preserve(ctx, fw, after, changes, r.At)
+	return r.Planner.Preserve(ctx, fw, after, changes, request.At)
 }

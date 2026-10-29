@@ -56,7 +56,7 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 			if err := charge(); err != nil {
 				return nil, err
 			}
-			if !sameContext(q, groups[i].Request) {
+			if !q.SameContext(groups[i].Request) {
 				continue
 			}
 			merged, err := groups[i].Request.Traffic.Union(q.Traffic, regions)
@@ -100,10 +100,6 @@ func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Reques
 		}
 	}
 	return groups, nil
-}
-
-func sameContext(a, b policy.Request) bool {
-	return a.Chain() == b.Chain() && a.FromZone == b.FromZone && a.ToZone == b.ToZone && a.EgressInterface == b.EgressInterface && a.At.Equal(b.At)
 }
 
 func joinBoxes(a, b flow.Box) (flow.Box, bool) {
