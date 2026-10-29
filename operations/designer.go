@@ -51,13 +51,19 @@ type DesignResult struct {
 // Empty request scopes use the capture's selected context. Inputs are not
 // mutated; an explicit scope remains subject to native query and render proof.
 func (d Designer) Design(ctx context.Context, device string, requests []policy.Request) (DesignResult, error) {
-	if d.store == nil || strings.TrimSpace(device) == "" {
+	if err := ctx.Err(); err != nil {
+		return DesignResult{}, err
+	}
+	if dependency.Nil(d.store) || strings.TrimSpace(device) == "" {
 		return DesignResult{}, ErrInvalid
 	}
 	ctx, cancel := operationContext(ctx, d.timeout)
 	defer cancel()
 	fw, head, err := d.store.Current(ctx, device)
 	if err != nil {
+		return DesignResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return DesignResult{}, err
 	}
 	if fw == nil || !head.Complete || !fw.Complete() {

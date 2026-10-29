@@ -143,6 +143,9 @@ func (s *Session) run(ctx context.Context, fn func(context.Context, *connector.O
 // Execute journals each accepted command before the next command is sent. A
 // failed command retains a separate uncertain write receipt when available.
 func (s *Session) Execute(ctx context.Context, commands []string, receive deploy.ReceiptFunc) (out deploy.Outcome, err error) {
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
 	if receive == nil || len(commands) > 10000 {
 		return out, ErrInvalid
 	}

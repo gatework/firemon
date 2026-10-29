@@ -49,11 +49,11 @@ func (f Factory) OpenReadOnly(ctx context.Context, id string) (device.Reader, er
 type readOnly struct{ device.Reader }
 
 func (f Factory) open(ctx context.Context, device string) (*Session, error) {
-	if f.Resolve == nil || strings.TrimSpace(device) == "" {
-		return nil, ErrInvalid
-	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if f.Resolve == nil || strings.TrimSpace(device) == "" {
+		return nil, ErrInvalid
 	}
 	options, err := f.Options.normalized()
 	if err != nil {
@@ -61,6 +61,9 @@ func (f Factory) open(ctx context.Context, device string) (*Session, error) {
 	}
 	target, err := f.Resolve(ctx, device)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if target.Metadata.Device != device {

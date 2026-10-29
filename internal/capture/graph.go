@@ -8,6 +8,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/internal/dependency"
 )
 
 type Diagnostics struct{ Failed, Incomplete fm.Diagnostic }
@@ -19,6 +20,9 @@ func Graph(ctx context.Context, parser config.Parser, source config.Source, meta
 		return nil, errors.Join(prior, invalid, fmt.Errorf("capture exceeds parser limit"))
 	}
 	failure := errors.Join(prior, ctx.Err())
+	if dependency.Nil(parser) {
+		failure = errors.Join(failure, invalid)
+	}
 	var fw *fm.Firewall
 	if failure == nil {
 		fw, failure = parser.Parse(ctx, source, metadata)

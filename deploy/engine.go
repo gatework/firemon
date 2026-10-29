@@ -11,9 +11,9 @@ import (
 	"time"
 
 	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/device"
 	capturegraph "github.com/gatework/firemon/internal/capture"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/snapshot"
 )
@@ -105,13 +105,7 @@ func (e Engine) context(ctx context.Context) (context.Context, context.CancelFun
 	return context.WithTimeout(ctx, timeout)
 }
 func (e Engine) validate(p *plan.Plan, authorize bool) error {
-	if e.store == nil || e.journal == nil || e.sessions == nil || e.parser == nil || authorize && e.authorizer == nil || p == nil || p.Before() == nil || p.After() == nil || p.Digest() == "" {
-		return ErrInvalid
-	}
-	if f, ok := e.parser.(config.ParseFunc); ok && f == nil {
-		return ErrInvalid
-	}
-	if f, ok := e.authorizer.(AuthorizeFunc); ok && f == nil && authorize {
+	if dependency.Nil(e.store) || dependency.Nil(e.journal) || dependency.Nil(e.sessions) || dependency.Nil(e.parser) || authorize && dependency.Nil(e.authorizer) || p == nil || p.Before() == nil || p.After() == nil || p.Digest() == "" {
 		return ErrInvalid
 	}
 	if len(p.Commands()) > 10000 {
@@ -123,6 +117,9 @@ func (e Engine) validate(p *plan.Plan, authorize bool) error {
 // Apply claims one durable operation before opening a device. Reusing a completed
 // operation is idempotent; reusing an uncertain operation never retries writes.
 func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.Plan) (result Result, err error) {
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
 	if err := e.validate(p, true); err != nil {
 		return Result{}, err
 	}
@@ -133,9 +130,18 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	defer cancel()
 	lease, err := e.journal.Acquire(ctx, operation)
 	if err != nil {
+		if !dependency.Nil(lease) {
+			err = errors.Join(err, lease.Close())
+		}
 		return Result{}, err
 	}
+	if dependency.Nil(lease) {
+		return Result{}, ErrInvalid
+	}
 	defer func() { err = errors.Join(err, lease.Close()) }()
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
 	prior, err := lease.Load(ctx)
 	if err == nil {
 		if prior.PlanDigest != p.Digest() || prior.BaselineRevision != expected || prior.Device != p.Before().Metadata().Device || prior.Context != p.Before().Metadata().Context {
@@ -158,11 +164,20 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	if err != nil {
 		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
 	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	if current == nil {
+		return Result{}, errors.Join(ErrInvalid, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
+	}
 	if head.Revision != expected || current.SemanticDigest() != p.Before().SemanticDigest() {
 		return Result{}, errors.Join(snapshot.ErrConflict, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
 	}
 	if err := e.authorizer.Authorize(ctx, Authorization{Operation: operation, Device: metadata.Device, BaselineRevision: expected, PlanDigest: p.Digest()}); err != nil {
 		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
 	}
 	if err := e.store.Reserve(ctx, metadata.Device, expected, operation); err != nil {
 		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
@@ -172,13 +187,22 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	}
 	session, err := e.sessions.Open(ctx, metadata.Device)
 	if err != nil {
+		if !dependency.Nil(session) {
+			err = errors.Join(err, session.Close())
+		}
 		return Result{}, e.uncertain(ctx, a, err)
 	}
+	if dependency.Nil(session) {
+		return Result{}, e.uncertain(ctx, a, ErrInvalid)
+	}
 	defer func() {
-		if session != nil {
+		if !dependency.Nil(session) {
 			err = errors.Join(err, session.Close())
 		}
 	}()
+	if err := ctx.Err(); err != nil {
+		return Result{}, e.uncertain(ctx, a, err)
+	}
 	{
 		var token [24]byte
 		if _, err := rand.Read(token[:]); err != nil {
@@ -240,6 +264,9 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 // Recover performs no Execute or Save calls. It requires fresh running evidence
 // and, when no durable confirmation was journaled, fresh saved-state evidence.
 func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (result Result, err error) {
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
 	if err := e.validate(p, false); err != nil {
 		return Result{}, err
 	}
@@ -247,9 +274,18 @@ func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (re
 	defer cancel()
 	lease, err := e.journal.Acquire(ctx, operation)
 	if err != nil {
+		if !dependency.Nil(lease) {
+			err = errors.Join(err, lease.Close())
+		}
 		return Result{}, err
 	}
+	if dependency.Nil(lease) {
+		return Result{}, ErrInvalid
+	}
 	defer func() { err = errors.Join(err, lease.Close()) }()
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
 	r, err := lease.Load(ctx)
 	if err != nil {
 		return Result{}, err
@@ -272,6 +308,9 @@ func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (re
 		fw, err := e.store.Load(ctx, publication.Revision)
 		if err != nil {
 			return Result{}, err
+		}
+		if fw == nil {
+			return Result{}, ErrInvalid
 		}
 		if r.Applied {
 			_, err = p.Verify(ctx, fw)
@@ -325,7 +364,13 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 	r := a.get()
 	session, err := e.sessions.Open(ctx, r.Device)
 	if err != nil {
+		if !dependency.Nil(session) {
+			err = errors.Join(err, session.Close())
+		}
 		return Result{}, e.uncertain(ctx, a, err)
+	}
+	if dependency.Nil(session) {
+		return Result{}, e.uncertain(ctx, a, ErrInvalid)
 	}
 	defer func() { err = errors.Join(err, session.Close()) }()
 	if recovered {

@@ -3,12 +3,16 @@ package inventory
 
 import (
 	"context"
+	"errors"
 	"sort"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/snapshot"
 )
+
+var ErrInvalid = errors.New("invalid inventory arguments")
 
 type Hit struct {
 	Device, Revision string
@@ -29,8 +33,17 @@ type RevisionLoader interface {
 }
 
 func Locate(ctx context.Context, store ManifestReader, addresses flow.Set) (Result, error) {
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	if dependency.Nil(store) {
+		return Result{}, ErrInvalid
+	}
 	manifest, err := store.Manifest(ctx)
 	if err != nil {
+		return Result{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
 	result := Result{Generation: manifest.Generation, Complete: true}
@@ -63,15 +76,30 @@ func Locate(ctx context.Context, store ManifestReader, addresses flow.Set) (Resu
 
 // LoadBatch loads each selected immutable revision once, with no database lookup or raw reparse.
 func LoadBatch(ctx context.Context, store RevisionLoader, result Result) (map[string]*fm.Firewall, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if dependency.Nil(store) {
+		return nil, ErrInvalid
+	}
 	loaded := make(map[string]*fm.Firewall)
 	byRevision := make(map[string]*fm.Firewall)
 	for _, hit := range result.Hits {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		fw := byRevision[hit.Revision]
 		if fw == nil {
 			var err error
 			fw, err = store.Load(ctx, hit.Revision)
 			if err != nil {
 				return nil, err
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if fw == nil {
+				return nil, snapshot.ErrFormat
 			}
 			byRevision[hit.Revision] = fw
 		}

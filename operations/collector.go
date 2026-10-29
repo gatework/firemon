@@ -85,10 +85,10 @@ func operationContext(ctx context.Context, timeout time.Duration) (context.Conte
 // identifier should therefore name one host-selected native context.
 // An incomplete publication returns both its revision and ErrIncomplete.
 func (c Collector) Collect(ctx context.Context, request CollectRequest) (result CollectResult, err error) {
-	if c.store == nil || c.sessions == nil || c.parser == nil || strings.TrimSpace(request.Device) == "" || strings.TrimSpace(request.PublicationID) == "" {
-		return CollectResult{}, ErrInvalid
+	if err := ctx.Err(); err != nil {
+		return CollectResult{}, err
 	}
-	if parser, ok := c.parser.(config.ParseFunc); ok && parser == nil {
+	if dependency.Nil(c.store) || dependency.Nil(c.sessions) || dependency.Nil(c.parser) || strings.TrimSpace(request.Device) == "" || strings.TrimSpace(request.PublicationID) == "" {
 		return CollectResult{}, ErrInvalid
 	}
 	ctx, cancel := operationContext(ctx, c.timeout)
@@ -114,14 +114,14 @@ func (c Collector) Collect(ctx context.Context, request CollectRequest) (result 
 	}
 	session, err := c.sessions.OpenReadOnly(ctx, request.Device)
 	defer func() {
-		if session != nil {
+		if !dependency.Nil(session) {
 			err = errors.Join(err, session.Close())
 		}
 	}()
 	if err != nil {
 		return CollectResult{}, errors.Join(err, ctx.Err())
 	}
-	if session == nil {
+	if dependency.Nil(session) {
 		return CollectResult{}, ErrInvalid
 	}
 	if err := ctx.Err(); err != nil {

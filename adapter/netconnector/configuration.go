@@ -17,6 +17,9 @@ var configurationToken = regexp.MustCompile(`\A[0-9a-f]{48}\z`)
 // BeginConfiguration acquires native candidate isolation before the caller's
 // baseline capture. No candidate reset, takeover, retry or reconnect is used.
 func (s *Session) BeginConfiguration(ctx context.Context, token string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !configurationToken.MatchString(token) {
 		return ErrInvalid
 	}
@@ -82,6 +85,9 @@ func (s *Session) BeginConfiguration(ctx context.Context, token string) error {
 // sessions can release PAN locks left by cancellation or process death. A dirty
 // candidate is deliberately retained for explicit operator reconciliation.
 func (s *Session) EndConfiguration(ctx context.Context, token string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !configurationToken.MatchString(token) {
 		return ErrInvalid
 	}

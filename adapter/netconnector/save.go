@@ -80,6 +80,9 @@ func persistenceText(step connector.StepResult) (string, error) {
 // Save produces one durable receipt only after affirmative vendor persistence
 // evidence. A lost response retires the session and never repeats save/commit.
 func (s *Session) Save(ctx context.Context, receive deploy.ReceiptFunc) (out deploy.Outcome, err error) {
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
 	if receive == nil {
 		return out, ErrInvalid
 	}

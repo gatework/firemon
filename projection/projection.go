@@ -6,8 +6,11 @@ import (
 	"errors"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/snapshot"
 )
+
+var ErrInvalid = errors.New("invalid projection arguments")
 
 type Batch struct {
 	Device, Revision string
@@ -30,15 +33,24 @@ type Outbox interface {
 }
 
 func Drain(ctx context.Context, store Outbox, name string, sink Sink) error {
-	if name == "" || sink == nil {
-		return errors.New("projection requires sink name and implementation")
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if name == "" || dependency.Nil(sink) || dependency.Nil(store) {
+		return ErrInvalid
 	}
 	manifest, err := store.Manifest(ctx)
 	if err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	cursor := manifest.Acknowledged[name]
 	for _, event := range manifest.Events {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if event.Generation <= cursor {
 			continue
 		}
@@ -46,10 +58,19 @@ func Drain(ctx context.Context, store Outbox, name string, sink Sink) error {
 		if err != nil {
 			return err
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if fw == nil {
+			return snapshot.ErrFormat
+		}
 		if fw.Metadata().Device != event.Device || fw.Complete() != event.Complete {
 			return snapshot.ErrFormat
 		}
 		if err = sink.Apply(ctx, Batch{Device: event.Device, Revision: event.Revision, Generation: event.Generation, Complete: event.Complete, Firewall: fw}); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if err = store.Acknowledge(ctx, name, cursor, event.Generation); err != nil {

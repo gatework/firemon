@@ -16,6 +16,9 @@ import (
 // Read captures running or persistent configuration independently. Complete
 // describes transport completeness; the vendor parser still decides semantics.
 func (s *Session) Read(ctx context.Context, view device.View) (capture device.Capture, err error) {
+	if err := ctx.Err(); err != nil {
+		return capture, err
+	}
 	if view != device.Running && view != device.Saved {
 		return capture, ErrInvalid
 	}
