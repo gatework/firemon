@@ -183,11 +183,11 @@ func (e Engine) natChain(ctx context.Context, fw *fm.Firewall, q Request, steps 
 			continue
 		}
 		var hit flow.Traffic
-		var certain bool
+		var matchKnown bool
 		if n.inverseOf != nil {
-			hit, certain, err = e.inverseMatch(ctx, fw, n, q, remaining)
+			hit, matchKnown, err = e.inverseMatch(ctx, fw, n, q, remaining)
 		} else {
-			hit, certain, err = e.Match(ctx, fw, n.match, q, remaining)
+			hit, matchKnown, err = e.Match(ctx, fw, n.match, q, remaining)
 		}
 		if err != nil {
 			return NATResult{}, err
@@ -208,16 +208,16 @@ func (e Engine) natChain(ctx context.Context, fw *fm.Firewall, q Request, steps 
 				continue
 			}
 			iface := fw.Interface(n.egress)
-			certain = certain && q.EgressInterface != "" && iface != nil
+			matchKnown = matchKnown && q.EgressInterface != "" && iface != nil
 			if iface != nil {
-				certain = certain && !iface.Disabled() && len(iface.Record().Unsupported) == 0
+				matchKnown = matchKnown && !iface.Disabled() && len(iface.Record().Unsupported) == 0
 			}
 		}
 		active, timeKnown := schedule(fw, n.match.Schedule, q.At)
 		if timeKnown && !active {
 			continue
 		}
-		known := n.known && certain && timeKnown
+		known := n.known && matchKnown && timeKnown
 		var translated flow.Traffic
 		exact, possible := false, false
 		if known {

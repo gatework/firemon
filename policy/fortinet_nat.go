@@ -41,13 +41,13 @@ func (e Engine) fortinetNAT(ctx context.Context, fw *fm.Firewall, q Request, bud
 		if err != nil {
 			return NATResult{}, err
 		}
-		for _, trace := range evaluated.Decisions {
-			if !trace.Known || trace.Action != fm.Permit {
+		for _, decision := range evaluated.Decisions {
+			if !decision.Known || decision.Action != fm.Permit {
 				continue
 			}
 			request := q
-			request.Traffic = trace.Traffic
-			post, err := e.fortinetPost(ctx, fw, request, trace.Rule, budget)
+			request.Traffic = decision.Traffic
+			post, err := e.fortinetPost(ctx, fw, request, decision.Rule, budget)
 			if err != nil {
 				return NATResult{}, err
 			}

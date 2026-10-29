@@ -64,7 +64,7 @@ func TestUsageEvidenceRequiresRevisionGraphAndContiguousWindow(t *testing.T) {
 	}
 }
 
-func TestUnusedDoesNotAuthorizeDeletionAndRedundantBatchKeepsObjects(t *testing.T) {
+func TestUnusedDoesNotAuthorizeDeletionAndUnreachableBatchKeepsObjects(t *testing.T) {
 	fw := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.1", "198.51.100.1"}})
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	window := fm.TimeWindow{Start: at.Add(-time.Hour), End: at}

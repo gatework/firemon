@@ -180,11 +180,11 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 			return Proof{}, err
 		}
 		owned := make(map[fm.ID]flow.Traffic)
-		for _, trace := range next.Decisions {
+		for _, decision := range next.Decisions {
 			if err := ctx.Err(); err != nil {
 				return Proof{}, err
 			}
-			owned[trace.Rule] = trace.Traffic
+			owned[decision.Rule] = decision.Traffic
 		}
 		var target flow.Traffic
 		for _, change := range changes {

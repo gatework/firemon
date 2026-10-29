@@ -124,8 +124,8 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 		if err := visits.take(ctx, len(result.Decisions)); err != nil {
 			return nil, err
 		}
-		for _, trace := range result.Decisions {
-			r := source.Rule(trace.Rule).Record()
+		for _, decision := range result.Decisions {
+			r := source.Rule(decision.Rule).Record()
 			if r.Builtin || len(request.Rules) > 0 && !selected[r.ID] {
 				continue
 			}
@@ -144,7 +144,7 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 			if err != nil {
 				return nil, err
 			}
-			intentRequest := policy.Request{Scope: chain.Scope, RuleSet: chain.RuleSet, FromZone: request.Zones[q.FromZone], ToZone: request.Zones[q.ToZone], Traffic: trace.Traffic, At: request.At}
+			intentRequest := policy.Request{Scope: chain.Scope, RuleSet: chain.RuleSet, FromZone: request.Zones[q.FromZone], ToZone: request.Zones[q.ToZone], Traffic: decision.Traffic, At: request.At}
 			intents = append(intents, plan.RuleIntent{Request: intentRequest, Action: r.Action, Log: r.Log, LogStart: r.LogStart, LogEnd: r.LogEnd})
 		}
 	}

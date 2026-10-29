@@ -140,8 +140,8 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 		if !r.Complete || !r.Unknown.Empty() {
 			return rows, nil
 		}
-		for _, trace := range r.Decisions {
-			effective[trace.Rule] = trace.Traffic
+		for _, decision := range r.Decisions {
+			effective[decision.Rule] = decision.Traffic
 		}
 	}
 	for i := range rows {

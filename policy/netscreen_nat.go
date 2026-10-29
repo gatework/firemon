@@ -66,16 +66,16 @@ func (e Engine) netscreenNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 	if err != nil {
 		return NATResult{}, err
 	}
-	for _, trace := range evaluated.Decisions {
-		if !trace.Known || trace.Action != fm.Permit {
+	for _, decision := range evaluated.Decisions {
+		if !decision.Known || decision.Action != fm.Permit {
 			continue
 		}
 		request := q
-		request.Traffic = trace.Traffic
+		request.Traffic = decision.Traffic
 		// MIP and VIP take priority over policy translation. Overlapping interface
 		// mappings need native composition evidence and are deliberately unknown.
 		shared := flow.Traffic{}
-		owner := fw.DynamicNAT(owned[trace.Rule].ID)
+		owner := fw.DynamicNAT(owned[decision.Rule].ID)
 		for _, step := range interfaces {
 			if *budget <= 0 {
 				return NATResult{}, ErrBudget
@@ -118,7 +118,7 @@ func (e Engine) netscreenNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 			return NATResult{}, err
 		}
 		steps := append([]NATStep{}, interfaces...)
-		if step := owned[trace.Rule]; step.ID != "" {
+		if step := owned[decision.Rule]; step.ID != "" {
 			steps = append(steps, step)
 		}
 		part, err := e.natChain(ctx, fw, request, steps, budget)

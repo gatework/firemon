@@ -34,14 +34,14 @@ func (e Engine) AppendCanPreserve(ctx context.Context, before, after *fm.Firewal
 		return false, err
 	}
 	rule := before.Rule(id).Record()
-	for _, trace := range prior.Decisions {
+	for _, decision := range prior.Decisions {
 		if outside.Empty() {
 			return true, nil
 		}
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
-		owner := before.Rule(trace.Rule)
+		owner := before.Rule(decision.Rule)
 		if owner == nil {
 			return false, ErrNotEquivalent
 		}
@@ -49,7 +49,7 @@ func (e Engine) AppendCanPreserve(ctx context.Context, before, after *fm.Firewal
 		if r.Position > rule.Position || r.Position == rule.Position && r.ID > rule.ID {
 			continue
 		}
-		outside, err = outside.Difference(trace.Traffic, e.Limits.WithDefaults().MaxRegions)
+		outside, err = outside.Difference(decision.Traffic, e.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return false, err
 		}

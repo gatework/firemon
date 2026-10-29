@@ -19,12 +19,12 @@ func (e Engine) fortinetQuery(ctx context.Context, fw *fm.Firewall, q Request) (
 		return Result{}, err
 	}
 	out := Result{Complete: pre.Complete, Unknown: pre.Unknown}
-	type traceKey struct {
-		rule    fm.ID
-		action  fm.Action
-		certain bool
+	type decisionKey struct {
+		rule   fm.ID
+		action fm.Action
+		known  bool
 	}
-	traceIndexes := make(map[traceKey]int)
+	decisionIndexes := make(map[decisionKey]int)
 	for _, view := range natParts(pre) {
 		part, err := e.fortinetPolicy(ctx, fw, q, view, &budget)
 		if err != nil {
@@ -43,10 +43,10 @@ func (e Engine) fortinetQuery(ctx context.Context, fw *fm.Firewall, q Request) (
 				return Result{}, err
 			}
 		}
-		for _, trace := range part.Decisions {
-			key := traceKey{trace.Rule, trace.Action, trace.Known}
-			if i, exists := traceIndexes[key]; exists {
-				out.Decisions[i].Traffic, err = out.Decisions[i].Traffic.Union(trace.Traffic, e.Limits.WithDefaults().MaxRegions)
+		for _, decision := range part.Decisions {
+			key := decisionKey{decision.Rule, decision.Action, decision.Known}
+			if i, exists := decisionIndexes[key]; exists {
+				out.Decisions[i].Traffic, err = out.Decisions[i].Traffic.Union(decision.Traffic, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
 					return Result{}, err
 				}
@@ -54,8 +54,8 @@ func (e Engine) fortinetQuery(ctx context.Context, fw *fm.Firewall, q Request) (
 				if len(out.Decisions) >= e.Limits.WithDefaults().MaxRegions {
 					return Result{}, ErrBudget
 				}
-				traceIndexes[key] = len(out.Decisions)
-				out.Decisions = append(out.Decisions, trace)
+				decisionIndexes[key] = len(out.Decisions)
+				out.Decisions = append(out.Decisions, decision)
 			}
 		}
 		out.Complete = out.Complete && part.Complete

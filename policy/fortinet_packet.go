@@ -128,14 +128,14 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			if err := markUnknown(unknown); err != nil {
 				return PacketResult{}, err
 			}
-			for _, trace := range evaluated.Decisions {
-				if !trace.Known {
+			for _, decision := range evaluated.Decisions {
+				if !decision.Known {
 					continue
 				}
-				post := NATResult{Complete: true, Unmatched: trace.Traffic}
-				if trace.Action == fm.Permit {
-					request.Traffic = trace.Traffic
-					post, err = e.fortinetPost(ctx, fw, request, trace.Rule, &budget)
+				post := NATResult{Complete: true, Unmatched: decision.Traffic}
+				if decision.Action == fm.Permit {
+					request.Traffic = decision.Traffic
+					post, err = e.fortinetPost(ctx, fw, request, decision.Rule, &budget)
 					if err != nil {
 						return PacketResult{}, err
 					}
@@ -153,8 +153,8 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					if err != nil {
 						return PacketResult{}, err
 					}
-					result := Result{Complete: true, Decisions: []RuleDecision{{Rule: trace.Rule, Action: trace.Action, Traffic: policyView, Known: true}}}
-					if trace.Action == fm.Permit {
+					result := Result{Complete: true, Decisions: []RuleDecision{{Rule: decision.Rule, Action: decision.Action, Traffic: policyView, Known: true}}}
+					if decision.Action == fm.Permit {
 						result.Allowed = policyView
 					} else {
 						result.Denied = policyView
