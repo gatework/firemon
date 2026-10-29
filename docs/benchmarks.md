@@ -233,3 +233,32 @@ indistinguishable at these sample sizes. The two serial blocks do not isolate
 run-order/host drift from code cost, so no speedup or causal overhead claim is
 made. This pass improves evidence reliability and names; it does not claim a
 performance optimization or production-capacity result.
+
+## Candidate contracts (2026-10-29)
+
+Compare baseline `bfc5f25` against core `9294f45` on Go 1.27.1, darwin/arm64,
+Apple M5. Six alternating samples per revision used independently built benchmark
+binaries, `-test.cpu=2 -test.benchtime=200ms -test.benchmem`, with sample order
+reversed on alternate pairs. An earlier sequential batch shifted unchanged reuse
+controls by 17–26%; those timings are not used to attribute a code effect.
+
+| Case | Before | After | Allocation change |
+| --- | ---: | ---: | ---: |
+| Plan reuse, 100 rules | 96.60 µs | 96.10 µs | 2133 allocations, unchanged |
+| Plan create, 10 rules | 1.108 ms | 1.151 ms | 9545 → 9912 allocations |
+| Plan create, 100 rules | 69.92 ms | 73.32 ms | 447100 → 452500 allocations (rounded) |
+| Risk declared, 1000 rules / 4 leaves | 5.704 ms | 5.661 ms | unchanged |
+| Risk effective, 1000 rules / 4 leaves | 28.47 ms | 28.55 ms | unchanged |
+
+Creation costs about 3.9–4.9% more time (`p=0.002`, n=6) and 2.9–4.2% more bytes
+in these workloads after adding native identity indexes and exact service
+coverage. Reuse and risk controls are stable; no overall speedup is claimed.
+
+`BenchmarkPlanCandidates` additionally measures rules that can all safely accept
+one source member. At 100 rules, retaining one candidate took a median 17.86 ms
+and 31.42 MB/op; retaining eight took 19.90 ms and 31.63 MB/op. Six samples used
+`-cpu=2 -benchtime=200ms`; both returned the cheapest proven append. These are
+absolute measurements of the new contract, not before/after speedups: the old
+implementation rejects this workload at these candidate limits. Retained drafts
+are bounded by MaxCandidates, but discovery still constructs each eligible draft
+and incurs whole-graph work. No peak-RSS or real-device performance claim is made.

@@ -355,3 +355,39 @@ current-core adapter workspace checks passed separately (10.813 s). The publishe
 core pin then passed standalone adapter build/race (5.880 s)/vet/module verification
 with GOWORK disabled and no replacement. Exact core CI and delivery are linked
 from [status](status.md). No execution rulings or minor findings were deferred.
+
+## Candidate coverage, native identity and search (2026-10-29)
+
+The [candidate plan](plans/2026-10-29-candidate-contracts.md) was implemented in
+`e8dafac`, with final renderer-boundary corrections in `9294f45`. Perl Searcher
+supplies union containment and uncovered-member cost intent; the Go implementation
+retains all five service dimensions and exact ordered-policy proofs.
+
+Before correction, tests reproduced redundant service appends for union-covered
+TCP ranges, duplicate generated service/rule IDs from reverse collision order,
+service/group native-name conflicts, Huawei creation targeting an existing aliased
+rule name, and candidate-limit errors despite a safe low-cost append. All now
+pass. Name tests also retain global/local shadow avoidance, pending reservations,
+ASA object/group distinction, Fortinet context and SRX native chain separation.
+
+An independent five-dimensional packet enumeration compares service containment
+and projection membership without using production set operations for expected
+results. Its 20-second fuzz run passed 3,521,078 executions. The existing traffic
+packet oracle passed 908,775 executions in 20 seconds. Snapshot v9, CLI JSON,
+approval digests, seven-vendor fixtures and independent readback tests pass.
+
+A fresh independent review of `bfc5f25..e8dafac` found no introduced defect, but
+identified existing Transfer renderer argument aliasing and cancellation gaps.
+The fix pass first reproduced sealed changes mutating through retained renderer
+arguments, and successful Transfer/Preserve results after cancellation. Shared
+renderChanges now copies nested inputs and returned commands and rejects canceled
+completion across all three planning entries. These regressions and the complete
+uncached race suite passed after the fix, with 25 successful root package rows;
+build, vet, formatting and diff checks also passed. No minor findings were deferred.
+
+The reviewer separately passed uncached plan/analysis/native-name/service-coverage
+and vendor contract tests. Real-device/firmware interoperability and unrelated
+unsupported native features remain unverified. Benchmark evidence is reported
+separately in [benchmarks](benchmarks.md), including the measured creation overhead.
+Publication, exact-commit CI and the standalone adapter pin are tracked in
+[status](status.md).

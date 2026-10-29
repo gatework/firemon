@@ -24,7 +24,36 @@ Unrecognized source and unsupported semantics remain incomplete; do not describe
 
 The user-confirmed scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. H3C, Topsec, Neteye and other vendors are deferred.
 
-## Core policy algorithm delivery (2026-10-29)
+## Candidate contract delivery (2026-10-29)
+
+Core [`9294f45`](https://github.com/gatework/firemon/commit/9294f4532eb246c057e0465ec6ff570c5f670bc2)
+implements the [candidate plan](plans/2026-10-29-candidate-contracts.md), including
+the final ownership/cancellation corrections. SSH push to public `gatework/firemon`
+completed, and its [exact-commit Go CI](https://github.com/gatework/firemon/actions/runs/40873825279)
+passed formatting, vet and race tests. Local uncached race tests passed 25 root
+package rows; build, vet, formatting and diff checks passed separately.
+
+Planning now compares service union coverage, allocates collision-free graph/native
+identities, and ranks bounded candidate attempts before constructing creation
+fallbacks. Huawei rejects aliased native rule names. Plan, Transfer and Preserve
+share renderer input/output ownership and cancellation handling. The public
+`MaxCandidates` field now counts full proof/render attempts (default 128); visit
+and region limits still bound discovery and proofs. Snapshot v9, CLI JSON,
+approval goldens and seven-vendor tests remain stable.
+
+The optional adapter pins published core `v0.0.0-20261029122754-9294f4532eb2`;
+connector remains `v0.0.0-20261026235641-c68c42b4bbcf`. Standalone
+`GOWORK=off GOPROXY=off` build, uncached race tests (5.735 s), vet and module
+verification passed after tidy. Module lookup confirms the published cache entry
+with no replacement. Current-core workspace race/vet passed separately (5.783 s).
+Public CI excludes this private-dependency adapter.
+
+The [verification record](verification.md) includes independent review and
+3,521,078 service / 908,775 traffic fuzz executions. Alternating benchmarks show
+roughly 4–5% creation overhead; reuse and risk controls remain stable. See
+[measurements](benchmarks.md). No release or real-device validation is claimed.
+
+## Previous core policy algorithm delivery (2026-10-29)
 
 Core [`6ec81b00be2a02ce0ab1f378c9bcaf1361c6399f`](https://github.com/gatework/firemon/commit/6ec81b00be2a02ce0ab1f378c9bcaf1361c6399f)
 implements the [algorithm plan](plans/2026-10-29-policy-algorithm-contracts.md).
