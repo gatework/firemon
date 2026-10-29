@@ -23,7 +23,7 @@ func request(t *testing.T, src, dst string) policy.Request {
 
 func TestOptimizerPreservesPairsAndMergesToFixedPoint(t *testing.T) {
 	requests := []policy.Request{request(t, "192.0.2.1", "198.51.100.1"), request(t, "192.0.2.2", "198.51.100.2")}
-	groups, err := (analysis.Optimizer{}).Optimize(context.Background(), requests)
+	groups, err := (analysis.RequestOptimizer{}).Optimize(context.Background(), requests)
 	if err != nil || len(groups) != 1 || len(groups[0].Request.Traffic.Boxes()) != 2 {
 		t.Fatal(groups, err)
 	}
@@ -33,7 +33,7 @@ func TestOptimizerPreservesPairsAndMergesToFixedPoint(t *testing.T) {
 		t.Fatal("cross pair introduced")
 	}
 	requests = append(requests, cross, request(t, "192.0.2.2", "198.51.100.1"))
-	groups, err = (analysis.Optimizer{}).Optimize(context.Background(), requests)
+	groups, err = (analysis.RequestOptimizer{}).Optimize(context.Background(), requests)
 	if err != nil || len(groups) != 1 || len(groups[0].Request.Traffic.Boxes()) != 1 || len(groups[0].Inputs) != 4 {
 		t.Fatal("not a fixed point", groups, err)
 	}
@@ -46,17 +46,17 @@ func TestOptimizerKeepsContextsAndFailsAtComparisonBudget(t *testing.T) {
 	a := request(t, "192.0.2.1", "198.51.100.1")
 	b := a
 	b.FromZone = "other"
-	groups, err := (analysis.Optimizer{}).Optimize(context.Background(), []policy.Request{a, b})
+	groups, err := (analysis.RequestOptimizer{}).Optimize(context.Background(), []policy.Request{a, b})
 	if err != nil || len(groups) != 2 {
 		t.Fatal(groups, err)
 	}
-	_, err = (analysis.Optimizer{MaxComparisons: 1}).Optimize(context.Background(), []policy.Request{a, a, a})
+	_, err = (analysis.RequestOptimizer{MaxComparisons: 1}).Optimize(context.Background(), []policy.Request{a, a, a})
 	if !errors.Is(err, policy.ErrBudget) {
 		t.Fatal("budget ignored", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := (analysis.Optimizer{}).Optimize(ctx, []policy.Request{a}); !errors.Is(err, context.Canceled) {
+	if _, err := (analysis.RequestOptimizer{}).Optimize(ctx, []policy.Request{a}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 }

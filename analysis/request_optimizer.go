@@ -15,11 +15,11 @@ type RequestGroup struct {
 	Request policy.Request
 	Inputs  []int
 }
-type Optimizer struct{ MaxComparisons, MaxRegions int }
+type RequestOptimizer struct{ MaxComparisons, MaxRegions int }
 
 // Optimize groups identical contexts while retaining exact paired traffic. Its
 // fixed-point coalescing joins boxes only across one adjacent/overlapping axis.
-func (o Optimizer) Optimize(ctx context.Context, requests []policy.Request) ([]RequestGroup, error) {
+func (o RequestOptimizer) Optimize(ctx context.Context, requests []policy.Request) ([]RequestGroup, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (o Optimizer) Optimize(ctx context.Context, requests []policy.Request) ([]R
 }
 
 func sameContext(a, b policy.Request) bool {
-	return a.Scope == b.Scope && a.RuleSet == b.RuleSet && a.FromZone == b.FromZone && a.ToZone == b.ToZone && a.EgressInterface == b.EgressInterface && a.At.Equal(b.At)
+	return a.Chain() == b.Chain() && a.FromZone == b.FromZone && a.ToZone == b.ToZone && a.EgressInterface == b.EgressInterface && a.At.Equal(b.At)
 }
 
 func joinBoxes(a, b flow.Box) (flow.Box, bool) {

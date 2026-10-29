@@ -30,7 +30,7 @@ func BenchmarkOptimize(b *testing.B) {
 				}
 				b.ReportAllocs()
 				for b.Loop() {
-					got, err := (analysis.Optimizer{}).Optimize(ctx, requests)
+					got, err := (analysis.RequestOptimizer{}).Optimize(ctx, requests)
 					if err != nil || len(got) != 1 || len(got[0].Request.Traffic.Boxes()) != want {
 						b.Fatalf("exact optimizer: %v", err)
 					}

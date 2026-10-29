@@ -12,10 +12,7 @@ import (
 
 type ZonePair struct{ From, To fm.ID }
 
-// Chain identifies a native policy chain independently of its zone pair.
-type Chain struct{ Scope, RuleSet string }
-
-type Translator struct {
+type PolicyMigrator struct {
 	Planner plan.Planner
 	// Zones maps source zones to target zones. An explicitly present empty
 	// destination value omits that target predicate, and requires an explicit
@@ -24,14 +21,14 @@ type Translator struct {
 	Zones map[fm.ID]fm.ID
 	// Chains maps native source chains to target chains. When omitted, only a
 	// unique selected security chain may be inferred. ASA ACLs require mapping.
-	Chains map[Chain]Chain
+	Chains map[fm.PolicyChain]fm.PolicyChain
 	At     time.Time
 }
 
 // Plan translates effective user-rule partitions in explicit zone pairs. Source
 // terminal/default rules stay baseline behavior. Unsupported or changing-time
 // declarations reject the batch; selecting a subset is always explicit.
-func (t Translator) Plan(ctx context.Context, source, target *fm.Firewall, pairs []ZonePair, selection []fm.ID) (*plan.Plan, error) {
+func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, pairs []ZonePair, selection []fm.ID) (*plan.Plan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -76,7 +73,7 @@ func (t Translator) Plan(ctx context.Context, source, target *fm.Firewall, pairs
 	for from, to := range t.Chains {
 		found := false
 		for _, q := range contexts {
-			found = found || from == (Chain{q.Scope, q.RuleSet})
+			found = found || from == (q.Chain())
 		}
 		if !found || strings.TrimSpace(to.RuleSet) == "" || !targetChainExists(target, to) {
 			return nil, ErrInvalid
@@ -123,7 +120,7 @@ func (t Translator) Plan(ctx context.Context, source, target *fm.Firewall, pairs
 			if r.Disabled || r.Log == fm.Unknown || r.LogStart == fm.Unknown || r.LogEnd == fm.Unknown {
 				return nil, plan.ErrUnsafe
 			}
-			chain, err := t.targetChain(target, Chain{q.Scope, q.RuleSet})
+			chain, err := t.targetChain(target, q.Chain())
 			if err != nil {
 				return nil, err
 			}
@@ -153,46 +150,46 @@ func (t Translator) Plan(ctx context.Context, source, target *fm.Firewall, pairs
 	return t.Planner.Transfer(ctx, target, intents, t.At)
 }
 
-func targetChainExists(target *fm.Firewall, chain Chain) bool {
+func targetChainExists(target *fm.Firewall, chain fm.PolicyChain) bool {
 	if selected := target.Metadata().Context; selected != "" && selected != chain.Scope {
 		return false
 	}
 	rules := target.Rules()
 	if len(rules) == 0 {
-		return chain == (Chain{target.Metadata().Context, "security"})
+		return chain == (fm.PolicyChain{Scope: target.Metadata().Context, RuleSet: "security"})
 	}
 	for _, rule := range rules {
 		r := rule.Record()
-		if chain == (Chain{r.Scope, r.RuleSet}) {
+		if chain == (fm.PolicyChain{Scope: r.Scope, RuleSet: r.RuleSet}) {
 			return true
 		}
 	}
 	return false
 }
 
-func (t Translator) targetChain(target *fm.Firewall, source Chain) (Chain, error) {
+func (t PolicyMigrator) targetChain(target *fm.Firewall, source fm.PolicyChain) (fm.PolicyChain, error) {
 	if chain, ok := t.Chains[source]; ok {
 		return chain, nil
 	}
 	if len(t.Chains) > 0 || target.Metadata().Vendor == "asa" {
-		return Chain{}, ErrInvalid
+		return fm.PolicyChain{}, ErrInvalid
 	}
 	selectedScope := target.Metadata().Context
-	chain := Chain{selectedScope, "security"}
+	chain := fm.PolicyChain{Scope: selectedScope, RuleSet: "security"}
 	found := false
 	for _, rule := range target.Rules() {
 		r := rule.Record()
 		if selectedScope != "" && r.Scope != selectedScope {
 			continue
 		}
-		candidate := Chain{r.Scope, r.RuleSet}
+		candidate := fm.PolicyChain{Scope: r.Scope, RuleSet: r.RuleSet}
 		if r.RuleSet != "security" || found && candidate != chain {
-			return Chain{}, ErrInvalid
+			return fm.PolicyChain{}, ErrInvalid
 		}
 		chain, found = candidate, true
 	}
 	if !targetChainExists(target, chain) {
-		return Chain{}, ErrInvalid
+		return fm.PolicyChain{}, ErrInvalid
 	}
 	return chain, nil
 }

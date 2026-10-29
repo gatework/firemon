@@ -24,7 +24,7 @@ type Equivalence struct {
 // half-open interval to the next transition; there is no polling approximation.
 func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.Firewall) ([]Request, error) {
 	limits := e.Limits.defaults()
-	chains := make(map[[2]string]bool)
+	chains := make(map[fm.PolicyChain]bool)
 	zones := make(map[fm.ID]bool)
 	times := []time.Time{from}
 	for _, fw := range firewalls {
@@ -33,7 +33,7 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 		}
 		for _, r := range fw.Rules() {
 			record := r.Record()
-			chains[[2]string{record.Scope, record.RuleSet}] = true
+			chains[record.Chain()] = true
 		}
 		for _, z := range fw.Zones() {
 			zones[z.Record().ID] = true
@@ -62,20 +62,20 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 		}
 	}
 	if len(chains) == 0 {
-		chains[[2]string{"", "security"}] = true
+		chains[fm.PolicyChain{RuleSet: "security"}] = true
 	}
 	if len(zones) == 0 {
 		zones[""] = true
 	}
-	keys := make([][2]string, 0, len(chains))
+	keys := make([]fm.PolicyChain, 0, len(chains))
 	for k := range chains {
 		keys = append(keys, k)
 	}
-	slices.SortFunc(keys, func(a, b [2]string) int {
-		if c := strings.Compare(a[0], b[0]); c != 0 {
+	slices.SortFunc(keys, func(a, b fm.PolicyChain) int {
+		if c := strings.Compare(a.Scope, b.Scope); c != 0 {
 			return c
 		}
-		return strings.Compare(a[1], b[1])
+		return strings.Compare(a.RuleSet, b.RuleSet)
 	})
 	zoneIDs := make([]fm.ID, 0, len(zones))
 	for id := range zones {
@@ -98,7 +98,7 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 					if len(out) >= limits.Combinations {
 						return nil, ErrBudget
 					}
-					out = append(out, Request{Scope: key[0], RuleSet: key[1], FromZone: src, ToZone: dst, At: at, Traffic: all})
+					out = append(out, Request{Scope: key.Scope, RuleSet: key.RuleSet, FromZone: src, ToZone: dst, At: at, Traffic: all})
 				}
 			}
 		}
