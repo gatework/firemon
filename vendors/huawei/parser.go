@@ -8,6 +8,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/vendors/internal/draft"
 )
 
 type parser struct {
@@ -20,9 +21,15 @@ type parser struct {
 
 // Parse imports a complete current-configuration capture. Unknown native blocks
 // stay opaque until their # boundary, including text resembling supported commands.
+type Parser struct{ Limits config.Limits }
+
 func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
+	return (Parser{}).Parse(ctx, source, metadata)
+}
+
+func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor, metadata.ParserVersion = "huawei", "huawei-go-1"
-	cursor, err := config.NewCursor(source, config.Limits{})
+	cursor, err := config.NewCursor(source, native.Limits)
 	if err != nil {
 		return nil, err
 	}
@@ -31,6 +38,7 @@ func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm
 		return nil, err
 	}
 	p := &parser{addresses: make(map[string]fm.AddressRef), services: make(map[string]fm.ServiceRef)}
+	p.data.Metadata = metadata
 	var block *config.Block
 	for _, row := range rows {
 		if err := ctx.Err(); err != nil {
@@ -138,7 +146,7 @@ func (p *parser) commit(s *config.Session, tx *config.Transaction, d fm.Data) er
 	if err := s.Commit(tx); err != nil {
 		return err
 	}
-	p.data = s.Data()
+	draft.Append(&p.data, d)
 	return nil
 }
 func claim(tx *config.Transaction, o *fm.Object, row config.Statement, ok bool) {

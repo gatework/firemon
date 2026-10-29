@@ -38,9 +38,15 @@ type parser struct {
 	addresses map[fm.ID]fm.AddressRef
 }
 
+type Parser struct{ Limits config.Limits }
+
 func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
+	return (Parser{}).Parse(ctx, source, metadata)
+}
+
+func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor, metadata.ParserVersion = "srx", "srx-go-1"
-	cursor, err := config.NewCursor(source, config.Limits{})
+	cursor, err := config.NewCursor(source, native.Limits)
 	if err != nil {
 		return nil, err
 	}

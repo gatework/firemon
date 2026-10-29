@@ -20,19 +20,29 @@ type block struct {
 	members              []config.Statement
 }
 type parser struct {
-	session        *config.Session
-	blocks         []block
-	lines          []config.Statement
-	data           fm.Data
-	graph          *fm.Firewall
-	aliases        map[string]fm.ID
-	legacy, modern bool
+	session           *config.Session
+	blocks            []block
+	lines             []config.Statement
+	data              fm.Data
+	graph             *fm.Firewall
+	literalIDs        map[fm.ID]bool
+	literalCommitted  int
+	literalDraft      *fm.Data
+	literalDraftCount int
+	aliases           map[string]fm.ID
+	legacy, modern    bool
 }
 
+type Parser struct{ Limits config.Limits }
+
 func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
+	return (Parser{}).Parse(ctx, source, metadata)
+}
+
+func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor = "asa"
 	metadata.ParserVersion = "asa-go-2"
-	cursor, err := config.NewCursor(source, config.Limits{})
+	cursor, err := config.NewCursor(source, native.Limits)
 	if err != nil {
 		return nil, err
 	}

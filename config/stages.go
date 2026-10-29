@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	fm "github.com/gatework/firemon"
-	"slices"
 )
 
 type Stage struct {
@@ -58,8 +57,10 @@ func (s *Session) Run(ctx context.Context, stages []Stage) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		before := s.data.Clone()
-		states := slices.Clone(s.Cursor.evidence)
+		before := s.data
+		wasTracking := s.Cursor.tracking
+		undoStart := len(s.Cursor.undo)
+		s.Cursor.tracking = true
 		point := s.Cursor.Checkpoint()
 		err := stage.Run(ctx, s)
 		if err == nil {
@@ -67,10 +68,19 @@ func (s *Session) Run(ctx context.Context, stages []Stage) error {
 		}
 		if err != nil {
 			s.data = before
-			s.Cursor.evidence = states
+			for i := len(s.Cursor.undo) - 1; i >= undoStart; i-- {
+				u := s.Cursor.undo[i]
+				s.Cursor.evidence[u.index] = u.previous
+			}
+			s.Cursor.undo = s.Cursor.undo[:undoStart]
+			s.Cursor.tracking = wasTracking
 			_ = s.Cursor.Restore(point)
 			return fmt.Errorf("stage %s: %w", stage.Name, err)
 		}
+		if !wasTracking {
+			s.Cursor.undo = nil
+		}
+		s.Cursor.tracking = wasTracking
 	}
 	return nil
 }

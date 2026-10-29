@@ -18,11 +18,15 @@ type Source struct {
 	Text     string
 	Complete bool
 }
+
+// DefaultMaxBytes bounds native configuration source size.
+const DefaultMaxBytes = 16 << 20
+
 type Limits struct{ MaxBytes, MaxLines, MaxDepth int }
 
 func (l Limits) defaults() Limits {
 	if l.MaxBytes <= 0 {
-		l.MaxBytes = 16 << 20
+		l.MaxBytes = DefaultMaxBytes
 	}
 	if l.MaxLines <= 0 {
 		l.MaxLines = 200000
@@ -37,11 +41,18 @@ type Line struct {
 	Number    int
 	Raw, Text string
 }
+type evidenceUndo struct {
+	index    int
+	previous fm.Evidence
+}
+
 type Cursor struct {
 	source   Source
 	lines    []Line
 	evidence []fm.Evidence
 	position int
+	undo     []evidenceUndo
+	tracking bool
 	limits   Limits
 }
 
@@ -166,20 +177,32 @@ type Transaction struct {
 
 func (c *Cursor) Begin() *Transaction { return &Transaction{cursor: c, checkpoint: c.Checkpoint()} }
 func (t *Transaction) Parse(lines ...int) {
+	if t.closed {
+		return
+	}
 	for _, n := range lines {
 		t.claims = append(t.claims, fm.Evidence{Span: fm.Span{First: n, Last: n}, State: fm.Parsed})
 	}
 }
 func (t *Transaction) Ignore(reason string, lines ...int) {
+	if t.closed {
+		return
+	}
 	for _, n := range lines {
 		t.claims = append(t.claims, fm.Evidence{Span: fm.Span{First: n, Last: n}, State: fm.Ignored, Reason: reason})
 	}
 }
-func (t *Transaction) Emit(d fm.Data) { appendData(&t.draft, d.Clone()) }
+func (t *Transaction) Emit(d fm.Data) {
+	if !t.closed {
+		appendData(&t.draft, d.Clone())
+	}
+}
 func (t *Transaction) Rollback() {
 	if !t.closed {
 		_ = t.cursor.Restore(t.checkpoint)
 		t.closed = true
+		t.draft = fm.Data{}
+		t.claims = nil
 	}
 }
 func (t *Transaction) Commit(dst *fm.Data) error {
@@ -200,13 +223,18 @@ func (t *Transaction) Commit(dst *fm.Data) error {
 		seen[n] = true
 	}
 	// All failure points precede this synchronous ownership transfer.
-	appendData(dst, t.draft.Clone())
+	appendData(dst, t.draft)
+	t.draft = fm.Data{}
 	for _, e := range t.claims {
 		index := e.Span.First - 1
 		e.Span = t.cursor.evidence[index].Span
+		if t.cursor.tracking {
+			t.cursor.undo = append(t.cursor.undo, evidenceUndo{index, t.cursor.evidence[index]})
+		}
 		t.cursor.evidence[index] = e
 	}
 	t.closed = true
+	t.claims = nil
 	return nil
 }
 func appendData(dst *fm.Data, d fm.Data) {

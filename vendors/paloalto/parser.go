@@ -28,7 +28,13 @@ type parser struct {
 	prefixes map[fm.ID]netip.Prefix
 }
 
+type Parser struct{ Limits config.Limits }
+
 func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
+	return (Parser{}).Parse(ctx, source, metadata)
+}
+
+func (adapter Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor = "paloalto"
 	metadata.ParserVersion = "paloalto-go-3"
 	var c *config.Cursor
@@ -36,13 +42,13 @@ func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm
 	var native *xmlInput
 	var err error
 	if strings.HasPrefix(strings.TrimLeft(source.Text, " \t\r\n\ufeff"), "<") {
-		native, statements, err = xmlStatements(ctx, source)
+		native, statements, err = xmlStatements(ctx, source, adapter.Limits)
 		if err != nil {
 			return nil, err
 		}
 		c = native.document.Cursor
 	} else {
-		c, err = config.NewCursor(source, config.Limits{})
+		c, err = config.NewCursor(source, adapter.Limits)
 		if err != nil {
 			return nil, err
 		}

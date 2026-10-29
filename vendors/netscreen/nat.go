@@ -256,7 +256,10 @@ func (p *parser) interfaceNAT(ctx context.Context, s *config.Session) error {
 			if uniqueInterface(fw, ir.Zone) != iface {
 				n.Unsupported = append(n.Unsupported, "VIP ingress interface is ambiguous within its zone")
 			}
-			terms, known := policy.Services(fw, []fm.ServiceRef{p.serviceRef(rest[2])}, false)
+			terms, known, err := (policy.Engine{}).ResolveServices(ctx, fw, []fm.ServiceRef{p.serviceRef(rest[2])}, false)
+			if err != nil {
+				return err
+			}
 			if !known || len(terms) != 1 || terms[0].Protocol.Low != terms[0].Protocol.High || terms[0].Protocol.Low != 6 && terms[0].Protocol.Low != 17 || terms[0].DestinationPort.Low != terms[0].DestinationPort.High || terms[0].SourcePort != (flow.Interval{High: 65535}) {
 				n.Unsupported = append(n.Unsupported, "VIP requires a single TCP/UDP service port")
 			} else {
@@ -301,7 +304,10 @@ func (p *parser) embeddedNAT(ctx context.Context, s *config.Session) error {
 		n.Unsupported = slices.Clone(r.Unsupported)
 		if fields.destination != "" {
 			target := netip.MustParseAddr(fields.destination)
-			destinations, known := policy.Addresses(fw, r.Match.Destinations, r.Match.AnyDestination)
+			destinations, known, err := (policy.Engine{}).ResolveAddresses(ctx, fw, r.Match.Destinations, r.Match.AnyDestination)
+			if err != nil {
+				return err
+			}
 			if !known || destinations.Empty() || slices.ContainsFunc(r.Match.Destinations, func(ref fm.AddressRef) bool { return ref.ID == "$any-ipv4" }) {
 				n.Unsupported = append(n.Unsupported, "policy destination NAT requires explicit resolved addresses")
 			} else {
@@ -311,7 +317,10 @@ func (p *parser) embeddedNAT(ctx context.Context, s *config.Session) error {
 			}
 			n.DestinationMode = fm.StaticIP
 			if fields.port != "" {
-				terms, known := policy.Services(fw, r.Match.Services, r.Match.AnyService)
+				terms, known, err := (policy.Engine{}).ResolveServices(ctx, fw, r.Match.Services, r.Match.AnyService)
+				if err != nil {
+					return err
+				}
 				if !known || len(terms) == 0 || slices.ContainsFunc(terms, func(term fm.ServiceTerm) bool {
 					return term.Protocol.Low != term.Protocol.High || term.Protocol.Low != 6 && term.Protocol.Low != 17
 				}) {

@@ -10,12 +10,12 @@ import (
 	"slices"
 )
 
-func (p *parser) resolve(name string, _ map[fm.ID]bool) ([]flow.Range, bool) {
+func (p *parser) resolve(ctx context.Context, name string) ([]flow.Range, bool, error) {
 	if r, err := literal(name); err == nil {
-		return []flow.Range{r}, true
+		return []flow.Range{r}, true, nil
 	}
-	set, known := policy.Addresses(p.graph, []fm.AddressRef{p.addressRef(name)}, false)
-	return set.Ranges(), known
+	set, known, err := (policy.Engine{}).ResolveAddresses(ctx, p.graph, []fm.AddressRef{p.addressRef(name)}, false)
+	return set.Ranges(), known, err
 }
 func (p *parser) natAddress(name string, d *fm.Data) (fm.AddressRef, bool) {
 	if _, ok := p.addressKinds[fm.ID(name)]; ok {
@@ -32,7 +32,7 @@ func (p *parser) natAddress(name string, d *fm.Data) (fm.AddressRef, bool) {
 	}
 	return fm.AddressRef{Kind: fm.AddressObject, ID: id}, true
 }
-func (p *parser) nat(_ context.Context, s *config.Session) error {
+func (p *parser) nat(ctx context.Context, s *config.Session) error {
 	p.data = s.Data()
 	var err error
 	p.graph, err = fm.Seal(p.data)
@@ -65,8 +65,14 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 			if !valid {
 				continue
 			}
-			mapped, ok := p.resolve(w[5], make(map[fm.ID]bool))
-			real, ok2 := p.resolve(w[8], make(map[fm.ID]bool))
+			mapped, ok, err := p.resolve(ctx, w[5])
+			if err != nil {
+				return err
+			}
+			real, ok2, err := p.resolve(ctx, w[8])
+			if err != nil {
+				return err
+			}
 			if !ok || !ok2 || len(mapped) != 1 || len(real) != 1 {
 				continue
 			}
@@ -100,7 +106,10 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 			}
 			r := fm.DynamicNATRecord{Object: o, Order: order, Match: match, Interface: fm.ID(fields["eif"]), SourceMode: fm.NoTranslation, DestinationMode: fm.NoTranslation, Disabled: fields["disable"] == "true"}
 			target := fields["trans-to"]
-			ranges, known := p.resolve(target, make(map[fm.ID]bool))
+			ranges, known, err := p.resolve(ctx, target)
+			if err != nil {
+				return err
+			}
 			if w[0] == "snatrule" {
 				r.SourceMode = fm.UnknownTranslation
 				if fields["mode"] == "dynamicip" {
@@ -118,7 +127,10 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 				}
 			} else {
 				r.DestinationMode = fm.UnknownTranslation
-				original, originalKnown := p.resolve(fields["to"], make(map[fm.ID]bool))
+				original, originalKnown, err := p.resolve(ctx, fields["to"])
+				if err != nil {
+					return err
+				}
 				if known && originalKnown && len(ranges) == 1 && ranges[0].First == ranges[0].Last {
 					r.DestinationMode = fm.StaticIP
 					for _, from := range original {
@@ -128,7 +140,10 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 			}
 			if fields["port"] != "" {
 				target, valid := port([]string{fields["port"]})
-				terms, known := p.serviceTerms(fields["service"], make(map[fm.ID]bool))
+				terms, known, err := p.serviceTerms(ctx, fields["service"])
+				if err != nil {
+					return err
+				}
 				if valid && known && len(terms) > 0 {
 					for _, term := range terms {
 						if term.Protocol.Low != term.Protocol.High || (term.Protocol.Low != 6 && term.Protocol.Low != 17) {
@@ -152,7 +167,10 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 			}
 			if w[0] == "snatrule" && fields["mode"] == "static" {
 				fixed := fm.StaticNATRecord{Object: r.Object, Match: r.Match, Order: r.Order, Interface: r.Interface, Disabled: r.Disabled, SourcePorts: r.SourcePorts}
-				originals, sourceKnown := p.resolve(fields["from"], nil)
+				originals, sourceKnown, err := p.resolve(ctx, fields["from"])
+				if err != nil {
+					return err
+				}
 				if known && sourceKnown && len(ranges) == 1 && len(originals) == 1 {
 					fixed.Source = []fm.Mapping{{Original: originals[0], Translated: ranges[0], Mode: fm.Offset}}
 				} else {
@@ -209,6 +227,6 @@ func natFields(words []string) (map[string]string, bool) {
 	return fields, fields["from"] != "" && fields["to"] != "" && fields["trans-to"] != ""
 }
 
-func (p *parser) serviceTerms(name string, _ map[fm.ID]bool) ([]fm.ServiceTerm, bool) {
-	return policy.Services(p.graph, []fm.ServiceRef{p.serviceRef(name)}, false)
+func (p *parser) serviceTerms(ctx context.Context, name string) ([]fm.ServiceTerm, bool, error) {
+	return (policy.Engine{}).ResolveServices(ctx, p.graph, []fm.ServiceRef{p.serviceRef(name)}, false)
 }

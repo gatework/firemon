@@ -12,6 +12,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/vendors/internal/draft"
 )
 
 type catalog[T any] struct {
@@ -44,9 +45,15 @@ type parser struct {
 	intraBlocked map[fm.ID]bool
 }
 
+type Parser struct{ Limits config.Limits }
+
 func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
+	return (Parser{}).Parse(ctx, source, metadata)
+}
+
+func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor, metadata.ParserVersion = "netscreen", "screenos-go-1"
-	cursor, err := config.NewCursor(source, config.Limits{})
+	cursor, err := config.NewCursor(source, native.Limits)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +62,7 @@ func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm
 		return nil, err
 	}
 	p := &parser{rows: scopeRows(statements), policyNAT: make(map[fm.ID]policyNAT), intraBlocked: make(map[fm.ID]bool)}
+	p.data.Metadata = metadata
 	s := config.NewSession(cursor, metadata)
 	stages := []config.Stage{
 		{Name: "interfaces-zones", Run: p.network},
@@ -204,7 +212,7 @@ func (p *parser) commit(s *config.Session, tx *config.Transaction, d fm.Data) er
 	if err := s.Commit(tx); err != nil {
 		return err
 	}
-	p.data = s.Data()
+	draft.Append(&p.data, d)
 	return nil
 }
 

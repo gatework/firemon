@@ -10,6 +10,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/vendors/internal/draft"
 )
 
 type parser struct {
@@ -27,18 +28,32 @@ type parser struct {
 }
 
 // Parse selects the root VDOM. ParseVDOM selects another domain explicitly.
+type Parser struct{ Limits config.Limits }
+
 func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	return ParseVDOM(ctx, source, metadata, "root")
+}
+
+func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
+	vdom := metadata.Context
+	if vdom == "" {
+		vdom = "root"
+	}
+	return native.ParseVDOM(ctx, source, metadata, vdom)
 }
 
 // ParseVDOM retains the complete source but only interprets the selected domain.
 // A capture without a config vdom wrapper is assumed to be from this domain.
 func ParseVDOM(ctx context.Context, source config.Source, metadata fm.Metadata, vdom string) (*fm.Firewall, error) {
+	return (Parser{}).ParseVDOM(ctx, source, metadata, vdom)
+}
+
+func (native Parser) ParseVDOM(ctx context.Context, source config.Source, metadata fm.Metadata, vdom string) (*fm.Firewall, error) {
 	if strings.TrimSpace(vdom) == "" {
 		return nil, fmt.Errorf("%w: VDOM is required", config.ErrSource)
 	}
 	metadata.Vendor, metadata.ParserVersion, metadata.Context = "fortinet", "fortios-go-1", vdom
-	cursor, err := config.NewCursor(source, config.Limits{})
+	cursor, err := config.NewCursor(source, native.Limits)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +90,7 @@ func ParseVDOM(ctx context.Context, source config.Source, metadata fm.Metadata, 
 		return nil, fmt.Errorf("%w: unclosed native configuration block", config.ErrSource)
 	}
 	p := &parser{vdom: vdom, sections: make(map[string][]*config.Block), interfaces: make(map[fm.ID]fm.InterfaceRecord), zones: make(map[fm.ID]fm.ZoneRecord), addresses: make(map[string]fm.AddressRef), services: make(map[string]fm.ServiceRef), sourcePorts: flow.Interval{Low: 1, High: 65535}, poolModes: make(map[fm.ID]fm.TranslationMode)}
+	p.data.Metadata = metadata
 	session := config.NewSession(cursor, metadata)
 	stages := []config.Stage{
 		{Name: "context", Run: func(ctx context.Context, s *config.Session) error { return p.selectContext(ctx, s, doc) }},
@@ -111,7 +127,7 @@ func (p *parser) commit(s *config.Session, tx *config.Transaction, d fm.Data) er
 	if err := s.Commit(tx); err != nil {
 		return err
 	}
-	p.data = s.Data()
+	draft.Append(&p.data, d)
 	return nil
 }
 func borders(tx *config.Transaction, b *config.Block) {

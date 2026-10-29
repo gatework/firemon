@@ -17,8 +17,8 @@ type xmlInput struct {
 
 // xmlStatements reads native paths directly, without an intermediate generated
 // set document. Every semantic row points to claims in the original XML cursor.
-func xmlStatements(ctx context.Context, source config.Source) (*xmlInput, []config.Statement, error) {
-	doc, err := config.XML(ctx, source, config.Limits{})
+func xmlStatements(ctx context.Context, source config.Source, limits config.Limits) (*xmlInput, []config.Statement, error) {
+	doc, err := config.XML(ctx, source, limits)
 	if err != nil {
 		return nil, nil, err
 	}

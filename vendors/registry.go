@@ -22,7 +22,6 @@ var ErrUnsupported = errors.New("vendor has no enabled native implementation")
 
 type definition struct {
 	name           string
-	parse          func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error)
 	renderer       plan.Renderer
 	defaultContext string
 }
@@ -30,21 +29,19 @@ type definition struct {
 func lookup(name string) (definition, error) {
 	switch name {
 	case "paloalto", "palo_alto":
-		return definition{name: "paloalto", parse: paloalto.Parse, renderer: paloalto.Renderer{}}, nil
+		return definition{name: "paloalto", renderer: paloalto.Renderer{}}, nil
 	case "srx":
-		return definition{name: "srx", parse: srx.Parse, renderer: srx.Renderer{}}, nil
+		return definition{name: "srx", renderer: srx.Renderer{}}, nil
 	case "huawei":
-		return definition{name: "huawei", parse: huawei.Parse, renderer: huawei.Renderer{}}, nil
+		return definition{name: "huawei", renderer: huawei.Renderer{}}, nil
 	case "hillstone":
-		return definition{name: "hillstone", parse: hillstone.Parse, renderer: hillstone.Renderer{}}, nil
+		return definition{name: "hillstone", renderer: hillstone.Renderer{}}, nil
 	case "fortinet":
-		return definition{name: "fortinet", parse: func(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-			return fortinet.ParseVDOM(ctx, source, metadata, metadata.Context)
-		}, renderer: fortinet.Renderer{}, defaultContext: "root"}, nil
+		return definition{name: "fortinet", renderer: fortinet.Renderer{}, defaultContext: "root"}, nil
 	case "netscreen", "screenos":
-		return definition{name: "netscreen", parse: netscreen.Parse, renderer: netscreen.Renderer{}}, nil
+		return definition{name: "netscreen", renderer: netscreen.Renderer{}}, nil
 	case "asa":
-		return definition{name: "asa", parse: asa.Parse, renderer: asa.Renderer{}}, nil
+		return definition{name: "asa", renderer: asa.Renderer{}}, nil
 	default:
 		return definition{}, ErrUnsupported
 	}
@@ -70,9 +67,9 @@ func Normalize(metadata fm.Metadata) (fm.Metadata, error) {
 
 // Parser dispatches from Metadata.Vendor. Metadata.Context selects the Fortinet
 // VDOM; an empty context selects root. Its zero value is ready for use.
-type Parser struct{}
+type Parser struct{ Limits config.Limits }
 
-func (Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
+func (p Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -80,7 +77,24 @@ func (Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metad
 	if err != nil {
 		return nil, err
 	}
-	return d.parse(ctx, source, d.metadata(metadata))
+	metadata = d.metadata(metadata)
+	switch d.name {
+	case "asa":
+		return (asa.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
+	case "srx":
+		return (srx.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
+	case "paloalto":
+		return (paloalto.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
+	case "fortinet":
+		return (fortinet.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
+	case "huawei":
+		return (huawei.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
+	case "hillstone":
+		return (hillstone.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
+	case "netscreen":
+		return (netscreen.Parser{Limits: p.Limits}).Parse(ctx, source, metadata)
+	}
+	return nil, ErrUnsupported
 }
 
 // Renderer returns the native renderer for an enabled vendor or existing alias.

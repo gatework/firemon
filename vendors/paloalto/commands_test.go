@@ -33,7 +33,10 @@ func TestPANNewRuleCommandsRoundTripThroughIndependentNativeParser(t *testing.T)
 		t.Fatal("native command representation did not produce planned graph", err)
 	}
 	r := observed.Rule(p.Changes()[0].Rule)
-	terms, known := policy.Services(observed, r.Record().Match.Services, false)
+	terms, known, err := (policy.Engine{}).ResolveServices(context.Background(), observed, r.Record().Match.Services, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !known || len(terms) != 1 || terms[0].SourcePort != (flow.Interval{Low: 1024, High: 65535}) {
 		t.Fatal("native service lost source port")
 	}

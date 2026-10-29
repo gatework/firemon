@@ -241,16 +241,16 @@ func (p *parser) rules(_ context.Context, s *config.Session) error {
 	p.data = s.Data()
 	return nil
 }
-func (p *parser) ranges(name string, _ map[fm.ID]bool) ([]flow.Range, bool) {
+func (p *parser) ranges(ctx context.Context, name string) ([]flow.Range, bool, error) {
 	if r, err := address(name); err == nil {
-		return []flow.Range{r}, true
+		return []flow.Range{r}, true, nil
 	}
 	kind := fm.AddressObject
 	if p.graph.AddressGroup(fm.ID(name)) != nil {
 		kind = fm.AddressGroupObject
 	}
-	set, known := policy.Addresses(p.graph, []fm.AddressRef{{Kind: kind, ID: fm.ID(name)}}, false)
-	return set.Ranges(), known
+	set, known, err := (policy.Engine{}).ResolveAddresses(ctx, p.graph, []fm.AddressRef{{Kind: kind, ID: fm.ID(name)}}, false)
+	return set.Ranges(), known, err
 }
 
 type natDraft struct {
@@ -267,7 +267,7 @@ type natDraft struct {
 	hasSource                           bool
 }
 
-func (p *parser) nat(_ context.Context, s *config.Session) error {
+func (p *parser) nat(ctx context.Context, s *config.Session) error {
 	var err error
 	p.graph, err = fm.Seal(p.data)
 	if err != nil {
@@ -366,7 +366,11 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 		collect := func(names []string) ([]flow.Range, bool) {
 			var result []flow.Range
 			for _, name := range names {
-				ranges, ok := p.ranges(name, make(map[fm.ID]bool))
+				ranges, ok, resolveErr := p.ranges(ctx, name)
+				if resolveErr != nil {
+					err = resolveErr
+					return nil, false
+				}
 				if !ok {
 					return nil, false
 				}
@@ -399,16 +403,25 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 			r.object.Unsupported = append(r.object.Unsupported, "conflicting interface translation mode")
 		}
 		srcTargets, known = collect(r.sourceTarget)
+		if err != nil {
+			return err
+		}
 		if !known {
 			r.object.Unsupported = append(r.object.Unsupported, "unresolved NAT source target")
 		}
 		dstTargets, known = collect(r.destinationTarget)
+		if err != nil {
+			return err
+		}
 		if !known {
 			r.object.Unsupported = append(r.object.Unsupported, "unresolved NAT destination target")
 		}
 		var destinations []fm.Mapping
 		if r.destinationMode == fm.StaticIP {
 			dstOriginal, known = collect(r.originalDestination)
+			if err != nil {
+				return err
+			}
 			if known && len(dstTargets) == 1 && dstTargets[0].First == dstTargets[0].Last {
 				for _, origin := range dstOriginal {
 					destinations = append(destinations, fm.Mapping{Original: origin, Translated: dstTargets[0], Mode: fm.Constant})
@@ -441,6 +454,9 @@ func (p *parser) nat(_ context.Context, s *config.Session) error {
 		}
 		if r.sourceMode == fm.StaticIP {
 			srcOriginal, known = collect(r.originalSource)
+			if err != nil {
+				return err
+			}
 			var sources []fm.Mapping
 			if known && len(srcOriginal) == 1 && len(srcTargets) == 1 {
 				sources = []fm.Mapping{{Original: srcOriginal[0], Translated: srcTargets[0], Mode: fm.Offset}}

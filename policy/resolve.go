@@ -206,13 +206,3 @@ func (e Engine) ResolveServices(ctx context.Context, fw *fm.Firewall, refs []fm.
 	}
 	return resolveServices(fw, refs, any, &resolutionBudget{ctx: ctx, limit: e.Limits.defaults().Combinations})
 }
-
-func Addresses(fw *fm.Firewall, refs []fm.AddressRef, any bool) (flow.Set, bool) {
-	result, known, err := resolveAddresses(fw, refs, any, &resolutionBudget{ctx: context.Background(), limit: 4096})
-	return result, known && err == nil
-}
-
-func Services(fw *fm.Firewall, refs []fm.ServiceRef, any bool) ([]fm.ServiceTerm, bool) {
-	result, known, err := resolveServices(fw, refs, any, &resolutionBudget{ctx: context.Background(), limit: 4096})
-	return result, known && err == nil
-}

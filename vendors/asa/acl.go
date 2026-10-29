@@ -53,20 +53,32 @@ func (p *parser) operand(words []string, d *fm.Data) (fm.AddressRef, int, bool) 
 		return fm.AddressRef{}, 0, false
 	}
 	id := fm.ID("$literal:" + r.First.String() + "-" + r.Last.String())
-	for _, a := range append(slices.Clone(p.data.Addresses), d.Addresses...) {
-		if a.ID == id {
-			return fm.AddressRef{Kind: fm.AddressObject, ID: id}, consumed, true
+	if p.literalIDs == nil || p.literalDraft != d || len(d.Addresses) < p.literalDraftCount || len(p.data.Addresses) != p.literalCommitted {
+		p.literalIDs = make(map[fm.ID]bool, len(p.data.Addresses)+len(d.Addresses))
+		for _, a := range p.data.Addresses {
+			p.literalIDs[a.ID] = true
 		}
+		p.literalCommitted = len(p.data.Addresses)
+		p.literalDraft = d
+		p.literalDraftCount = 0
 	}
-	d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id}, Ranges: []flow.Range{r}})
+	for _, a := range d.Addresses[p.literalDraftCount:] {
+		p.literalIDs[a.ID] = true
+	}
+	p.literalDraftCount = len(d.Addresses)
+	if !p.literalIDs[id] {
+		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id}, Ranges: []flow.Range{r}})
+		p.literalIDs[id] = true
+		p.literalDraftCount = len(d.Addresses)
+	}
 	return fm.AddressRef{Kind: fm.AddressObject, ID: id}, consumed, true
 }
-func (p *parser) serviceTerms(id fm.ID, group bool, _ map[fm.ID]bool) ([]fm.ServiceTerm, bool) {
+func (p *parser) serviceTerms(ctx context.Context, id fm.ID, group bool) ([]fm.ServiceTerm, bool, error) {
 	kind := fm.ServiceObject
 	if group {
 		kind = fm.ServiceGroupObject
 	}
-	return policy.Services(p.graph, []fm.ServiceRef{{Kind: kind, ID: id}}, false)
+	return (policy.Engine{}).ResolveServices(ctx, p.graph, []fm.ServiceRef{{Kind: kind, ID: id}}, false)
 }
 func (p *parser) acls(ctx context.Context, s *config.Session) error {
 	var err error
@@ -108,7 +120,10 @@ func (p *parser) acls(ctx context.Context, s *config.Session) error {
 		var baseTerms []fm.ServiceTerm
 		var direct *fm.ServiceRef
 		if (rest[0] == "object-group" || rest[0] == "object") && len(rest) > 1 {
-			terms, ok := p.serviceTerms(fm.ID(rest[1]), rest[0] == "object-group", nil)
+			terms, ok, err := p.serviceTerms(ctx, fm.ID(rest[1]), rest[0] == "object-group")
+			if err != nil {
+				return err
+			}
 			if !ok {
 				continue
 			}
@@ -149,7 +164,10 @@ func (p *parser) acls(ctx context.Context, s *config.Session) error {
 		var constrained []fm.ServiceTerm
 		if len(rest) > 1 && rest[0] == "object-group" {
 			direct = nil
-			constrained, ok = p.serviceTerms(fm.ID(rest[1]), true, make(map[fm.ID]bool))
+			constrained, ok, err = p.serviceTerms(ctx, fm.ID(rest[1]), true)
+			if err != nil {
+				return err
+			}
 			if !ok {
 				continue
 			}
