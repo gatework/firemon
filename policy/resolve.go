@@ -22,12 +22,6 @@ func (b *resolutionBudget) charge() error {
 	return nil
 }
 
-// Addresses returns known=false for unresolved, cyclic or over-budget declarations.
-// The query engine additionally reports budget/cancellation errors to its caller.
-func Addresses(fw *fm.Firewall, refs []fm.AddressRef, any bool) (flow.Set, bool) {
-	result, known, err := resolveAddresses(fw, refs, any, &resolutionBudget{ctx: context.Background(), limit: 4096})
-	return result, known && err == nil
-}
 func resolveAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *resolutionBudget) (flow.Set, bool, error) {
 	if any {
 		return allAddresses(), true, nil
@@ -111,11 +105,6 @@ func allServices() []fm.ServiceTerm {
 	return []fm.ServiceTerm{{Protocol: flow.Interval{Low: 0, High: 255}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 0, High: 65535}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}}}
 }
 
-// Services resolves a group DAG as a union; shared children are visited once.
-func Services(fw *fm.Firewall, refs []fm.ServiceRef, any bool) ([]fm.ServiceTerm, bool) {
-	result, known, err := resolveServices(fw, refs, any, &resolutionBudget{ctx: context.Background(), limit: 4096})
-	return result, known && err == nil
-}
 func resolveServices(fw *fm.Firewall, refs []fm.ServiceRef, any bool, budget *resolutionBudget) ([]fm.ServiceTerm, bool, error) {
 	if any {
 		return allServices(), true, nil
@@ -192,4 +181,38 @@ func resolveServices(fw *fm.Firewall, refs []fm.ServiceRef, any bool, budget *re
 		return allServices(), false, nil
 	}
 	return result, true, nil
+}
+
+// ResolveAddresses separates unknown declarations from cancellation and resource errors.
+// The returned set is conservative when known is false.
+func (e Engine) ResolveAddresses(ctx context.Context, fw *fm.Firewall, refs []fm.AddressRef, any bool) (flow.Set, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return flow.Set{}, false, err
+	}
+	if fw == nil {
+		return flow.Set{}, false, ErrInvalid
+	}
+	return resolveAddresses(fw, refs, any, &resolutionBudget{ctx: ctx, limit: e.Limits.defaults().Combinations})
+}
+
+// ResolveServices resolves service declarations without hiding execution errors.
+// Shared children in a group DAG are visited once per resolution.
+func (e Engine) ResolveServices(ctx context.Context, fw *fm.Firewall, refs []fm.ServiceRef, any bool) ([]fm.ServiceTerm, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if fw == nil {
+		return nil, false, ErrInvalid
+	}
+	return resolveServices(fw, refs, any, &resolutionBudget{ctx: ctx, limit: e.Limits.defaults().Combinations})
+}
+
+func Addresses(fw *fm.Firewall, refs []fm.AddressRef, any bool) (flow.Set, bool) {
+	result, known, err := resolveAddresses(fw, refs, any, &resolutionBudget{ctx: context.Background(), limit: 4096})
+	return result, known && err == nil
+}
+
+func Services(fw *fm.Firewall, refs []fm.ServiceRef, any bool) ([]fm.ServiceTerm, bool) {
+	result, known, err := resolveServices(fw, refs, any, &resolutionBudget{ctx: context.Background(), limit: 4096})
+	return result, known && err == nil
 }

@@ -23,7 +23,7 @@ func TestFortinetOrdinaryAddressInVIPNamedScopeRemainsOrdinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, known := policy.Addresses(fw, m.Destinations, false); !known {
+	if _, known, err := (policy.Engine{}).ResolveAddresses(context.Background(), fw, m.Destinations, false); err != nil || !known {
 		t.Fatal("ordinary address classified as VIP by scope or ID")
 	}
 	got, err := (policy.Engine{}).Query(context.Background(), fw, q)
@@ -57,7 +57,7 @@ func TestFortinetInvalidExplicitVIPDoesNotBecomeOrdinaryCoverage(t *testing.T) {
 			if fw.Complete() {
 				t.Fatal("unresolved VIP declared complete")
 			}
-			if _, known := policy.Addresses(fw, m.Destinations, false); known {
+			if _, known, err := (policy.Engine{}).ResolveAddresses(context.Background(), fw, m.Destinations, false); err != nil || known {
 				t.Fatal("invalid VIP flattened to address coverage")
 			}
 			got, err := (policy.Engine{}).Query(context.Background(), fw, q)

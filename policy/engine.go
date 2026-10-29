@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+var ErrInvalid = errors.New("policy: invalid input")
+
 var ErrBudget = errors.New("policy evaluation budget exceeded")
 
 type Limits struct{ Regions, Rules, Combinations int }
@@ -54,7 +56,7 @@ func (e Engine) Query(ctx context.Context, fw *fm.Firewall, q Request) (Result, 
 		return Result{}, err
 	}
 	if fw == nil {
-		return Result{}, errors.New("firewall required")
+		return Result{}, ErrInvalid
 	}
 	// Unknown top-level syntax may introduce earlier policy. Do not retain
 	// certain denies, unmatched traffic or rule ownership from a partial graph.
@@ -179,6 +181,12 @@ func zoneMatch(zones []fm.ID, any bool, q fm.ID) (bool, bool) {
 
 // Match returns a conservative possible match and whether that match is semantically certain.
 func (e Engine) Match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Request, input flow.Traffic) (flow.Traffic, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return flow.Traffic{}, false, err
+	}
+	if fw == nil {
+		return flow.Traffic{}, false, ErrInvalid
+	}
 	if fw != nil {
 		if normalize := semantics(fw.Metadata().Vendor).normalizeRequest; normalize != nil {
 			q = normalize(q)
@@ -259,3 +267,6 @@ func (e Engine) Match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Reques
 	}
 	return out, known, nil
 }
+
+// Chain returns the native chain without changing the request's wire representation.
+func (r Request) Chain() fm.PolicyChain { return fm.PolicyChain{Scope: r.Scope, RuleSet: r.RuleSet} }

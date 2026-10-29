@@ -122,8 +122,8 @@ func TestSharedGroupDAGIsResolvedOnceAndTraversalBudgetAppliesBeforeExpansion(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	terms, known := policy.Services(fw, []fm.ServiceRef{ref}, false)
-	if !known || len(terms) != 1 {
+	terms, known, err := (policy.Engine{}).ResolveServices(context.Background(), fw, []fm.ServiceRef{ref}, false)
+	if err != nil || !known || len(terms) != 1 {
 		t.Fatalf("DAG expanded %d terms, known %v", len(terms), known)
 	}
 	_, err = (policy.Engine{Limits: policy.Limits{Combinations: 2}}).Query(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.1/32", "198.51.100.1/32")})

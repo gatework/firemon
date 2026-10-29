@@ -171,8 +171,11 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		if r.Disabled || r.Builtin || r.Action != fm.Permit || r.Scope != q.Scope || r.RuleSet != q.RuleSet || r.Log == fm.Unknown || !sameZones(r.Match, q) {
 			continue
 		}
-		next, changes, cost, err := appendCandidate(fw, r, gap)
+		next, changes, cost, err := p.appendCandidate(ctx, fw, r, gap)
 		if err != nil {
+			if errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget) || ctx.Err() != nil {
+				return nil, err
+			}
 			continue
 		}
 		if len(changes) == 0 {
@@ -456,19 +459,28 @@ func ensureService(d *fm.Data, term fm.ServiceTerm) fm.ServiceRef {
 	d.Services = append(d.Services, fm.ServiceRecord{Object: fm.Object{ID: id, Name: string(id)}, Terms: []fm.ServiceTerm{term}})
 	return fm.ServiceRef{Kind: fm.ServiceObject, ID: id}
 }
-func appendCandidate(fw *fm.Firewall, rule fm.RuleRecord, gap flow.Traffic) (*fm.Firewall, []Change, Cost, error) {
+func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.RuleRecord, gap flow.Traffic) (*fm.Firewall, []Change, Cost, error) {
 	d := fw.Export()
 	objects := len(d.Addresses) + len(d.Services)
 	change := Change{Kind: AppendMembers, Rule: rule.ID}
-	src, known := policy.Addresses(fw, rule.Match.Sources, rule.Match.AnySource)
+	src, known, err := p.Engine.ResolveAddresses(ctx, fw, rule.Match.Sources, rule.Match.AnySource)
+	if err != nil {
+		return nil, nil, Cost{}, err
+	}
 	if !known {
 		return nil, nil, Cost{}, ErrUnsafe
 	}
-	dst, known := policy.Addresses(fw, rule.Match.Destinations, rule.Match.AnyDestination)
+	dst, known, err := p.Engine.ResolveAddresses(ctx, fw, rule.Match.Destinations, rule.Match.AnyDestination)
+	if err != nil {
+		return nil, nil, Cost{}, err
+	}
 	if !known {
 		return nil, nil, Cost{}, ErrUnsafe
 	}
-	terms, known := policy.Services(fw, rule.Match.Services, rule.Match.AnyService)
+	terms, known, err := p.Engine.ResolveServices(ctx, fw, rule.Match.Services, rule.Match.AnyService)
+	if err != nil {
+		return nil, nil, Cost{}, err
+	}
 	if !known {
 		return nil, nil, Cost{}, ErrUnsafe
 	}
