@@ -9,6 +9,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/firemon/operations"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
@@ -35,12 +36,12 @@ func (d *nativeDevice) Open(ctx context.Context, device string) (deploy.Session,
 	d.active++
 	return &nativeSession{device: d}, nil
 }
-func (s *nativeSession) Read(ctx context.Context, view deploy.View) (deploy.Capture, error) {
+func (s *nativeSession) Read(ctx context.Context, view device.View) (device.Capture, error) {
 	raw := s.device.running
-	if view == deploy.Saved {
+	if view == device.Saved {
 		raw = s.device.saved
 	}
-	return deploy.Capture{Source: config.Source{Text: raw, Complete: true}, Metadata: fm.Metadata{Device: "pan", Vendor: "paloalto"}}, ctx.Err()
+	return device.Capture{Source: config.Source{Text: raw, Complete: true}, Metadata: fm.Metadata{Device: "pan", Vendor: "paloalto"}}, ctx.Err()
 }
 func (s *nativeSession) BeginConfiguration(ctx context.Context, token string) error {
 	if token == "" || s.device.token != "" {
@@ -112,15 +113,15 @@ func TestRuntimeCollectDesignApplyAndRecoveryUseOneNativeComposition(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	collected, err := runtime.Collector.Collect(ctx, operations.CollectRequest{Device: "pan", PublicationID: "first-capture"})
+	collected, err := runtime.Collect(ctx, operations.CollectRequest{Device: "pan", PublicationID: "first-capture"})
 	if err != nil || !collected.Complete || device.begins != 0 {
 		t.Fatal("read-only collection acquired a candidate or failed", collected, err)
 	}
-	designed, err := runtime.Designer.Design(ctx, "pan", []policy.Request{{Traffic: requestTraffic(t, "192.0.2.10/32", "198.51.100.10/32", 1024), FromZone: "inside", ToZone: "outside"}})
+	designed, err := runtime.Design(ctx, "pan", []policy.Request{{Traffic: requestTraffic(t, "192.0.2.10/32", "198.51.100.10/32", 1024), FromZone: "inside", ToZone: "outside"}})
 	if err != nil || designed.Revision != collected.Revision || len(designed.Plan.Commands()) == 0 {
 		t.Fatal("design failed", err)
 	}
-	applied, err := runtime.Deployment.Apply(ctx, "approved-operation", designed.Revision, designed.Plan)
+	applied, err := runtime.Apply(ctx, "approved-operation", designed.Revision, designed.Plan)
 	if err != nil || applied.Phase != deploy.Published {
 		t.Fatal("native apply/readback failed", applied, err)
 	}
@@ -134,10 +135,10 @@ func TestRuntimeCollectDesignApplyAndRecoveryUseOneNativeComposition(t *testing.
 	if err != nil || head.Revision != applied.Revision || fw.SemanticDigest() != designed.Plan.After().SemanticDigest() || fw.Export().Raw != device.saved {
 		t.Fatal("published snapshot does not match independent native readback", head, err)
 	}
-	if _, err := runtime.Deployment.Apply(ctx, "approved-operation", designed.Revision, designed.Plan); err != nil {
+	if _, err := runtime.Apply(ctx, "approved-operation", designed.Revision, designed.Plan); err != nil {
 		t.Fatal("idempotent apply", err)
 	}
-	if result, err := runtime.Deployment.Recover(ctx, "approved-operation", designed.Plan); err != nil || !result.Recovered || result.Revision != applied.Revision {
+	if result, err := runtime.Recover(ctx, "approved-operation", designed.Plan); err != nil || !result.Recovered || result.Revision != applied.Revision {
 		t.Fatal("completed recovery", result, err)
 	}
 	if device.opens != 3 || device.executes != 1 || device.saves != 1 {

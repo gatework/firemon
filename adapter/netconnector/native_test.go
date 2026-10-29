@@ -32,7 +32,7 @@ import (
 
 type nativeCase struct {
 	vendor, prompt, raw, from, to, domain string
-	parser                                deploy.ParseFunc
+	parser                                config.ParseFunc
 	renderer                              plan.Renderer
 }
 
@@ -455,7 +455,7 @@ func TestNativeVendorsApplyAndRecoverLostSaveWithoutReplay(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				engine := deploy.Engine{Store: store, Journal: journal, Sessions: factory, Parser: tc.parser, Authorizer: deploy.AuthorizeFunc(func(context.Context, deploy.Authorization) error { return nil })}
+				engine := configuredEngine{Options: deploy.Options{Store: store, Journal: journal, Sessions: factory, Parser: tc.parser, Authorizer: deploy.AuthorizeFunc(func(context.Context, deploy.Authorization) error { return nil })}, t: t}
 				result, err := engine.Apply(ctx, "op", base.Revision, p)
 				if rejectMode {
 					peers.Wait()

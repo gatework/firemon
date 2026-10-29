@@ -31,7 +31,7 @@ func requestTraffic(t *testing.T, source, destination string, sourcePort uint16)
 
 func TestDesignerUsesCurrentRevisionAndNativeRendererReadback(t *testing.T) {
 	_, store, _, req := collectionFixture(t)
-	designer := operations.Designer{Store: store, Engine: policy.Engine{}}
+	designer := mustDesigner{DesignerOptions: operations.DesignerOptions{Store: store, Engine: policy.Engine{}}, t: t}
 	requests := []policy.Request{{Traffic: requestTraffic(t, "192.0.2.10/32", "198.51.100.10/32", 1024), FromZone: "inside", ToZone: "outside"}}
 	result, err := designer.Design(context.Background(), req.Device, requests)
 	if err != nil || result.Revision != req.Expected || result.Plan == nil || len(result.Plan.Commands()) == 0 {
@@ -64,7 +64,7 @@ func TestDesignerDefaultsSelectedContextWithoutMutatingRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	requests := []policy.Request{{Traffic: requestTraffic(t, "192.0.2.10/32", "203.0.113.10/32", 1000), FromZone: "inside", ToZone: "wan1"}}
-	result, err := (operations.Designer{Store: store}).Design(context.Background(), "tenant-device", requests)
+	result, err := (mustDesigner{DesignerOptions: operations.DesignerOptions{Store: store}, t: t}).Design(context.Background(), "tenant-device", requests)
 	if err != nil || result.Revision != pub.Revision || len(result.Plan.Commands()) != 0 || requests[0].Scope != "" {
 		t.Fatal("selected context was lost or caller input mutated", result, err)
 	}
@@ -89,7 +89,7 @@ func TestDesignerRejectsReservedIncompleteAndMissingCurrent(t *testing.T) {
 				req.Device = "missing"
 				want = snapshot.ErrNotFound
 			}
-			if _, err := (operations.Designer{Store: store}).Design(context.Background(), req.Device, []policy.Request{{}}); !errors.Is(err, want) {
+			if _, err := (mustDesigner{DesignerOptions: operations.DesignerOptions{Store: store}, t: t}).Design(context.Background(), req.Device, []policy.Request{{}}); !errors.Is(err, want) {
 				t.Fatal("unavailable current became design input", err)
 			}
 		})

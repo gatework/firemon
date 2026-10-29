@@ -10,14 +10,11 @@ import (
 	"github.com/gatework/firemon/config"
 )
 
-type Parser interface {
-	Parse(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error)
-}
 type Diagnostics struct{ Failed, Incomplete fm.Diagnostic }
 
 // Graph never trusts a parser to substitute capture identity, source, or completeness.
 // Failure text is returned to the caller; only fixed diagnostics enter the graph.
-func Graph(ctx context.Context, parser Parser, source config.Source, metadata fm.Metadata, prior error, invalid error, diagnostics Diagnostics) (*fm.Firewall, error) {
+func Graph(ctx context.Context, parser config.Parser, source config.Source, metadata fm.Metadata, prior error, invalid error, diagnostics Diagnostics) (*fm.Firewall, error) {
 	if len(source.Text) > config.DefaultMaxBytes {
 		return nil, errors.Join(prior, invalid, fmt.Errorf("capture exceeds parser limit"))
 	}

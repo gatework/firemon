@@ -1,47 +1,88 @@
 package operations
 
 import (
+	"context"
 	"time"
 
 	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/vendors"
 )
 
-// Options contains host-owned dependencies. Store is normally a snapshot.Store;
-// sessions resolve host inventory and credentials, and Authorizer decides whether
-// the exact operation and plan may be applied. No device is opened by New.
+// Sessions supplies independent readers and deployment sessions.
+type Sessions interface {
+	deploy.Factory
+	ReadOnlyFactory
+}
+
+// Options contains host-owned dependencies. No device is opened by New.
 type Options struct {
 	Store         deploy.Repository
 	Journal       deploy.Journal
-	Sessions      deploy.Factory
+	Sessions      Sessions
 	Authorizer    deploy.Authorizer
 	Policy        policy.Engine
 	Timeout       time.Duration
 	MaxCandidates int
 }
 
-// Runtime wires the native capture and design boundary to the existing durable
-// deployment engine. Apply and Recover remain methods of Deployment. Hosts use
-// their Store directly to load graphs for the policy and analysis packages.
+// Runtime owns the capture, design and deployment components.
 type Runtime struct {
-	Collector  Collector
-	Designer   Designer
-	Deployment deploy.Engine
+	collector  *Collector
+	designer   *Designer
+	deployment *deploy.Engine
 }
 
 func New(options Options) (*Runtime, error) {
-	if options.Store == nil || options.Journal == nil || options.Sessions == nil || options.Authorizer == nil {
-		return nil, ErrInvalid
-	}
-	if authorize, ok := options.Authorizer.(deploy.AuthorizeFunc); ok && authorize == nil {
-		return nil, ErrInvalid
-	}
 	parser := vendors.Parser{}
-	return &Runtime{
-		Collector: Collector{Store: options.Store, Sessions: options.Sessions, Parser: parser, Timeout: options.Timeout},
-		Designer:  Designer{Store: options.Store, Engine: options.Policy, MaxCandidates: options.MaxCandidates, Timeout: options.Timeout},
-		Deployment: deploy.Engine{Store: options.Store, Journal: options.Journal, Sessions: options.Sessions,
-			Parser: parser, Authorizer: options.Authorizer, Timeout: options.Timeout},
-	}, nil
+	collector, err := NewCollector(CollectorOptions{Store: options.Store, Sessions: options.Sessions, Parser: parser, Timeout: options.Timeout})
+	if err != nil {
+		return nil, err
+	}
+	designer, err := NewDesigner(DesignerOptions{Store: options.Store, Engine: options.Policy, MaxCandidates: options.MaxCandidates, Timeout: options.Timeout})
+	if err != nil {
+		return nil, err
+	}
+	deployment, err := deploy.New(deploy.Options{Store: options.Store, Journal: options.Journal, Sessions: options.Sessions, Parser: parser, Authorizer: options.Authorizer, Timeout: options.Timeout})
+	if err != nil {
+		return nil, ErrInvalid
+	}
+	return &Runtime{collector: collector, designer: designer, deployment: deployment}, nil
+}
+func (r *Runtime) Collect(ctx context.Context, request CollectRequest) (CollectResult, error) {
+	if err := ctx.Err(); err != nil {
+		return CollectResult{}, err
+	}
+	if r == nil || r.collector == nil {
+		return CollectResult{}, ErrInvalid
+	}
+	return r.collector.Collect(ctx, request)
+}
+func (r *Runtime) Design(ctx context.Context, device string, requests []policy.Request) (DesignResult, error) {
+	if err := ctx.Err(); err != nil {
+		return DesignResult{}, err
+	}
+	if r == nil || r.designer == nil {
+		return DesignResult{}, ErrInvalid
+	}
+	return r.designer.Design(ctx, device, requests)
+}
+func (r *Runtime) Apply(ctx context.Context, operation, expected string, p *plan.Plan) (deploy.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return deploy.Result{}, err
+	}
+	if r == nil || r.deployment == nil {
+		return deploy.Result{}, ErrInvalid
+	}
+	return r.deployment.Apply(ctx, operation, expected, p)
+}
+func (r *Runtime) Recover(ctx context.Context, operation string, p *plan.Plan) (deploy.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return deploy.Result{}, err
+	}
+	if r == nil || r.deployment == nil {
+		return deploy.Result{}, ErrInvalid
+	}
+	return r.deployment.Recover(ctx, operation, p)
 }

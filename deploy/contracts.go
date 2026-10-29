@@ -9,6 +9,8 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/device"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/snapshot"
 )
 
@@ -19,18 +21,6 @@ var (
 	ErrJournalNotFound = errors.New("journal operation not found")
 	ErrInvalid         = errors.New("invalid deployment request")
 )
-
-type View uint8
-
-const (
-	Running View = iota + 1
-	Saved
-)
-
-type Capture struct {
-	Source   config.Source
-	Metadata fm.Metadata
-}
 
 // Receipt contains evidence flags and a response digest, never raw device
 // output or credentials. Index is the native script step index within Phase.
@@ -53,10 +43,9 @@ type ReceiptFunc func(context.Context, Receipt) error
 // lifecycle too, for example by preflighting persistence or using no-ops.
 type Session interface {
 	ConfigurationSession
-	Read(context.Context, View) (Capture, error)
+	device.Reader
 	Execute(context.Context, []string, ReceiptFunc) (Outcome, error)
 	Save(context.Context, ReceiptFunc) (Outcome, error)
-	Close() error
 }
 
 // ConfigurationSession supplies device-side candidate isolation. Begin is called
@@ -72,15 +61,6 @@ type ConfigurationSession interface {
 type Factory interface {
 	Open(context.Context, string) (Session, error)
 }
-type Parser interface {
-	Parse(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error)
-}
-type ParseFunc func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error)
-
-func (f ParseFunc) Parse(ctx context.Context, s config.Source, m fm.Metadata) (*fm.Firewall, error) {
-	return f(ctx, s, m)
-}
-
 type Authorization struct {
 	Operation, Device, BaselineRevision, PlanDigest string
 }
@@ -146,15 +126,33 @@ type Journal interface {
 	Acquire(context.Context, string) (Lease, error)
 }
 
-type Engine struct {
+type Options struct {
 	Store      Repository
 	Journal    Journal
 	Sessions   Factory
-	Parser     Parser
+	Parser     config.Parser
 	Authorizer Authorizer
 	// Timeout bounds a whole Apply or Recover call. Zero uses five minutes.
 	Timeout time.Duration
 }
+
+// Engine privately owns the dependencies validated by New.
+type Engine struct {
+	store      Repository
+	journal    Journal
+	sessions   Factory
+	parser     config.Parser
+	authorizer Authorizer
+	timeout    time.Duration
+}
+
+func New(options Options) (*Engine, error) {
+	if dependency.Nil(options.Store) || dependency.Nil(options.Journal) || dependency.Nil(options.Sessions) || dependency.Nil(options.Parser) || dependency.Nil(options.Authorizer) || options.Timeout < 0 {
+		return nil, ErrInvalid
+	}
+	return &Engine{store: options.Store, journal: options.Journal, sessions: options.Sessions, parser: options.Parser, authorizer: options.Authorizer, timeout: options.Timeout}, nil
+}
+
 type Result struct {
 	Operation, Revision string
 	Phase               Phase

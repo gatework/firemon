@@ -14,6 +14,7 @@ import (
 	fm "github.com/gatework/firemon"
 	adapter "github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/go-net-connector/connector"
 )
 
@@ -56,19 +57,22 @@ func TestFactoryCreatesIndependentDevicesAndASANativeProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := f.Open(context.Background(), "fw")
+	b, err := f.OpenReadOnly(context.Background(), "fw")
 	if err != nil {
 		_ = a.Close()
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = a.Close(); _ = b.Close(); peers.Wait() })
+	if _, ok := b.(deploy.Session); ok {
+		t.Fatal("read-only factory exposed deployment methods")
+	}
 	if opened.Load() != 2 {
 		t.Fatal("factory reused a connection", opened.Load())
 	}
 	if err := a.Close(); err != nil {
 		t.Fatal(err)
 	}
-	capture, err := b.Read(context.Background(), deploy.Running)
+	capture, err := b.Read(context.Background(), device.Running)
 	if err != nil || !capture.Source.Complete || !strings.Contains(capture.Source.Text, "interface inside0") || strings.Contains(capture.Source.Text, "fw#") {
 		t.Fatal(capture, err)
 	}

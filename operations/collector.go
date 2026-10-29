@@ -10,8 +10,9 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	capturegraph "github.com/gatework/firemon/internal/capture"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
 )
@@ -28,14 +29,33 @@ type CaptureStore interface {
 	Publish(context.Context, *fm.Firewall, snapshot.PublishOptions) (snapshot.PublishResult, error)
 }
 
-type Collector struct {
+// ReadOnlyFactory opens an independently owned reader without write dependencies.
+type ReadOnlyFactory interface {
+	OpenReadOnly(context.Context, string) (device.Reader, error)
+}
+
+type CollectorOptions struct {
 	Store    CaptureStore
-	Sessions deploy.Factory
-	Parser   deploy.Parser
+	Sessions ReadOnlyFactory
+	Parser   config.Parser
 	// Timeout bounds capture and parsing. Zero uses five minutes. Evidence
 	// publication has a separate five-second bound so cancellation cannot leave
 	// an old complete head current after a partial live capture was observed.
 	Timeout time.Duration
+}
+
+type Collector struct {
+	store    CaptureStore
+	sessions ReadOnlyFactory
+	parser   config.Parser
+	timeout  time.Duration
+}
+
+func NewCollector(options CollectorOptions) (*Collector, error) {
+	if dependency.Nil(options.Store) || dependency.Nil(options.Sessions) || dependency.Nil(options.Parser) || options.Timeout < 0 {
+		return nil, ErrInvalid
+	}
+	return &Collector{store: options.Store, sessions: options.Sessions, parser: options.Parser, timeout: options.Timeout}, nil
 }
 
 type CollectRequest struct {
@@ -65,15 +85,15 @@ func operationContext(ctx context.Context, timeout time.Duration) (context.Conte
 // identifier should therefore name one host-selected native context.
 // An incomplete publication returns both its revision and ErrIncomplete.
 func (c Collector) Collect(ctx context.Context, request CollectRequest) (result CollectResult, err error) {
-	if c.Store == nil || c.Sessions == nil || c.Parser == nil || strings.TrimSpace(request.Device) == "" || strings.TrimSpace(request.PublicationID) == "" {
+	if c.store == nil || c.sessions == nil || c.parser == nil || strings.TrimSpace(request.Device) == "" || strings.TrimSpace(request.PublicationID) == "" {
 		return CollectResult{}, ErrInvalid
 	}
-	if parser, ok := c.Parser.(deploy.ParseFunc); ok && parser == nil {
+	if parser, ok := c.parser.(config.ParseFunc); ok && parser == nil {
 		return CollectResult{}, ErrInvalid
 	}
-	ctx, cancel := operationContext(ctx, c.Timeout)
+	ctx, cancel := operationContext(ctx, c.timeout)
 	defer cancel()
-	manifest, err := c.Store.Manifest(ctx)
+	manifest, err := c.store.Manifest(ctx)
 	if err != nil {
 		return CollectResult{}, err
 	}
@@ -92,7 +112,7 @@ func (c Collector) Collect(ctx context.Context, request CollectRequest) (result 
 	if err := ctx.Err(); err != nil {
 		return CollectResult{}, err
 	}
-	session, err := c.Sessions.Open(ctx, request.Device)
+	session, err := c.sessions.OpenReadOnly(ctx, request.Device)
 	defer func() {
 		if session != nil {
 			err = errors.Join(err, session.Close())
@@ -107,7 +127,7 @@ func (c Collector) Collect(ctx context.Context, request CollectRequest) (result 
 	if err := ctx.Err(); err != nil {
 		return CollectResult{}, err
 	}
-	capture, readErr := session.Read(ctx, deploy.Running)
+	capture, readErr := session.Read(ctx, device.Running)
 	closeErr := session.Close()
 	session = nil
 	readErr = errors.Join(readErr, ctx.Err())
@@ -121,13 +141,13 @@ func (c Collector) Collect(ctx context.Context, request CollectRequest) (result 
 	if readErr != nil {
 		capture.Source.Complete = false
 	}
-	fw, parseErr := capturedGraph(ctx, c.Parser, capture)
+	fw, parseErr := capturedGraph(ctx, c.parser, capture)
 	if fw == nil {
 		return CollectResult{}, errors.Join(parseErr, readErr, closeErr)
 	}
 	publicationCtx, finish := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer finish()
-	published, publishErr := c.Store.Publish(publicationCtx, fw, snapshot.PublishOptions{
+	published, publishErr := c.store.Publish(publicationCtx, fw, snapshot.PublishOptions{
 		Expected: request.Expected, PublicationID: request.PublicationID, Live: true,
 	})
 	if publishErr != nil {
@@ -174,7 +194,7 @@ func priorCollection(ctx context.Context, manifest snapshot.Manifest, prior snap
 	return result, collectionStatus(result)
 }
 
-func capturedGraph(ctx context.Context, parser deploy.Parser, capture deploy.Capture) (*fm.Firewall, error) {
+func capturedGraph(ctx context.Context, parser config.Parser, capture device.Capture) (*fm.Firewall, error) {
 	return capturegraph.Graph(ctx, parser, capture.Source, capture.Metadata, nil, ErrInvalid, capturegraph.Diagnostics{
 		Failed:     fm.Diagnostic{Code: "capture-parse-failed", Message: "native parser could not establish the captured configuration"},
 		Incomplete: fm.Diagnostic{Code: "incomplete-source", Message: "capture completeness was not established"},

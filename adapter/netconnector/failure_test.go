@@ -15,6 +15,7 @@ import (
 	fm "github.com/gatework/firemon"
 	adapter "github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/go-net-connector/connector"
 )
 
@@ -203,7 +204,7 @@ func TestSavedXMLRequiresACompleteConfigurationRoot(t *testing.T) {
 	for _, text := range []string{`<response status="success"><result/></response>`, `<config><shared/></config><config/>`, `<config>`, strings.Repeat(" ", 3)} {
 		t.Run(text, func(t *testing.T) {
 			s := session(t, "paloalto", []exchange{{"set cli pager off", ""}, {"show config saved running-config.xml", text}})
-			capture, err := s.Read(context.Background(), deploy.Saved)
+			capture, err := s.Read(context.Background(), device.Saved)
 			if !errors.Is(err, adapter.ErrCapture) || capture.Source.Complete {
 				t.Fatal(capture, err)
 			}

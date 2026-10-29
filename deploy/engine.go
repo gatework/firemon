@@ -11,6 +11,8 @@ import (
 	"time"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/device"
 	capturegraph "github.com/gatework/firemon/internal/capture"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/snapshot"
@@ -96,20 +98,20 @@ func (a *attempt) receiptFailure() error {
 }
 
 func (e Engine) context(ctx context.Context) (context.Context, context.CancelFunc) {
-	timeout := e.Timeout
+	timeout := e.timeout
 	if timeout <= 0 {
 		timeout = 5 * time.Minute
 	}
 	return context.WithTimeout(ctx, timeout)
 }
 func (e Engine) validate(p *plan.Plan, authorize bool) error {
-	if e.Store == nil || e.Journal == nil || e.Sessions == nil || e.Parser == nil || authorize && e.Authorizer == nil || p == nil || p.Before() == nil || p.After() == nil || p.Digest() == "" {
+	if e.store == nil || e.journal == nil || e.sessions == nil || e.parser == nil || authorize && e.authorizer == nil || p == nil || p.Before() == nil || p.After() == nil || p.Digest() == "" {
 		return ErrInvalid
 	}
-	if f, ok := e.Parser.(ParseFunc); ok && f == nil {
+	if f, ok := e.parser.(config.ParseFunc); ok && f == nil {
 		return ErrInvalid
 	}
-	if f, ok := e.Authorizer.(AuthorizeFunc); ok && f == nil && authorize {
+	if f, ok := e.authorizer.(AuthorizeFunc); ok && f == nil && authorize {
 		return ErrInvalid
 	}
 	if len(p.Commands()) > 10000 {
@@ -129,7 +131,7 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	}
 	ctx, cancel := e.context(ctx)
 	defer cancel()
-	lease, err := e.Journal.Acquire(ctx, operation)
+	lease, err := e.journal.Acquire(ctx, operation)
 	if err != nil {
 		return Result{}, err
 	}
@@ -152,23 +154,23 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	if err := a.update(ctx, func(*Record) {}); err != nil {
 		return Result{}, err
 	}
-	current, head, err := e.Store.Current(ctx, metadata.Device)
+	current, head, err := e.store.Current(ctx, metadata.Device)
 	if err != nil {
 		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
 	}
 	if head.Revision != expected || current.SemanticDigest() != p.Before().SemanticDigest() {
 		return Result{}, errors.Join(snapshot.ErrConflict, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
 	}
-	if err := e.Authorizer.Authorize(ctx, Authorization{Operation: operation, Device: metadata.Device, BaselineRevision: expected, PlanDigest: p.Digest()}); err != nil {
+	if err := e.authorizer.Authorize(ctx, Authorization{Operation: operation, Device: metadata.Device, BaselineRevision: expected, PlanDigest: p.Digest()}); err != nil {
 		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
 	}
-	if err := e.Store.Reserve(ctx, metadata.Device, expected, operation); err != nil {
+	if err := e.store.Reserve(ctx, metadata.Device, expected, operation); err != nil {
 		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
 	}
 	if err := a.update(ctx, func(r *Record) { r.Phase = Reserved }); err != nil {
 		return Result{}, errors.Join(ErrPending, err)
 	}
-	session, err := e.Sessions.Open(ctx, metadata.Device)
+	session, err := e.sessions.Open(ctx, metadata.Device)
 	if err != nil {
 		return Result{}, e.uncertain(ctx, a, err)
 	}
@@ -189,7 +191,7 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 			return Result{}, e.uncertain(ctx, a, err)
 		}
 	}
-	baseline, err := e.read(ctx, session, Running, a.get())
+	baseline, err := e.read(ctx, session, device.Running, a.get())
 	if err != nil {
 		return Result{}, e.uncertainRunning(ctx, a, baseline, err)
 	}
@@ -243,7 +245,7 @@ func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (re
 	}
 	ctx, cancel := e.context(ctx)
 	defer cancel()
-	lease, err := e.Journal.Acquire(ctx, operation)
+	lease, err := e.journal.Acquire(ctx, operation)
 	if err != nil {
 		return Result{}, err
 	}
@@ -259,7 +261,7 @@ func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (re
 		return Result{Operation: operation, Revision: r.PublishedRevision, Phase: r.Phase, Recovered: true}, nil
 	}
 	a := &attempt{lease: lease, record: r}
-	m, err := e.Store.Manifest(ctx)
+	m, err := e.store.Manifest(ctx)
 	if err != nil {
 		return Result{}, err
 	}
@@ -267,7 +269,7 @@ func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (re
 		if publication.Device != r.Device || publication.Revision != r.ObservedRevision || publication.Reservation != operation || publication.KeepReservation {
 			return Result{}, ErrJournalConflict
 		}
-		fw, err := e.Store.Load(ctx, publication.Revision)
+		fw, err := e.store.Load(ctx, publication.Revision)
 		if err != nil {
 			return Result{}, err
 		}
@@ -321,7 +323,7 @@ func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (re
 
 func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovered bool) (result Result, err error) {
 	r := a.get()
-	session, err := e.Sessions.Open(ctx, r.Device)
+	session, err := e.sessions.Open(ctx, r.Device)
 	if err != nil {
 		return Result{}, e.uncertain(ctx, a, err)
 	}
@@ -331,7 +333,7 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 			return Result{}, e.uncertain(ctx, a, err)
 		}
 	}
-	observed, err := e.read(ctx, session, Running, r)
+	observed, err := e.read(ctx, session, device.Running, r)
 	if err != nil {
 		return Result{}, e.uncertainRunning(ctx, a, observed, err)
 	}
@@ -340,7 +342,7 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 		// Recovery can observe external changes before our write intent, or after
 		// an earlier save receipt. Neither proves the current running graph durable.
 		if recovered || !r.Saved {
-			saved, readErr := e.read(ctx, session, Saved, r)
+			saved, readErr := e.read(ctx, session, device.Saved, r)
 			if readErr != nil {
 				return Result{}, errors.Join(e.uncertain(ctx, a, readErr), e.observe(ctx, a, observed))
 			}
@@ -355,7 +357,7 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 	}
 	if recovered && p.VerifyBaseline(ctx, observed) == nil {
 		if r.WriteStarted {
-			saved, readErr := e.read(ctx, session, Saved, r)
+			saved, readErr := e.read(ctx, session, device.Saved, r)
 			if readErr != nil {
 				return Result{}, errors.Join(e.uncertain(ctx, a, readErr), e.observe(ctx, a, observed))
 			}
@@ -387,7 +389,7 @@ func (e Engine) endConfiguration(ctx context.Context, session Session, a *attemp
 	return a.update(ctx, func(r *Record) { r.ConfigurationReleased = true })
 }
 
-func (e Engine) read(ctx context.Context, session Session, view View, r Record) (*fm.Firewall, error) {
+func (e Engine) read(ctx context.Context, session Session, view device.View, r Record) (*fm.Firewall, error) {
 	capture, readErr := session.Read(ctx, view)
 	if capture.Metadata.Device != r.Device || capture.Metadata.Vendor != r.Vendor || capture.Metadata.Context != r.Context {
 		return nil, errors.Join(readErr, fmt.Errorf("%w: capture identity mismatch", ErrInvalid))
@@ -396,7 +398,7 @@ func (e Engine) read(ctx context.Context, session Session, view View, r Record) 
 	if readErr != nil {
 		code, message = "readback-capture-failed", "native configuration capture was interrupted"
 	}
-	return capturegraph.Graph(ctx, e.Parser, capture.Source, capture.Metadata, readErr, ErrInvalid, capturegraph.Diagnostics{
+	return capturegraph.Graph(ctx, e.parser, capture.Source, capture.Metadata, readErr, ErrInvalid, capturegraph.Diagnostics{
 		Failed:     fm.Diagnostic{Code: code, Message: message},
 		Incomplete: fm.Diagnostic{Code: "readback-parse-failed", Message: "capture completeness was not established"},
 	})
@@ -410,7 +412,7 @@ func (e Engine) abortUnchanged(ctx context.Context, a *attempt, phase Phase) err
 	if err := a.update(ctx, func(r *Record) { r.Phase = BaselineConfirmed; r.Applied = phase == Published }); err != nil {
 		return err
 	}
-	if err := e.Store.ReleaseUnchanged(ctx, r.Device, r.ID, r.BaselineRevision); err != nil {
+	if err := e.store.ReleaseUnchanged(ctx, r.Device, r.ID, r.BaselineRevision); err != nil {
 		return err
 	}
 	return a.update(ctx, func(r *Record) { r.Phase = phase; r.PublishedRevision = r.BaselineRevision })
@@ -438,21 +440,21 @@ func (e Engine) observe(ctx context.Context, a *attempt, fw *fm.Firewall) error 
 		return err
 	}
 	r := a.get()
-	revision, err := e.Store.Archive(ctx, incomplete)
+	revision, err := e.store.Archive(ctx, incomplete)
 	if err != nil {
 		return err
 	}
 	if err := a.update(ctx, func(r *Record) { r.Phase = Uncertain; r.ObservedRevision = revision }); err != nil {
 		return err
 	}
-	result, err := e.Store.Publish(ctx, incomplete, snapshot.PublishOptions{Expected: r.ExpectedRevision, PublicationID: r.ID + ":observation:" + revision, Reservation: r.ID, Live: true, KeepReservation: true})
+	result, err := e.store.Publish(ctx, incomplete, snapshot.PublishOptions{Expected: r.ExpectedRevision, PublicationID: r.ID + ":observation:" + revision, Reservation: r.ID, Live: true, KeepReservation: true})
 	if err != nil {
 		return err
 	}
 	return a.update(ctx, func(r *Record) { r.ExpectedRevision = result.Revision })
 }
 func (e Engine) publish(ctx context.Context, a *attempt, fw *fm.Firewall, applied, recovered bool) (Result, error) {
-	revision, err := e.Store.Archive(ctx, fw)
+	revision, err := e.store.Archive(ctx, fw)
 	if err != nil {
 		return Result{}, errors.Join(ErrPending, err)
 	}
@@ -460,7 +462,7 @@ func (e Engine) publish(ctx context.Context, a *attempt, fw *fm.Firewall, applie
 		return Result{}, errors.Join(ErrPending, err)
 	}
 	r := a.get()
-	pub, err := e.Store.Publish(ctx, fw, snapshot.PublishOptions{Expected: r.ExpectedRevision, PublicationID: r.ID + ":complete", Reservation: r.ID, Live: true})
+	pub, err := e.store.Publish(ctx, fw, snapshot.PublishOptions{Expected: r.ExpectedRevision, PublicationID: r.ID + ":complete", Reservation: r.ID, Live: true})
 	if err != nil {
 		return Result{}, errors.Join(ErrPending, err)
 	}

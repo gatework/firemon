@@ -7,6 +7,7 @@ import (
 	"time"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
@@ -19,12 +20,26 @@ type CurrentStore interface {
 	Current(context.Context, string) (*fm.Firewall, snapshot.Head, error)
 }
 
-type Designer struct {
+type DesignerOptions struct {
 	Store         CurrentStore
 	Engine        policy.Engine
 	MaxCandidates int
 	// Timeout bounds graph loading and planning. Zero uses five minutes.
 	Timeout time.Duration
+}
+
+type Designer struct {
+	store         CurrentStore
+	engine        policy.Engine
+	maxCandidates int
+	timeout       time.Duration
+}
+
+func NewDesigner(options DesignerOptions) (*Designer, error) {
+	if dependency.Nil(options.Store) || options.Timeout < 0 || options.MaxCandidates < 0 {
+		return nil, ErrInvalid
+	}
+	return &Designer{store: options.Store, engine: options.Engine, maxCandidates: options.MaxCandidates, timeout: options.Timeout}, nil
 }
 
 type DesignResult struct {
@@ -36,12 +51,12 @@ type DesignResult struct {
 // Empty request scopes use the capture's selected context. Inputs are not
 // mutated; an explicit scope remains subject to native query and render proof.
 func (d Designer) Design(ctx context.Context, device string, requests []policy.Request) (DesignResult, error) {
-	if d.Store == nil || strings.TrimSpace(device) == "" {
+	if d.store == nil || strings.TrimSpace(device) == "" {
 		return DesignResult{}, ErrInvalid
 	}
-	ctx, cancel := operationContext(ctx, d.Timeout)
+	ctx, cancel := operationContext(ctx, d.timeout)
 	defer cancel()
-	fw, head, err := d.Store.Current(ctx, device)
+	fw, head, err := d.store.Current(ctx, device)
 	if err != nil {
 		return DesignResult{}, err
 	}
@@ -61,7 +76,7 @@ func (d Designer) Design(ctx context.Context, device string, requests []policy.R
 			requests[i].Scope = fw.Metadata().Context
 		}
 	}
-	p, err := (plan.Planner{Renderer: renderer, Engine: d.Engine, MaxCandidates: d.MaxCandidates}).Plan(ctx, fw, requests)
+	p, err := (plan.Planner{Renderer: renderer, Engine: d.engine, MaxCandidates: d.maxCandidates}).Plan(ctx, fw, requests)
 	if err != nil {
 		return DesignResult{}, err
 	}

@@ -11,6 +11,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
@@ -48,14 +49,14 @@ func (d *fakeDevice) Open(_ context.Context, _ string) (deploy.Session, error) {
 	d.opens++
 	return &fakeSession{d: d}, nil
 }
-func (s *fakeSession) Read(_ context.Context, view deploy.View) (deploy.Capture, error) {
+func (s *fakeSession) Read(_ context.Context, view device.View) (device.Capture, error) {
 	s.d.mu.Lock()
 	defer s.d.mu.Unlock()
 	fw := s.d.running
-	if view == deploy.Saved {
+	if view == device.Saved {
 		fw = s.d.saved
 	}
-	return deploy.Capture{Source: config.Source{Text: fw.SemanticDigest(), Complete: true}, Metadata: fw.Metadata()}, nil
+	return device.Capture{Source: config.Source{Text: fw.SemanticDigest(), Complete: true}, Metadata: fw.Metadata()}, nil
 }
 func (s *fakeSession) Execute(ctx context.Context, commands []string, receipt deploy.ReceiptFunc) (deploy.Outcome, error) {
 	s.d.mu.Lock()
@@ -119,7 +120,7 @@ func (d *fakeDevice) Parse(_ context.Context, source config.Source, _ fm.Metadat
 }
 
 type fixture struct {
-	engine   deploy.Engine
+	engine   configuredEngine
 	device   *fakeDevice
 	store    *snapshot.Store
 	journal  *deploy.FileJournal
@@ -156,12 +157,12 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	d := &fakeDevice{before: base, after: p.After(), running: base, saved: base}
-	e := deploy.Engine{Store: s, Journal: j, Sessions: d, Parser: d, Authorizer: deploy.AuthorizeFunc(func(_ context.Context, a deploy.Authorization) error {
+	e := configuredEngine{Options: deploy.Options{Store: s, Journal: j, Sessions: d, Parser: d, Authorizer: deploy.AuthorizeFunc(func(_ context.Context, a deploy.Authorization) error {
 		if a.Device != "fw" || a.PlanDigest != p.Digest() || a.BaselineRevision != pub.Revision || a.Operation == "" {
 			return errors.New("approval not bound to exact plan")
 		}
 		return nil
-	})}
+	})}, t: t}
 	return fixture{e, d, s, j, p, pub.Revision}
 }
 func (f fixture) record(t *testing.T) deploy.Record {

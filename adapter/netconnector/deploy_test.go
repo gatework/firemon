@@ -154,12 +154,12 @@ func TestNativeASADeployAndLostSaveRecoveryUseIndependentReadback(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			engine := deploy.Engine{Store: store, Journal: journal, Sessions: factory, Parser: deploy.ParseFunc(asa.Parse), Authorizer: deploy.AuthorizeFunc(func(_ context.Context, a deploy.Authorization) error {
+			engine := configuredEngine{Options: deploy.Options{Store: store, Journal: journal, Sessions: factory, Parser: config.ParseFunc(asa.Parse), Authorizer: deploy.AuthorizeFunc(func(_ context.Context, a deploy.Authorization) error {
 				if a.Device != "fw" || a.PlanDigest != p.Digest() || a.BaselineRevision != base.Revision {
 					return errors.New("wrong authorization")
 				}
 				return nil
-			})}
+			})}, t: t}
 			result, err := engine.Apply(ctx, "operation", base.Revision, p)
 			if lostSaveReply {
 				if !errors.Is(err, deploy.ErrUncertain) {

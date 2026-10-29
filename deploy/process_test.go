@@ -14,6 +14,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
@@ -32,18 +33,18 @@ func (d *crashDevice) Open(context.Context, string) (deploy.Session, error) { re
 func (d *crashDevice) Close() error                                         { return nil }
 func (*crashDevice) BeginConfiguration(context.Context, string) error       { return nil }
 func (*crashDevice) EndConfiguration(context.Context, string) error         { return nil }
-func (d *crashDevice) Read(_ context.Context, view deploy.View) (deploy.Capture, error) {
+func (d *crashDevice) Read(_ context.Context, view device.View) (device.Capture, error) {
 	name := "running"
 	d.reads++
-	if view == deploy.Saved {
+	if view == device.Saved {
 		name = "saved"
 		d.savedReads++
 	}
 	text, err := os.ReadFile(filepath.Join(d.root, name))
 	if err != nil {
-		return deploy.Capture{}, err
+		return device.Capture{}, err
 	}
-	return deploy.Capture{Source: config.Source{Text: string(text), Complete: true}, Metadata: d.before.Metadata()}, nil
+	return device.Capture{Source: config.Source{Text: string(text), Complete: true}, Metadata: d.before.Metadata()}, nil
 }
 func (d *crashDevice) Parse(_ context.Context, source config.Source, _ fm.Metadata) (*fm.Firewall, error) {
 	f := d.before
@@ -120,7 +121,7 @@ func (r crashRepository) Publish(ctx context.Context, f *fm.Firewall, opts snaps
 	return result, err
 }
 
-func crashFixture(t *testing.T, root, point string) (deploy.Engine, *crashDevice, *plan.Plan, *snapshot.Store) {
+func crashFixture(t *testing.T, root, point string) (configuredEngine, *crashDevice, *plan.Plan, *snapshot.Store) {
 	t.Helper()
 	before, err := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}})
 	if err != nil {
@@ -145,7 +146,7 @@ func crashFixture(t *testing.T, root, point string) (deploy.Engine, *crashDevice
 		t.Fatal(err)
 	}
 	d := &crashDevice{root: root, point: point, before: before, after: p.After()}
-	e := deploy.Engine{Store: crashRepository{Store: store, point: point}, Journal: journal, Sessions: d, Parser: d, Authorizer: deploy.AuthorizeFunc(func(context.Context, deploy.Authorization) error { return nil })}
+	e := configuredEngine{Options: deploy.Options{Store: crashRepository{Store: store, point: point}, Journal: journal, Sessions: d, Parser: d, Authorizer: deploy.AuthorizeFunc(func(context.Context, deploy.Authorization) error { return nil })}, t: t}
 	return e, d, p, store
 }
 

@@ -15,6 +15,7 @@ import (
 	fm "github.com/gatework/firemon"
 	adapter "github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/go-net-connector/connector"
 )
 
@@ -110,11 +111,11 @@ func TestReadKeepsRunningAndSavedViewsDistinct(t *testing.T) {
 		t.Run(tc.vendor, func(t *testing.T) {
 			profile := connector.Profile{Name: tc.vendor, LoginPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), ConfigCommands: []string{"show current"}}
 			s := sessionWith(t, tc.vendor, profile, []exchange{{"show current", "hostname current"}, {tc.pager, ""}, {tc.saved, tc.text}}, adapter.Options{})
-			running, err := s.Read(context.Background(), deploy.Running)
+			running, err := s.Read(context.Background(), device.Running)
 			if err != nil || !running.Source.Complete || running.Source.Text != "hostname current" || running.Metadata.Device != "fw" || running.Metadata.CapturedAt.IsZero() {
 				t.Fatal(running, err)
 			}
-			saved, err := s.Read(context.Background(), deploy.Saved)
+			saved, err := s.Read(context.Background(), device.Saved)
 			if err != nil || !saved.Source.Complete || saved.Source.Text != tc.text || saved.Metadata.Vendor != tc.vendor {
 				t.Fatal(saved, err)
 			}
@@ -124,11 +125,11 @@ func TestReadKeepsRunningAndSavedViewsDistinct(t *testing.T) {
 
 func TestReadRejectsEmptySavedCaptureAndRetires(t *testing.T) {
 	s := session(t, "asa", []exchange{{"terminal pager 0", ""}, {"show startup-config", ""}})
-	c, err := s.Read(context.Background(), deploy.Saved)
+	c, err := s.Read(context.Background(), device.Saved)
 	if !errors.Is(err, adapter.ErrCapture) || c.Source.Complete {
 		t.Fatal(c, err)
 	}
-	if _, err := s.Read(context.Background(), deploy.Running); !errors.Is(err, adapter.ErrRetired) {
+	if _, err := s.Read(context.Background(), device.Running); !errors.Is(err, adapter.ErrRetired) {
 		t.Fatal(err)
 	}
 }
@@ -271,7 +272,7 @@ func TestFortinetSavedRequiresAutomaticPersistence(t *testing.T) {
 				{"get system status", "Current virtual domain: blue\nVirtual domain configuration: disable"},
 				{"show full-configuration system global", "config system global\nset cfg-save " + mode + "\nend"},
 			})
-			capture, err := s.Read(context.Background(), deploy.Saved)
+			capture, err := s.Read(context.Background(), device.Saved)
 			if !errors.Is(err, adapter.ErrPersistence) || capture.Source.Complete {
 				t.Fatal(capture, err)
 			}
@@ -285,7 +286,7 @@ func TestFortinetMissingVDOMDoesNotIssueEdit(t *testing.T) {
 		{"config global", ""},
 		{"diagnose sys vd list", "name=root index=0 enabled\nname=unrelated index=1 enabled"},
 	})
-	if capture, err := s.Read(context.Background(), deploy.Running); !errors.Is(err, adapter.ErrCapture) || capture.Source.Complete {
+	if capture, err := s.Read(context.Background(), device.Running); !errors.Is(err, adapter.ErrCapture) || capture.Source.Complete {
 		t.Fatal(capture, err)
 	}
 }

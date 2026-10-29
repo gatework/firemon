@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 )
 
 type guardedFactory struct {
@@ -40,10 +41,10 @@ func (s *guardedSession) EndConfiguration(_ context.Context, token string) error
 	*s.events = append(*s.events, "end:"+token)
 	return s.endErr
 }
-func (s *guardedSession) Read(ctx context.Context, v deploy.View) (deploy.Capture, error) {
+func (s *guardedSession) Read(ctx context.Context, v device.View) (device.Capture, error) {
 	*s.events = append(*s.events, "read")
 	if s.readErr != nil {
-		return deploy.Capture{}, s.readErr
+		return device.Capture{}, s.readErr
 	}
 	return s.Session.Read(ctx, v)
 }
@@ -138,7 +139,7 @@ func TestConfigurationTokenSurvivesCanceledAcquire(t *testing.T) {
 
 type captureMetadataFactory struct {
 	base  deploy.Factory
-	alter func(*deploy.Capture)
+	alter func(*device.Capture)
 }
 
 func (f captureMetadataFactory) Open(ctx context.Context, id string) (deploy.Session, error) {
@@ -148,10 +149,10 @@ func (f captureMetadataFactory) Open(ctx context.Context, id string) (deploy.Ses
 
 type captureMetadataSession struct {
 	deploy.Session
-	alter func(*deploy.Capture)
+	alter func(*device.Capture)
 }
 
-func (s *captureMetadataSession) Read(ctx context.Context, view deploy.View) (deploy.Capture, error) {
+func (s *captureMetadataSession) Read(ctx context.Context, view device.View) (device.Capture, error) {
 	capture, err := s.Session.Read(ctx, view)
 	if err == nil {
 		s.alter(&capture)
@@ -162,7 +163,7 @@ func TestParserCannotReplaceFreshCaptureMetadataBeforeExecute(t *testing.T) {
 	for _, field := range []string{"software", "capture-time", "context"} {
 		t.Run(field, func(t *testing.T) {
 			f := newFixture(t)
-			f.engine.Sessions = captureMetadataFactory{base: f.device, alter: func(c *deploy.Capture) {
+			f.engine.Sessions = captureMetadataFactory{base: f.device, alter: func(c *device.Capture) {
 				switch field {
 				case "software":
 					c.Metadata.Software = "changed-firmware"
@@ -206,7 +207,7 @@ type interruptedCaptureSession struct {
 
 const partialConfiguration = "set security policies from-zone inside to-zone outside\n"
 
-func (s interruptedCaptureSession) Read(ctx context.Context, view deploy.View) (deploy.Capture, error) {
+func (s interruptedCaptureSession) Read(ctx context.Context, view device.View) (device.Capture, error) {
 	capture, err := s.Session.Read(ctx, view)
 	if err != nil {
 		return capture, err

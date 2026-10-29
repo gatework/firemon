@@ -7,6 +7,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/go-net-connector/connector"
 )
 
@@ -27,7 +28,27 @@ type Factory struct {
 
 var _ deploy.Factory = Factory{}
 
-func (f Factory) Open(ctx context.Context, device string) (deploy.Session, error) {
+func (f Factory) Open(ctx context.Context, id string) (deploy.Session, error) {
+	s, err := f.open(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// OpenReadOnly transfers a fresh reader without beginning configuration isolation.
+func (f Factory) OpenReadOnly(ctx context.Context, id string) (device.Reader, error) {
+	s, err := f.open(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &readOnly{Reader: s}, nil
+}
+
+// readOnly exposes only capture and resource ownership, even through type assertions.
+type readOnly struct{ device.Reader }
+
+func (f Factory) open(ctx context.Context, device string) (*Session, error) {
 	if f.Resolve == nil || strings.TrimSpace(device) == "" {
 		return nil, ErrInvalid
 	}

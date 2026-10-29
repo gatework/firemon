@@ -9,7 +9,6 @@ import (
 	fm "github.com/gatework/firemon"
 	adapter "github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/firemon/operations"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/go-net-connector/connector"
@@ -54,10 +53,10 @@ func TestNativeContextSelectionIsValidatedBeforeDialAndCapture(t *testing.T) {
 					t.Fatal(err)
 				}
 				parses := 0
-				collector := operations.Collector{Store: store, Sessions: factory, Parser: deploy.ParseFunc(func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error) {
+				collector := configuredCollector{Options: operations.CollectorOptions{Store: store, Sessions: factory, Parser: config.ParseFunc(func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error) {
 					parses++
 					return nil, errors.New("unexpected parse")
-				})}
+				})}, t: t}
 				result, err := collector.Collect(context.Background(), operations.CollectRequest{Device: "fw", PublicationID: "bad-context"})
 				if !errors.Is(err, adapter.ErrInvalid) || result.Revision != "" || dials != 0 || parses != 0 {
 					t.Fatalf("unselected context reached capture: dials=%d parses=%d result=%+v err=%v", dials, parses, result, err)

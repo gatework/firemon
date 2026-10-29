@@ -10,7 +10,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/firemon/operations"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
@@ -19,7 +19,7 @@ import (
 const panBase = "set zone inside network layer3 ethernet1/1\nset zone outside network layer3 ethernet1/2\nset network interface ethernet ethernet1/1 layer3 ip 192.0.2.1/24\nset network interface ethernet ethernet1/2 layer3 ip 198.51.100.1/24\n"
 
 type captureDevice struct {
-	capture                    deploy.Capture
+	capture                    device.Capture
 	openErr, readErr, closeErr error
 	opens, reads, closes       int
 	onRead                     func(context.Context)
@@ -36,7 +36,7 @@ func (s cancellingManifest) Manifest(ctx context.Context) (snapshot.Manifest, er
 	return manifest, err
 }
 
-func (d *captureDevice) Open(ctx context.Context, device string) (deploy.Session, error) {
+func (d *captureDevice) OpenReadOnly(ctx context.Context, device string) (device.Reader, error) {
 	d.opens++
 	if _, ok := ctx.Deadline(); !ok || device == "" {
 		return nil, errors.New("missing device or operation deadline")
@@ -46,27 +46,15 @@ func (d *captureDevice) Open(ctx context.Context, device string) (deploy.Session
 	}
 	return d, nil
 }
-func (d *captureDevice) Read(ctx context.Context, view deploy.View) (deploy.Capture, error) {
+func (d *captureDevice) Read(ctx context.Context, view device.View) (device.Capture, error) {
 	d.reads++
-	if view != deploy.Running {
-		return deploy.Capture{}, errors.New("collection must read running configuration")
+	if view != device.Running {
+		return device.Capture{}, errors.New("collection must read running configuration")
 	}
 	if d.onRead != nil {
 		d.onRead(ctx)
 	}
 	return d.capture, d.readErr
-}
-func (*captureDevice) Execute(context.Context, []string, deploy.ReceiptFunc) (deploy.Outcome, error) {
-	panic("collector attempted device writes")
-}
-func (*captureDevice) Save(context.Context, deploy.ReceiptFunc) (deploy.Outcome, error) {
-	panic("collector attempted persistence")
-}
-func (*captureDevice) BeginConfiguration(context.Context, string) error {
-	panic("collector attempted candidate mutation")
-}
-func (*captureDevice) EndConfiguration(context.Context, string) error {
-	panic("collector attempted candidate mutation")
 }
 func (d *captureDevice) Close() error {
 	d.closes++
@@ -82,7 +70,7 @@ func parseNative(t *testing.T, raw string, metadata fm.Metadata) *fm.Firewall {
 	return fw
 }
 
-func collectionFixture(t *testing.T) (operations.Collector, *snapshot.Store, *captureDevice, operations.CollectRequest) {
+func collectionFixture(t *testing.T) (configuredCollector, *snapshot.Store, *captureDevice, operations.CollectRequest) {
 	t.Helper()
 	store, err := snapshot.Open(t.TempDir())
 	if err != nil {
@@ -94,8 +82,8 @@ func collectionFixture(t *testing.T) (operations.Collector, *snapshot.Store, *ca
 	if err != nil {
 		t.Fatal(err)
 	}
-	device := &captureDevice{capture: deploy.Capture{Source: config.Source{Text: panBase + "set address captured ip-netmask 203.0.113.1/32\n", Complete: true}, Metadata: metadata}}
-	collector := operations.Collector{Store: store, Sessions: device, Parser: vendors.Parser{}}
+	device := &captureDevice{capture: device.Capture{Source: config.Source{Text: panBase + "set address captured ip-netmask 203.0.113.1/32\n", Complete: true}, Metadata: metadata}}
+	collector := configuredCollector{CollectorOptions: operations.CollectorOptions{Store: store, Sessions: device, Parser: vendors.Parser{}}, t: t}
 	return collector, store, device, operations.CollectRequest{Device: "fw", Expected: pub.Revision, PublicationID: "capture"}
 }
 
@@ -122,12 +110,12 @@ func TestCollectorRetainsIncompleteEvidenceAndInvalidatesOldCurrent(t *testing.T
 			case "read failure":
 				device.readErr = secretErr
 			case "fatal parser":
-				c.Parser = deploy.ParseFunc(func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error) { return nil, secretErr })
+				c.Parser = config.ParseFunc(func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error) { return nil, secretErr })
 			case "nil parser graph":
-				c.Parser = deploy.ParseFunc(func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error) { return nil, nil })
+				c.Parser = config.ParseFunc(func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error) { return nil, nil })
 			case "parser lost completeness":
 				device.capture.Source.Complete = false
-				c.Parser = deploy.ParseFunc(func(ctx context.Context, source config.Source, m fm.Metadata) (*fm.Firewall, error) {
+				c.Parser = config.ParseFunc(func(ctx context.Context, source config.Source, m fm.Metadata) (*fm.Firewall, error) {
 					source.Complete = true
 					return (vendors.Parser{}).Parse(ctx, source, m)
 				})
@@ -192,7 +180,7 @@ func TestCollectorOpenFailureCreatesNoEvidence(t *testing.T) {
 func TestCollectorRejectsWrongDeviceBeforeParsingOrPublishing(t *testing.T) {
 	c, store, device, req := collectionFixture(t)
 	device.capture.Metadata.Device = "another-device"
-	c.Parser = deploy.ParseFunc(func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error) {
+	c.Parser = config.ParseFunc(func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, error) {
 		t.Fatal("wrong device reached parser")
 		return nil, nil
 	})
@@ -212,7 +200,7 @@ func TestCollectorRejectsParserIdentityOrRawSubstitution(t *testing.T) {
 			c, store, device, req := collectionFixture(t)
 			device.capture.Metadata.Software = "11.0"
 			device.capture.Metadata.CapturedAt = time.Date(2026, 10, 29, 1, 0, 0, 0, time.UTC)
-			c.Parser = deploy.ParseFunc(func(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
+			c.Parser = config.ParseFunc(func(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 				fw, err := (vendors.Parser{}).Parse(ctx, source, metadata)
 				if err != nil {
 					return nil, err
@@ -338,8 +326,8 @@ func TestCollectorFatalNativeParseRetainsSelectedContextAndRaw(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw := "config firewall address\nedit unfinished\nset subnet 192.0.2.2 255.255.255.255\n"
-	device := &captureDevice{capture: deploy.Capture{Source: config.Source{Text: raw, Complete: true}, Metadata: metadata}}
-	c := operations.Collector{Store: store, Sessions: device, Parser: vendors.Parser{}}
+	device := &captureDevice{capture: device.Capture{Source: config.Source{Text: raw, Complete: true}, Metadata: metadata}}
+	c := configuredCollector{CollectorOptions: operations.CollectorOptions{Store: store, Sessions: device, Parser: vendors.Parser{}}, t: t}
 	result, err := c.Collect(context.Background(), operations.CollectRequest{Device: metadata.Device, Expected: pub.Revision, PublicationID: "bad-native"})
 	if !errors.Is(err, config.ErrSource) || !errors.Is(err, operations.ErrIncomplete) || result.Complete || result.Revision == "" {
 		t.Fatal("fatal native failure was not published conservatively", result, err)

@@ -13,7 +13,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	adapter "github.com/gatework/firemon/adapter/netconnector"
-	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/firemon/operations"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
@@ -175,7 +175,7 @@ func TestCollectorRetainsInterruptedNativeCaptureWithoutReconnect(t *testing.T) 
 				if err != nil {
 					t.Fatal(err)
 				}
-				collector := operations.Collector{Store: store, Sessions: factory, Parser: vendors.Parser{}}
+				collector := configuredCollector{Options: operations.CollectorOptions{Store: store, Sessions: factory, Parser: vendors.Parser{}}, t: t}
 				request := operations.CollectRequest{Device: "fw", Expected: base.Revision, PublicationID: "interrupted"}
 				result, err := collector.Collect(collectCtx, request)
 				if !errors.Is(err, operations.ErrIncomplete) || result.Complete || result.Revision == "" {
@@ -214,23 +214,23 @@ func TestReadRetainsOnlyMatchingConfigurationCommandEvidence(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		fault readFault
-		view  deploy.View
+		view  device.View
 		want  string
 	}{
-		{"srx-saved", readFault{vendor: "srx", command: "show configuration | display set | no-more", payload: "set interfaces ge-0/0/0 description partial", mode: "eof"}, deploy.Saved, "set interfaces ge-0/0/0 description partial"},
-		{"fortinet-saved", readFault{vendor: "fortinet", command: "show full-configuration", payload: "config firewall address\nedit partial", mode: "eof"}, deploy.Saved, "config firewall address\nedit partial"},
-		{"asa-running", readFault{vendor: "asa", command: "show running-config", payload: "interface inside0\n nameif inside", mode: "eof"}, deploy.Running, "interface inside0\n nameif inside"},
-		{"asa-saved", readFault{vendor: "asa", command: "show startup-config", payload: "interface inside0\n nameif inside", mode: "eof"}, deploy.Saved, "interface inside0\n nameif inside"},
-		{"hillstone-running", readFault{vendor: "hillstone", command: "show configuration running", payload: "zone inside\nexit", mode: "eof"}, deploy.Running, "zone inside\nexit"},
-		{"netscreen-running", readFault{vendor: "netscreen", command: "get config", payload: "set interface ethernet0/1 zone Trust", mode: "eof"}, deploy.Running, "set interface ethernet0/1 zone Trust"},
-		{"huawei-running", readFault{vendor: "huawei", command: "dis cur", payload: "firewall zone trust\n add interface GigabitEthernet1/0/1", mode: "eof"}, deploy.Running, "firewall zone trust\n add interface GigabitEthernet1/0/1"},
-		{"pan-running", readFault{vendor: "paloalto", command: "show", payload: "set address partial ip-netmask 192.0.2.1/32", mode: "eof"}, deploy.Running, "set address partial ip-netmask 192.0.2.1/32"},
-		{"pan-saved", readFault{vendor: "paloalto", command: "show config saved running-config.xml", payload: "<config><shared>", mode: "eof"}, deploy.Saved, "<config><shared>"},
-		{"pager-failure", readFault{vendor: "asa", command: "terminal pager 0", payload: "preparation-marker", mode: "eof"}, deploy.Running, ""},
-		{"context-failure", readFault{vendor: "fortinet", command: "get system status", payload: "Current virtual domain: blue", mode: "eof"}, deploy.Running, ""},
-		{"save-mode-failure", readFault{vendor: "fortinet", command: "show full-configuration system global", payload: "config system global\nset cfg-save", mode: "eof"}, deploy.Saved, ""},
-		{"pan-prediff", readFault{vendor: "paloalto", command: "show config diff", payload: "uncommitted-preflight", mode: "rejected"}, deploy.Running, ""},
-		{"pan-postdiff", readFault{vendor: "paloalto", command: "show config diff", occurrence: 2, payload: "uncommitted-postflight", mode: "rejected"}, deploy.Running, "set address captured ip-netmask 192.0.2.1/32\n[edit]"},
+		{"srx-saved", readFault{vendor: "srx", command: "show configuration | display set | no-more", payload: "set interfaces ge-0/0/0 description partial", mode: "eof"}, device.Saved, "set interfaces ge-0/0/0 description partial"},
+		{"fortinet-saved", readFault{vendor: "fortinet", command: "show full-configuration", payload: "config firewall address\nedit partial", mode: "eof"}, device.Saved, "config firewall address\nedit partial"},
+		{"asa-running", readFault{vendor: "asa", command: "show running-config", payload: "interface inside0\n nameif inside", mode: "eof"}, device.Running, "interface inside0\n nameif inside"},
+		{"asa-saved", readFault{vendor: "asa", command: "show startup-config", payload: "interface inside0\n nameif inside", mode: "eof"}, device.Saved, "interface inside0\n nameif inside"},
+		{"hillstone-running", readFault{vendor: "hillstone", command: "show configuration running", payload: "zone inside\nexit", mode: "eof"}, device.Running, "zone inside\nexit"},
+		{"netscreen-running", readFault{vendor: "netscreen", command: "get config", payload: "set interface ethernet0/1 zone Trust", mode: "eof"}, device.Running, "set interface ethernet0/1 zone Trust"},
+		{"huawei-running", readFault{vendor: "huawei", command: "dis cur", payload: "firewall zone trust\n add interface GigabitEthernet1/0/1", mode: "eof"}, device.Running, "firewall zone trust\n add interface GigabitEthernet1/0/1"},
+		{"pan-running", readFault{vendor: "paloalto", command: "show", payload: "set address partial ip-netmask 192.0.2.1/32", mode: "eof"}, device.Running, "set address partial ip-netmask 192.0.2.1/32"},
+		{"pan-saved", readFault{vendor: "paloalto", command: "show config saved running-config.xml", payload: "<config><shared>", mode: "eof"}, device.Saved, "<config><shared>"},
+		{"pager-failure", readFault{vendor: "asa", command: "terminal pager 0", payload: "preparation-marker", mode: "eof"}, device.Running, ""},
+		{"context-failure", readFault{vendor: "fortinet", command: "get system status", payload: "Current virtual domain: blue", mode: "eof"}, device.Running, ""},
+		{"save-mode-failure", readFault{vendor: "fortinet", command: "show full-configuration system global", payload: "config system global\nset cfg-save", mode: "eof"}, device.Saved, ""},
+		{"pan-prediff", readFault{vendor: "paloalto", command: "show config diff", payload: "uncommitted-preflight", mode: "rejected"}, device.Running, ""},
+		{"pan-postdiff", readFault{vendor: "paloalto", command: "show config diff", occurrence: 2, payload: "uncommitted-postflight", mode: "rejected"}, device.Running, "set address captured ip-netmask 192.0.2.1/32\n[edit]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			factory, opens, _ := interruptedFactory(t, tc.fault)

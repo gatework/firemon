@@ -9,14 +9,14 @@ import (
 	"unicode/utf8"
 
 	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/deploy"
+	"github.com/gatework/firemon/device"
 	"github.com/gatework/go-net-connector/connector"
 )
 
 // Read captures running or persistent configuration independently. Complete
 // describes transport completeness; the vendor parser still decides semantics.
-func (s *Session) Read(ctx context.Context, view deploy.View) (capture deploy.Capture, err error) {
-	if view != deploy.Running && view != deploy.Saved {
+func (s *Session) Read(ctx context.Context, view device.View) (capture device.Capture, err error) {
+	if view != device.Running && view != device.Saved {
 		return capture, ErrInvalid
 	}
 	capture.Metadata = s.metadata
@@ -38,7 +38,7 @@ func (s *Session) Read(ctx context.Context, view deploy.View) (capture deploy.Ca
 			}
 			capture.Source.Text = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(text), "[edit]"))
 		case s.metadata.Vendor == "fortinet":
-			if view == deploy.Saved {
+			if view == device.Saved {
 				if err := s.fortinetAutomatic(ctx, op, &budget); err != nil {
 					return err
 				}
@@ -51,12 +51,12 @@ func (s *Session) Read(ctx context.Context, view deploy.View) (capture deploy.Ca
 			if err != nil {
 				return err
 			}
-			if view == deploy.Saved {
+			if view == device.Saved {
 				if err := s.fortinetAutomatic(ctx, op, &budget); err != nil {
 					return err
 				}
 			}
-		case view == deploy.Running:
+		case view == device.Running:
 			result, err := op.RunningConfig(ctx)
 			_, complete := result.Config()
 			text, evidenceErr := captureEvidence(result, s.runningCommand(), s.options.MaxOutputBytes)
