@@ -1,0 +1,313 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                                             │ docs/benchmarks/2026-10-29-contracts-before.txt │ docs/benchmarks/2026-10-29-contracts-after.txt │
+                                             │                     sec/op                      │         sec/op           vs base               │
+Snapshot/encode/rules=10                                                         61.87µ ±   4%              61.97µ ± 47%        ~ (p=0.589 n=6)
+Snapshot/decode/rules=10                                                         140.7µ ±  19%              137.2µ ± 11%        ~ (p=0.589 n=6)
+Snapshot/encode/rules=100                                                        293.9µ ±   9%              287.2µ ±  9%        ~ (p=0.310 n=6)
+Snapshot/decode/rules=100                                                        670.6µ ±   3%              667.5µ ± 14%        ~ (p=0.589 n=6)
+Snapshot/encode/rules=1000                                                       2.595m ±   4%              2.503m ±  6%        ~ (p=0.310 n=6)
+Snapshot/decode/rules=1000                                                       6.912m ±  13%              6.551m ±  6%        ~ (p=0.589 n=6)
+CaptureValidation/rules=10                                                     3735.50n ±  15%              17.85n ±  3%  -99.52% (p=0.002 n=6)
+CaptureValidation/rules=1000                                                 346412.00n ±   5%              17.94n ±  4%  -99.99% (p=0.002 n=6)
+RouteResolution/routes=10                                                        4.646µ ±   4%              3.849µ ±  3%  -17.15% (p=0.002 n=6)
+RouteResolution/routes=1000                                                      656.6µ ±   5%              532.8µ ±  6%  -18.86% (p=0.002 n=6)
+Query/asa/rules=10                                                               7.249µ ±  14%              7.154µ ± 14%        ~ (p=0.394 n=6)
+Query/asa/rules=100                                                              68.73µ ±  14%              69.16µ ±  3%        ~ (p=0.974 n=6)
+Query/asa/rules=1000                                                             794.1µ ±  12%              775.4µ ±  9%        ~ (p=0.394 n=6)
+Query/fortinet/rules=10                                                          13.18µ ±   2%              12.91µ ± 10%        ~ (p=0.093 n=6)
+Query/fortinet/rules=100                                                         120.0µ ±   1%              119.6µ ±  8%        ~ (p=0.818 n=6)
+Query/fortinet/rules=1000                                                        1.356m ±   4%              1.349m ±  5%        ~ (p=0.818 n=6)
+Query/hillstone/rules=10                                                         10.96µ ±  11%              10.91µ ± 24%        ~ (p=1.000 n=6)
+Query/hillstone/rules=100                                                        106.7µ ±   1%              105.9µ ±  9%        ~ (p=0.240 n=6)
+Query/hillstone/rules=1000                                                       1.184m ±   2%              1.179m ± 12%        ~ (p=0.937 n=6)
+Query/huawei/rules=10                                                            11.00µ ±  65%              11.12µ ±  2%        ~ (p=0.699 n=6)
+Query/huawei/rules=100                                                           108.6µ ±  30%              107.8µ ±  1%        ~ (p=0.065 n=6)
+Query/huawei/rules=1000                                                          1.197m ±   6%              1.189m ±  3%        ~ (p=0.485 n=6)
+Query/netscreen/rules=10                                                         8.265µ ±   9%              8.275µ ±  4%        ~ (p=0.699 n=6)
+Query/netscreen/rules=100                                                        76.31µ ±   5%              76.78µ ±  3%        ~ (p=0.937 n=6)
+Query/netscreen/rules=1000                                                       892.8µ ±   8%              877.1µ ±  4%        ~ (p=0.180 n=6)
+Query/paloalto/rules=10                                                          10.86µ ±   3%              10.67µ ±  3%        ~ (p=0.853 n=6)
+Query/paloalto/rules=100                                                         105.9µ ±   3%              105.5µ ±  3%        ~ (p=0.589 n=6)
+Query/paloalto/rules=1000                                                        1.149m ±   4%              1.159m ±  2%        ~ (p=0.589 n=6)
+Query/srx/rules=10                                                               10.96µ ±   2%              10.83µ ±  2%        ~ (p=0.240 n=6)
+Query/srx/rules=100                                                              107.3µ ±   2%              106.5µ ± 16%        ~ (p=0.818 n=6)
+Query/srx/rules=1000                                                             1.149m ±   4%              1.142m ± 86%        ~ (p=0.937 n=6)
+NAT/huawei/rules=10                                                              13.89µ ±   5%              13.77µ ±  8%        ~ (p=0.394 n=6)
+NAT/huawei/rules=100                                                             136.6µ ± 102%              134.7µ ±  8%        ~ (p=0.394 n=6)
+NAT/huawei/rules=1000                                                            1.448m ±  17%              1.362m ±  5%   -5.94% (p=0.041 n=6)
+Packet/huawei/rules=10                                                           44.38µ ±   8%              42.99µ ±  4%        ~ (p=0.180 n=6)
+Packet/huawei/rules=100                                                          382.0µ ±   5%              375.5µ ±  2%        ~ (p=0.240 n=6)
+Packet/huawei/rules=1000                                                         3.887m ±  10%              3.742m ±  5%        ~ (p=0.065 n=6)
+Plan/reuse/rules=10                                                              13.61µ ±  14%              13.49µ ±  1%        ~ (p=0.589 n=6)
+Plan/reuse/rules=100                                                             114.4µ ±   7%              112.8µ ±  2%        ~ (p=0.485 n=6)
+Plan/reuse/rules=1000                                                            1.218m ±   8%              1.187m ±  2%        ~ (p=0.065 n=6)
+Plan/create/rules=10                                                             1.236m ±  11%              1.208m ±  4%        ~ (p=0.180 n=6)
+Plan/create/rules=100                                                            84.21m ±   8%              83.23m ±  7%        ~ (p=0.394 n=6)
+Convergence/rules=4                                                              1.428m ±  12%              1.406m ± 13%        ~ (p=0.818 n=6)
+Convergence/rules=10                                                             37.78m ±   8%              36.28m ±  5%        ~ (p=0.310 n=6)
+Risk/rules=10/mode=1                                                             13.46µ ±   5%              11.51µ ± 10%  -14.48% (p=0.002 n=6)
+Risk/rules=10/mode=2                                                             15.34µ ±  17%              13.60µ ± 11%  -11.39% (p=0.009 n=6)
+Risk/rules=100/mode=1                                                            129.6µ ±   4%              115.3µ ± 10%  -11.07% (p=0.002 n=6)
+Risk/rules=100/mode=2                                                            152.3µ ±  11%              131.3µ ± 10%  -13.78% (p=0.002 n=6)
+SharedGroupMemberUsage/rules=10/members=10                                       43.21µ ±   5%              40.77µ ± 10%   -5.66% (p=0.041 n=6)
+SharedGroupMemberUsage/rules=100/members=100                                     4.752m ±   9%              4.656m ± 18%        ~ (p=0.485 n=6)
+Optimize/adjacent/requests=10                                                    7.750µ ±   4%              7.834µ ± 10%        ~ (p=0.310 n=6)
+Optimize/adjacent/requests=100                                                   392.5µ ±  12%              398.5µ ±  6%        ~ (p=0.589 n=6)
+Optimize/paired/requests=10                                                      15.65µ ±  13%              15.81µ ±  8%        ~ (p=0.818 n=6)
+Optimize/paired/requests=100                                                     1.209m ±  24%              1.176m ± 13%        ~ (p=0.310 n=6)
+Parse/asa/rules=10                                                               140.4µ ±  45%              133.9µ ± 10%        ~ (p=0.065 n=6)
+Parse/asa/rules=100                                                              1.064m ±  10%              1.034m ± 10%        ~ (p=0.240 n=6)
+Parse/asa/rules=1000                                                             11.44m ±   4%              11.07m ± 10%        ~ (p=0.180 n=6)
+Parse/fortinet/rules=10                                                          145.6µ ±   3%              144.9µ ±  3%        ~ (p=0.699 n=6)
+Parse/fortinet/rules=100                                                         1.246m ±  10%              1.214m ±  3%        ~ (p=0.093 n=6)
+Parse/fortinet/rules=1000                                                        14.32m ±  11%              13.86m ±  4%        ~ (p=0.132 n=6)
+Parse/hillstone/rules=10                                                         153.8µ ±   4%              148.6µ ±  5%        ~ (p=0.065 n=6)
+Parse/hillstone/rules=100                                                        1.355m ±   2%              1.334m ±  9%        ~ (p=0.132 n=6)
+Parse/hillstone/rules=1000                                                       14.77m ±   9%              14.93m ± 10%        ~ (p=0.310 n=6)
+Parse/huawei/rules=10                                                            128.8µ ±   4%              124.6µ ±  7%        ~ (p=0.485 n=6)
+Parse/huawei/rules=100                                                           1.085m ±   2%              1.069m ±  6%        ~ (p=0.485 n=6)
+Parse/huawei/rules=1000                                                          12.36m ±   6%              12.23m ±  4%        ~ (p=0.818 n=6)
+Parse/netscreen/rules=10                                                         169.7µ ±   3%              166.7µ ±  7%        ~ (p=0.240 n=6)
+Parse/netscreen/rules=100                                                        1.446m ±   6%              1.474m ±  8%        ~ (p=0.818 n=6)
+Parse/netscreen/rules=1000                                                       14.46m ±   5%              13.74m ±  6%        ~ (p=0.132 n=6)
+Parse/paloalto/rules=10                                                          190.4µ ±   4%              191.1µ ±  5%        ~ (p=0.937 n=6)
+Parse/paloalto/rules=100                                                         1.683m ±   5%              1.667m ±  4%        ~ (p=0.589 n=6)
+Parse/paloalto/rules=1000                                                        18.41m ±  10%              18.07m ±  4%        ~ (p=0.310 n=6)
+Parse/srx/rules=10                                                               141.4µ ±   7%              139.0µ ±  3%        ~ (p=0.394 n=6)
+Parse/srx/rules=100                                                              1.255m ±   9%              1.232m ± 10%        ~ (p=0.240 n=6)
+Parse/srx/rules=1000                                                             13.81m ±   8%              13.24m ±  4%        ~ (p=0.240 n=6)
+Traffic/union/ipv4/regions=16                                                    14.33µ ±   3%              14.10µ ±  6%        ~ (p=0.589 n=6)
+Traffic/intersection/ipv4/regions=16                                             7.540µ ±   3%              7.563µ ±  8%        ~ (p=1.000 n=6)
+Traffic/difference/ipv4/regions=16                                               11.98µ ±   2%              12.06µ ±  3%        ~ (p=0.699 n=6)
+Traffic/union/ipv4/regions=128                                                   720.3µ ±   4%              703.6µ ±  5%        ~ (p=0.394 n=6)
+Traffic/intersection/ipv4/regions=128                                            413.3µ ±   3%              411.3µ ±  2%        ~ (p=0.818 n=6)
+Traffic/difference/ipv4/regions=128                                              621.6µ ±   2%              610.2µ ±  3%        ~ (p=0.180 n=6)
+Traffic/union/ipv6/regions=16                                                    14.20µ ±   1%              14.04µ ±  3%        ~ (p=0.394 n=6)
+Traffic/intersection/ipv6/regions=16                                             7.694µ ±   3%              7.580µ ±  6%        ~ (p=0.310 n=6)
+Traffic/difference/ipv6/regions=16                                               12.40µ ±   5%              12.42µ ±  4%        ~ (p=0.589 n=6)
+Traffic/union/ipv6/regions=128                                                   721.1µ ±  12%              726.6µ ±  6%        ~ (p=1.000 n=6)
+Traffic/intersection/ipv6/regions=128                                            418.3µ ±   6%              417.0µ ±  2%        ~ (p=1.000 n=6)
+Traffic/difference/ipv6/regions=128                                              632.0µ ±   6%              626.6µ ±  7%        ~ (p=0.937 n=6)
+geomean                                                                          260.4µ                     213.4µ        -18.03%
+
+                           │ docs/benchmarks/2026-10-29-contracts-before.txt │ docs/benchmarks/2026-10-29-contracts-after.txt │
+                           │                       B/s                       │           B/s             vs base              │
+Snapshot/encode/rules=10                                       164.9Mi ±  4%              164.6Mi ± 32%       ~ (p=0.589 n=6)
+Snapshot/decode/rules=10                                       72.54Mi ± 16%              74.37Mi ± 10%       ~ (p=0.589 n=6)
+Snapshot/encode/rules=100                                      200.1Mi ±  8%              204.7Mi ±  8%       ~ (p=0.310 n=6)
+Snapshot/decode/rules=100                                      87.70Mi ±  3%              88.12Mi ± 12%       ~ (p=0.589 n=6)
+Snapshot/encode/rules=1000                                     213.4Mi ±  4%              221.2Mi ±  6%       ~ (p=0.310 n=6)
+Snapshot/decode/rules=1000                                     80.11Mi ± 15%              84.52Mi ±  6%       ~ (p=0.589 n=6)
+Parse/asa/rules=10                                             10.29Mi ± 31%              10.79Mi ±  9%  +4.87% (p=0.043 n=6)
+Parse/asa/rules=100                                            11.93Mi ±  9%              12.28Mi ±  9%       ~ (p=0.225 n=6)
+Parse/asa/rules=1000                                           11.13Mi ±  4%              11.50Mi ±  9%       ~ (p=0.193 n=6)
+Parse/fortinet/rules=10                                        14.50Mi ±  3%              14.57Mi ±  3%       ~ (p=0.699 n=6)
+Parse/fortinet/rules=100                                       15.41Mi ±  9%              15.80Mi ±  3%       ~ (p=0.093 n=6)
+Parse/fortinet/rules=1000                                      13.48Mi ± 10%              13.93Mi ±  4%       ~ (p=0.121 n=6)
+Parse/hillstone/rules=10                                       8.993Mi ±  4%              9.308Mi ±  5%       ~ (p=0.065 n=6)
+Parse/hillstone/rules=100                                      8.745Mi ±  2%              8.888Mi ±  8%       ~ (p=0.143 n=6)
+Parse/hillstone/rules=1000                                     8.106Mi ±  8%              8.020Mi ±  9%       ~ (p=0.310 n=6)
+Parse/huawei/rules=10                                          17.64Mi ±  4%              18.22Mi ±  7%       ~ (p=0.485 n=6)
+Parse/huawei/rules=100                                         18.23Mi ±  2%              18.51Mi ±  5%       ~ (p=0.485 n=6)
+Parse/huawei/rules=1000                                        16.02Mi ±  6%              16.19Mi ±  4%       ~ (p=0.818 n=6)
+Parse/netscreen/rules=10                                       7.443Mi ±  3%              7.577Mi ±  6%       ~ (p=0.260 n=6)
+Parse/netscreen/rules=100                                      7.405Mi ±  6%              7.262Mi ±  9%       ~ (p=0.818 n=6)
+Parse/netscreen/rules=1000                                     7.486Mi ±  5%              7.877Mi ±  5%       ~ (p=0.132 n=6)
+Parse/paloalto/rules=10                                        21.55Mi ±  4%              21.47Mi ±  5%       ~ (p=0.853 n=6)
+Parse/paloalto/rules=100                                       23.19Mi ±  4%              23.41Mi ±  4%       ~ (p=0.563 n=6)
+Parse/paloalto/rules=1000                                      21.55Mi ±  9%              21.95Mi ±  4%       ~ (p=0.255 n=6)
+Parse/srx/rules=10                                             32.33Mi ±  7%              32.87Mi ±  3%       ~ (p=0.394 n=6)
+Parse/srx/rules=100                                            34.09Mi ±  8%              34.72Mi ±  9%       ~ (p=0.197 n=6)
+Parse/srx/rules=1000                                           31.17Mi ±  9%              32.52Mi ±  4%       ~ (p=0.193 n=6)
+geomean                                                        23.20Mi                    23.69Mi        +2.10%
+
+                                             │ docs/benchmarks/2026-10-29-contracts-before.txt │ docs/benchmarks/2026-10-29-contracts-after.txt │
+                                             │                      B/op                       │        B/op         vs base                    │
+Snapshot/encode/rules=10                                                          73.65Ki ± 0%         73.65Ki ± 0%         ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=10                                                          182.9Ki ± 0%         182.9Ki ± 0%         ~ (p=0.677 n=6)
+Snapshot/encode/rules=100                                                         464.4Ki ± 0%         464.4Ki ± 0%         ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=100                                                         985.6Ki ± 0%         985.6Ki ± 0%         ~ (p=0.563 n=6)
+Snapshot/encode/rules=1000                                                        4.398Mi ± 0%         4.398Mi ± 0%         ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=1000                                                        9.160Mi ± 5%         9.242Mi ± 3%         ~ (p=0.483 n=6)
+CaptureValidation/rules=10                                                        17.77Ki ± 0%          0.00Ki ± 0%  -100.00% (p=0.002 n=6)
+CaptureValidation/rules=1000                                                      1.383Mi ± 0%         0.000Mi ± 0%  -100.00% (p=0.002 n=6)
+RouteResolution/routes=10                                                         7.000Ki ± 0%         8.094Ki ± 0%   +15.62% (p=0.002 n=6)
+RouteResolution/routes=1000                                                       1.003Mi ± 0%         1.060Mi ± 0%    +5.61% (p=0.002 n=6)
+Query/asa/rules=10                                                                11.68Ki ± 0%         11.68Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/asa/rules=100                                                               99.57Ki ± 0%         99.57Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/asa/rules=1000                                                              1.101Mi ± 0%         1.101Mi ± 0%         ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=10                                                           20.82Ki ± 0%         20.82Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=100                                                          180.3Ki ± 0%         180.3Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=1000                                                         1.916Mi ± 0%         1.916Mi ± 0%         ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=10                                                          16.27Ki ± 0%         16.27Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=100                                                         147.1Ki ± 0%         147.1Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=1000                                                        1.567Mi ± 0%         1.567Mi ± 0%         ~ (p=1.000 n=6) ¹
+Query/huawei/rules=10                                                             17.21Ki ± 0%         17.21Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/huawei/rules=100                                                            156.4Ki ± 0%         156.4Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/huawei/rules=1000                                                           1.658Mi ± 0%         1.658Mi ± 0%         ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=10                                                          13.27Ki ± 0%         13.27Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=100                                                         113.8Ki ± 0%         113.8Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=1000                                                        1.239Mi ± 0%         1.239Mi ± 0%         ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=10                                                           14.68Ki ± 0%         14.68Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=100                                                          131.4Ki ± 0%         131.4Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=1000                                                         1.414Mi ± 0%         1.414Mi ± 0%         ~ (p=1.000 n=6) ¹
+Query/srx/rules=10                                                                15.68Ki ± 0%         15.68Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/srx/rules=100                                                               140.8Ki ± 0%         140.8Ki ± 0%         ~ (p=1.000 n=6) ¹
+Query/srx/rules=1000                                                              1.506Mi ± 0%         1.506Mi ± 0%         ~ (p=1.000 n=6) ¹
+NAT/huawei/rules=10                                                               24.12Ki ± 0%         24.12Ki ± 0%         ~ (p=1.000 n=6) ¹
+NAT/huawei/rules=100                                                              220.2Ki ± 0%         220.2Ki ± 0%         ~ (p=1.000 n=6) ¹
+NAT/huawei/rules=1000                                                             2.100Mi ± 0%         2.100Mi ± 0%         ~ (p=1.000 n=6) ¹
+Packet/huawei/rules=10                                                            71.15Ki ± 0%         71.15Ki ± 0%         ~ (p=1.000 n=6) ¹
+Packet/huawei/rules=100                                                           547.2Ki ± 0%         547.2Ki ± 0%         ~ (p=1.000 n=6) ¹
+Packet/huawei/rules=1000                                                          5.444Mi ± 0%         5.444Mi ± 0%         ~ (p=1.000 n=6) ¹
+Plan/reuse/rules=10                                                               19.50Ki ± 0%         19.50Ki ± 0%         ~ (p=1.000 n=6)
+Plan/reuse/rules=100                                                              158.7Ki ± 0%         158.7Ki ± 0%         ~ (p=1.000 n=6) ¹
+Plan/reuse/rules=1000                                                             1.660Mi ± 0%         1.660Mi ± 0%         ~ (p=0.264 n=6)
+Plan/create/rules=10                                                              1.989Mi ± 0%         1.988Mi ± 0%    -0.01% (p=0.002 n=6)
+Plan/create/rules=100                                                             119.3Mi ± 0%         119.3Mi ± 0%    -0.00% (p=0.002 n=6)
+Convergence/rules=4                                                               2.308Mi ± 0%         2.302Mi ± 0%    -0.27% (p=0.002 n=6)
+Convergence/rules=10                                                              42.90Mi ± 0%         42.85Mi ± 0%    -0.11% (p=0.002 n=6)
+Risk/rules=10/mode=1                                                              20.75Ki ± 0%         18.09Ki ± 0%   -12.80% (p=0.002 n=6)
+Risk/rules=10/mode=2                                                              26.02Ki ± 0%         23.37Ki ± 0%   -10.21% (p=0.002 n=6)
+Risk/rules=100/mode=1                                                             201.4Ki ± 0%         174.8Ki ± 0%   -13.19% (p=0.002 n=6)
+Risk/rules=100/mode=2                                                             241.8Ki ± 0%         215.3Ki ± 0%   -10.98% (p=0.002 n=6)
+SharedGroupMemberUsage/rules=10/members=10                                        127.8Ki ± 0%         125.1Ki ± 0%    -2.08% (p=0.002 n=6)
+SharedGroupMemberUsage/rules=100/members=100                                      13.24Mi ± 0%         13.21Mi ± 0%    -0.20% (p=0.002 n=6)
+Optimize/adjacent/requests=10                                                     23.59Ki ± 0%         23.59Ki ± 0%         ~ (p=1.000 n=6) ¹
+Optimize/adjacent/requests=100                                                    914.7Ki ± 0%         914.7Ki ± 0%         ~ (p=1.000 n=6)
+Optimize/paired/requests=10                                                       40.79Ki ± 0%         40.79Ki ± 0%         ~ (p=1.000 n=6) ¹
+Optimize/paired/requests=100                                                      2.292Mi ± 0%         2.292Mi ± 0%         ~ (p=1.000 n=6)
+Parse/asa/rules=10                                                                299.9Ki ± 0%         299.9Ki ± 0%         ~ (p=1.000 n=6)
+Parse/asa/rules=100                                                               2.294Mi ± 0%         2.294Mi ± 0%         ~ (p=1.000 n=6)
+Parse/asa/rules=1000                                                              24.85Mi ± 1%         24.70Mi ± 1%         ~ (p=0.699 n=6)
+Parse/fortinet/rules=10                                                           380.9Ki ± 0%         380.9Ki ± 0%         ~ (p=0.848 n=6)
+Parse/fortinet/rules=100                                                          3.259Mi ± 0%         3.258Mi ± 0%         ~ (p=0.613 n=6)
+Parse/fortinet/rules=1000                                                         41.02Mi ± 2%         41.30Mi ± 2%         ~ (p=0.310 n=6)
+Parse/hillstone/rules=10                                                          358.9Ki ± 0%         358.9Ki ± 0%         ~ (p=0.061 n=6)
+Parse/hillstone/rules=100                                                         2.973Mi ± 0%         2.973Mi ± 0%         ~ (p=0.699 n=6)
+Parse/hillstone/rules=1000                                                        36.62Mi ± 2%         36.06Mi ± 3%         ~ (p=0.310 n=6)
+Parse/huawei/rules=10                                                             330.6Ki ± 0%         330.6Ki ± 0%         ~ (p=0.095 n=6)
+Parse/huawei/rules=100                                                            2.679Mi ± 0%         2.679Mi ± 0%         ~ (p=0.848 n=6)
+Parse/huawei/rules=1000                                                           35.68Mi ± 2%         35.68Mi ± 3%    -0.00% (p=0.037 n=6)
+Parse/netscreen/rules=10                                                          293.0Ki ± 0%         293.0Ki ± 0%         ~ (p=0.232 n=6)
+Parse/netscreen/rules=100                                                         2.080Mi ± 0%         2.080Mi ± 0%         ~ (p=0.286 n=6)
+Parse/netscreen/rules=1000                                                        23.29Mi ± 2%         23.31Mi ± 4%         ~ (p=0.937 n=6)
+Parse/paloalto/rules=10                                                           391.6Ki ± 0%         391.6Ki ± 0%         ~ (p=0.494 n=6)
+Parse/paloalto/rules=100                                                          3.225Mi ± 1%         3.210Mi ± 1%         ~ (p=0.368 n=6)
+Parse/paloalto/rules=1000                                                         40.33Mi ± 3%         40.33Mi ± 3%         ~ (p=1.000 n=6)
+Parse/srx/rules=10                                                                274.2Ki ± 0%         274.2Ki ± 0%         ~ (p=0.892 n=6)
+Parse/srx/rules=100                                                               2.224Mi ± 0%         2.224Mi ± 0%         ~ (p=0.615 n=6)
+Parse/srx/rules=1000                                                              26.91Mi ± 3%         26.91Mi ± 3%         ~ (p=0.699 n=6)
+Traffic/union/ipv4/regions=16                                                     10.00Ki ± 0%         10.00Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/intersection/ipv4/regions=16                                              3.828Ki ± 0%         3.828Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/difference/ipv4/regions=16                                                5.828Ki ± 0%         5.828Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/union/ipv4/regions=128                                                    80.00Ki ± 0%         80.00Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/intersection/ipv4/regions=128                                             31.83Ki ± 0%         31.83Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/difference/ipv4/regions=128                                               47.83Ki ± 0%         47.83Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/union/ipv6/regions=16                                                     10.00Ki ± 0%         10.00Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/intersection/ipv6/regions=16                                              3.828Ki ± 0%         3.828Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/difference/ipv6/regions=16                                                5.828Ki ± 0%         5.828Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/union/ipv6/regions=128                                                    80.00Ki ± 0%         80.00Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/intersection/ipv6/regions=128                                             31.83Ki ± 0%         31.83Ki ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/difference/ipv6/regions=128                                               47.83Ki ± 0%         47.83Ki ± 0%         ~ (p=1.000 n=6) ¹
+geomean                                                                           344.9Ki                            ?                      ² ³
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+³ ratios must be >0 to compute geomean
+
+                                             │ docs/benchmarks/2026-10-29-contracts-before.txt │ docs/benchmarks/2026-10-29-contracts-after.txt │
+                                             │                    allocs/op                    │     allocs/op       vs base                    │
+Snapshot/encode/rules=10                                                            238.0 ± 0%           238.0 ± 0%         ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=10                                                           2.234k ± 0%          2.234k ± 0%         ~ (p=1.000 n=6) ¹
+Snapshot/encode/rules=100                                                          1.229k ± 0%          1.229k ± 0%         ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=100                                                          7.203k ± 0%          7.203k ± 0%         ~ (p=1.000 n=6) ¹
+Snapshot/encode/rules=1000                                                         11.13k ± 0%          11.13k ± 0%         ~ (p=1.000 n=6) ¹
+Snapshot/decode/rules=1000                                                         56.74k ± 0%          56.74k ± 0%         ~ (p=0.439 n=6)
+CaptureValidation/rules=10                                                          85.00 ± 0%            0.00 ± 0%  -100.00% (p=0.002 n=6)
+CaptureValidation/rules=1000                                                       7.015k ± 0%          0.000k ± 0%  -100.00% (p=0.002 n=6)
+RouteResolution/routes=10                                                           126.0 ± 0%           112.0 ± 0%   -11.11% (p=0.002 n=6)
+RouteResolution/routes=1000                                                        16.40k ± 0%          10.97k ± 0%   -33.12% (p=0.002 n=6)
+Query/asa/rules=10                                                                  182.0 ± 0%           182.0 ± 0%         ~ (p=1.000 n=6) ¹
+Query/asa/rules=100                                                                1.628k ± 0%          1.628k ± 0%         ~ (p=1.000 n=6) ¹
+Query/asa/rules=1000                                                               16.04k ± 0%          16.04k ± 0%         ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=10                                                             331.0 ± 0%           331.0 ± 0%         ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=100                                                           2.953k ± 0%          2.953k ± 0%         ~ (p=1.000 n=6) ¹
+Query/fortinet/rules=1000                                                          29.07k ± 0%          29.07k ± 0%         ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=10                                                            228.0 ± 0%           228.0 ± 0%         ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=100                                                          2.124k ± 0%          2.124k ± 0%         ~ (p=1.000 n=6) ¹
+Query/hillstone/rules=1000                                                         21.04k ± 0%          21.04k ± 0%         ~ (p=1.000 n=6) ¹
+Query/huawei/rules=10                                                               228.0 ± 0%           228.0 ± 0%         ~ (p=1.000 n=6) ¹
+Query/huawei/rules=100                                                             2.124k ± 0%          2.124k ± 0%         ~ (p=1.000 n=6) ¹
+Query/huawei/rules=1000                                                            21.04k ± 0%          21.04k ± 0%         ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=10                                                            231.0 ± 0%           231.0 ± 0%         ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=100                                                          2.037k ± 0%          2.037k ± 0%         ~ (p=1.000 n=6) ¹
+Query/netscreen/rules=1000                                                         20.05k ± 0%          20.05k ± 0%         ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=10                                                             228.0 ± 0%           228.0 ± 0%         ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=100                                                           2.124k ± 0%          2.124k ± 0%         ~ (p=1.000 n=6) ¹
+Query/paloalto/rules=1000                                                          21.04k ± 0%          21.04k ± 0%         ~ (p=1.000 n=6) ¹
+Query/srx/rules=10                                                                  228.0 ± 0%           228.0 ± 0%         ~ (p=1.000 n=6) ¹
+Query/srx/rules=100                                                                2.124k ± 0%          2.124k ± 0%         ~ (p=1.000 n=6) ¹
+Query/srx/rules=1000                                                               21.04k ± 0%          21.04k ± 0%         ~ (p=1.000 n=6) ¹
+NAT/huawei/rules=10                                                                 314.0 ± 0%           314.0 ± 0%         ~ (p=1.000 n=6) ¹
+NAT/huawei/rules=100                                                               2.837k ± 0%          2.837k ± 0%         ~ (p=1.000 n=6) ¹
+NAT/huawei/rules=1000                                                              28.04k ± 0%          28.04k ± 0%         ~ (p=1.000 n=6) ¹
+Packet/huawei/rules=10                                                              914.0 ± 0%           914.0 ± 0%         ~ (p=1.000 n=6) ¹
+Packet/huawei/rules=100                                                            7.229k ± 0%          7.229k ± 0%         ~ (p=1.000 n=6) ¹
+Packet/huawei/rules=1000                                                           70.25k ± 0%          70.25k ± 0%         ~ (p=1.000 n=6) ¹
+Plan/reuse/rules=10                                                                 236.0 ± 0%           236.0 ± 0%         ~ (p=1.000 n=6) ¹
+Plan/reuse/rules=100                                                               2.132k ± 0%          2.132k ± 0%         ~ (p=1.000 n=6) ¹
+Plan/reuse/rules=1000                                                              21.04k ± 0%          21.04k ± 0%         ~ (p=1.000 n=6) ¹
+Plan/create/rules=10                                                               8.421k ± 0%          8.416k ± 0%    -0.06% (p=0.002 n=6)
+Plan/create/rules=100                                                              437.7k ± 0%          437.7k ± 0%    -0.00% (p=0.002 n=6)
+Convergence/rules=4                                                                10.18k ± 0%          10.06k ± 0%    -1.14% (p=0.002 n=6)
+Convergence/rules=10                                                               140.6k ± 0%          139.8k ± 0%    -0.61% (p=0.002 n=6)
+Risk/rules=10/mode=1                                                                300.0 ± 0%           250.0 ± 0%   -16.67% (p=0.002 n=6)
+Risk/rules=10/mode=2                                                                335.0 ± 0%           285.0 ± 0%   -14.93% (p=0.002 n=6)
+Risk/rules=100/mode=1                                                              2.913k ± 0%          2.413k ± 0%   -17.16% (p=0.002 n=6)
+Risk/rules=100/mode=2                                                              3.134k ± 0%          2.634k ± 0%   -15.95% (p=0.002 n=6)
+SharedGroupMemberUsage/rules=10/members=10                                          470.0 ± 0%           420.0 ± 0%   -10.64% (p=0.002 n=6)
+SharedGroupMemberUsage/rules=100/members=100                                       31.60k ± 0%          31.10k ± 0%    -1.58% (p=0.002 n=6)
+Optimize/adjacent/requests=10                                                       82.00 ± 0%           82.00 ± 0%         ~ (p=1.000 n=6) ¹
+Optimize/adjacent/requests=100                                                      737.0 ± 0%           737.0 ± 0%         ~ (p=1.000 n=6) ¹
+Optimize/paired/requests=10                                                         212.0 ± 0%           212.0 ± 0%         ~ (p=1.000 n=6) ¹
+Optimize/paired/requests=100                                                       15.49k ± 0%          15.49k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/asa/rules=10                                                                 1.824k ± 0%          1.824k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/asa/rules=100                                                                13.72k ± 0%          13.72k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/asa/rules=1000                                                               132.8k ± 0%          132.8k ± 0%         ~ (p=0.251 n=6)
+Parse/fortinet/rules=10                                                            2.225k ± 0%          2.225k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/fortinet/rules=100                                                           17.89k ± 0%          17.89k ± 0%         ~ (p=1.000 n=6)
+Parse/fortinet/rules=1000                                                          173.8k ± 0%          173.8k ± 0%         ~ (p=0.610 n=6)
+Parse/hillstone/rules=10                                                           2.064k ± 0%          2.064k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/hillstone/rules=100                                                          15.94k ± 0%          15.94k ± 0%         ~ (p=0.675 n=6)
+Parse/hillstone/rules=1000                                                         153.9k ± 0%          153.8k ± 0%         ~ (p=0.249 n=6)
+Parse/huawei/rules=10                                                              1.791k ± 0%          1.791k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/huawei/rules=100                                                             13.69k ± 0%          13.69k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/huawei/rules=1000                                                            131.8k ± 0%          131.8k ± 0%         ~ (p=0.318 n=6)
+Parse/netscreen/rules=10                                                           2.068k ± 0%          2.068k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/netscreen/rules=100                                                          14.69k ± 0%          14.69k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/netscreen/rules=1000                                                         141.8k ± 0%          141.8k ± 0%         ~ (p=0.937 n=6)
+Parse/paloalto/rules=10                                                            2.377k ± 0%          2.377k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/paloalto/rules=100                                                           19.95k ± 0%          19.95k ± 0%         ~ (p=0.240 n=6)
+Parse/paloalto/rules=1000                                                          194.8k ± 0%          194.8k ± 0%         ~ (p=1.000 n=6)
+Parse/srx/rules=10                                                                 2.196k ± 0%          2.196k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/srx/rules=100                                                                18.30k ± 0%          18.30k ± 0%         ~ (p=1.000 n=6) ¹
+Parse/srx/rules=1000                                                               178.7k ± 0%          178.7k ± 0%         ~ (p=0.784 n=6)
+Traffic/union/ipv4/regions=16                                                       34.00 ± 0%           34.00 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/intersection/ipv4/regions=16                                                5.000 ± 0%           5.000 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/difference/ipv4/regions=16                                                  6.000 ± 0%           6.000 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/union/ipv4/regions=128                                                      258.0 ± 0%           258.0 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/intersection/ipv4/regions=128                                               8.000 ± 0%           8.000 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/difference/ipv4/regions=128                                                 9.000 ± 0%           9.000 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/union/ipv6/regions=16                                                       34.00 ± 0%           34.00 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/intersection/ipv6/regions=16                                                5.000 ± 0%           5.000 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/difference/ipv6/regions=16                                                  6.000 ± 0%           6.000 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/union/ipv6/regions=128                                                      258.0 ± 0%           258.0 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/intersection/ipv6/regions=128                                               8.000 ± 0%           8.000 ± 0%         ~ (p=1.000 n=6) ¹
+Traffic/difference/ipv6/regions=128                                                 9.000 ± 0%           9.000 ± 0%         ~ (p=1.000 n=6) ¹
+geomean                                                                            2.072k                            ?                      ² ³
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+³ ratios must be >0 to compute geomean

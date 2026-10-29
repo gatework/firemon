@@ -98,3 +98,58 @@ an explicit representation cost, not a claim that every metric improves.
 These are synthetic local measurements, not firmware interoperability, worst-case
 latency or a service-level guarantee. Benchmarks assert their semantic results;
 short timing windows remain sensitive to host load and thermal conditions.
+
+## Contract and ownership refactor measurements (2026-10-29)
+
+The baseline runtime is `dd15031`; the new capture-validation and route-resolution
+harnesses were added to that frozen baseline without changing runtime code. Both
+binaries use Go 1.27.1, darwin/arm64, Apple M5. Six serial samples alternate the
+before/after execution order, with `GOMAXPROCS=1`, `-test.cpu=1` and
+`-test.benchtime=100ms`. All 87 cases passed all six samples for both binaries.
+No tests or builds ran during measurement. Each benchmark validates its result.
+
+The full matrix contains the existing 83 workloads plus capture validation at
+10/1,000 rules and route resolution at 10/1,000 routes. Capture validation starts
+with an already parsed retained graph; it excludes parsing, device I/O and
+publication. Route resolution partitions a synthetic /16 across the configured
+/32 routes and the unmatched remainder, with native interface/zone evidence.
+
+| Workload | Before | After | Allocation change |
+| --- | --- | --- | --- |
+| Validate retained capture, 1,000 rules | 346.412 µs; 1.383 MiB; 7,015 allocations | 17.94 ns; 0 bytes; 0 allocations | Removes a defensive full-graph clone used only to compare raw text |
+| Declared risk, 100 rules | 129.6 µs; 201.4 KiB; 2,913 allocations | 115.3 µs; 174.8 KiB; 2,413 allocations | -13.19% bytes; -17.16% allocations |
+| Effective risk, 100 rules | 152.3 µs; 241.8 KiB; 3,134 allocations | 131.3 µs; 215.3 KiB; 2,634 allocations | -10.98% bytes; -15.95% allocations |
+
+Those timing differences have `p=0.002`, `n=6`. Capture validation still checks
+metadata and exact retained text; an invalid or substituted result remains
+incomplete/error. The nanosecond result measures that narrow retained-graph
+validation path and is not configuration parsing throughput.
+
+The full matrix initially exposed a route-buffer allocation cost: at 1,000 routes,
+time fell 18.86% and allocation count fell 33.12%, but bytes increased 5.61%.
+Inspection found a remaining interface-record clone used only for flags. Replacing
+it with `Disabled`/`HasUnsupported` completed the scalar-read migration. The final
+runtime is `02977bc` (later import grouping does not change runtime behavior).
+Only the affected route and packet cases were remeasured, again with six
+counterbalanced serial samples:
+
+| Final route workload | Before | After | Change |
+| --- | --- | --- | --- |
+| 10 routes | 4.436 µs; 7,168 bytes; 126 allocations | 3.303 µs; 7,232 bytes; 90 allocations | -25.54% time; +64 bytes; -28.57% allocations |
+| 1,000 routes | 643.2 µs; 1,027.5 KiB; 16,398 allocations | 480.9 µs; 991.3 KiB; 8,965 allocations | -25.23% time; -3.52% bytes; -45.33% allocations |
+
+The 1,000-route timing change has `p=0.002`; the smaller case has `p=0.041` and a
+±37% after-sample uncertainty, so its timing is less stable. Cached route keys and a
+bounded stable merge buffer retain declaration order and responsive cancellation.
+The 64-byte small-case increase is an explicit representation cost. Final packet
+timings, full-matrix parser/query/planning/convergence timings, and snapshot
+controls showed no statistically significant timing regression in these samples.
+No general production, peak-memory or firmware-capacity claim follows.
+
+Raw full-matrix [before](benchmarks/2026-10-29-contracts-before.txt),
+[after](benchmarks/2026-10-29-contracts-after.txt) and
+[comparison](benchmarks/2026-10-29-contracts-comparison.txt) retain the initial
+route result. The final [route/packet before](benchmarks/2026-10-29-contracts-route-before.txt),
+[after](benchmarks/2026-10-29-contracts-route-after.txt) and
+[comparison](benchmarks/2026-10-29-contracts-route-comparison.txt) supersede only
+those affected rows. These are separate measurements, not merged samples.

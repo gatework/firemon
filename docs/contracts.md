@@ -8,13 +8,14 @@ projection. No single vendor interface combines all these responsibilities.
 | Boundary | Contract | Meaning of success |
 | --- | --- | --- |
 | Native selection | `vendors.Parser.Parse`, `vendors.Renderer` | One of the seven enabled implementations, with the selected native context retained |
-| Configuration | `Parse(ctx, config.Source, firemon.Metadata)` | A sealed graph; `Complete()` additionally requires complete capture and established semantics |
-| Domain | Concrete immutable objects, `Record()` copies, typed reference accessors | Shared graph identity without mutable container aliases |
-| Policy | `policy.Engine.Query`, `Match`, `QueryNAT`, `QueryPacket` | Exact known partitions; unresolved traffic remains `Unknown`, independent of transport success |
+| Configuration | `config.Parser.Parse(ctx, config.Source, firemon.Metadata)` | A sealed graph; `Complete()` additionally requires complete capture and established semantics |
+| Domain | Concrete immutable objects, scalar behavior, `Record()` copies, typed references | Shared graph identity without mutable container aliases |
+| Policy | `policy.Engine.Query`, `Match`, `QueryNAT`, `QueryPacket`, `ResolveRoutes` | Exact known partitions; unresolved traffic remains `Unknown`, independent of transport success |
 | Design | `plan.Planner.Plan`, `Transfer`, `Preserve` | Renderable target and outside-traffic proof, with preserved translation behavior |
 | Readback | `Plan.VerifyBaseline`, `Plan.Verify` | Independent parsed native configuration establishes the approved baseline/result |
-| Lifecycle | `RiskAnalyzer.Assess`, `Converger.Candidates`, `PolicyMigrator.Plan`, `Reclaimer.AnalyzeMembers` | Versioned findings or proven plans; findings alone never authorize changes |
-| Device | `deploy.Factory.Open`, `Session` | Fresh session, explicit configuration isolation, bounded capture/execution/persistence and closure |
+| Lifecycle | `RiskAnalyzer.Analyze`, `Converger.Candidates`, `PolicyMigrator.Plan`, `Reclaimer.AnalyzeMembers` | Versioned findings or proven plans; findings alone never authorize changes |
+| Collection | `operations.ReadOnlyFactory.OpenReadOnly`, `device.Reader` | Fresh owned reader with `Read` and `Close`, independent of deployment dependencies |
+| Deployment | `deploy.Factory.Open`, `deploy.Session` | Fresh session, explicit configuration isolation, bounded capture/execution/persistence and closure |
 | Publication | Snapshot CAS and durable operation reservation | Complete current state or explicitly unavailable state, never silent stale success |
 
 The policy package selects a private native semantic strategy once at each
@@ -22,6 +23,25 @@ entry boundary. The strategy supplies policy/NAT/packet evaluation, native
 transform details, activation and ordering. Planning consumes semantic methods;
 it does not decide behavior by vendor name. Native parser and renderer selection
 is shared by the CLI and embedded operations.
+
+## Parser and evaluation ownership
+
+`config.NewSession` rejects a nil cursor and returns `(*Session, error)`. The
+session retains that cursor privately and exposes it with `Cursor()`. A commit
+accepts only a transaction from that cursor; a rejected foreign transaction stays
+usable by its owner. Closed commits return `config.ErrClosed`; invalid ownership
+returns `config.ErrClaim`. Invalid session input returns `config.ErrInvalid`.
+Stages retain dependency order and atomic draft/evidence rollback.
+
+`policy.RuleChain` names the native chain and its zone pair; it replaces an opaque
+array only in evaluation state. `Request.SameContext` normalizes omitted security
+rule sets and compares time by instant. `Engine.ResolveRoutes` uses `Limits.Rules`
+for selected-VRF candidates and `Limits.Regions` for output partitions. Sorting
+preserves native ties and checks cancellation between bounded chunks and merges.
+Invalid inputs, cancellation and exhausted budgets remain errors; unsupported
+semantics remain unknown. The evaluation/planning and application boundaries
+check cancellation before validation. Inventory/projection invalid dependencies
+use their own `ErrInvalid`; malformed stored evidence remains `snapshot.ErrFormat`.
 
 ## Object identity and translation proof
 
@@ -45,6 +65,19 @@ outside the policy-only migrator's supported contract.
 
 ## Lifecycle evidence
 
+Reusable services retain their planner and configured limits. `ReclamationRequest`
+provides the current time, revision, observation window and rule/member evidence
+for each `Reclaimer` call. `MigrationRequest` provides time, zone/chain mappings,
+pairs and selected rules for `PolicyMigrator.Plan`. `Converger.Candidates` and
+`Plan` receive the proof start time per call. Inputs are read without retention or
+mutation; callers must not mutate them while a call is in progress.
+
+`Schedule.ActiveAt` and `ExpiredAt` return `(value, known)`. Absolute windows are
+half-open; recurrence, unsupported declarations, missing windows or absent time
+remain unknown. Unknown activity stays possibly active; unknown expiry never
+authorizes removal. `HasUnsupported` describes local unmodeled declarations,
+not graph completeness or successful reference resolution.
+
 Migration maps `firemon.PolicyChain{Scope, RuleSet}` independently from zones. A unique selected
 security chain may be inferred. ACL or ambiguous targets require explicit chain
 mapping. An explicitly empty destination-zone mapping, together with an explicit
@@ -67,7 +100,13 @@ candidate plans must not be concatenated without a new combined proof.
 
 ## Session and application ownership
 
-Every session implements configuration begin/end, read, execute, save and close.
+A `device.Reader` implements only `Read(ctx, device.View)` and `Close()`.
+`device.Capture` retains the source and metadata. `device.Running` and
+`device.Saved` select the view. The connector adapter returns a fresh reader from
+`OpenReadOnly`; opening it does not enter configuration mode.
+
+A `deploy.Session` embeds `device.Reader` and additionally implements
+configuration begin/end, execute and save.
 Host-defined session implementations must add `BeginConfiguration` and
 `EndConfiguration`; no-op implementations are valid only for native devices
 whose edits immediately affect running state and require no candidate isolation.
@@ -86,6 +125,14 @@ evidence. Deployment keeps its reservation and publishes that observation even
 when cancellation requires a separate bounded local persistence context; recovery
 uses a new session and never replays the failed operation. Collector retries use
 the existing publication ID instead of reconnecting.
+
+`operations.NewCollector`, `operations.NewDesigner` and `deploy.New` validate
+option structs once and keep dependencies private. Typed-nil dependencies and
+negative bounds are invalid. Zero timeout retains the five-minute default.
+`operations.New` returns a runtime exposing `Collect`, `Design`, `Apply` and
+`Recover`; it does not expose replaceable components. A standalone collector
+requires only a capture store, read-only factory and `config.Parser`, without a
+journal, authorizer or write-capable session.
 
 `operations.Collector` collects running configuration and publishes with live CAS
 semantics; partial evidence invalidates stale current state. `Designer` loads a

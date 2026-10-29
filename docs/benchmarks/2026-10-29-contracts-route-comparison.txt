@@ -1,0 +1,30 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                            │ docs/benchmarks/2026-10-29-contracts-route-before.txt │ docs/benchmarks/2026-10-29-contracts-route-after.txt │
+                            │                        sec/op                         │            sec/op              vs base               │
+RouteResolution/routes=10                                               4.436µ ± 3%                    3.303µ ± 37%  -25.54% (p=0.041 n=6)
+RouteResolution/routes=1000                                             643.2µ ± 3%                    480.9µ ±  3%  -25.23% (p=0.002 n=6)
+Packet/huawei/rules=10                                                  43.08µ ± 4%                    43.05µ ±  3%        ~ (p=0.699 n=6)
+Packet/huawei/rules=100                                                 367.8µ ± 1%                    368.9µ ±  1%        ~ (p=0.485 n=6)
+Packet/huawei/rules=1000                                                3.834m ± 6%                    3.749m ±  2%        ~ (p=0.065 n=6)
+geomean                                                                 176.9µ                         156.7µ        -11.41%
+
+                            │ docs/benchmarks/2026-10-29-contracts-route-before.txt │ docs/benchmarks/2026-10-29-contracts-route-after.txt │
+                            │                         B/op                          │              B/op               vs base              │
+RouteResolution/routes=10                                              7.000Ki ± 0%                     7.062Ki ± 0%  +0.89% (p=0.002 n=6)
+RouteResolution/routes=1000                                           1027.5Ki ± 0%                     991.3Ki ± 0%  -3.52% (p=0.002 n=6)
+Packet/huawei/rules=10                                                 71.15Ki ± 0%                     70.96Ki ± 0%  -0.26% (p=0.002 n=6)
+Packet/huawei/rules=100                                                547.2Ki ± 0%                     547.0Ki ± 0%  -0.03% (p=0.002 n=6)
+Packet/huawei/rules=1000                                               5.444Mi ± 0%                     5.444Mi ± 0%  -0.00% (p=0.002 n=6)
+geomean                                                                274.6Ki                          273.0Ki       -0.60%
+
+                            │ docs/benchmarks/2026-10-29-contracts-route-before.txt │ docs/benchmarks/2026-10-29-contracts-route-after.txt │
+                            │                       allocs/op                       │           allocs/op            vs base               │
+RouteResolution/routes=10                                               126.00 ± 0%                      90.00 ± 0%  -28.57% (p=0.002 n=6)
+RouteResolution/routes=1000                                            16.398k ± 0%                     8.965k ± 0%  -45.33% (p=0.002 n=6)
+Packet/huawei/rules=10                                                   914.0 ± 0%                      910.0 ± 0%   -0.44% (p=0.002 n=6)
+Packet/huawei/rules=100                                                 7.229k ± 0%                     7.225k ± 0%   -0.06% (p=0.002 n=6)
+Packet/huawei/rules=1000                                                70.25k ± 0%                     70.25k ± 0%   -0.01% (p=0.002 n=6)
+geomean                                                                 3.948k                          3.268k       -17.23%

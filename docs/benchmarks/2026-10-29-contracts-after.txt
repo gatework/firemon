@@ -1,0 +1,552 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    1122	     91357 ns/op	 117.11 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     868	    136425 ns/op	  78.42 MB/s	  187289 B/op	    2234 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     424	    279851 ns/op	 220.33 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     184	    651129 ns/op	  94.70 MB/s	 1009167 B/op	    7203 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      48	   2453328 ns/op	 236.66 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6263750 ns/op	  92.69 MB/s	 9690977 B/op	   56743 allocs/op
+BenchmarkCaptureValidation/rules=10       	 6773871	        17.61 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCaptureValidation/rules=1000     	 6616628	        17.89 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRouteResolution/routes=10        	   31620	      3730 ns/op	    8288 B/op	     112 allocs/op
+BenchmarkRouteResolution/routes=1000      	     230	    520321 ns/op	 1111200 B/op	   10967 allocs/op
+BenchmarkQuery/asa/rules=10               	   16810	      7086 ns/op	   11960 B/op	     182 allocs/op
+BenchmarkQuery/asa/rules=100              	    1629	     68315 ns/op	  101960 B/op	    1628 allocs/op
+BenchmarkQuery/asa/rules=1000             	     156	    760825 ns/op	 1154776 B/op	   16039 allocs/op
+BenchmarkQuery/fortinet/rules=10          	   10000	     12824 ns/op	   21320 B/op	     331 allocs/op
+BenchmarkQuery/fortinet/rules=100         	     998	    118975 ns/op	  184600 B/op	    2953 allocs/op
+BenchmarkQuery/fortinet/rules=1000        	     100	   1331217 ns/op	 2009176 B/op	   29075 allocs/op
+BenchmarkQuery/hillstone/rules=10         	   10000	     10781 ns/op	   16664 B/op	     228 allocs/op
+BenchmarkQuery/hillstone/rules=100        	    1123	    106744 ns/op	  150584 B/op	    2124 allocs/op
+BenchmarkQuery/hillstone/rules=1000       	     100	   1148801 ns/op	 1642600 B/op	   21035 allocs/op
+BenchmarkQuery/huawei/rules=10            	   10000	     11094 ns/op	   17624 B/op	     228 allocs/op
+BenchmarkQuery/huawei/rules=100           	    1110	    107876 ns/op	  160184 B/op	    2124 allocs/op
+BenchmarkQuery/huawei/rules=1000          	     100	   1168507 ns/op	 1738600 B/op	   21035 allocs/op
+BenchmarkQuery/netscreen/rules=10         	   15073	      7983 ns/op	   13592 B/op	     231 allocs/op
+BenchmarkQuery/netscreen/rules=100        	    1568	     74835 ns/op	  116552 B/op	    2037 allocs/op
+BenchmarkQuery/netscreen/rules=1000       	     144	    838321 ns/op	 1298968 B/op	   20048 allocs/op
+BenchmarkQuery/paloalto/rules=10          	   10000	     10670 ns/op	   15032 B/op	     228 allocs/op
+BenchmarkQuery/paloalto/rules=100         	    1148	    103437 ns/op	  134552 B/op	    2124 allocs/op
+BenchmarkQuery/paloalto/rules=1000        	      92	   1155967 ns/op	 1482568 B/op	   21035 allocs/op
+BenchmarkQuery/srx/rules=10               	   10000	     10628 ns/op	   16056 B/op	     228 allocs/op
+BenchmarkQuery/srx/rules=100              	    1138	    106022 ns/op	  144216 B/op	    2124 allocs/op
+BenchmarkQuery/srx/rules=1000             	     104	   1136996 ns/op	 1578632 B/op	   21035 allocs/op
+BenchmarkNAT/huawei/rules=10              	    9416	     13842 ns/op	   24704 B/op	     314 allocs/op
+BenchmarkNAT/huawei/rules=100             	     898	    132512 ns/op	  225488 B/op	    2837 allocs/op
+BenchmarkNAT/huawei/rules=1000            	     100	   1386228 ns/op	 2202353 B/op	   28040 allocs/op
+BenchmarkPacket/huawei/rules=10           	    2829	     42894 ns/op	   72856 B/op	     914 allocs/op
+BenchmarkPacket/huawei/rules=100          	     318	    375309 ns/op	  560360 B/op	    7229 allocs/op
+BenchmarkPacket/huawei/rules=1000         	      28	   3732707 ns/op	 5708648 B/op	   70254 allocs/op
+BenchmarkPlan/reuse/rules=10              	   10000	     13568 ns/op	   19963 B/op	     236 allocs/op
+BenchmarkPlan/reuse/rules=100             	    1058	    112370 ns/op	  162529 B/op	    2132 allocs/op
+BenchmarkPlan/reuse/rules=1000            	      98	   1206958 ns/op	 1740983 B/op	   21043 allocs/op
+BenchmarkPlan/create/rules=10             	     100	   1212200 ns/op	 2084897 B/op	    8416 allocs/op
+BenchmarkPlan/create/rules=100            	       2	  82787021 ns/op	125044736 B/op	  437744 allocs/op
+BenchmarkConvergence/rules=4              	      94	   1403666 ns/op	 2413866 B/op	   10062 allocs/op
+BenchmarkConvergence/rules=10             	       3	  34892278 ns/op	44931922 B/op	  139791 allocs/op
+BenchmarkRisk/rules=10/mode=1             	   10000	     11508 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2             	   10000	     13551 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1            	    1039	    115843 ns/op	  179040 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2            	     901	    133561 ns/op	  220440 B/op	    2634 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=10/members=10         	    2899	     40995 ns/op	  128152 B/op	     420 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=100/members=100       	      24	   4794087 ns/op	13856552 B/op	   31100 allocs/op
+BenchmarkOptimize/adjacent/requests=10                      	   15543	      7720 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=100                     	     310	    388054 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/paired/requests=10                        	    7864	     15466 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=100                       	     100	   1164055 ns/op	 2403662 B/op	   15495 allocs/op
+BenchmarkParse/asa/rules=10                                 	     908	    131714 ns/op	  11.50 MB/s	  307115 B/op	    1824 allocs/op
+BenchmarkParse/asa/rules=100                                	     100	   1042589 ns/op	  12.76 MB/s	 2405251 B/op	   13724 allocs/op
+BenchmarkParse/asa/rules=1000                               	      10	  10956800 ns/op	  12.19 MB/s	25995652 B/op	  132787 allocs/op
+BenchmarkParse/fortinet/rules=10                            	     830	    144525 ns/op	  15.32 MB/s	  390052 B/op	    2225 allocs/op
+BenchmarkParse/fortinet/rules=100                           	      94	   1214662 ns/op	  16.57 MB/s	 3416739 B/op	   17886 allocs/op
+BenchmarkParse/fortinet/rules=1000                          	       8	  13982682 ns/op	  14.48 MB/s	43088008 B/op	  173822 allocs/op
+BenchmarkParse/hillstone/rules=10                           	     802	    148223 ns/op	   9.78 MB/s	  367491 B/op	    2064 allocs/op
+BenchmarkParse/hillstone/rules=100                          	      91	   1352527 ns/op	   9.19 MB/s	 3115594 B/op	   15936 allocs/op
+BenchmarkParse/hillstone/rules=1000                         	       7	  14814809 ns/op	   8.47 MB/s	37222027 B/op	  153845 allocs/op
+BenchmarkParse/huawei/rules=10                              	     975	    124356 ns/op	  19.15 MB/s	  338483 B/op	    1791 allocs/op
+BenchmarkParse/huawei/rules=100                             	     100	   1073627 ns/op	  19.32 MB/s	 2809652 B/op	   13686 allocs/op
+BenchmarkParse/huawei/rules=1000                            	       9	  12244718 ns/op	  16.96 MB/s	37408011 B/op	  131835 allocs/op
+BenchmarkParse/netscreen/rules=10                           	     715	    166715 ns/op	   7.94 MB/s	  299990 B/op	    2068 allocs/op
+BenchmarkParse/netscreen/rules=100                          	     100	   1437411 ns/op	   7.81 MB/s	 2180919 B/op	   14686 allocs/op
+BenchmarkParse/netscreen/rules=1000                         	       8	  14245833 ns/op	   7.97 MB/s	25271599 B/op	  141803 allocs/op
+BenchmarkParse/paloalto/rules=10                            	     616	    191889 ns/op	  22.42 MB/s	  400974 B/op	    2377 allocs/op
+BenchmarkParse/paloalto/rules=100                           	      75	   1691135 ns/op	  24.20 MB/s	 3355986 B/op	   19952 allocs/op
+BenchmarkParse/paloalto/rules=1000                          	       6	  17308097 ns/op	  24.03 MB/s	42292842 B/op	  194800 allocs/op
+BenchmarkParse/srx/rules=10                                 	     849	    142026 ns/op	  33.74 MB/s	  280821 B/op	    2196 allocs/op
+BenchmarkParse/srx/rules=100                                	     100	   1237864 ns/op	  36.23 MB/s	 2332042 B/op	   18299 allocs/op
+BenchmarkParse/srx/rules=1000                               	       8	  13329974 ns/op	  33.86 MB/s	28477415 B/op	  178696 allocs/op
+BenchmarkTraffic/union/ipv4/regions=16                      	   10000	     14031 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=16               	   15890	      7551 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=16                 	   10000	     11720 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv4/regions=128                     	     186	    679112 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=128              	     295	    407855 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=128                	     199	    601638 ns/op	   48976 B/op	       9 allocs/op
+BenchmarkTraffic/union/ipv6/regions=16                      	   10000	     14011 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=16               	   15937	      7538 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=16                 	   10000	     11880 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv6/regions=128                     	     186	    682635 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=128              	     288	    415940 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=128                	     198	    613596 ns/op	   48976 B/op	       9 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    2084	     60994 ns/op	 175.41 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     877	    137134 ns/op	  78.02 MB/s	  187288 B/op	    2234 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     422	    285398 ns/op	 216.05 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     177	    677733 ns/op	  90.98 MB/s	 1009250 B/op	    7203 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      48	   2505833 ns/op	 231.70 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6691800 ns/op	  86.76 MB/s	 9690968 B/op	   56743 allocs/op
+BenchmarkCaptureValidation/rules=10       	 6771786	        17.63 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCaptureValidation/rules=1000     	 6806949	        17.93 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRouteResolution/routes=10        	   30350	      3844 ns/op	    8288 B/op	     112 allocs/op
+BenchmarkRouteResolution/routes=1000      	     226	    533265 ns/op	 1111200 B/op	   10967 allocs/op
+BenchmarkQuery/asa/rules=10               	   16990	      7038 ns/op	   11960 B/op	     182 allocs/op
+BenchmarkQuery/asa/rules=100              	    1638	     67813 ns/op	  101960 B/op	    1628 allocs/op
+BenchmarkQuery/asa/rules=1000             	     157	    757840 ns/op	 1154776 B/op	   16039 allocs/op
+BenchmarkQuery/fortinet/rules=10          	   10000	     12765 ns/op	   21320 B/op	     331 allocs/op
+BenchmarkQuery/fortinet/rules=100         	     985	    117744 ns/op	  184600 B/op	    2953 allocs/op
+BenchmarkQuery/fortinet/rules=1000        	     100	   1336171 ns/op	 2009176 B/op	   29075 allocs/op
+BenchmarkQuery/hillstone/rules=10         	   10000	     10684 ns/op	   16664 B/op	     228 allocs/op
+BenchmarkQuery/hillstone/rules=100        	    1130	    105832 ns/op	  150584 B/op	    2124 allocs/op
+BenchmarkQuery/hillstone/rules=1000       	     100	   1168428 ns/op	 1642600 B/op	   21035 allocs/op
+BenchmarkQuery/huawei/rules=10            	   10000	     11118 ns/op	   17624 B/op	     228 allocs/op
+BenchmarkQuery/huawei/rules=100           	    1098	    107727 ns/op	  160184 B/op	    2124 allocs/op
+BenchmarkQuery/huawei/rules=1000          	     100	   1180167 ns/op	 1738600 B/op	   21035 allocs/op
+BenchmarkQuery/netscreen/rules=10         	   14960	      8032 ns/op	   13592 B/op	     231 allocs/op
+BenchmarkQuery/netscreen/rules=100        	    1561	     75458 ns/op	  116552 B/op	    2037 allocs/op
+BenchmarkQuery/netscreen/rules=1000       	     135	    885663 ns/op	 1298968 B/op	   20048 allocs/op
+BenchmarkQuery/paloalto/rules=10          	   10000	     10666 ns/op	   15032 B/op	     228 allocs/op
+BenchmarkQuery/paloalto/rules=100         	    1123	    104222 ns/op	  134552 B/op	    2124 allocs/op
+BenchmarkQuery/paloalto/rules=1000        	     105	   1137908 ns/op	 1482568 B/op	   21035 allocs/op
+BenchmarkQuery/srx/rules=10               	   10000	     10757 ns/op	   16056 B/op	     228 allocs/op
+BenchmarkQuery/srx/rules=100              	    1101	    104994 ns/op	  144216 B/op	    2124 allocs/op
+BenchmarkQuery/srx/rules=1000             	     104	   1134239 ns/op	 1578632 B/op	   21035 allocs/op
+BenchmarkNAT/huawei/rules=10              	    9414	     13549 ns/op	   24704 B/op	     314 allocs/op
+BenchmarkNAT/huawei/rules=100             	     901	    132052 ns/op	  225488 B/op	    2837 allocs/op
+BenchmarkNAT/huawei/rules=1000            	     100	   1362696 ns/op	 2202353 B/op	   28040 allocs/op
+BenchmarkPacket/huawei/rules=10           	    2768	     43089 ns/op	   72856 B/op	     914 allocs/op
+BenchmarkPacket/huawei/rules=100          	     321	    370595 ns/op	  560360 B/op	    7229 allocs/op
+BenchmarkPacket/huawei/rules=1000         	      32	   3696168 ns/op	 5708648 B/op	   70254 allocs/op
+BenchmarkPlan/reuse/rules=10              	   10000	     13478 ns/op	   19963 B/op	     236 allocs/op
+BenchmarkPlan/reuse/rules=100             	    1010	    113170 ns/op	  162529 B/op	    2132 allocs/op
+BenchmarkPlan/reuse/rules=1000            	      85	   1189960 ns/op	 1740980 B/op	   21043 allocs/op
+BenchmarkPlan/create/rules=10             	     100	   1202345 ns/op	 2084900 B/op	    8416 allocs/op
+BenchmarkPlan/create/rules=100            	       2	  77303770 ns/op	125044732 B/op	  437744 allocs/op
+BenchmarkConvergence/rules=4              	      87	   1409150 ns/op	 2413866 B/op	   10062 allocs/op
+BenchmarkConvergence/rules=10             	       3	  35026875 ns/op	44931922 B/op	  139791 allocs/op
+BenchmarkRisk/rules=10/mode=1             	   10000	     11507 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2             	   10000	     13439 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1            	    1036	    114286 ns/op	  179040 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2            	     914	    130886 ns/op	  220440 B/op	    2634 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=10/members=10         	    2884	     40717 ns/op	  128152 B/op	     420 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=100/members=100       	      26	   4444019 ns/op	13856552 B/op	   31100 allocs/op
+BenchmarkOptimize/adjacent/requests=10                      	   15338	      7762 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=100                     	     288	    404581 ns/op	  936601 B/op	     737 allocs/op
+BenchmarkOptimize/paired/requests=10                        	    7920	     15937 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=100                       	     100	   1172340 ns/op	 2403663 B/op	   15495 allocs/op
+BenchmarkParse/asa/rules=10                                 	     895	    134105 ns/op	  11.30 MB/s	  307115 B/op	    1824 allocs/op
+BenchmarkParse/asa/rules=100                                	     100	   1023563 ns/op	  13.00 MB/s	 2405245 B/op	   13724 allocs/op
+BenchmarkParse/asa/rules=1000                               	      10	  10556000 ns/op	  12.65 MB/s	25813754 B/op	  132778 allocs/op
+BenchmarkParse/fortinet/rules=10                            	     831	    142849 ns/op	  15.50 MB/s	  390052 B/op	    2225 allocs/op
+BenchmarkParse/fortinet/rules=100                           	      93	   1214181 ns/op	  16.57 MB/s	 3416780 B/op	   17886 allocs/op
+BenchmarkParse/fortinet/rules=1000                          	       7	  14425929 ns/op	  14.04 MB/s	43530242 B/op	  173825 allocs/op
+BenchmarkParse/hillstone/rules=10                           	     806	    151592 ns/op	   9.57 MB/s	  367491 B/op	    2064 allocs/op
+BenchmarkParse/hillstone/rules=100                          	      92	   1333024 ns/op	   9.33 MB/s	 3115504 B/op	   15936 allocs/op
+BenchmarkParse/hillstone/rules=1000                         	       7	  14994143 ns/op	   8.37 MB/s	37811733 B/op	  153850 allocs/op
+BenchmarkParse/huawei/rules=10                              	     967	    124462 ns/op	  19.13 MB/s	  338484 B/op	    1791 allocs/op
+BenchmarkParse/huawei/rules=100                             	     100	   1064401 ns/op	  19.49 MB/s	 2809656 B/op	   13686 allocs/op
+BenchmarkParse/huawei/rules=1000                            	       9	  11952338 ns/op	  17.37 MB/s	37407994 B/op	  131835 allocs/op
+BenchmarkParse/netscreen/rules=10                           	     724	    165559 ns/op	   8.00 MB/s	  299990 B/op	    2068 allocs/op
+BenchmarkParse/netscreen/rules=100                          	     100	   1499602 ns/op	   7.49 MB/s	 2180919 B/op	   14686 allocs/op
+BenchmarkParse/netscreen/rules=1000                         	       8	  13212406 ns/op	   8.59 MB/s	25385242 B/op	  141809 allocs/op
+BenchmarkParse/paloalto/rules=10                            	     621	    188609 ns/op	  22.81 MB/s	  400974 B/op	    2377 allocs/op
+BenchmarkParse/paloalto/rules=100                           	      75	   1676073 ns/op	  24.42 MB/s	 3345750 B/op	   19952 allocs/op
+BenchmarkParse/paloalto/rules=1000                          	       6	  18161181 ns/op	  22.90 MB/s	40916658 B/op	  194785 allocs/op
+BenchmarkParse/srx/rules=10                                 	     867	    138200 ns/op	  34.67 MB/s	  280820 B/op	    2196 allocs/op
+BenchmarkParse/srx/rules=100                                	     100	   1225490 ns/op	  36.59 MB/s	 2332036 B/op	   18299 allocs/op
+BenchmarkParse/srx/rules=1000                               	       8	  12716021 ns/op	  35.49 MB/s	28993403 B/op	  178701 allocs/op
+BenchmarkTraffic/union/ipv4/regions=16                      	   10000	     14953 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=16               	   14136	      8183 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=16                 	   10000	     12189 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv4/regions=128                     	     163	    741222 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=128              	     291	    417982 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=128                	     195	    620740 ns/op	   48976 B/op	       9 allocs/op
+BenchmarkTraffic/union/ipv6/regions=16                      	   10000	     14062 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=16               	   15945	      7529 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=16                 	   10000	     12308 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv6/regions=128                     	     168	    723158 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=128              	     291	    411657 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=128                	     201	    626319 ns/op	   48976 B/op	       9 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    2088	     61885 ns/op	 172.88 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     864	    135921 ns/op	  78.71 MB/s	  187289 B/op	    2234 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     414	    289057 ns/op	 213.31 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     182	    657176 ns/op	  93.83 MB/s	 1009189 B/op	    7203 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      48	   2499792 ns/op	 232.26 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6531018 ns/op	  88.90 MB/s	 9948963 B/op	   56746 allocs/op
+BenchmarkCaptureValidation/rules=10       	 6651331	        18.02 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCaptureValidation/rules=1000     	 6520572	        18.64 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRouteResolution/routes=10        	   31770	      3761 ns/op	    8288 B/op	     112 allocs/op
+BenchmarkRouteResolution/routes=1000      	     225	    532270 ns/op	 1111200 B/op	   10967 allocs/op
+BenchmarkQuery/asa/rules=10               	   16586	      7211 ns/op	   11960 B/op	     182 allocs/op
+BenchmarkQuery/asa/rules=100              	    1597	     69257 ns/op	  101960 B/op	    1628 allocs/op
+BenchmarkQuery/asa/rules=1000             	     153	    776734 ns/op	 1154776 B/op	   16039 allocs/op
+BenchmarkQuery/fortinet/rules=10          	   10000	     13005 ns/op	   21320 B/op	     331 allocs/op
+BenchmarkQuery/fortinet/rules=100         	     997	    120220 ns/op	  184600 B/op	    2953 allocs/op
+BenchmarkQuery/fortinet/rules=1000        	     100	   1360941 ns/op	 2009176 B/op	   29075 allocs/op
+BenchmarkQuery/hillstone/rules=10         	   10000	     11044 ns/op	   16664 B/op	     228 allocs/op
+BenchmarkQuery/hillstone/rules=100        	    1140	    105544 ns/op	  150584 B/op	    2124 allocs/op
+BenchmarkQuery/hillstone/rules=1000       	     100	   1144367 ns/op	 1642600 B/op	   21035 allocs/op
+BenchmarkQuery/huawei/rules=10            	   10000	     10937 ns/op	   17624 B/op	     228 allocs/op
+BenchmarkQuery/huawei/rules=100           	    1110	    108363 ns/op	  160184 B/op	    2124 allocs/op
+BenchmarkQuery/huawei/rules=1000          	     100	   1195649 ns/op	 1738600 B/op	   21035 allocs/op
+BenchmarkQuery/netscreen/rules=10         	   14359	      8377 ns/op	   13592 B/op	     231 allocs/op
+BenchmarkQuery/netscreen/rules=100        	    1477	     78455 ns/op	  116552 B/op	    2037 allocs/op
+BenchmarkQuery/netscreen/rules=1000       	     140	    860104 ns/op	 1298968 B/op	   20048 allocs/op
+BenchmarkQuery/paloalto/rules=10          	   10000	     10651 ns/op	   15032 B/op	     228 allocs/op
+BenchmarkQuery/paloalto/rules=100         	    1116	    106466 ns/op	  134552 B/op	    2124 allocs/op
+BenchmarkQuery/paloalto/rules=1000        	      94	   1162356 ns/op	 1482568 B/op	   21035 allocs/op
+BenchmarkQuery/srx/rules=10               	   10000	     10960 ns/op	   16056 B/op	     228 allocs/op
+BenchmarkQuery/srx/rules=100              	    1096	    108562 ns/op	  144216 B/op	    2124 allocs/op
+BenchmarkQuery/srx/rules=1000             	      99	   1172293 ns/op	 1578632 B/op	   21035 allocs/op
+BenchmarkNAT/huawei/rules=10              	    8923	     14102 ns/op	   24704 B/op	     314 allocs/op
+BenchmarkNAT/huawei/rules=100             	     858	    134275 ns/op	  225488 B/op	    2837 allocs/op
+BenchmarkNAT/huawei/rules=1000            	      85	   1361530 ns/op	 2202353 B/op	   28040 allocs/op
+BenchmarkPacket/huawei/rules=10           	    2842	     42664 ns/op	   72856 B/op	     914 allocs/op
+BenchmarkPacket/huawei/rules=100          	     322	    369080 ns/op	  560360 B/op	    7229 allocs/op
+BenchmarkPacket/huawei/rules=1000         	      28	   3689985 ns/op	 5708648 B/op	   70254 allocs/op
+BenchmarkPlan/reuse/rules=10              	   10000	     13351 ns/op	   19963 B/op	     236 allocs/op
+BenchmarkPlan/reuse/rules=100             	    1072	    110934 ns/op	  162529 B/op	    2132 allocs/op
+BenchmarkPlan/reuse/rules=1000            	      99	   1196452 ns/op	 1740980 B/op	   21043 allocs/op
+BenchmarkPlan/create/rules=10             	     100	   1203997 ns/op	 2084900 B/op	    8416 allocs/op
+BenchmarkPlan/create/rules=100            	       2	  79450875 ns/op	125044668 B/op	  437743 allocs/op
+BenchmarkConvergence/rules=4              	      96	   1386178 ns/op	 2413863 B/op	   10062 allocs/op
+BenchmarkConvergence/rules=10             	       3	  36093722 ns/op	44931922 B/op	  139791 allocs/op
+BenchmarkRisk/rules=10/mode=1             	   10000	     11433 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2             	   10000	     13501 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1            	    1042	    114734 ns/op	  179040 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2            	     909	    131361 ns/op	  220440 B/op	    2634 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=10/members=10         	    2940	     40815 ns/op	  128152 B/op	     420 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=100/members=100       	      24	   4588998 ns/op	13856552 B/op	   31100 allocs/op
+BenchmarkOptimize/adjacent/requests=10                      	   15103	      7833 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=100                     	     302	    391268 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/paired/requests=10                        	    8144	     15529 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=100                       	     100	   1189938 ns/op	 2403663 B/op	   15495 allocs/op
+BenchmarkParse/asa/rules=10                                 	     882	    133746 ns/op	  11.33 MB/s	  307115 B/op	    1824 allocs/op
+BenchmarkParse/asa/rules=100                                	     100	   1023765 ns/op	  13.00 MB/s	 2405248 B/op	   13724 allocs/op
+BenchmarkParse/asa/rules=1000                               	      10	  10655400 ns/op	  12.54 MB/s	26177174 B/op	  132791 allocs/op
+BenchmarkParse/fortinet/rules=10                            	     834	    144681 ns/op	  15.30 MB/s	  390052 B/op	    2225 allocs/op
+BenchmarkParse/fortinet/rules=100                           	      90	   1206285 ns/op	  16.68 MB/s	 3416900 B/op	   17886 allocs/op
+BenchmarkParse/fortinet/rules=1000                          	       8	  13486005 ns/op	  15.02 MB/s	43087759 B/op	  173819 allocs/op
+BenchmarkParse/hillstone/rules=10                           	     799	    148893 ns/op	   9.74 MB/s	  367491 B/op	    2064 allocs/op
+BenchmarkParse/hillstone/rules=100                          	      93	   1335198 ns/op	   9.31 MB/s	 3119542 B/op	   15937 allocs/op
+BenchmarkParse/hillstone/rules=1000                         	       7	  14858792 ns/op	   8.45 MB/s	38991242 B/op	  153862 allocs/op
+BenchmarkParse/huawei/rules=10                              	     961	    124776 ns/op	  19.08 MB/s	  338484 B/op	    1791 allocs/op
+BenchmarkParse/huawei/rules=100                             	     100	   1041575 ns/op	  19.91 MB/s	 2809654 B/op	   13686 allocs/op
+BenchmarkParse/huawei/rules=1000                            	       9	  12163269 ns/op	  17.07 MB/s	37407994 B/op	  131835 allocs/op
+BenchmarkParse/netscreen/rules=10                           	     711	    168528 ns/op	   7.86 MB/s	  299990 B/op	    2068 allocs/op
+BenchmarkParse/netscreen/rules=100                          	     100	   1356357 ns/op	   8.28 MB/s	 2180917 B/op	   14686 allocs/op
+BenchmarkParse/netscreen/rules=1000                         	       8	  13976417 ns/op	   8.12 MB/s	23610020 B/op	  141785 allocs/op
+BenchmarkParse/paloalto/rules=10                            	     627	    190328 ns/op	  22.61 MB/s	  400973 B/op	    2377 allocs/op
+BenchmarkParse/paloalto/rules=100                           	      76	   1638924 ns/op	  24.98 MB/s	 3375732 B/op	   19954 allocs/op
+BenchmarkParse/paloalto/rules=1000                          	       6	  18092798 ns/op	  22.99 MB/s	42980785 B/op	  194806 allocs/op
+BenchmarkParse/srx/rules=10                                 	     878	    135766 ns/op	  35.30 MB/s	  280819 B/op	    2196 allocs/op
+BenchmarkParse/srx/rules=100                                	     100	   1187395 ns/op	  37.77 MB/s	 2332040 B/op	   18299 allocs/op
+BenchmarkParse/srx/rules=1000                               	       8	  13143557 ns/op	  34.34 MB/s	27961215 B/op	  178689 allocs/op
+BenchmarkTraffic/union/ipv4/regions=16                      	   10000	     13771 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=16               	   16342	      7334 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=16                 	   10000	     11829 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv4/regions=128                     	     169	    716197 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=128              	     292	    409753 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=128                	     200	    629309 ns/op	   48976 B/op	       9 allocs/op
+BenchmarkTraffic/union/ipv6/regions=16                      	   10000	     13918 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=16               	   15975	      7590 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=16                 	   10000	     12540 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv6/regions=128                     	     166	    730020 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=128              	     289	    418091 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=128                	     206	    614953 ns/op	   48976 B/op	       9 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    2100	     61447 ns/op	 174.12 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     844	    140093 ns/op	  76.37 MB/s	  187290 B/op	    2234 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     427	    279555 ns/op	 220.56 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     184	    652574 ns/op	  94.49 MB/s	 1009167 B/op	    7203 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      45	   2469762 ns/op	 235.09 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6570896 ns/op	  88.36 MB/s	 9690977 B/op	   56743 allocs/op
+BenchmarkCaptureValidation/rules=10       	 6790082	        18.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCaptureValidation/rules=1000     	 6706142	        18.04 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRouteResolution/routes=10        	   30912	      3859 ns/op	    8288 B/op	     112 allocs/op
+BenchmarkRouteResolution/routes=1000      	     204	    565195 ns/op	 1111200 B/op	   10967 allocs/op
+BenchmarkQuery/asa/rules=10               	   16896	      7115 ns/op	   11960 B/op	     182 allocs/op
+BenchmarkQuery/asa/rules=100              	    1611	     69083 ns/op	  101960 B/op	    1628 allocs/op
+BenchmarkQuery/asa/rules=1000             	     147	    809343 ns/op	 1154776 B/op	   16039 allocs/op
+BenchmarkQuery/fortinet/rules=10          	   10000	     12910 ns/op	   21320 B/op	     331 allocs/op
+BenchmarkQuery/fortinet/rules=100         	    1018	    116817 ns/op	  184600 B/op	    2953 allocs/op
+BenchmarkQuery/fortinet/rules=1000        	     100	   1337735 ns/op	 2009176 B/op	   29075 allocs/op
+BenchmarkQuery/hillstone/rules=10         	   10000	     10614 ns/op	   16664 B/op	     228 allocs/op
+BenchmarkQuery/hillstone/rules=100        	    1136	    105149 ns/op	  150584 B/op	    2124 allocs/op
+BenchmarkQuery/hillstone/rules=1000       	     100	   1224592 ns/op	 1642600 B/op	   21035 allocs/op
+BenchmarkQuery/huawei/rules=10            	   10000	     11141 ns/op	   17624 B/op	     228 allocs/op
+BenchmarkQuery/huawei/rules=100           	    1054	    107768 ns/op	  160184 B/op	    2124 allocs/op
+BenchmarkQuery/huawei/rules=1000          	     100	   1182723 ns/op	 1738600 B/op	   21035 allocs/op
+BenchmarkQuery/netscreen/rules=10         	   14420	      8357 ns/op	   13592 B/op	     231 allocs/op
+BenchmarkQuery/netscreen/rules=100        	    1514	     78472 ns/op	  116552 B/op	    2037 allocs/op
+BenchmarkQuery/netscreen/rules=1000       	     134	    888387 ns/op	 1298968 B/op	   20048 allocs/op
+BenchmarkQuery/paloalto/rules=10          	   10000	     10884 ns/op	   15032 B/op	     228 allocs/op
+BenchmarkQuery/paloalto/rules=100         	    1108	    104508 ns/op	  134552 B/op	    2124 allocs/op
+BenchmarkQuery/paloalto/rules=1000        	     100	   1143505 ns/op	 1482568 B/op	   21035 allocs/op
+BenchmarkQuery/srx/rules=10               	   10000	     10625 ns/op	   16056 B/op	     228 allocs/op
+BenchmarkQuery/srx/rules=100              	    1137	    105034 ns/op	  144216 B/op	    2124 allocs/op
+BenchmarkQuery/srx/rules=1000             	     104	   1130587 ns/op	 1578632 B/op	   21035 allocs/op
+BenchmarkNAT/huawei/rules=10              	    9510	     13691 ns/op	   24704 B/op	     314 allocs/op
+BenchmarkNAT/huawei/rules=100             	     865	    135111 ns/op	  225488 B/op	    2837 allocs/op
+BenchmarkNAT/huawei/rules=1000            	      74	   1361773 ns/op	 2202353 B/op	   28040 allocs/op
+BenchmarkPacket/huawei/rules=10           	    2802	     42586 ns/op	   72856 B/op	     914 allocs/op
+BenchmarkPacket/huawei/rules=100          	     322	    375693 ns/op	  560360 B/op	    7229 allocs/op
+BenchmarkPacket/huawei/rules=1000         	      31	   3750792 ns/op	 5708648 B/op	   70254 allocs/op
+BenchmarkPlan/reuse/rules=10              	   10000	     13293 ns/op	   19963 B/op	     236 allocs/op
+BenchmarkPlan/reuse/rules=100             	    1058	    110415 ns/op	  162529 B/op	    2132 allocs/op
+BenchmarkPlan/reuse/rules=1000            	      87	   1175588 ns/op	 1740982 B/op	   21043 allocs/op
+BenchmarkPlan/create/rules=10             	     100	   1250998 ns/op	 2084898 B/op	    8416 allocs/op
+BenchmarkPlan/create/rules=100            	       2	  85225167 ns/op	125044804 B/op	  437745 allocs/op
+BenchmarkConvergence/rules=4              	      92	   1400608 ns/op	 2413865 B/op	   10062 allocs/op
+BenchmarkConvergence/rules=10             	       3	  36471750 ns/op	44931928 B/op	  139791 allocs/op
+BenchmarkRisk/rules=10/mode=1             	   10000	     11392 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2             	   10000	     13642 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1            	    1042	    113831 ns/op	  179040 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2            	     925	    130615 ns/op	  220440 B/op	    2634 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=10/members=10         	    2929	     40469 ns/op	  128152 B/op	     420 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=100/members=100       	      22	   4722924 ns/op	13856552 B/op	   31100 allocs/op
+BenchmarkOptimize/adjacent/requests=10                      	   15332	      7835 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=100                     	     301	    399140 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/paired/requests=10                        	    8029	     15760 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=100                       	     100	   1179968 ns/op	 2403663 B/op	   15495 allocs/op
+BenchmarkParse/asa/rules=10                                 	     850	    137007 ns/op	  11.06 MB/s	  307115 B/op	    1824 allocs/op
+BenchmarkParse/asa/rules=100                                	     100	   1052285 ns/op	  12.64 MB/s	 2405245 B/op	   13724 allocs/op
+BenchmarkParse/asa/rules=1000                               	       9	  11192185 ns/op	  11.93 MB/s	25854306 B/op	  132781 allocs/op
+BenchmarkParse/fortinet/rules=10                            	     730	    147959 ns/op	  14.96 MB/s	  390060 B/op	    2225 allocs/op
+BenchmarkParse/fortinet/rules=100                           	      94	   1198071 ns/op	  16.80 MB/s	 3416741 B/op	   17886 allocs/op
+BenchmarkParse/fortinet/rules=1000                          	       8	  13523677 ns/op	  14.97 MB/s	43603887 B/op	  173826 allocs/op
+BenchmarkParse/hillstone/rules=10                           	     811	    146855 ns/op	   9.87 MB/s	  367491 B/op	    2064 allocs/op
+BenchmarkParse/hillstone/rules=100                          	      91	   1328854 ns/op	   9.35 MB/s	 3132473 B/op	   15938 allocs/op
+BenchmarkParse/hillstone/rules=1000                         	       7	  15388911 ns/op	   8.16 MB/s	38401484 B/op	  153856 allocs/op
+BenchmarkParse/huawei/rules=10                              	     951	    128577 ns/op	  18.52 MB/s	  338484 B/op	    1791 allocs/op
+BenchmarkParse/huawei/rules=100                             	     100	   1098896 ns/op	  18.87 MB/s	 2809654 B/op	   13686 allocs/op
+BenchmarkParse/huawei/rules=1000                            	       9	  12539231 ns/op	  16.56 MB/s	36949149 B/op	  131828 allocs/op
+BenchmarkParse/netscreen/rules=10                           	     715	    164922 ns/op	   8.03 MB/s	  299990 B/op	    2068 allocs/op
+BenchmarkParse/netscreen/rules=100                          	     100	   1475766 ns/op	   7.61 MB/s	 2180919 B/op	   14686 allocs/op
+BenchmarkParse/netscreen/rules=1000                         	       8	  13450969 ns/op	   8.44 MB/s	24126108 B/op	  141791 allocs/op
+BenchmarkParse/paloalto/rules=10                            	     644	    187510 ns/op	  22.95 MB/s	  400972 B/op	    2377 allocs/op
+BenchmarkParse/paloalto/rules=100                           	      79	   1654069 ns/op	  24.75 MB/s	 3378476 B/op	   19954 allocs/op
+BenchmarkParse/paloalto/rules=1000                          	       6	  18515389 ns/op	  22.46 MB/s	42292757 B/op	  194799 allocs/op
+BenchmarkParse/srx/rules=10                                 	     877	    135278 ns/op	  35.42 MB/s	  280819 B/op	    2196 allocs/op
+BenchmarkParse/srx/rules=100                                	     100	   1352263 ns/op	  33.16 MB/s	 2332041 B/op	   18299 allocs/op
+BenchmarkParse/srx/rules=1000                               	       8	  13497901 ns/op	  33.44 MB/s	27961243 B/op	  178690 allocs/op
+BenchmarkTraffic/union/ipv4/regions=16                      	   10000	     14105 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=16               	   16130	      7422 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=16                 	   10000	     11966 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv4/regions=128                     	     164	    733857 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=128              	     284	    415375 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=128                	     199	    618785 ns/op	   48976 B/op	       9 allocs/op
+BenchmarkTraffic/union/ipv6/regions=16                      	   10000	     14026 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=16               	   15860	      7570 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=16                 	   10000	     11870 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv6/regions=128                     	     170	    716421 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=128              	     288	    419271 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=128                	     195	    644614 ns/op	   48976 B/op	       9 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    2049	     65113 ns/op	 164.31 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     769	    151706 ns/op	  70.52 MB/s	  187296 B/op	    2234 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     355	    313634 ns/op	 196.60 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     150	    758188 ns/op	  81.33 MB/s	 1009640 B/op	    7203 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      44	   2660997 ns/op	 218.19 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      15	   6939150 ns/op	  83.67 MB/s	10017779 B/op	   56746 allocs/op
+BenchmarkCaptureValidation/rules=10       	 6625822	        18.22 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCaptureValidation/rules=1000     	 6689614	        17.95 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRouteResolution/routes=10        	   29359	      3968 ns/op	    8288 B/op	     112 allocs/op
+BenchmarkRouteResolution/routes=1000      	     213	    553966 ns/op	 1111200 B/op	   10967 allocs/op
+BenchmarkQuery/asa/rules=10               	   15591	      8124 ns/op	   11960 B/op	     182 allocs/op
+BenchmarkQuery/asa/rules=100              	    1522	     71530 ns/op	  101960 B/op	    1628 allocs/op
+BenchmarkQuery/asa/rules=1000             	     141	    848414 ns/op	 1154776 B/op	   16039 allocs/op
+BenchmarkQuery/fortinet/rules=10          	   10000	     14225 ns/op	   21320 B/op	     331 allocs/op
+BenchmarkQuery/fortinet/rules=100         	     913	    129212 ns/op	  184600 B/op	    2953 allocs/op
+BenchmarkQuery/fortinet/rules=1000        	      99	   1410987 ns/op	 2009176 B/op	   29075 allocs/op
+BenchmarkQuery/hillstone/rules=10         	   10000	     11083 ns/op	   16664 B/op	     228 allocs/op
+BenchmarkQuery/hillstone/rules=100        	    1114	    106052 ns/op	  150584 B/op	    2124 allocs/op
+BenchmarkQuery/hillstone/rules=1000       	     100	   1189644 ns/op	 1642600 B/op	   21035 allocs/op
+BenchmarkQuery/huawei/rules=10            	   10000	     11112 ns/op	   17624 B/op	     228 allocs/op
+BenchmarkQuery/huawei/rules=100           	    1093	    107550 ns/op	  160184 B/op	    2124 allocs/op
+BenchmarkQuery/huawei/rules=1000          	     100	   1198812 ns/op	 1738600 B/op	   21035 allocs/op
+BenchmarkQuery/netscreen/rules=10         	   14538	      8193 ns/op	   13592 B/op	     231 allocs/op
+BenchmarkQuery/netscreen/rules=100        	    1560	     75332 ns/op	  116552 B/op	    2037 allocs/op
+BenchmarkQuery/netscreen/rules=1000       	     136	    868591 ns/op	 1298968 B/op	   20048 allocs/op
+BenchmarkQuery/paloalto/rules=10          	   10000	     10507 ns/op	   15032 B/op	     228 allocs/op
+BenchmarkQuery/paloalto/rules=100         	    1125	    106728 ns/op	  134552 B/op	    2124 allocs/op
+BenchmarkQuery/paloalto/rules=1000        	     103	   1169641 ns/op	 1482568 B/op	   21035 allocs/op
+BenchmarkQuery/srx/rules=10               	   10000	     10988 ns/op	   16056 B/op	     228 allocs/op
+BenchmarkQuery/srx/rules=100              	    1093	    106930 ns/op	  144216 B/op	    2124 allocs/op
+BenchmarkQuery/srx/rules=1000             	     104	   1146740 ns/op	 1578632 B/op	   21035 allocs/op
+BenchmarkNAT/huawei/rules=10              	   10000	     13684 ns/op	   24704 B/op	     314 allocs/op
+BenchmarkNAT/huawei/rules=100             	     775	    141390 ns/op	  225488 B/op	    2837 allocs/op
+BenchmarkNAT/huawei/rules=1000            	     100	   1357355 ns/op	 2202353 B/op	   28040 allocs/op
+BenchmarkPacket/huawei/rules=10           	    2770	     44467 ns/op	   72856 B/op	     914 allocs/op
+BenchmarkPacket/huawei/rules=100          	     313	    379671 ns/op	  560360 B/op	    7229 allocs/op
+BenchmarkPacket/huawei/rules=1000         	      38	   3794419 ns/op	 5708648 B/op	   70254 allocs/op
+BenchmarkPlan/reuse/rules=10              	   10000	     13666 ns/op	   19962 B/op	     236 allocs/op
+BenchmarkPlan/reuse/rules=100             	    1020	    113884 ns/op	  162529 B/op	    2132 allocs/op
+BenchmarkPlan/reuse/rules=1000            	      86	   1174066 ns/op	 1740979 B/op	   21043 allocs/op
+BenchmarkPlan/create/rules=10             	     100	   1204742 ns/op	 2084898 B/op	    8416 allocs/op
+BenchmarkPlan/create/rules=100            	       2	  83664416 ns/op	125044532 B/op	  437741 allocs/op
+BenchmarkConvergence/rules=4              	      92	   1456617 ns/op	 2413867 B/op	   10062 allocs/op
+BenchmarkConvergence/rules=10             	       3	  37701305 ns/op	44931928 B/op	  139791 allocs/op
+BenchmarkRisk/rules=10/mode=1             	   10000	     12025 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2             	    9700	     14180 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1            	     992	    120712 ns/op	  179040 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2            	     888	    131223 ns/op	  220440 B/op	    2634 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=10/members=10         	    2887	     40537 ns/op	  128152 B/op	     420 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=100/members=100       	      24	   4240132 ns/op	13856552 B/op	   31100 allocs/op
+BenchmarkOptimize/adjacent/requests=10                      	   14985	      7939 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=100                     	     302	    397841 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/paired/requests=10                        	    7724	     15855 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=100                       	     100	   1166093 ns/op	 2403663 B/op	   15495 allocs/op
+BenchmarkParse/asa/rules=10                                 	     904	    133509 ns/op	  11.35 MB/s	  307115 B/op	    1824 allocs/op
+BenchmarkParse/asa/rules=100                                	     100	   1024569 ns/op	  12.99 MB/s	 2405245 B/op	   13724 allocs/op
+BenchmarkParse/asa/rules=1000                               	       9	  11374843 ns/op	  11.74 MB/s	25955248 B/op	  132785 allocs/op
+BenchmarkParse/fortinet/rules=10                            	     810	    145169 ns/op	  15.25 MB/s	  390053 B/op	    2225 allocs/op
+BenchmarkParse/fortinet/rules=100                           	      94	   1253243 ns/op	  16.06 MB/s	 3416741 B/op	   17886 allocs/op
+BenchmarkParse/fortinet/rules=1000                          	       8	  14308214 ns/op	  14.15 MB/s	43603915 B/op	  173826 allocs/op
+BenchmarkParse/hillstone/rules=10                           	     804	    147959 ns/op	   9.80 MB/s	  367491 B/op	    2064 allocs/op
+BenchmarkParse/hillstone/rules=100                          	      94	   1331088 ns/op	   9.34 MB/s	 3119412 B/op	   15937 allocs/op
+BenchmarkParse/hillstone/rules=1000                         	       7	  14763601 ns/op	   8.50 MB/s	37811638 B/op	  153849 allocs/op
+BenchmarkParse/huawei/rules=10                              	     970	    124257 ns/op	  19.16 MB/s	  338484 B/op	    1791 allocs/op
+BenchmarkParse/huawei/rules=100                             	     100	   1053991 ns/op	  19.68 MB/s	 2809649 B/op	   13686 allocs/op
+BenchmarkParse/huawei/rules=1000                            	       9	  12211449 ns/op	  17.00 MB/s	37408009 B/op	  131835 allocs/op
+BenchmarkParse/netscreen/rules=10                           	     709	    166601 ns/op	   7.95 MB/s	  299991 B/op	    2068 allocs/op
+BenchmarkParse/netscreen/rules=100                          	     100	   1551121 ns/op	   7.24 MB/s	 2180919 B/op	   14686 allocs/op
+BenchmarkParse/netscreen/rules=1000                         	       8	  13504568 ns/op	   8.40 MB/s	24755626 B/op	  141799 allocs/op
+BenchmarkParse/paloalto/rules=10                            	     618	    201262 ns/op	  21.38 MB/s	  400974 B/op	    2377 allocs/op
+BenchmarkParse/paloalto/rules=100                           	      75	   1658826 ns/op	  24.68 MB/s	 3355986 B/op	   19952 allocs/op
+BenchmarkParse/paloalto/rules=1000                          	       6	  18051375 ns/op	  23.04 MB/s	42292781 B/op	  194799 allocs/op
+BenchmarkParse/srx/rules=10                                 	     804	    139849 ns/op	  34.27 MB/s	  280824 B/op	    2196 allocs/op
+BenchmarkParse/srx/rules=100                                	     100	   1210828 ns/op	  37.03 MB/s	 2332042 B/op	   18299 allocs/op
+BenchmarkParse/srx/rules=1000                               	       8	  13119104 ns/op	  34.40 MB/s	27961221 B/op	  178689 allocs/op
+BenchmarkTraffic/union/ipv4/regions=16                      	   10000	     14155 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=16               	   15811	      7601 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=16                 	   10000	     12153 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv4/regions=128                     	     182	    690911 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=128              	     295	    408766 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=128                	     210	    598529 ns/op	   48976 B/op	       9 allocs/op
+BenchmarkTraffic/union/ipv6/regions=16                      	   10000	     14456 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=16               	   14976	      8018 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=16                 	   10000	     12731 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv6/regions=128                     	     166	    735951 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=128              	     276	    424729 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=128                	     201	    626966 ns/op	   48976 B/op	       9 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkSnapshot/encode/rules=10         	    2013	     62063 ns/op	 172.39 MB/s	   75416 B/op	     238 allocs/op
+BenchmarkSnapshot/decode/rules=10         	     852	    137274 ns/op	  77.94 MB/s	  187290 B/op	    2234 allocs/op
+BenchmarkSnapshot/encode/rules=100        	     414	    291356 ns/op	 211.63 MB/s	  475593 B/op	    1229 allocs/op
+BenchmarkSnapshot/decode/rules=100        	     175	    683423 ns/op	  90.22 MB/s	 1009274 B/op	    7203 allocs/op
+BenchmarkSnapshot/encode/rules=1000       	      45	   2585732 ns/op	 224.54 MB/s	 4612012 B/op	   11130 allocs/op
+BenchmarkSnapshot/decode/rules=1000       	      16	   6526646 ns/op	  88.96 MB/s	 9690977 B/op	   56743 allocs/op
+BenchmarkCaptureValidation/rules=10       	 6676650	        17.68 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCaptureValidation/rules=1000     	 6770224	        17.73 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRouteResolution/routes=10        	   31093	      3854 ns/op	    8288 B/op	     112 allocs/op
+BenchmarkRouteResolution/routes=1000      	     223	    531923 ns/op	 1111200 B/op	   10967 allocs/op
+BenchmarkQuery/asa/rules=10               	   16738	      7193 ns/op	   11960 B/op	     182 allocs/op
+BenchmarkQuery/asa/rules=100              	    1644	     69242 ns/op	  101960 B/op	    1628 allocs/op
+BenchmarkQuery/asa/rules=1000             	     154	    774159 ns/op	 1154776 B/op	   16039 allocs/op
+BenchmarkQuery/fortinet/rules=10          	   10000	     12901 ns/op	   21320 B/op	     331 allocs/op
+BenchmarkQuery/fortinet/rules=100         	     982	    121203 ns/op	  184600 B/op	    2953 allocs/op
+BenchmarkQuery/fortinet/rules=1000        	     100	   1378890 ns/op	 2009176 B/op	   29075 allocs/op
+BenchmarkQuery/hillstone/rules=10         	   10000	     13578 ns/op	   16664 B/op	     228 allocs/op
+BenchmarkQuery/hillstone/rules=100        	    1000	    114974 ns/op	  150584 B/op	    2124 allocs/op
+BenchmarkQuery/hillstone/rules=1000       	     100	   1325903 ns/op	 1642600 B/op	   21035 allocs/op
+BenchmarkQuery/huawei/rules=10            	   10000	     11125 ns/op	   17624 B/op	     228 allocs/op
+BenchmarkQuery/huawei/rules=100           	    1099	    108781 ns/op	  160184 B/op	    2124 allocs/op
+BenchmarkQuery/huawei/rules=1000          	     100	   1220411 ns/op	 1738600 B/op	   21035 allocs/op
+BenchmarkQuery/netscreen/rules=10         	   14306	      8385 ns/op	   13592 B/op	     231 allocs/op
+BenchmarkQuery/netscreen/rules=100        	    1298	     78107 ns/op	  116552 B/op	    2037 allocs/op
+BenchmarkQuery/netscreen/rules=1000       	     133	    904055 ns/op	 1298968 B/op	   20048 allocs/op
+BenchmarkQuery/paloalto/rules=10          	   10000	     10967 ns/op	   15032 B/op	     228 allocs/op
+BenchmarkQuery/paloalto/rules=100         	    1092	    108376 ns/op	  134552 B/op	    2124 allocs/op
+BenchmarkQuery/paloalto/rules=1000        	      87	   1171410 ns/op	 1482568 B/op	   21035 allocs/op
+BenchmarkQuery/srx/rules=10               	   10000	     10908 ns/op	   16056 B/op	     228 allocs/op
+BenchmarkQuery/srx/rules=100              	    1087	    123210 ns/op	  144216 B/op	    2124 allocs/op
+BenchmarkQuery/srx/rules=1000             	      62	   2125946 ns/op	 1578632 B/op	   21035 allocs/op
+BenchmarkNAT/huawei/rules=10              	    7135	     14845 ns/op	   24704 B/op	     314 allocs/op
+BenchmarkNAT/huawei/rules=100             	     835	    144955 ns/op	  225488 B/op	    2837 allocs/op
+BenchmarkNAT/huawei/rules=1000            	     100	   1436107 ns/op	 2202353 B/op	   28040 allocs/op
+BenchmarkPacket/huawei/rules=10           	    2715	     44803 ns/op	   72856 B/op	     914 allocs/op
+BenchmarkPacket/huawei/rules=100          	     304	    384250 ns/op	  560360 B/op	    7229 allocs/op
+BenchmarkPacket/huawei/rules=1000         	      36	   3939188 ns/op	 5708648 B/op	   70254 allocs/op
+BenchmarkPlan/reuse/rules=10              	   10000	     13508 ns/op	   19963 B/op	     236 allocs/op
+BenchmarkPlan/reuse/rules=100             	    1051	    113610 ns/op	  162529 B/op	    2132 allocs/op
+BenchmarkPlan/reuse/rules=1000            	     100	   1184396 ns/op	 1740984 B/op	   21043 allocs/op
+BenchmarkPlan/create/rules=10             	     100	   1247896 ns/op	 2084896 B/op	    8416 allocs/op
+BenchmarkPlan/create/rules=100            	       2	  83725854 ns/op	125044464 B/op	  437740 allocs/op
+BenchmarkConvergence/rules=4              	      87	   1582237 ns/op	 2413867 B/op	   10062 allocs/op
+BenchmarkConvergence/rules=10             	       3	  37972625 ns/op	44931973 B/op	  139791 allocs/op
+BenchmarkRisk/rules=10/mode=1             	   10000	     12639 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2             	    9312	     15147 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1            	     943	    126963 ns/op	  179040 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2            	     838	    143960 ns/op	  220440 B/op	    2634 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=10/members=10         	    2674	     45039 ns/op	  128152 B/op	     420 allocs/op
+BenchmarkSharedGroupMemberUsage/rules=100/members=100       	      19	   5479575 ns/op	13856552 B/op	   31100 allocs/op
+BenchmarkOptimize/adjacent/requests=10                      	   13828	      8607 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=100                     	     283	    421902 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/paired/requests=10                        	    7389	     17012 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=100                       	     100	   1334076 ns/op	 2403662 B/op	   15495 allocs/op
+BenchmarkParse/asa/rules=10                                 	     810	    146796 ns/op	  10.32 MB/s	  307115 B/op	    1824 allocs/op
+BenchmarkParse/asa/rules=100                                	     100	   1140830 ns/op	  11.66 MB/s	 2405248 B/op	   13724 allocs/op
+BenchmarkParse/asa/rules=1000                               	       9	  12159412 ns/op	  10.99 MB/s	25853865 B/op	  132775 allocs/op
+BenchmarkParse/fortinet/rules=10                            	     794	    149407 ns/op	  14.82 MB/s	  390054 B/op	    2225 allocs/op
+BenchmarkParse/fortinet/rules=100                           	      88	   1229194 ns/op	  16.37 MB/s	 3416987 B/op	   17886 allocs/op
+BenchmarkParse/fortinet/rules=1000                          	       8	  13744036 ns/op	  14.73 MB/s	42571816 B/op	  173815 allocs/op
+BenchmarkParse/hillstone/rules=10                           	     811	    156056 ns/op	   9.29 MB/s	  367491 B/op	    2064 allocs/op
+BenchmarkParse/hillstone/rules=100                          	      85	   1455630 ns/op	   8.54 MB/s	 3116192 B/op	   15937 allocs/op
+BenchmarkParse/hillstone/rules=1000                         	       7	  16396673 ns/op	   7.65 MB/s	37221962 B/op	  153844 allocs/op
+BenchmarkParse/huawei/rules=10                              	     868	    133877 ns/op	  17.78 MB/s	  338489 B/op	    1791 allocs/op
+BenchmarkParse/huawei/rules=100                             	     100	   1127961 ns/op	  18.39 MB/s	 2809654 B/op	   13686 allocs/op
+BenchmarkParse/huawei/rules=1000                            	       8	  12770182 ns/op	  16.26 MB/s	36375851 B/op	  131823 allocs/op
+BenchmarkParse/netscreen/rules=10                           	     679	    177582 ns/op	   7.46 MB/s	  299992 B/op	    2068 allocs/op
+BenchmarkParse/netscreen/rules=100                          	      97	   1472268 ns/op	   7.62 MB/s	 2181018 B/op	   14686 allocs/op
+BenchmarkParse/netscreen/rules=1000                         	       7	  14534750 ns/op	   7.81 MB/s	23831072 B/op	  141786 allocs/op
+BenchmarkParse/paloalto/rules=10                            	     633	    195934 ns/op	  21.96 MB/s	  400973 B/op	    2377 allocs/op
+BenchmarkParse/paloalto/rules=100                           	      75	   1731944 ns/op	  23.63 MB/s	 3407195 B/op	   19956 allocs/op
+BenchmarkParse/paloalto/rules=1000                          	       6	  17844125 ns/op	  23.31 MB/s	42980853 B/op	  194807 allocs/op
+BenchmarkParse/srx/rules=10                                 	     849	    141631 ns/op	  33.83 MB/s	  280821 B/op	    2196 allocs/op
+BenchmarkParse/srx/rules=100                                	     100	   1252745 ns/op	  35.79 MB/s	 2332042 B/op	   18299 allocs/op
+BenchmarkParse/srx/rules=1000                               	       8	  13332542 ns/op	  33.85 MB/s	28993401 B/op	  178701 allocs/op
+BenchmarkTraffic/union/ipv4/regions=16                      	    9957	     14102 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=16               	   15897	      7574 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=16                 	   10000	     12197 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv4/regions=128                     	     183	    686655 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv4/regions=128              	     288	    412897 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv4/regions=128                	     207	    600478 ns/op	   48976 B/op	       9 allocs/op
+BenchmarkTraffic/union/ipv6/regions=16                      	   10000	     14395 ns/op	   10240 B/op	      34 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=16               	   15313	      7837 ns/op	    3920 B/op	       5 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=16                 	   10000	     12523 ns/op	    5968 B/op	       6 allocs/op
+BenchmarkTraffic/union/ipv6/regions=128                     	     164	    736141 ns/op	   81920 B/op	     258 allocs/op
+BenchmarkTraffic/intersection/ipv6/regions=128              	     289	    415636 ns/op	   32592 B/op	       8 allocs/op
+BenchmarkTraffic/difference/ipv6/regions=128                	     187	    671293 ns/op	   48976 B/op	       9 allocs/op
+PASS

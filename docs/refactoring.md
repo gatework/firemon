@@ -1,6 +1,7 @@
 # Domain refactoring and API migration
 
-This iteration implements the [approved module review plan](plans/2026-10-29-domain-refactor.md).
+The module audit implements the [domain review plan](plans/2026-10-29-domain-refactor.md)
+and the subsequent [contract and ownership plan](plans/2026-10-29-contracts.md).
 It refactors existing behavior; supported vendor syntax and lifecycle capabilities
 remain those in [status](status.md). Only Palo Alto, SRX, Huawei, Hillstone,
 Fortinet, Netscreen and ASA are enabled.
@@ -20,7 +21,7 @@ address/service sets, candidate cost and evidence-bound policy operations.
 | Policy::Designer | plan owns candidate object reuse, cost ranking, renderability and independent traffic proofs. Proof, candidate construction and public contracts are separated. |
 | Config::Ruleopti | analysis.Converger classifies containment/combination and proves whole-rulebase preservation. Pair comparison budgets and native order remain deterministic. |
 | Config::Audit | RiskAnalyzer retains declared/effective modes, paired traffic and three-valued compound expressions. No unknown result becomes a clean risk assessment. |
-| Policy::Cleaner::Flagger | Reclaimer retains revision, graph, time-window and rule/member evidence. Missing logs and zero counters alone do not authorize removal. |
+| Policy::Cleaner::Flagger | Reclaimer evaluates request-local revision, graph, time-window and rule/member evidence. Missing logs and zero counters alone do not authorize removal. |
 | FireFlow design/deploy | operations composes collection/design; deploy owns authorization, reservation, receipts, persistence and independent recovery. No uncertain writes are replayed. |
 | DAO and reporting | snapshot remains authoritative; inventory/projection consume narrow interfaces. Host databases remain optional projections, not graph reconstruction dependencies. |
 
@@ -41,6 +42,31 @@ account service, workflow approval platform or new vendor family.
 | Different rule/NAT relationship views | `Rule.Match()`, `StaticNAT.Match()`, `DynamicNAT.Match()` return `MatchObjects` |
 | Fixed parser limits | `vendors.Parser{Limits: config.Limits{...}}`, or the same `Parser` shape in each native package |
 | Concrete store arguments for inventory/projection | `inventory.ManifestReader`, `inventory.RevisionLoader`, `projection.Outbox` |
+
+The subsequent contract migration deliberately removes the old Go APIs without
+aliases. Update consumers together with the optional adapter:
+
+| Previous usage | Current usage |
+| --- | --- |
+| `deploy.View`, `Capture`, `Running`, `Saved` | Same names in `device` |
+| `deploy.Parser`, `ParseFunc` | `config.Parser`, `config.ParseFunc` |
+| Public fields on `Collector`, `Designer`, `deploy.Engine` | `operations.NewCollector(CollectorOptions)`, `NewDesigner(DesignerOptions)`, `deploy.New(Options)`, each returning a pointer and error |
+| `runtime.Collector.Collect`, component replacement | `runtime.Collect`, `Design`, `Apply`, `Recover`; dependencies are private |
+| Collection through `deploy.Factory.Open` | `operations.ReadOnlyFactory.OpenReadOnly` returning `device.Reader` |
+| `session := config.NewSession(cursor, metadata)` | `session, err := config.NewSession(cursor, metadata)`; access `session.Cursor()` |
+| `policy.Routes(..., limit)` | `engine.ResolveRoutes(ctx, fw, vrf, addresses)` with `Engine.Limits` |
+| `RuleOrder.Chain [4]string` | `policy.RuleChain{PolicyChain, FromZone, ToZone}` |
+| `Reclaimer` evidence/time fields | `ReclamationRequest` passed to `Analyze`, `AnalyzeMembers` and `Plan` |
+| `PolicyMigrator` mappings/time fields and selection arguments | `MigrationRequest` passed to `Plan(ctx, source, target, request)` |
+| `Converger.From` | `Candidates(ctx, fw, from)` and `Plan(ctx, fw, ids, from)` |
+| `RiskAnalyzer.Assess` | `RiskAnalyzer.Analyze` |
+| Raw-source or flag reads through a full record clone | `Firewall.Raw`, `HasUnsupported`, `Disabled`, `Rule.Builtin`, `Rule.Action` as applicable |
+
+`Reclaimer.Plan(ctx, fw, request, ids)` proves the selected batch using that call's
+time and evidence. Reusing a service does not carry observations, mappings or
+selections into a subsequent invocation. `Schedule.ActiveAt` and `ExpiredAt`
+centralize domain time predicates; `Request.SameContext` centralizes evaluation
+context equality. These APIs preserve unknown evidence and full-plan proof.
 
 The old lifecycle type names and error-hiding resolver functions are removed.
 `known=false, err=nil` means declarations cannot be fully interpreted. A canceled
@@ -68,7 +94,8 @@ Snapshot semantic format stays at **9**; manifest and journal layouts are unchan
 Request/record `Scope` and `RuleSet` fields retain their wire representation;
 `Chain()` is a value view. No snapshot reimport is required solely for this
 refactor. Older pre-v9 snapshots remain subject to the existing format rejection.
-Native fixture exports and semantic digests were compared to e9e9b96; reuse,
+Native fixture exports and semantic digests were compared to e9e9b96 in the
+first refactor and dd15031 in the contract iteration; reuse,
 append and create approval digests are protected by baseline golden tests.
 
 Configuration stages append accepted drafts and commit consumed evidence together.

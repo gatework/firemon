@@ -1,6 +1,6 @@
 # Optional device connector adapter
 
-This separate module implements the same `deploy.Factory` and `deploy.Session` contract for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA using the pinned private `github.com/gatework/go-net-connector` dependency. The root module remains independent of the connector. No private dependency source or local `replace` directive is included.
+This separate module implements `operations.ReadOnlyFactory`, `device.Reader`, `deploy.Factory` and `deploy.Session` contracts for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA using the pinned private `github.com/gatework/go-net-connector` dependency. The root module remains independent of the connector. No private dependency source or local `replace` directive is included.
 
 The published core pin is `v0.0.0-20261029031126-c9d9f251ed20`. See the [API migration guide](../../docs/refactoring.md) for the domain refactor and [delivery status](../../docs/status.md) for its standalone versioned-consumer verification.
 
@@ -55,3 +55,13 @@ GOWORK=off GOPRIVATE=github.com/gatework/go-net-connector go mod verify
 ```
 
 The public root CI does not have access to the private connector and does not test this nested module. Further native semantic limits are in [the semantics notes](../../docs/native-semantics.md).
+
+## Read-only collection contract
+
+`Factory.OpenReadOnly(ctx, deviceID)` returns an independently owned
+`device.Reader` with only `Read` and `Close`. Opening it does not begin native
+configuration isolation. `Factory.Open` returns a fresh `deploy.Session` for
+controlled writes. Neither method reuses an earlier session. Capture/view types
+live in `device`, and parser contracts live in `config`. Application composition
+uses `operations.New` or the checked `NewCollector`, `NewDesigner` and
+`deploy.New` constructors; see the core [migration guide](../../docs/refactoring.md).

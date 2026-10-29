@@ -166,3 +166,47 @@ Perl/Ruby references and real devices were not modified or executed.
 
 Final remote commit, CI and separately pinned adapter evidence are recorded in
 [delivery status](status.md). Local tests alone do not establish those results.
+
+## Contract and ownership verification (2026-10-29)
+
+The [contract plan](plans/2026-10-29-contracts.md) is implemented with intentional
+Go API changes described in the [migration guide](refactoring.md). The new
+`device.Reader` supports standalone collection; shared parsing lives in `config`.
+Application dependencies are private and validated by constructors. Lifecycle
+evidence, selections, mappings and proof times belong to individual calls.
+
+- Root race tests and vet cover the complete integration, including cursor
+  ownership/rollback, shared native parser limits, nil/typed-nil providers,
+  independent collection, request reuse/concurrency, route budget/cancellation,
+  approval golden digests, snapshots, CLI and process-exit deployment recovery.
+- Native fixture exported data and semantic digests match frozen baseline
+  `dd15031` across all seven vendors. Snapshot semantic format 9, persisted
+  records, CLI fields and approval encoding are unchanged.
+- Five-second bounded fuzz runs passed: traffic packet oracle 54,019 executions,
+  Fortinet 50,174, Huawei 62 and Netscreen 30,904. The low Huawei count reflects
+  the retained complex corpus; these runs do not establish grammar parity.
+- Task reviews and the final independent Codex source review passed with no
+  unresolved findings. Corrections cover cancellation through route sorting and
+  equal-route groups, nil/zero runtime delegation, inventory/projection invalid
+  error classification, and reclamation cancellation priority. Targeted failures
+  were reproduced before correction and passed afterward.
+- The first final-review dispatch failed before reviewing due to a model usage
+  limit; its replacement completed the same source review. It ran no tests or
+  builds during the controlled benchmark window. The import-grouping cleanup
+  afterward changes no runtime behavior.
+- The [87-case benchmark comparison](benchmarks.md) records counterbalanced
+  serial samples, the final route follow-up and its remaining small-input
+  allocation cost. It does not imply every metric improves.
+
+The optional adapter passed current-core workspace race/vet checks before
+publication. Its final published pin and standalone checks, SSH readback and exact
+GitHub CI are recorded separately in [delivery status](status.md). Source review
+did not judge those delivery outcomes or measured speedups. No live firewall,
+SQL database, private dependency source publication, new vendor, broader native
+syntax, NAT/schedule migration, tag or release is included.
+
+The execution decision was to retain the existing isolated Go worktree and use
+the user's authorized SSH delivery directly to `gatework/firemon`, preserving
+separate reviewable commits. A separate PR/merge approval cycle was not added;
+reversal would require reverting those public commits. The Ruby worktree remains
+unchanged.

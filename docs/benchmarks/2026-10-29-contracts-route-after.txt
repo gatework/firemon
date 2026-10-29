@@ -1,0 +1,60 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   24793	      4528 ns/op	    7232 B/op	      90 allocs/op
+BenchmarkRouteResolution/routes=1000       	     244	    482651 ns/op	 1015104 B/op	    8965 allocs/op
+BenchmarkPacket/huawei/rules=10            	    2683	     43380 ns/op	   72664 B/op	     910 allocs/op
+BenchmarkPacket/huawei/rules=100           	     320	    368747 ns/op	  560168 B/op	    7225 allocs/op
+BenchmarkPacket/huawei/rules=1000          	      34	   3750772 ns/op	 5708456 B/op	   70250 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   36560	      3305 ns/op	    7232 B/op	      90 allocs/op
+BenchmarkRouteResolution/routes=1000       	     247	    479144 ns/op	 1015104 B/op	    8965 allocs/op
+BenchmarkPacket/huawei/rules=10            	    2852	     42083 ns/op	   72664 B/op	     910 allocs/op
+BenchmarkPacket/huawei/rules=100           	     321	    371405 ns/op	  560168 B/op	    7225 allocs/op
+BenchmarkPacket/huawei/rules=1000          	      33	   3747208 ns/op	 5708456 B/op	   70250 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   31242	      3505 ns/op	    7232 B/op	      90 allocs/op
+BenchmarkRouteResolution/routes=1000       	     237	    495102 ns/op	 1015104 B/op	    8965 allocs/op
+BenchmarkPacket/huawei/rules=10            	    2704	     43242 ns/op	   72664 B/op	     910 allocs/op
+BenchmarkPacket/huawei/rules=100           	     322	    369054 ns/op	  560168 B/op	    7225 allocs/op
+BenchmarkPacket/huawei/rules=1000          	      37	   3739097 ns/op	 5708456 B/op	   70250 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   37077	      3301 ns/op	    7232 B/op	      90 allocs/op
+BenchmarkRouteResolution/routes=1000       	     247	    476469 ns/op	 1015104 B/op	    8965 allocs/op
+BenchmarkPacket/huawei/rules=10            	    2877	     41683 ns/op	   72664 B/op	     910 allocs/op
+BenchmarkPacket/huawei/rules=100           	     328	    364920 ns/op	  560168 B/op	    7225 allocs/op
+BenchmarkPacket/huawei/rules=1000          	      32	   3809464 ns/op	 5708456 B/op	   70250 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   36350	      3235 ns/op	    7232 B/op	      90 allocs/op
+BenchmarkRouteResolution/routes=1000       	     253	    471388 ns/op	 1015104 B/op	    8965 allocs/op
+BenchmarkPacket/huawei/rules=10            	    2718	     42860 ns/op	   72664 B/op	     910 allocs/op
+BenchmarkPacket/huawei/rules=100           	     324	    368843 ns/op	  560168 B/op	    7225 allocs/op
+BenchmarkPacket/huawei/rules=1000          	      31	   3708341 ns/op	 5708456 B/op	   70250 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   37335	      3260 ns/op	    7232 B/op	      90 allocs/op
+BenchmarkRouteResolution/routes=1000       	     244	    484050 ns/op	 1015104 B/op	    8965 allocs/op
+BenchmarkPacket/huawei/rules=10            	    2749	     43552 ns/op	   72664 B/op	     910 allocs/op
+BenchmarkPacket/huawei/rules=100           	     316	    370497 ns/op	  560168 B/op	    7225 allocs/op
+BenchmarkPacket/huawei/rules=1000          	      33	   3798569 ns/op	 5708456 B/op	   70250 allocs/op
+PASS
