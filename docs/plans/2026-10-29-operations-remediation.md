@@ -54,6 +54,7 @@ Cross-vendor contracts and exact test boundaries are recorded in
 The simplification pass and independent full review are complete. Review found
 three defects in authorization ordering, partial capture retention and unsupported
 context labels; all have regression-backed corrections. Native NAT readback and
-future ownership transitions also have explicit coverage. Publication and the
-adapter's published-core consumer check are the remaining delivery gates;
-implementation evidence does not imply device validation.
+future ownership transitions also have explicit coverage. The core is published
+and its exact-commit CI passed. The adapter's published-core consumer check passes
+with workspace disabled and no replacement; [status](../status.md) records these
+separate delivery proofs. Implementation evidence does not imply device validation.

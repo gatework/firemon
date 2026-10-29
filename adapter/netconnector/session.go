@@ -3,6 +3,7 @@ package netconnector
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"strings"
 	"sync"
@@ -15,12 +16,14 @@ import (
 )
 
 var (
-	ErrRetired     = errors.New("netconnector: session retired")
-	ErrBusy        = errors.New("netconnector: session busy")
-	ErrInvalid     = errors.New("netconnector: invalid input")
-	ErrPersistence = errors.New("netconnector: persistence not confirmed")
-	ErrCapture     = errors.New("netconnector: configuration capture incomplete")
-	ErrLimit       = errors.New("netconnector: resource limit exceeded")
+	ErrRetired           = errors.New("netconnector: session retired")
+	ErrBusy              = errors.New("netconnector: session busy")
+	ErrInvalid           = errors.New("netconnector: invalid input")
+	ErrPersistence       = errors.New("netconnector: persistence not confirmed")
+	ErrCapture           = errors.New("netconnector: configuration capture incomplete")
+	ErrLimit             = errors.New("netconnector: resource limit exceeded")
+	ErrConfigurationLock = errors.New("netconnector: configuration ownership not established")
+	ErrCandidate         = errors.New("netconnector: uncommitted candidate configuration")
 )
 
 // Options bounds each operation, including the complete PAN commit polling loop.
@@ -30,17 +33,24 @@ type Options struct {
 	MaxPolls       int
 	Timeout        time.Duration
 	MaxOutputBytes int64
+	// ExclusivePANAdmin attests that the host reserves this PAN administrator
+	// account for this deployment, across all tools and login sessions. PAN
+	// config locks are administrator-scoped, not session-scoped; without this
+	// external guarantee the adapter cannot safely edit or remove its lock.
+	ExclusivePANAdmin bool
 }
 
 // Session owns its Device. Do not share that Device with other callers or copy
 // Session. Close is terminal and interrupts I/O without waiting for callbacks.
 type Session struct {
-	device         *connector.Device
-	metadata       fm.Metadata
-	options        Options
-	mu             sync.Mutex
-	active, closed bool
-	cancel         context.CancelFunc
+	device             *connector.Device
+	metadata           fm.Metadata
+	options            Options
+	mu                 sync.Mutex
+	active, closed     bool
+	cancel             context.CancelFunc
+	configurationToken string
+	srxExclusive       bool
 }
 
 var _ deploy.Session = (*Session)(nil)
@@ -55,6 +65,9 @@ func New(device *connector.Device, metadata fm.Metadata, options Options) (*Sess
 		return nil, err
 	}
 	metadata.Vendor = nativeVendor(metadata.Vendor)
+	if metadata.Vendor == "fortinet" && !vdomName.MatchString(metadata.Context) || metadata.Vendor != "fortinet" && metadata.Context != "" {
+		return nil, ErrInvalid
+	}
 	return &Session{device: device, metadata: metadata, options: options}, nil
 }
 
@@ -85,6 +98,12 @@ func nativeVendor(name string) string {
 		return "paloalto"
 	case "hillstone":
 		return "hillstone"
+	case "srx", "juniper":
+		return "srx"
+	case "netscreen", "screenos":
+		return "netscreen"
+	case "fortinet", "huawei":
+		return name
 	}
 	return ""
 }
@@ -136,10 +155,38 @@ func (s *Session) Execute(ctx context.Context, commands []string, receive deploy
 		script.Commands[i] = connector.Command{Text: command, Source: "firemon-apply", Line: i + 1, Sensitive: true, OutputSensitive: true}
 	}
 	err = s.run(ctx, func(ctx context.Context, op *connector.Operation) error {
+		b := responseBudget{remaining: s.options.MaxOutputBytes, digest: sha256.New()}
+		if s.metadata.Vendor == "paloalto" {
+			if err := s.verifyPANLock(ctx, op, &b); err != nil {
+				return err
+			}
+		}
+		if s.metadata.Vendor == "srx" {
+			// Begin already entered exclusive mode. Preserve the lock through
+			// Save, replacing only the renderer's validated outer wrapper with
+			// native top commands. Both retain their indexed transport receipts.
+			if !s.srxExclusive || len(script.Commands) < 2 || commands[0] != "configure" || commands[len(commands)-1] != "exit" {
+				return ErrConfigurationLock
+			}
+			for i := 1; i < len(commands)-1; i++ {
+				if !strings.HasPrefix(commands[i], "set ") && !strings.HasPrefix(commands[i], "delete ") && !strings.HasPrefix(commands[i], "insert ") {
+					return ErrInvalid
+				}
+			}
+			script.Commands[0].Text, script.Commands[len(commands)-1].Text = "top", "top"
+		}
+		if s.metadata.Vendor == "fortinet" {
+			if err := s.fortinetContext(ctx, op, &b); err != nil {
+				return err
+			}
+		}
 		accepted := 0
+		if b.remaining <= 0 {
+			return ErrLimit
+		}
 		var callbackErr error
 		result, execErr := op.ExecuteScript(ctx, script, connector.ExecuteOptions{
-			MaxOutputBytes: s.options.MaxOutputBytes,
+			MaxOutputBytes: b.remaining,
 			OnStep: func(ctx context.Context, step connector.StepResult) error {
 				if accepted >= len(script.Commands) || step.Command().Text != script.Commands[accepted].Text || step.Command().Line != accepted+1 {
 					callbackErr = ErrInvalid

@@ -86,7 +86,7 @@ func (s *Session) Save(ctx context.Context, receive deploy.ReceiptFunc) (out dep
 	err = s.run(ctx, func(ctx context.Context, op *connector.Operation) error {
 		b := responseBudget{remaining: s.options.MaxOutputBytes, digest: sha256.New()}
 		switch s.metadata.Vendor {
-		case "hillstone":
+		case "hillstone", "huawei":
 			result, err := op.SaveConfig(ctx, connector.ExecuteOptions{MaxOutputBytes: b.remaining})
 			if limitErr := b.record(result); err == nil {
 				err = limitErr
@@ -106,7 +106,67 @@ func (s *Session) Save(ctx context.Context, receive deploy.ReceiptFunc) (out dep
 				return err
 			}
 		case "paloalto":
+			if err := s.verifyPANLock(ctx, op, &b); err != nil {
+				return err
+			}
 			if err := s.panCommit(ctx, op, &b); err != nil {
+				return err
+			}
+		case "srx":
+			if !s.srxExclusive {
+				return ErrConfigurationLock
+			}
+			step, err := b.command(ctx, op, `commit comment "firemon:`+s.configurationToken+`"`)
+			if err != nil {
+				return err
+			}
+			text, err := persistenceText(step)
+			if err != nil {
+				return err
+			}
+			complete := 0
+			for _, line := range strings.Split(text, "\n") {
+				if strings.TrimSpace(line) == "commit complete" {
+					complete++
+				}
+			}
+			if complete != 1 {
+				return ErrPersistence
+			}
+		case "netscreen":
+			step, err := b.command(ctx, op, "save")
+			if err != nil {
+				return err
+			}
+			if _, err := persistenceText(step); err != nil {
+				return err
+			}
+			// ScreenOS save may return only the prompt. Establish persistence
+			// by comparing fresh native running and flash views, never a prompt.
+			current, err := b.command(ctx, op, "get config")
+			if err != nil {
+				return err
+			}
+			saved, err := b.command(ctx, op, "get config saved")
+			if err != nil {
+				return err
+			}
+			body := configBody(current.Output(), current.Command().Text, current.Prompt())
+			if body == "" || body != configBody(saved.Output(), saved.Command().Text, saved.Prompt()) {
+				return ErrPersistence
+			}
+		case "fortinet":
+			if err := s.fortinetAutomatic(ctx, op, &b); err != nil {
+				return err
+			}
+			step, err := b.command(ctx, op, "execute cfg save")
+			if err != nil {
+				return err
+			}
+			if _, err := persistenceText(step); err != nil {
+				return err
+			}
+			if err := s.fortinetAutomatic(ctx, op, &b); err != nil {
 				return err
 			}
 		default:
@@ -172,36 +232,71 @@ func (s *Session) panCommit(ctx context.Context, op *connector.Operation, b *res
 }
 
 func panJob(text, job string) (bool, error) {
+	if _, err := strconv.ParseUint(job, 10, 32); err != nil || job == "0" {
+		return false, ErrPersistence
+	}
+	if failure.MatchString(text) {
+		return false, ErrPersistence
+	}
 	matched, finished := 0, false
 	for _, line := range strings.Split(text, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 7 || fields[3] != job {
+		f := strings.Fields(line)
+		if len(f) == 0 {
 			continue
 		}
-		if _, err := time.Parse("2006/01/02", fields[0]); err != nil {
+		if _, err := time.Parse("2006/01/02", f[0]); err != nil {
 			continue
 		}
-		if _, err := time.Parse("15:04:05", fields[1]); err != nil {
-			continue
-		}
-		if _, err := time.Parse("15:04:05", fields[2]); err != nil {
+		// Native rows have optional Dequeued and PositionInQ columns. Parse from
+		// both ends, where Type/Status/Result/Completed remain unambiguous.
+		if len(f) < 7 || len(f) > 9 {
 			return false, ErrPersistence
 		}
-		matched++
-		if fields[4] != "Commit" {
+		if _, err := time.Parse("15:04:05", f[1]); err != nil {
 			return false, ErrPersistence
 		}
-		switch fields[5] {
-		case "FIN":
-			if fields[6] != "OK" || len(fields) != 8 {
+		i := 2
+		hasDequeue := strings.Contains(f[i], ":")
+		if hasDequeue {
+			if _, err := time.Parse("15:04:05", f[i]); err != nil {
 				return false, ErrPersistence
 			}
-			if _, err := time.Parse("15:04:05", fields[7]); err != nil {
+			i++
+		}
+		if f[i] != job {
+			return false, ErrPersistence
+		}
+		i++
+		if len(f)-i == 5 {
+			if n, err := strconv.ParseUint(f[i], 10, 32); err != nil || n == 0 {
+				return false, ErrPersistence
+			}
+			i++
+		}
+		if len(f)-i != 4 || f[i] != "Commit" {
+			return false, ErrPersistence
+		}
+		status, result, progress := f[i+1], f[i+2], f[i+3]
+		matched++
+		switch status {
+		case "FIN":
+			if !hasDequeue || result != "OK" {
+				return false, ErrPersistence
+			}
+			if _, err := time.Parse("15:04:05", progress); err != nil {
 				return false, ErrPersistence
 			}
 			finished = true
-		case "ACT", "PEND":
-			if fields[6] != "PEND" {
+		case "QUEUED", "PEND", "ACT":
+			if result != "PEND" || status == "ACT" && !hasDequeue {
+				return false, ErrPersistence
+			}
+			if strings.HasSuffix(progress, "%") {
+				n, err := strconv.ParseUint(strings.TrimSuffix(progress, "%"), 10, 8)
+				if err != nil || n > 100 {
+					return false, ErrPersistence
+				}
+			} else if _, err := time.Parse("15:04:05", progress); err != nil {
 				return false, ErrPersistence
 			}
 		default:

@@ -24,6 +24,29 @@ Unrecognized source and unsupported semantics remain incomplete; do not describe
 
 The user-confirmed scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. H3C, Topsec, Neteye and other vendors are deferred.
 
+## Operations remediation delivery
+
+The operations core [`af1f854b08e6b5117a43d137c91408af3e91d7de`](https://github.com/gatework/firemon/commit/af1f854b08e6b5117a43d137c91408af3e91d7de)
+was pushed to public `gatework/firemon` on `main`. The remote SHA was read back
+and matched, and its [Go workflow](https://github.com/gatework/firemon/actions/runs/40801906537)
+passed vet and race tests on Ubuntu. Local root race/vet passed across 21 packages.
+The completed full Codex review and all three corrected findings are recorded in
+[verification](verification.md).
+
+The optional adapter pins core `v0.0.0-20261029014108-af1f854b08e6` and connector
+`v0.0.0-20261026235641-c68c42b4bbcf`, with no local replacement. After `go mod tidy`,
+`GOWORK=off GOPROXY=off go test -count=1 -race ./...` passed (7.097 seconds), as did
+`go vet ./...` and `go mod verify`. `go list -m -json` confirmed the published
+module-cache versions without a `Replace` field. The separate current-core
+workspace check passed earlier (6.526 seconds). Public root CI does not test this
+nested module's private dependency; no private connector source is included.
+
+Snapshot semantic format 9 requires reimporting original captures into a new
+store. Complete pending device recovery with the prior binary and retain its
+journal/store before upgrading. Custom `deploy.Session` implementations must
+implement the configuration begin/end contract. These migration requirements
+are detailed in [contracts](contracts.md).
+
 ## Previous delivery verification
 
 The following exact-commit results predate the operations remediation. They are retained as historical evidence, not verification of subsequent changes. Current remediation evidence is recorded separately in [verification](verification.md).

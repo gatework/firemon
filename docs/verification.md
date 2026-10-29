@@ -54,6 +54,14 @@ All three findings are addressed. Both testing gaps were added: independent
 native readback of a Fortinet transfer with retained SNAT, and future scheduled
 policy changes to NAT ownership. No review finding was rejected or deferred.
 
+The published core is [`af1f854`](https://github.com/gatework/firemon/commit/af1f854b08e6b5117a43d137c91408af3e91d7de);
+its [exact-commit CI](https://github.com/gatework/firemon/actions/runs/40801906537)
+passed vet and race tests. The adapter's final current-core workspace race suite
+passed in 6.526 seconds. After pinning the published core, its independent
+`GOWORK=off GOPROXY=off` race suite passed in 7.097 seconds, together with vet and
+module verification. `go list -m -json` confirmed the published versions without
+replacement. See [delivery status](status.md) for pins and migration requirements.
+
 ## Original requirement audit
 
 | Plan task | Implemented contract and executable evidence | Current result |

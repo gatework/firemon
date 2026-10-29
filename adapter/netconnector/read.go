@@ -22,22 +22,49 @@ func (s *Session) Read(ctx context.Context, view deploy.View) (capture deploy.Ca
 	capture.Metadata = s.metadata
 	capture.Metadata.SourceDigest, capture.Metadata.ParserVersion = "", ""
 	err = s.run(ctx, func(ctx context.Context, op *connector.Operation) error {
-		if view == deploy.Running {
-			result, err := op.RunningConfig(ctx)
-			text, complete := result.Config()
-			steps := result.Steps()
-			if len(steps) > 0 {
-				last := steps[len(steps)-1]
-				if !complete {
-					text = last.Output()
-				}
-				text = configBody(text, last.Command().Text, last.Prompt())
+		budget := responseBudget{remaining: s.options.MaxOutputBytes, digest: sha256.New()}
+		switch {
+		case s.metadata.Vendor == "srx":
+			// Operational show configuration is the last committed database,
+			// while configuration-mode show is the shared candidate.
+			command := "show configuration | display set | no-more"
+			if s.srxExclusive {
+				command = "run " + command
 			}
+			text, err := budget.capture(ctx, op, command)
 			capture.Source.Text = text
-			if err != nil || !complete {
-				return errors.Join(ErrCapture, err)
+			if err != nil {
+				return err
 			}
-		} else {
+			capture.Source.Text = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(text), "[edit]"))
+		case s.metadata.Vendor == "fortinet":
+			if view == deploy.Saved {
+				if err := s.fortinetAutomatic(ctx, op, &budget); err != nil {
+					return err
+				}
+			}
+			if err := s.fortinetContext(ctx, op, &budget); err != nil {
+				return err
+			}
+			text, err := budget.capture(ctx, op, "show full-configuration")
+			capture.Source.Text = text
+			if err != nil {
+				return err
+			}
+			if view == deploy.Saved {
+				if err := s.fortinetAutomatic(ctx, op, &budget); err != nil {
+					return err
+				}
+			}
+		case view == deploy.Running:
+			result, err := op.RunningConfig(ctx)
+			_, complete := result.Config()
+			text, evidenceErr := captureEvidence(result, s.runningCommand(), s.options.MaxOutputBytes)
+			capture.Source.Text = text
+			if err != nil || evidenceErr != nil || !complete {
+				return errors.Join(ErrCapture, err, evidenceErr)
+			}
+		default:
 			pager, command := "", ""
 			switch s.metadata.Vendor {
 			case "asa":
@@ -46,18 +73,23 @@ func (s *Session) Read(ctx context.Context, view deploy.View) (capture deploy.Ca
 				pager, command = "terminal length 0", "show configuration startup"
 			case "paloalto":
 				pager, command = "set cli pager off", "show config saved running-config.xml"
+			case "netscreen":
+				command = "get config saved"
+			case "huawei":
+				pager, command = "screen-length 0 temporary", "display saved-configuration"
 			default:
 				return ErrInvalid
 			}
-			budget := responseBudget{remaining: s.options.MaxOutputBytes, digest: sha256.New()}
-			if _, err := budget.command(ctx, op, pager); err != nil {
-				return err
+			if pager != "" {
+				if _, err := budget.command(ctx, op, pager); err != nil {
+					return err
+				}
 			}
-			step, err := budget.command(ctx, op, command)
+			text, err := budget.capture(ctx, op, command)
+			capture.Source.Text = text
 			if err != nil {
 				return err
 			}
-			capture.Source.Text = configBody(step.Output(), command, step.Prompt())
 			if s.metadata.Vendor == "paloalto" {
 				xml, err := config.XML(ctx, config.Source{Text: capture.Source.Text, Complete: true}, config.Limits{MaxBytes: int(s.options.MaxOutputBytes)})
 				if err != nil || xml.Root == nil || xml.Root.Name.Local != "config" {
@@ -79,6 +111,67 @@ func (s *Session) Read(ctx context.Context, view deploy.View) (capture deploy.Ca
 		capture.Source.Complete = false
 	}
 	return
+}
+
+// capture keeps received evidence even when the command fails. Persistence and
+// preflight commands continue to use command, which requires an accepted step.
+func (b *responseBudget) capture(ctx context.Context, op *connector.Operation, command string) (string, error) {
+	limit := b.remaining
+	if limit <= 0 {
+		return "", ErrLimit
+	}
+	result, err := op.ExecuteCommand(ctx, connector.Command{Text: command, Sensitive: true, OutputSensitive: true}, connector.ExecuteOptions{MaxOutputBytes: limit})
+	text, evidenceErr := captureEvidence(result, command, limit)
+	return text, errors.Join(err, b.record(result), evidenceErr)
+}
+
+// runningCommand identifies the configuration payload in the validated profile,
+// excluding setup commands and PAN's checks after its configuration-mode show.
+func (s *Session) runningCommand() string {
+	commands := s.device.ConfigCommands()
+	if s.metadata.Vendor == "paloalto" {
+		for _, command := range commands {
+			if command == "show" {
+				return command
+			}
+		}
+	}
+	if len(commands) == 0 {
+		return ""
+	}
+	return commands[len(commands)-1]
+}
+
+// captureEvidence binds output to the requested configuration command. The
+// pinned connector exposes only Raw for failed attempts; these bytes are kept
+// as incomplete evidence, without guessing encoding or terminal rendering.
+func captureEvidence(result connector.Result, command string, limit int64) (string, error) {
+	text, prompt := "", ""
+	found := false
+	steps := result.Steps()
+	for i := len(steps) - 1; i >= 0; i-- {
+		if steps[i].Command().Text == command {
+			text, prompt, found = steps[i].Output(), steps[i].Prompt(), true
+			if configuration, complete := result.Config(); complete {
+				text = configuration
+			}
+			break
+		}
+	}
+	if !found {
+		attempts := result.Attempts()
+		for i := len(attempts) - 1; i >= 0; i-- {
+			if attempts[i].Command().Text == command {
+				text, prompt = attempts[i].Raw(), attempts[i].Prompt()
+				break
+			}
+		}
+	}
+	var err error
+	if int64(len(text)) > limit {
+		text, err = text[:max(0, limit)], ErrLimit
+	}
+	return configBody(text, command, prompt), err
 }
 
 // configBody removes only the command echo and terminal prompt. In particular,

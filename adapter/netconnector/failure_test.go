@@ -21,21 +21,51 @@ import (
 func controlled(t *testing.T, vendor string, serve func(net.Conn)) *adapter.Session {
 	t.Helper()
 	profile := connector.Profile{Name: vendor, LoginPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandPrompt: regexp.MustCompile(`(?m)^fw#\s*$`)}
+	prompt := "fw#"
+	if vendor == "paloalto" {
+		prompt = "audit@fw>"
+		profile.LoginPrompt = regexp.MustCompile(`(?m)^(?:audit@fw>|fw#)\s*$`)
+		profile.CommandPrompt = profile.LoginPrompt
+	}
 	var peers sync.WaitGroup
 	d, err := connector.New(profile, connector.ConnectionConfig{Host: "synthetic", CommandTimeout: time.Second}, connector.WithTransportFactory(func(context.Context, connector.ConnectionConfig) (io.ReadWriteCloser, error) {
 		a, b := net.Pipe()
 		peers.Add(1)
-		go func() { defer peers.Done(); defer b.Close(); _, _ = io.WriteString(b, "fw#"); serve(b) }()
+		go func() {
+			defer peers.Done()
+			defer b.Close()
+			_, _ = io.WriteString(b, prompt)
+			if vendor == "paloalto" {
+				r := bufio.NewReader(b)
+				for _, event := range append(panLockDialogue(), panLockCheck()...) {
+					line, err := r.ReadString('\n')
+					if err != nil {
+						return
+					}
+					if strings.TrimSpace(line) != event.command {
+						t.Errorf("lock command %q, want %q", line, event.command)
+						return
+					}
+					_, _ = io.WriteString(b, event.command+"\r\n"+event.response+"\r\n"+prompt)
+				}
+			}
+			serve(b)
+		}()
 		return a, nil
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := adapter.New(d, fm.Metadata{Device: "fw", Vendor: vendor}, adapter.Options{PollInterval: 5 * time.Second, MaxPolls: 3})
+	s, err := adapter.New(d, fm.Metadata{Device: "fw", Vendor: vendor}, adapter.Options{PollInterval: 5 * time.Second, MaxPolls: 3, ExclusivePANAdmin: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close(); peers.Wait() })
+	if vendor == "paloalto" {
+		if err := s.BeginConfiguration(context.Background(), lockToken); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return s
 }
 
@@ -187,11 +217,14 @@ func TestCommitPollAndOutputBudgetsStopTheConversation(t *testing.T) {
 		polls int
 		bytes int64
 	}{
-		{"poll-count", 2, 0}, {"cumulative-output", 3, 220},
+		{"poll-count", 2, 0}, {"cumulative-output", 3, 2048},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			profile := connector.Profile{Name: "paloalto", LoginPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandPrompt: regexp.MustCompile(`(?m)^fw#\s*$`)}
 			pending := "2026/01/01 00:00:00 00:00:00 42 Commit ACT PEND 00:00:01"
+			if tc.bytes > 0 {
+				pending += "\n" + strings.Repeat("synthetic detail ", 80)
+			}
 			s := sessionWith(t, "paloalto", profile, []exchange{{"configure", ""}, {"commit", "Commit job enqueued with jobid 42"}, {"exit", ""}, {"show jobs id 42", pending}, {"show jobs id 42", pending}}, adapter.Options{PollInterval: time.Millisecond, MaxPolls: tc.polls, MaxOutputBytes: tc.bytes})
 			out, err := s.Save(context.Background(), func(context.Context, deploy.Receipt) error { t.Error("unfinished job produced receipt"); return nil })
 			if err == nil || out.Durable {

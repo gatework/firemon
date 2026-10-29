@@ -10,14 +10,42 @@ import (
 	"github.com/gatework/go-net-connector/vendors"
 )
 
-// Profile reuses connector's native Hillstone/PAN profiles and supplies the ASA
-// profile absent from that registry. It does not enable legacy SSH recovery.
+// Profile reuses the pinned connector's native dialects and adds ASA/ScreenOS.
+// SRX accepts configuration prompts because the adapter owns its exclusive
+// candidate session. It does not enable legacy SSH recovery.
 func Profile(vendor string) (connector.Profile, error) {
 	switch nativeVendor(vendor) {
 	case "hillstone":
 		return vendors.Profile("hillstone")
 	case "paloalto":
 		return vendors.Profile("palo_alto")
+	case "srx":
+		p, err := vendors.Profile("juniper")
+		if err != nil {
+			return p, err
+		}
+		p.CommandPrompt = regexp.MustCompile(`(?:\A|[\r\n])[^\s@]+@[^\s>#]+[>#][ \t]*\z`)
+		return p, nil
+	case "fortinet":
+		return vendors.Profile(nativeVendor(vendor))
+	case "huawei":
+		p, err := vendors.Profile("huawei")
+		// USG persists with save and a native confirmation interaction. Do not
+		// pass the Comware-specific force token as a Huawei filename.
+		p.SaveCommands = []string{"save"}
+		return p, err
+	case "netscreen":
+		prompt := regexp.MustCompile(`(?:\A|[\r\n])[A-Za-z0-9_.:/-]+(?:\([^\r\n()]*\))?->[ \t]*\z`)
+		return connector.Profile{
+			Name: "netscreen", LoginPrompt: prompt, CommandPrompt: prompt,
+			UsernamePrompt: regexp.MustCompile(`(?i)(?:\A|[\r\n])[ \t]*login:[ \t]*\z`),
+			PasswordPrompt: regexp.MustCompile(`(?i)(?:\A|[\r\n])[ \t]*password:[ \t]*\z`),
+			Pager:          regexp.MustCompile(`(?i)(?:\A|[\r\n])[ \t]*--- more ---[^\r\n]*\z`), PagerResponse: " ",
+			AuthenticationErrors: []*regexp.Regexp{regexp.MustCompile(`(?im)^[ \t]*(?:Login failed|Authentication failed|Access denied)\b`)},
+			CommandErrors:        []*regexp.Regexp{regexp.MustCompile(`(?im)^[ \t]*(?:Unknown keyword|Invalid command|Invalid operation|Error:|Command failed|Access denied)\b`)},
+			ConfigCommands:       []string{"get config"}, SaveCommands: []string{"save"},
+			CommandTimeout: time.Minute, LegacySSHArguments: []string{}, Capabilities: connector.Capabilities{Save: true},
+		}, nil
 	case "asa":
 		stem := `(?:\A|[\r\n])[A-Za-z0-9_.:/-]+(?:\([A-Za-z0-9_/-]+\))?`
 		return connector.Profile{
