@@ -3,12 +3,13 @@ package policy_test
 import (
 	"context"
 	"errors"
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
-	"github.com/gatework/firemon/policy"
 	"net/netip"
 	"testing"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/policy"
 )
 
 func TestEvaluationInputAndCancellationContract(t *testing.T) {

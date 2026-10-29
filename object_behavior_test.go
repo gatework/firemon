@@ -1,9 +1,10 @@
 package firemon_test
 
 import (
-	fm "github.com/gatework/firemon"
 	"testing"
 	"time"
+
+	fm "github.com/gatework/firemon"
 )
 
 func TestScheduleOwnsActivityAndExpiryEvidence(t *testing.T) {

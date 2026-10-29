@@ -1,10 +1,11 @@
 package policy_test
 
 import (
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/policy"
 	"testing"
 	"time"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/policy"
 )
 
 func TestSameContextUsesDefaultChainAndTimeInstant(t *testing.T) {

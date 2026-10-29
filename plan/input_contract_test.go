@@ -3,11 +3,12 @@ package plan_test
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
-	"testing"
-	"time"
 )
 
 func TestPlanningInvalidInputAndCancellation(t *testing.T) {
