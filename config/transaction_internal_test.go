@@ -8,6 +8,20 @@ import (
 	fm "github.com/gatework/firemon"
 )
 
+func TestSessionRejectsNilTransactionWithoutChangingEvidence(t *testing.T) {
+	c, _ := NewCursor(Source{Text: "a\n", Complete: true}, Limits{})
+	s, err := NewSession(c, fm.Metadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Commit(nil); !errors.Is(err, ErrClaim) {
+		t.Fatalf("nil transaction: %v", err)
+	}
+	if c.Evidence()[0].State != fm.Pending || len(s.Data().Addresses) != 0 {
+		t.Fatal("invalid transaction changed session")
+	}
+}
+
 func TestClosedTransactionCannotAccumulateEffects(t *testing.T) {
 	c, _ := NewCursor(Source{Text: "a\n", Complete: true}, Limits{})
 	tx := c.Begin()

@@ -31,7 +31,10 @@ func NewSession(c *Cursor, m fm.Metadata) (*Session, error) {
 func (s *Session) Cursor() *Cursor { return s.cursor }
 
 func (s *Session) Commit(t *Transaction) error {
-	if t.cursor != s.cursor {
+	if s == nil || s.cursor == nil {
+		return ErrInvalid
+	}
+	if t == nil || t.cursor != s.cursor {
 		return ErrClaim
 	}
 	return t.Commit(&s.data)
@@ -47,6 +50,9 @@ func (s *Session) Data() fm.Data {
 func (s *Session) Run(ctx context.Context, stages []Stage) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if s == nil || s.cursor == nil {
+		return ErrInvalid
 	}
 	done := make(map[string]bool)
 	for _, stage := range stages {

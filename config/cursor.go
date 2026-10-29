@@ -208,6 +208,9 @@ func (t *Transaction) Rollback() {
 	}
 }
 func (t *Transaction) Commit(dst *fm.Data) error {
+	if t == nil || t.cursor == nil {
+		return ErrClaim
+	}
 	if t.closed {
 		return ErrClosed
 	}
