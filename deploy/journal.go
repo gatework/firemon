@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/gatework/firemon/internal/durablefile"
@@ -29,6 +30,9 @@ type fileLease struct {
 }
 
 func OpenJournal(root string) (*FileJournal, error) {
+	if strings.TrimSpace(root) == "" {
+		return nil, ErrInvalid
+	}
 	path, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -39,7 +43,10 @@ func OpenJournal(root string) (*FileJournal, error) {
 	return &FileJournal{root: path}, nil
 }
 func (j *FileJournal) Acquire(ctx context.Context, id string) (Lease, error) {
-	if id == "" || len(id) > 512 {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if j == nil || j.root == "" || strings.TrimSpace(id) == "" || len(id) > 512 {
 		return nil, ErrInvalid
 	}
 	sum := sha256.Sum256([]byte(id))
@@ -51,6 +58,9 @@ func (j *FileJournal) Acquire(ctx context.Context, id string) (Lease, error) {
 	return &fileLease{path: path + ".gob", id: id, unlock: unlock}, nil
 }
 func (l *fileLease) Load(ctx context.Context) (Record, error) {
+	if err := ctx.Err(); err != nil {
+		return Record{}, err
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {
@@ -75,11 +85,11 @@ func (l *fileLease) load(ctx context.Context) (result Record, err error) {
 		return Record{}, err
 	}
 	if len(data) <= sha256.Size || len(data) > maxJournalBytes {
-		return Record{}, ErrJournalConflict
+		return Record{}, ErrJournalFormat
 	}
 	sum := sha256.Sum256(data[sha256.Size:])
 	if !bytes.Equal(data[:sha256.Size], sum[:]) {
-		return Record{}, ErrJournalConflict
+		return Record{}, ErrJournalFormat
 	}
 	var envelope struct {
 		Version uint16
@@ -87,22 +97,31 @@ func (l *fileLease) load(ctx context.Context) (result Record, err error) {
 	}
 	decoder := gob.NewDecoder(bytes.NewReader(data[sha256.Size:]))
 	if err := decoder.Decode(&envelope); err != nil {
-		return Record{}, fmt.Errorf("journal decode: %w", err)
+		return Record{}, fmt.Errorf("%w: decode: %w", ErrJournalFormat, err)
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
-		return Record{}, ErrJournalConflict
+		return Record{}, ErrJournalFormat
 	}
 	if envelope.Version != 1 || envelope.Record.ID != l.id || envelope.Record.Sequence == 0 {
-		return Record{}, ErrJournalConflict
+		return Record{}, ErrJournalFormat
 	}
 	return envelope.Record, nil
 }
 func (l *fileLease) Save(ctx context.Context, r Record) (Record, error) {
+	if err := ctx.Err(); err != nil {
+		return Record{}, err
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.closed || r.ID != l.id || r.Sequence == math.MaxUint64 || len(r.Receipts) > 20000 {
+	if strings.TrimSpace(r.ID) == "" {
+		return Record{}, ErrInvalid
+	}
+	if l.closed || r.ID != l.id {
 		return Record{}, ErrJournalConflict
+	}
+	if r.Sequence == math.MaxUint64 || len(r.Receipts) > 20000 {
+		return Record{}, ErrInvalid
 	}
 	prior, err := l.load(ctx)
 	if errors.Is(err, ErrJournalNotFound) {
@@ -124,7 +143,7 @@ func (l *fileLease) Save(ctx context.Context, r Record) (Record, error) {
 		return Record{}, err
 	}
 	if buf.Len()+sha256.Size > maxJournalBytes {
-		return Record{}, ErrJournalConflict
+		return Record{}, ErrInvalid
 	}
 	sum := sha256.Sum256(buf.Bytes())
 	data := append(sum[:], buf.Bytes()...)

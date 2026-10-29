@@ -11,6 +11,7 @@ import (
 	"io"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/internal/dependency"
 )
 
 const DefaultMaxBytes int64 = 128 << 20
@@ -18,6 +19,10 @@ const formatVersion uint16 = 1
 const semanticVersion uint16 = 9
 
 var magic = [8]byte{'F', 'I', 'R', 'E', 'M', 'O', 'N', 0}
+
+// ErrInvalid identifies invalid codec or store arguments.
+var ErrInvalid = errors.New("invalid snapshot input")
+
 var ErrFormat = errors.New("unsupported or corrupt snapshot")
 
 type payload struct {
@@ -27,8 +32,8 @@ type payload struct {
 
 // Encode stores concrete tables and IDs. Runtime pointers and callbacks never enter the gob payload.
 func Encode(w io.Writer, f *fm.Firewall) error {
-	if f == nil {
-		return ErrFormat
+	if f == nil || dependency.Nil(w) {
+		return ErrInvalid
 	}
 	var body bytes.Buffer
 	if err := gob.NewEncoder(&body).Encode(payload{SemanticDigest: f.SemanticDigest(), Data: f.Export()}); err != nil {
@@ -44,35 +49,43 @@ func Encode(w io.Writer, f *fm.Firewall) error {
 	binary.BigEndian.PutUint64(header[12:20], uint64(body.Len()))
 	sum := sha256.Sum256(body.Bytes())
 	copy(header[20:], sum[:])
-	if _, err := w.Write(header); err != nil {
-		return err
+	for _, part := range [][]byte{header, body.Bytes()} {
+		n, err := w.Write(part)
+		if err != nil {
+			return err
+		}
+		if n != len(part) {
+			return io.ErrShortWrite
+		}
 	}
-	_, err := w.Write(body.Bytes())
-	return err
+	return nil
 }
 
 // Decode bounds the envelope before gob decoding. gob files must come from trusted local storage.
 func Decode(r io.Reader, maxBytes int64) (*fm.Firewall, error) {
-	if maxBytes <= 0 {
-		return nil, ErrFormat
+	if maxBytes <= 0 || dependency.Nil(r) {
+		return nil, ErrInvalid
 	}
 	header := make([]byte, 52)
 	if _, err := io.ReadFull(r, header); err != nil {
-		return nil, fmt.Errorf("%w: header: %v", ErrFormat, err)
+		return nil, fmt.Errorf("%w: header: %w", ErrFormat, err)
 	}
 	if !bytes.Equal(header[:8], magic[:]) || binary.BigEndian.Uint16(header[8:10]) != formatVersion || binary.BigEndian.Uint16(header[10:12]) != semanticVersion {
 		return nil, ErrFormat
 	}
 	n := binary.BigEndian.Uint64(header[12:20])
-	if n > uint64(maxBytes) || n == 0 {
+	if n > uint64(maxBytes) || n > uint64(^uint(0)>>1) || n == 0 {
 		return nil, ErrFormat
 	}
 	body := make([]byte, int(n))
 	if _, err := io.ReadFull(r, body); err != nil {
-		return nil, fmt.Errorf("%w: payload: %v", ErrFormat, err)
+		return nil, fmt.Errorf("%w: payload: %w", ErrFormat, err)
 	}
 	var extra [1]byte
 	if n, err := r.Read(extra[:]); n != 0 || err != io.EOF {
+		if err != nil {
+			return nil, fmt.Errorf("%w: trailing data: %w", ErrFormat, err)
+		}
 		return nil, fmt.Errorf("%w: trailing data", ErrFormat)
 	}
 	sum := sha256.Sum256(body)
@@ -82,7 +95,7 @@ func Decode(r io.Reader, maxBytes int64) (*fm.Firewall, error) {
 	var p payload
 	decoder := gob.NewDecoder(bytes.NewReader(body))
 	if err := decoder.Decode(&p); err != nil {
-		return nil, fmt.Errorf("%w: gob: %v", ErrFormat, err)
+		return nil, fmt.Errorf("%w: gob: %w", ErrFormat, err)
 	}
 	var trailing payload
 	if err := decoder.Decode(&trailing); err != io.EOF {
@@ -90,7 +103,7 @@ func Decode(r io.Reader, maxBytes int64) (*fm.Firewall, error) {
 	}
 	fw, err := fm.Seal(p.Data)
 	if err != nil {
-		return nil, fmt.Errorf("%w: graph: %v", ErrFormat, err)
+		return nil, fmt.Errorf("%w: graph: %w", ErrFormat, err)
 	}
 	if fw.SemanticDigest() != p.SemanticDigest {
 		return nil, fmt.Errorf("%w: semantic digest", ErrFormat)

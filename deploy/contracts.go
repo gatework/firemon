@@ -17,6 +17,7 @@ import (
 var (
 	ErrPending         = errors.New("operation requires independent recovery")
 	ErrUncertain       = errors.New("device effect or persistence is not established")
+	ErrJournalFormat   = errors.New("unsupported or corrupt operation journal")
 	ErrJournalConflict = errors.New("journal operation conflict")
 	ErrJournalNotFound = errors.New("journal operation not found")
 	ErrInvalid         = errors.New("invalid deployment request")

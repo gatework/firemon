@@ -178,3 +178,23 @@ each policy context and its result pass. Both request lists require a window if
 present, although each analysis consumes only its own evidence. Budget exhaustion
 and cancellation return no partial results. Interval sorting uses bounded chunks
 and cancellable merges. Request data is neither retained nor mutated.
+
+## Persistence input and failure contracts
+
+Snapshot codec/store invalid inputs use `snapshot.ErrInvalid`; stored envelope,
+graph or manifest corruption uses `snapshot.ErrFormat`. Revision mismatches remain
+`ErrConflict`, ownership mismatches remain `ErrReserved`, and a well-formed missing
+revision remains `ErrNotFound`. Empty store/journal roots and nil/zero store handles
+are invalid. Context cancellation precedes argument validation and file access.
+
+Snapshot encoding detects short header/body writes with `io.ErrShortWrite` and
+does not continue after failure. Decoding retains underlying I/O errors through
+`errors.Is` while classifying corrupt/truncated input as `ErrFormat`. Typed-nil
+readers/writers are rejected before invocation. The envelope and semantic version
+remain unchanged.
+
+Journal corruption or unsupported encoding uses `deploy.ErrJournalFormat`;
+invalid inputs use `deploy.ErrInvalid`, while lease ownership, closed leases and
+sequence conflicts remain `deploy.ErrJournalConflict`. Corrupt journals are never
+replaced by a fresh operation. These classifications do not release reservations,
+change write receipts, or permit replay during recovery.

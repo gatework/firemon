@@ -53,7 +53,20 @@ type Manifest struct {
 }
 type Store struct{ root string }
 
+func (s *Store) validate(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if s == nil || s.root == "" {
+		return ErrInvalid
+	}
+	return nil
+}
+
 func Open(root string) (*Store, error) {
+	if strings.TrimSpace(root) == "" {
+		return nil, ErrInvalid
+	}
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -79,7 +92,7 @@ func (s *Store) readManifest() (result Manifest, err error) {
 	decoder := json.NewDecoder(io.LimitReader(f, DefaultMaxBytes))
 	decoder.DisallowUnknownFields()
 	if err = decoder.Decode(&m); err != nil {
-		return Manifest{}, err
+		return Manifest{}, fmt.Errorf("%w: manifest: %w", ErrFormat, err)
 	}
 	if m.Version != 1 || m.Devices == nil || m.Reservations == nil || m.Publications == nil || m.Acknowledged == nil {
 		return Manifest{}, ErrFormat
@@ -93,7 +106,7 @@ func (s *Store) readManifest() (result Manifest, err error) {
 
 // Manifest always reads persisted state, including cross-process reservations.
 func (s *Store) Manifest(ctx context.Context) (Manifest, error) {
-	if err := ctx.Err(); err != nil {
+	if err := s.validate(ctx); err != nil {
 		return Manifest{}, err
 	}
 	return s.readManifest()
@@ -114,11 +127,11 @@ func validRevision(revision string) bool {
 	return err == nil && strings.ToLower(revision) == revision
 }
 func (s *Store) Load(ctx context.Context, revision string) (result *fm.Firewall, err error) {
-	if err := ctx.Err(); err != nil {
+	if err := s.validate(ctx); err != nil {
 		return nil, err
 	}
 	if !validRevision(revision) {
-		return nil, ErrNotFound
+		return nil, ErrInvalid
 	}
 	f, err := os.Open(filepath.Join(s.root, "objects", revision+".gob"))
 	if errors.Is(err, os.ErrNotExist) {
@@ -139,6 +152,12 @@ func (s *Store) Load(ctx context.Context, revision string) (result *fm.Firewall,
 	return fw, ctx.Err()
 }
 func (s *Store) Current(ctx context.Context, device string) (*fm.Firewall, Head, error) {
+	if err := s.validate(ctx); err != nil {
+		return nil, Head{}, err
+	}
+	if strings.TrimSpace(device) == "" {
+		return nil, Head{}, ErrInvalid
+	}
 	m, err := s.Manifest(ctx)
 	if err != nil {
 		return nil, Head{}, err
@@ -174,12 +193,13 @@ type PublishResult struct {
 }
 
 func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOptions) (result PublishResult, err error) {
-	if fw == nil || options.PublicationID == "" || options.KeepReservation && (!options.Live || options.Reservation == "") {
-		return PublishResult{}, fmt.Errorf("publication ID and firewall required")
-	}
-	if err := ctx.Err(); err != nil {
+	if err := s.validate(ctx); err != nil {
 		return PublishResult{}, err
 	}
+	if fw == nil || strings.TrimSpace(options.PublicationID) == "" || options.Expected != "" && !validRevision(options.Expected) || options.KeepReservation && (!options.Live || strings.TrimSpace(options.Reservation) == "") {
+		return PublishResult{}, ErrInvalid
+	}
+
 	var buf bytes.Buffer
 	if err := Encode(&buf, fw); err != nil {
 		return PublishResult{}, err
@@ -227,7 +247,7 @@ func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOpt
 	if !fw.Complete() && !options.Live {
 		return PublishResult{Revision: revision, Generation: m.Generation, Archived: true}, nil
 	}
-	if err := ctx.Err(); err != nil {
+	if err := s.validate(ctx); err != nil {
 		return PublishResult{}, err
 	}
 	m.Generation++
@@ -246,8 +266,11 @@ func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOpt
 	return PublishResult{Revision: revision, Generation: m.Generation}, nil
 }
 func (s *Store) Reserve(ctx context.Context, device, expected, token string) (err error) {
-	if token == "" || device == "" {
-		return ErrReserved
+	if err := s.validate(ctx); err != nil {
+		return err
+	}
+	if strings.TrimSpace(token) == "" || strings.TrimSpace(device) == "" || !validRevision(expected) {
+		return ErrInvalid
 	}
 	unlock, err := lock(ctx, filepath.Join(s.root, "manifest.lock"))
 	if err != nil {
@@ -275,6 +298,12 @@ func (s *Store) Reserve(ctx context.Context, device, expected, token string) (er
 
 // ReleaseUnchanged requires an independently confirmed baseline revision, never a timeout.
 func (s *Store) ReleaseUnchanged(ctx context.Context, device, token, confirmedRevision string) (err error) {
+	if err := s.validate(ctx); err != nil {
+		return err
+	}
+	if strings.TrimSpace(device) == "" || strings.TrimSpace(token) == "" || !validRevision(confirmedRevision) {
+		return ErrInvalid
+	}
 	unlock, err := lock(ctx, filepath.Join(s.root, "manifest.lock"))
 	if err != nil {
 		return err
@@ -302,7 +331,7 @@ func (s *Store) ReleaseUnchanged(ctx context.Context, device, token, confirmedRe
 // Archive stores immutable captured evidence without publishing a current head,
 // releasing a reservation or emitting a projection event.
 func (s *Store) Archive(ctx context.Context, fw *fm.Firewall) (string, error) {
-	if err := ctx.Err(); err != nil {
+	if err := s.validate(ctx); err != nil {
 		return "", err
 	}
 	var buf bytes.Buffer
@@ -326,8 +355,11 @@ func (s *Store) Archive(ctx context.Context, fw *fm.Firewall) (string, error) {
 
 // Acknowledge advances a sink cursor with CAS. Sinks apply each batch idempotently before this call.
 func (s *Store) Acknowledge(ctx context.Context, sink string, expected, next uint64) (err error) {
-	if sink == "" || next < expected {
-		return ErrConflict
+	if err := s.validate(ctx); err != nil {
+		return err
+	}
+	if strings.TrimSpace(sink) == "" || next < expected {
+		return ErrInvalid
 	}
 	unlock, err := lock(ctx, filepath.Join(s.root, "manifest.lock"))
 	if err != nil {
