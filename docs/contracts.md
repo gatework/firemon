@@ -271,3 +271,41 @@ make member counters or absent logs a removal authorization. Empty declarations
 can be unreachable without an earlier shadowing rule. Future absolute schedule
 boundaries and NAT-owning rules still participate in proof. Member usage has no
 removal flag.
+
+## Candidate coverage, identity and attempt limits
+
+`Planner.Plan` reuses existing effective coverage, then considers single-rule
+member additions, then exact new rules. Service additions compare the union of
+complete protocol/source-port/destination-port/ICMP-type/ICMP-code tuples. Members
+already covered by that union add neither a reference nor a cost. Partial coverage
+still adds the requested whole term. `internal/servicecoverage` shares this
+projection with service risk predicates; protocol zero remains a concrete protocol.
+Risk relation direction, empty exposure and unknown evidence semantics are unchanged.
+
+`MaxCandidates` now bounds full proof/render attempts (default 128), rather than
+the total number of viable alternatives discovered. Discovery still scans all
+eligible rules within `Engine.Limits.MaxVisits`; a bounded max heap retains only
+the cheapest N append drafts. Full proofs run in the established lexicographic
+`Cost` order. A rejected prefilter consumes visits but not an attempt. Proof or
+`ErrRender` rejection consumes an attempt. Creation is built only after append
+alternatives fail and an attempt remains. Remaining untried alternatives at the
+limit yield `policy.ErrBudget`, never a partial plan; complete unsuccessful search
+yields `plan.ErrUnsafe`. Cancellation, region/visit budgets and fatal renderer
+errors still propagate. `Transfer` has no candidate search and does not consume
+this cap. Optimality is within the generated single-rule candidate space, not a
+claim of globally minimal multi-rule or object-member combinations.
+
+A candidate owns its name reservations, including pending declarations. Allocation
+keeps existing unoccupied hash names and probes successive `-new` suffixes until
+both graph identity and native name are available. Global address/service names
+also avoid local object/group names across scopes, because native lookup can
+shadow global names. Indexing, probes and reservations consume the same candidate
+visit allowance. Plan and Transfer use this allocation contract.
+
+`internal/nativename` supplies the actual namespace keys used by independent native
+renderer validation: ASA separates objects from groups, Fortinet resolves the
+selected context, and named rules retain their native chain. PAN, SRX and Huawei
+reject creation that aliases an existing rule name even when graph IDs differ.
+Numeric native rule allocation remains renderer-owned. Existing valid cross-scope
+names remain loadable; this change does not add a blanket name restriction to Seal.
+The public DTOs, snapshot v9 format, CLI JSON and Renderer signature are unchanged.

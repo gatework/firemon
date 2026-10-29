@@ -28,9 +28,9 @@ IPv4/IPv6 interval algebra without enumeration. Exact multidimensional traffic u
 
 Native NAT semantics govern selection: original match first; explicit identity/constant/offset/dynamic relations; no-NAT terminal; dynamic allocation is possible, not exact session state. Reverse inventory aliases require forward validation. PAN ordered NAT and ASA staged auto/manual semantics must not be conflated.
 
-Reuse coverage, then append members, then create exact gaps. Perl candidate subset/equality conditions and append-member costs are retained, with deterministic lexicographic cost: new rules, appended members, new objects, modified rules, moves, position, ID. Every rendered candidate and batch merge needs exact-target and outside-preservation proof; try safe alternatives if rendering fails. Limits: 100 requests, 4096 combinations, 100000 candidate visits, 4096 regions, 128 plan combinations; charge before expansion.
+Reuse coverage, then append members, then create exact gaps. Perl candidate subset/equality conditions and append-member costs are retained, with deterministic lexicographic cost: new rules, appended members, new objects, modified rules, moves, position, ID. Every rendered candidate and batch merge needs exact-target and outside-preservation proof; try safe alternatives if rendering fails. Limits: 100 requests, 4096 combinations, 100000 candidate visits, 4096 regions, 128 complete candidate proof/render attempts; charge before expansion.
 
-An append proven to change effective ownership outside the request is rejected before counting viable plan combinations. Earlier-rule shadowing must be retained: declaration cross-products alone cannot establish a behavior change. Baseline evaluation may be shared only within one immutable graph and request context; candidate and independent-readback proofs still run in full.
+An append proven to change effective ownership outside the request is rejected before counting complete candidate attempts. Earlier-rule shadowing must be retained: declaration cross-products alone cannot establish a behavior change. Baseline evaluation may be shared only within one immutable graph and request context; candidate and independent-readback proofs still run in full.
 
 ## Lifecycle and online
 

@@ -6,6 +6,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/internal/servicecoverage"
 	"github.com/gatework/firemon/policy"
 )
 
@@ -132,7 +133,7 @@ func (e *riskEvaluation) projection(ctx context.Context, dimension Dimension) (f
 	var projected flow.Traffic
 	if known && !actual.Empty() {
 		var err error
-		projected, err = riskProjection(actual, dimension, e.limit)
+		projected, err = riskProjection(ctx, actual, dimension, e.limit)
 		if err != nil {
 			return flow.Traffic{}, false, err
 		}
@@ -189,7 +190,10 @@ func (e *riskEvaluation) assess(ctx context.Context, expression preparedRiskExpr
 	return value, nil
 }
 
-func riskProjection(traffic flow.Traffic, dimension Dimension, limit int) (flow.Traffic, error) {
+func riskProjection(ctx context.Context, traffic flow.Traffic, dimension Dimension, limit int) (flow.Traffic, error) {
+	if dimension == Service {
+		return servicecoverage.FromTraffic(ctx, traffic, limit)
+	}
 	boxes := traffic.Regions()
 	for i, b := range boxes {
 		switch dimension {
@@ -203,10 +207,6 @@ func riskProjection(traffic flow.Traffic, dimension Dimension, limit int) (flow.
 				zero = netip.IPv6Unspecified()
 			}
 			boxes[i] = flow.TrafficRegion{Source: address, Destination: flow.AddressRange{First: zero, Last: zero}}
-		case Service:
-			zero := netip.IPv4Unspecified()
-			b.Source, b.Destination = flow.AddressRange{First: zero, Last: zero}, flow.AddressRange{First: zero, Last: zero}
-			boxes[i] = b
 		default:
 			return flow.Traffic{}, ErrInvalid
 		}
@@ -242,17 +242,7 @@ func riskStandard(ctx context.Context, predicate RiskPredicate, limit int) (flow
 		if !predicate.Addresses.Empty() || len(predicate.Services) == 0 {
 			return flow.Traffic{}, ErrInvalid
 		}
-		zero := netip.IPv4Unspecified()
-		if len(predicate.Services) > limit {
-			return flow.Traffic{}, flow.ErrBudget
-		}
-		boxes = make([]flow.TrafficRegion, 0, len(predicate.Services))
-		for _, term := range predicate.Services {
-			if err := ctx.Err(); err != nil {
-				return flow.Traffic{}, err
-			}
-			boxes = append(boxes, flow.TrafficRegion{Source: flow.AddressRange{First: zero, Last: zero}, Destination: flow.AddressRange{First: zero, Last: zero}, Protocol: term.Protocol, SourcePort: term.SourcePort, DestinationPort: term.DestinationPort, ICMPType: term.ICMPType, ICMPCode: term.ICMPCode})
-		}
+		return servicecoverage.FromTerms(ctx, predicate.Services, limit)
 	default:
 		return flow.Traffic{}, ErrInvalid
 	}

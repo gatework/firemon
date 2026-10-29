@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
@@ -13,7 +12,9 @@ import (
 )
 
 type Planner struct {
-	Renderer      Renderer
+	Renderer Renderer
+	// MaxCandidates bounds full proof/render attempts in increasing Cost order.
+	// Nonpositive values default to 128. Scanning still uses Engine.Limits.
 	MaxCandidates int
 	Engine        policy.Engine
 }
@@ -98,7 +99,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 	if !prior.Complete {
 		return nil, ErrUnsafe
 	}
-	var candidates []*Plan
+	candidates := candidateSelection{limit: maxCandidates}
 	if err := visits.take(ctx, fw.RuleCount()); err != nil {
 		return nil, err
 	}
@@ -127,56 +128,28 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 		if !possible {
 			continue
 		}
-		if len(candidates) >= maxCandidates {
-			return nil, policy.ErrBudget
+		candidates.consider(candidate{after: next, changes: changes, cost: cost})
+	}
+	attempts := 0
+	for _, draft := range candidates.ordered() {
+		attempts++
+		result, err := p.tryCandidate(ctx, fw, draft, q, &prior, &visits)
+		if err != nil || result != nil {
+			return result, err
 		}
-		candidates = append(candidates, &Plan{before: fw, after: next, changes: changes, cost: cost})
+	}
+	// Every append has fewer new rules than creation. Construct the fallback
+	// only after those attempts fail; an unused fallback must not spend budget.
+	if attempts >= maxCandidates {
+		return nil, policy.ErrBudget
 	}
 	next, changes, cost, err := createCandidate(ctx, fw, q, gap, &visits)
 	if err != nil {
 		return nil, err
 	}
-	if len(candidates) >= maxCandidates {
-		return nil, policy.ErrBudget
-	}
-	candidates = append(candidates, &Plan{before: fw, after: next, changes: changes, cost: cost})
-	slices.SortStableFunc(candidates, func(a, b *Plan) int {
-		if a.cost.less(b.cost) {
-			return -1
-		}
-		if b.cost.less(a.cost) {
-			return 1
-		}
-		return 0
-	})
-	for _, candidate := range candidates {
-		proof, err := p.proveWithBaseline(ctx, fw, candidate.after, q, &prior, &visits)
-		if err != nil {
-			if errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget) || ctx.Err() != nil {
-				return nil, err
-			}
-			continue
-		}
-		commands, err := p.Renderer.Render(ctx, fw, candidate.after, candidate.Changes())
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			if !errors.Is(err, ErrRender) {
-				return nil, err
-			}
-			continue
-		}
-		if len(commands) == 0 {
-			continue
-		}
-		candidate.proof = proof
-		candidate.commands = slices.Clone(commands)
-		candidate.target, candidate.engine = q, p.Engine
-		if err := candidate.seal(); err != nil {
-			return nil, err
-		}
-		return candidate, nil
+	result, err := p.tryCandidate(ctx, fw, candidate{after: next, changes: changes, cost: cost}, q, &prior, &visits)
+	if err != nil || result != nil {
+		return result, err
 	}
 	return nil, ErrUnsafe
 }

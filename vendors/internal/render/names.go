@@ -4,35 +4,19 @@ import (
 	"context"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/internal/nativename"
 	"github.com/gatework/firemon/plan"
-	"github.com/gatework/firemon/policy"
 )
-
-func nativeName(o fm.Object) string {
-	if o.Name != "" {
-		return o.Name
-	}
-	return string(o.ID)
-}
 
 // Native namespaces, rather than graph IDs, determine what a CLI edit targets.
 // Existing names seed the index even when a rule is scheduled for removal: a
 // delete/create replacement of the same native identity is not a rule addition.
 func (b batch) validateNames(ctx context.Context, before, after *fm.Firewall) error {
 	vendor := before.Metadata().Vendor
-	type objectName struct {
-		scope, name string
-		group       bool
+	key := func(object fm.Object, group bool) nativename.ObjectKey {
+		return nativename.Object(before.Metadata(), object, group)
 	}
-	key := func(o fm.Object, group bool) objectName {
-		scope := o.Scope
-		if vendor == "fortinet" && scope == "" {
-			scope = before.Metadata().Context
-		}
-		// ASA references distinguish object from object-group explicitly.
-		return objectName{scope, nativeName(o), group && vendor == "asa"}
-	}
-	addresses, services := make(map[objectName]bool), make(map[objectName]bool)
+	addresses, services := make(map[nativename.ObjectKey]bool), make(map[nativename.ObjectKey]bool)
 	for _, a := range before.Addresses() {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -93,16 +77,12 @@ func (b batch) validateNames(ctx context.Context, before, after *fm.Firewall) er
 		}
 		services[k] = true
 	}
-	if vendor != "paloalto" && vendor != "srx" {
+	if !nativename.NamedRules(vendor) {
 		return ctx.Err()
 	}
-	type ruleName struct {
-		chain policy.RuleChain
-		name  string
-	}
-	rules := make(map[ruleName]bool)
-	ruleKey := func(r fm.RuleRecord) ruleName {
-		return ruleName{policy.NativeRuleOrder(vendor, r).Chain, nativeName(r.Object)}
+	rules := make(map[nativename.RuleKey]bool)
+	ruleKey := func(rule fm.RuleRecord) nativename.RuleKey {
+		return nativename.Rule(vendor, rule)
 	}
 	for _, r := range before.Rules() {
 		if err := ctx.Err(); err != nil {
@@ -134,7 +114,7 @@ func declarationIdentity(vendor string, object fm.Object) bool {
 	}
 	switch vendor {
 	case "paloalto", "asa", "hillstone":
-		return object.Scope == "" && object.ID == fm.ID(nativeName(object))
+		return object.Scope == "" && object.ID == fm.ID(nativename.Name(object))
 	default:
 		return true // Scoped native adapters validate their own identity scheme.
 	}

@@ -78,7 +78,11 @@ func (p *Plan) Before() *fm.Firewall { return p.before }
 func (p *Plan) After() *fm.Firewall { return p.after }
 
 func (p *Plan) Changes() []Change {
-	out := slices.Clone(p.changes)
+	return cloneChanges(p.changes)
+}
+
+func cloneChanges(changes []Change) []Change {
+	out := slices.Clone(changes)
 	for i := range out {
 		out[i].Sources = slices.Clone(out[i].Sources)
 		out[i].Destinations = slices.Clone(out[i].Destinations)

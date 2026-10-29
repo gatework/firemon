@@ -116,6 +116,30 @@ func TestPANCreationRejectsNativeNameCollisions(t *testing.T) {
 	}
 }
 
+func TestHuaweiCreationRejectsAliasedNativeRuleName(t *testing.T) {
+	rule := fm.RuleRecord{
+		Object:  fm.Object{ID: "graph-id", Name: "occupied"},
+		RuleSet: "security", Position: 10, Action: fm.Deny,
+		Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant,
+		Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true},
+	}
+	data := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "huawei"}, Rules: []fm.RuleRecord{rule}}
+	before, err := fm.Seal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule.ID, rule.Position, rule.Action = "occupied", 0, fm.Permit
+	data.Rules = append(data.Rules, rule)
+	after, err := fm.Seal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands, err := (huawei.Renderer{}).Render(context.Background(), before, after, []plan.Change{{Kind: plan.CreateRule, Rule: rule.ID}})
+	if !errors.Is(err, plan.ErrRender) || commands != nil {
+		t.Fatalf("creation targets occupied native rule: %v %v", commands, err)
+	}
+}
+
 func TestPANAnyCreationRoundTripsThroughParser(t *testing.T) {
 	before, _ := fm.Seal(fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "paloalto"}})
 	rule := fm.RuleRecord{Object: fm.Object{ID: "new", Name: "new"}, RuleSet: "security", Action: fm.Permit, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant, Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}}

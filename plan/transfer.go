@@ -77,24 +77,20 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			if err := visits.take(ctx, len(rules)); err != nil {
-				return nil, err
-			}
 			id := generatedID("fm-transfer-", struct {
 				Index int
 				Box   flow.TrafficRegion
 			}{index, box})
-			for before.Rule(id) != nil || slices.ContainsFunc(rules, func(r fm.RuleRecord) bool { return r.ID == id }) {
-				if err := visits.take(ctx, len(rules)+1); err != nil {
-					return nil, err
-				}
-				id += "-new"
-			}
 			m, err := catalog.match(ctx, box, q)
 			if err != nil {
 				return nil, err
 			}
 			r := fm.RuleRecord{Object: fm.Object{ID: id, Name: string(id), Scope: q.Scope}, RuleSet: q.RuleSet, Position: len(rules), Match: m, Action: intent.Action, Log: intent.Log, LogStart: intent.LogStart, LogEnd: intent.LogEnd}
+			id, err = catalog.names.rule(ctx, id, r)
+			if err != nil {
+				return nil, err
+			}
+			r.ID, r.Name = id, string(id)
 			rules = append(rules, r)
 			changes = append(changes, Change{Kind: CreateRule, Rule: id, Sources: m.Sources, Destinations: m.Destinations, Services: m.Services})
 		}

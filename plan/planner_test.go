@@ -26,7 +26,7 @@ func addressRange(cidr string) flow.AddressRange {
 	r, _ := flow.PrefixRange(netip.MustParsePrefix(cidr))
 	return r
 }
-func request(t *testing.T, source string) policy.Request {
+func request(t testing.TB, source string) policy.Request {
 	t.Helper()
 	q, err := flow.NewTraffic(32, flow.TrafficRegion{Source: addressRange(source), Destination: addressRange("198.51.100.1/32"), Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
 	if err != nil {
@@ -34,7 +34,7 @@ func request(t *testing.T, source string) policy.Request {
 	}
 	return policy.Request{Traffic: q}
 }
-func baseline(t *testing.T) *fm.Firewall {
+func baseline(t testing.TB) *fm.Firewall {
 	t.Helper()
 	d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "src"}, Ranges: []flow.AddressRange{addressRange("192.0.2.1/32")}}, {Object: fm.Object{ID: "dst"}, Ranges: []flow.AddressRange{addressRange("198.51.100.1/32")}}}, Services: []fm.ServiceRecord{{Object: fm.Object{ID: "https"}, Terms: []fm.ServiceTerm{{Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}}}}}, Rules: []fm.RuleRecord{{Object: fm.Object{ID: "10"}, RuleSet: "security", Action: fm.Permit, Log: fm.Irrelevant, Match: fm.Match{Sources: []fm.AddressRef{{Kind: fm.AddressObject, ID: "src"}}, Destinations: []fm.AddressRef{{Kind: fm.AddressObject, ID: "dst"}}, Services: []fm.ServiceRef{{Kind: fm.ServiceObject, ID: "https"}}, AnyFromZone: true, AnyToZone: true}}}}
 	fw, err := fm.Seal(d)
