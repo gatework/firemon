@@ -93,8 +93,8 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 		if !definition.Traffic.Empty() || definition.Relation != 0 {
 			return nil, ErrInvalid
 		}
-		validationBudget := comparisons
-		if err := validateRiskExpression(ctx, *definition.Expression, limit, &validationBudget, 0); err != nil {
+		validationBudget, retained := comparisons, limit
+		if err := validateRiskExpression(ctx, *definition.Expression, limit, &validationBudget, &retained, 0); err != nil {
 			return nil, err
 		}
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-func validateRiskExpression(ctx context.Context, expression RiskExpression, limit int, budget *int, depth int) error {
+func validateRiskExpression(ctx context.Context, expression RiskExpression, limit int, budget *int, retained *int, depth int) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -34,15 +34,23 @@ func validateRiskExpression(ctx context.Context, expression RiskExpression, limi
 		if p.Relation < Intersects || p.Relation > NotEqual {
 			return ErrInvalid
 		}
-		_, err := riskStandard(*p, limit)
-		return err
+		standard, err := riskStandard(*p, limit)
+		if err != nil {
+			return err
+		}
+		count := len(standard.Boxes())
+		if count > *retained {
+			return flow.ErrBudget
+		}
+		*retained -= count
+		return nil
 	}
 	children := expression.All
 	if len(expression.Any) > 0 {
 		children = expression.Any
 	}
 	for _, child := range children {
-		if err := validateRiskExpression(ctx, child, limit, budget, depth+1); err != nil {
+		if err := validateRiskExpression(ctx, child, limit, budget, retained, depth+1); err != nil {
 			return err
 		}
 	}
