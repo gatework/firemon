@@ -2,7 +2,6 @@ package asa
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -11,9 +10,10 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
+	"github.com/gatework/firemon/vendors/internal/render"
 )
 
-var ErrRender = errors.New("unsupported ASA command representation")
+var ErrRender = fmt.Errorf("%w: unsupported ASA command representation", plan.ErrRender)
 
 type Renderer struct{}
 
@@ -42,8 +42,12 @@ func ports(r flow.Interval) string {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	if before == nil || after == nil || before.Metadata().Vendor != "asa" || after.Metadata().Vendor != "asa" {
-		return nil, ErrRender
+	changes, err := render.Prepare(ctx, "asa", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) == 0 {
+		return nil, nil
 	}
 	commands := []string{"configure terminal"}
 	for _, address := range after.Addresses() {
@@ -193,6 +197,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, ErrRender
 		}
 		commands = append(commands, fmt.Sprintf("access-list %s line %d extended permit %s %s %s", acl, positions[r.ID], svc, src, dst))
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return append(commands, "end"), nil
 }

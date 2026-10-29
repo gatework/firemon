@@ -2,7 +2,6 @@ package hillstone
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"unicode"
@@ -10,9 +9,10 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
+	"github.com/gatework/firemon/vendors/internal/render"
 )
 
-var ErrRender = errors.New("unsupported Hillstone command representation")
+var ErrRender = fmt.Errorf("%w: unsupported Hillstone command representation", plan.ErrRender)
 
 type Renderer struct{}
 
@@ -34,11 +34,18 @@ func nativeName(o fm.Object) string {
 	return string(o.ID)
 }
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	if before == nil || after == nil || before.Metadata().Vendor != "hillstone" || after.Metadata().Vendor != "hillstone" {
-		return nil, ErrRender
+	changes, err := render.Prepare(ctx, "hillstone", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) == 0 {
+		return nil, nil
 	}
 	commands := []string{"configure"}
 	for _, a := range after.Addresses() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		r := a.Record()
 		if before.Address(r.ID) != nil {
 			continue
@@ -61,6 +68,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		commands = append(commands, "exit")
 	}
 	for _, s := range after.Services() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		r := s.Record()
 		if before.Service(r.ID) != nil {
 			continue
@@ -111,6 +121,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, ErrRender
 		}
 		r := rule.Record()
+		if r.RuleSet != "security" {
+			return nil, ErrRender
+		}
 		switch change.Kind {
 		case plan.AppendMembers:
 			if _, err := strconv.ParseUint(string(change.Rule), 10, 32); err != nil {
@@ -130,10 +143,24 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			if r.Log == fm.Known && r.Action != fm.Permit {
 				return nil, ErrRender
 			}
-			if r.Scope != "" && (len(r.Match.FromZones) != 1 || len(r.Match.ToZones) != 1) {
-				return nil, ErrRender
+			if r.Scope != "" {
+				if len(r.Match.FromZones) != 1 || len(r.Match.ToZones) != 1 {
+					return nil, ErrRender
+				}
+				from, to := after.Zone(r.Match.FromZones[0]), after.Zone(r.Match.ToZones[0])
+				if from == nil || to == nil || from.Scope() != r.Scope || to.Scope() != r.Scope {
+					return nil, ErrRender
+				}
 			}
 			commands = append(commands, "rule top", "action "+action)
+			for _, side := range []struct {
+				word string
+				any  bool
+			}{{"src-addr", r.Match.AnySource}, {"dst-addr", r.Match.AnyDestination}, {"service", r.Match.AnyService}} {
+				if side.any {
+					commands = append(commands, side.word+" any")
+				}
+			}
 			if r.LogStart == fm.Known {
 				commands = append(commands, "log session-start")
 			}
@@ -219,6 +246,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			commands = append(commands, "service "+name)
 		}
 		commands = append(commands, "exit")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return append(commands, "exit"), nil
 }

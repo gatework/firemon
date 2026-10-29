@@ -2,7 +2,6 @@ package huawei
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/netip"
 	"slices"
@@ -13,9 +12,10 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
+	"github.com/gatework/firemon/vendors/internal/render"
 )
 
-var ErrRender = errors.New("unsupported Huawei command representation")
+var ErrRender = fmt.Errorf("%w: unsupported Huawei command representation", plan.ErrRender)
 
 // Renderer emits USG system-view commands. Native policy moves preserve the
 // planner's first-match order; device save/commit belongs to the deploy adapter.
@@ -111,8 +111,12 @@ func serviceText(fw *fm.Firewall, ref fm.ServiceRef) ([]string, error) {
 	return []string{name}, err
 }
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	if before == nil || after == nil || !before.Complete() || !after.Complete() || before.Metadata().Vendor != "huawei" || after.Metadata().Vendor != "huawei" {
-		return nil, ErrRender
+	changes, err := render.Prepare(ctx, "huawei", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) == 0 {
+		return nil, nil
 	}
 	commands := []string{"system-view"}
 	for _, a := range after.Addresses() {
@@ -308,6 +312,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 	}
 	if len(commands) == 1 || len(changes) == 0 {
 		return nil, ErrRender
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return append(commands, "return"), nil
 }

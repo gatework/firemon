@@ -2,7 +2,6 @@ package fortinet
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/netip"
 	"slices"
@@ -14,9 +13,10 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
+	"github.com/gatework/firemon/vendors/internal/render"
 )
 
-var ErrRender = errors.New("unsupported FortiOS command representation")
+var ErrRender = fmt.Errorf("%w: unsupported FortiOS command representation", plan.ErrRender)
 
 // Renderer emits commands within Metadata.Context. A deployment session must
 // establish that VDOM before executing them.
@@ -115,8 +115,12 @@ func natOwner(fw *fm.Firewall, id fm.ID) bool {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	if before == nil || after == nil || !before.Complete() || !after.Complete() || before.Metadata().Vendor != "fortinet" || after.Metadata().Vendor != "fortinet" || before.Metadata().Context == "" || before.Metadata().Context != after.Metadata().Context {
-		return nil, ErrRender
+	changes, err := render.Prepare(ctx, "fortinet", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) == 0 {
+		return nil, nil
 	}
 	var commands []string
 	block := func(section, name string, fields []string) {
@@ -316,6 +320,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 	}
 	if len(commands) == 0 {
 		return nil, ErrRender
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return commands, nil
 }

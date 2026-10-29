@@ -2,7 +2,6 @@ package srx
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -10,9 +9,10 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
+	"github.com/gatework/firemon/vendors/internal/render"
 )
 
-var ErrRender = errors.New("unsupported Junos command representation")
+var ErrRender = fmt.Errorf("%w: unsupported Junos command representation", plan.ErrRender)
 
 type Renderer struct{}
 
@@ -128,8 +128,12 @@ func applicationName(fw *fm.Firewall, ref fm.ServiceRef) (string, error) {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	if before == nil || after == nil || before.Metadata().Vendor != "srx" || after.Metadata().Vendor != "srx" || !before.Complete() || !after.Complete() {
-		return nil, ErrRender
+	changes, err := render.Prepare(ctx, "srx", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) == 0 {
+		return nil, nil
 	}
 	commands := []string{"configure"}
 	for _, a := range after.Addresses() {
@@ -280,7 +284,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		for _, prior := range ordered {
 			p := prior.Record()
-			if p.Builtin || p.Scope != r.Scope || p.RuleSet != r.RuleSet || !slices.Equal(p.Match.FromZones, r.Match.FromZones) || !slices.Equal(p.Match.ToZones, r.Match.ToZones) {
+			if after.Rule(p.ID) == nil || p.Builtin || p.Scope != r.Scope || p.RuleSet != r.RuleSet || !slices.Equal(p.Match.FromZones, r.Match.FromZones) || !slices.Equal(p.Match.ToZones, r.Match.ToZones) {
 				continue
 			}
 			name, err := token(nativeName(p.Object))
@@ -293,6 +297,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 	}
 	if len(commands) == 1 {
 		return nil, ErrRender
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return append(commands, "exit"), nil
 }

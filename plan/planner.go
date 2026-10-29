@@ -150,6 +150,9 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
+			if !errors.Is(err, ErrRender) {
+				return nil, err
+			}
 			continue
 		}
 		if len(commands) == 0 {

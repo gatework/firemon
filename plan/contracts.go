@@ -13,6 +13,9 @@ import (
 
 var ErrInvalid = errors.New("plan: invalid input")
 
+// ErrRender means a valid change cannot be expressed by the native renderer.
+var ErrRender = errors.New("unsupported native command representation")
+
 var ErrUnsafe = errors.New("no proven renderable policy plan")
 
 type ChangeKind uint8

@@ -123,6 +123,10 @@ func TestTranslationRequiresExplicitAmbiguousChainMapping(t *testing.T) {
 	source, target := translationGraphs(t)
 	d := target.Export()
 	d.Metadata.Vendor = "hillstone"
+	// Hillstone derives the native VRF from the referenced zones.
+	for i := range d.Zones {
+		d.Zones[i].Scope = "red"
+	}
 	for i, scope := range []string{"blue", "red"} {
 		d.Rules = append(d.Rules, fm.RuleRecord{Object: fm.Object{ID: fm.ID(scope), Scope: scope}, Position: i, RuleSet: "security", Builtin: true, Action: fm.Drop, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant, Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}})
 	}

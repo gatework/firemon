@@ -2,7 +2,6 @@ package paloalto
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -12,9 +11,10 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
+	"github.com/gatework/firemon/vendors/internal/render"
 )
 
-var ErrRender = errors.New("unsupported PAN command representation")
+var ErrRender = fmt.Errorf("%w: unsupported PAN command representation", plan.ErrRender)
 
 type Renderer struct{}
 
@@ -45,8 +45,12 @@ func portText(p flow.Interval) string {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	if before == nil || after == nil || before.Metadata().Vendor != "paloalto" || after.Metadata().Vendor != "paloalto" {
-		return nil, ErrRender
+	changes, err := render.Prepare(ctx, "paloalto", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) == 0 {
+		return nil, nil
 	}
 	commands := []string{"configure"}
 	for _, a := range after.Addresses() {
@@ -112,7 +116,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 	first := ""
 	for _, rule := range ordered {
 		r := rule.Record()
-		if r.Scope == "" && r.RuleSet == "security" && !r.Builtin {
+		if r.Scope == "" && r.RuleSet == "security" && !r.Builtin && after.Rule(r.ID) != nil {
 			first = nativeName(r.Object)
 			break
 		}
@@ -262,5 +266,8 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 	}
 	// Persistence is a separately journaled deploy phase with commit completion.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return append(commands, "exit"), nil
 }

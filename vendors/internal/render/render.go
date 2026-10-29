@@ -1,0 +1,69 @@
+// Package render shares native renderer entry validation and change ordering.
+package render
+
+import (
+	"cmp"
+	"context"
+	"slices"
+
+	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/plan"
+	"github.com/gatework/firemon/policy"
+)
+
+// Prepare returns an owned change order. Most native emitters support creation
+// before surviving explicit rules; ASA can select an exact ACL line instead.
+func Prepare(ctx context.Context, vendor string, before, after *fm.Firewall, changes []plan.Change) ([]plan.Change, error) {
+	if err := plan.ValidateChanges(ctx, before, after, changes); err != nil {
+		return nil, err
+	}
+	if before.Metadata().Vendor != vendor || vendor == "fortinet" && before.Metadata().Context == "" {
+		return nil, plan.ErrInvalid
+	}
+	for _, c := range changes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if c.Kind != plan.CreateRule {
+			continue
+		}
+		r := after.Rule(c.Rule).Record()
+		if r.Description != "" || r.Disabled || (r.Log == fm.Known) != (r.LogStart == fm.Known || r.LogEnd == fm.Known) {
+			return nil, plan.ErrRender
+		}
+	}
+	if vendor != "asa" {
+		seen := make(map[policy.RuleChain]bool)
+		for r := range after.OrderedRules() {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			order := policy.NativeRuleOrder(vendor, r.Record())
+			if r.Builtin() {
+				continue
+			}
+			if before.Rule(r.ID()) != nil {
+				seen[order.Chain] = true
+			} else if seen[order.Chain] {
+				return nil, plan.ErrRender
+			}
+		}
+	}
+	result := slices.Clone(changes)
+	slices.SortStableFunc(result, func(a, b plan.Change) int {
+		if a.Kind == plan.RemoveRule {
+			if b.Kind == plan.RemoveRule {
+				return 0
+			}
+			return -1
+		}
+		if b.Kind == plan.RemoveRule {
+			return 1
+		}
+		if n := cmp.Compare(after.Rule(a.Rule).Position(), after.Rule(b.Rule).Position()); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.Rule, b.Rule)
+	})
+	return result, ctx.Err()
+}

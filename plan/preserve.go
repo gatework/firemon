@@ -27,6 +27,9 @@ func (p Planner) Preserve(ctx context.Context, before, after *fm.Firewall, chang
 	if before == nil || after == nil || p.Renderer != nil && dependency.Nil(p.Renderer) {
 		return nil, ErrInvalid
 	}
+	if err := ValidateChanges(ctx, before, after, changes); err != nil {
+		return nil, err
+	}
 	proof, err := p.Engine.Equivalent(ctx, before, after, from)
 	if err != nil {
 		return nil, err

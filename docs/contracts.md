@@ -145,3 +145,22 @@ Tests establish supported fixture and transcript behavior. New native syntax or
 firmware behavior requires evidence and a regression at its owning boundary;
 unsupported cases continue to return unknown/error. Live-device compatibility is
 separate from offline, synthetic transcript and CI evidence.
+
+## Native rendering boundary
+
+`plan.ValidateChanges` validates a complete before/after delta without granting
+traffic or device-write authority. Every native `Renderer.Render` calls it even
+when used outside a planner. Device, vendor, software, parser version and selected
+context must agree. Every rule addition, member addition and removal must be
+listed exactly once; shared declarations and unrelated catalogs cannot change.
+Only referenced new address/service declarations are accepted. Native relative
+order is preserved across source position renumbering. Successful no-op rendering
+returns no commands; failed rendering never returns a partial script.
+
+Cancellation precedes validation. Invalid deltas use `plan.ErrInvalid`, incomplete
+graphs use `plan.ErrUnsafe`, and unsupported native expressions use `plan.ErrRender`.
+Vendor-specific rendering errors wrap the common sentinel. A custom renderer must
+use that sentinel for a retryable representation rejection: Planner propagates all
+other errors instead of silently trying another candidate. Preserve also validates
+an empty change list. Native creation supports front insertion (ASA supports ACL
+line placement); an unsupported destination position is rejected, never guessed.

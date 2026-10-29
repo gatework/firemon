@@ -2,7 +2,6 @@ package netscreen
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/netip"
 	"slices"
@@ -13,9 +12,10 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
+	"github.com/gatework/firemon/vendors/internal/render"
 )
 
-var ErrRender = errors.New("unsupported ScreenOS command representation")
+var ErrRender = fmt.Errorf("%w: unsupported ScreenOS command representation", plan.ErrRender)
 
 type Renderer struct{}
 
@@ -112,8 +112,12 @@ func ownsNAT(fw *fm.Firewall, id fm.ID) bool {
 // Render produces configuration commands only. Persisting configuration belongs
 // to the deployment session's independently verified save operation.
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	if before == nil || after == nil || before.Metadata().Vendor != "netscreen" || after.Metadata().Vendor != "netscreen" || !before.Complete() || !after.Complete() {
-		return nil, ErrRender
+	changes, err := render.Prepare(ctx, "netscreen", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) == 0 {
+		return nil, nil
 	}
 	var commands []string
 	for _, address := range after.Addresses() {
@@ -319,6 +323,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 	}
 	if len(commands) == 0 {
 		return nil, ErrRender
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return commands, nil
 }

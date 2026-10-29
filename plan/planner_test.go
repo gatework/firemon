@@ -2,7 +2,6 @@ package plan_test
 
 import (
 	"context"
-	"errors"
 	"net/netip"
 	"testing"
 
@@ -16,10 +15,10 @@ type renderer struct{ rejectAppend, rejectEarlierAppends bool }
 
 func (r renderer) Render(_ context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
 	if r.rejectAppend && changes[0].Kind == plan.AppendMembers {
-		return nil, errors.New("native append unsupported")
+		return nil, plan.ErrRender
 	}
 	if r.rejectEarlierAppends && changes[0].Kind == plan.AppendMembers && changes[0].Rule != "10" {
-		return nil, errors.New("earlier rule cannot be edited")
+		return nil, plan.ErrRender
 	}
 	return []string{"reviewable native commands"}, nil
 }
