@@ -1,0 +1,78 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/huawei/rules=10-10         	    1126	    105420 ns/op	  22.59 MB/s	  344198 B/op	    1795 allocs/op
+BenchmarkParse/huawei/rules=100-10        	     139	    863343 ns/op	  24.02 MB/s	 3171758 B/op	   13715 allocs/op
+BenchmarkParse/huawei/rules=1000-10       	      12	   9469083 ns/op	  21.93 MB/s	37413776 B/op	  131837 allocs/op
+BenchmarkScan/short-10                    	    4569	     25684 ns/op	 105.12 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-10                     	      85	   1448982 ns/op	 407.07 MB/s	 3841285 B/op	      42 allocs/op
+BenchmarkScan/multiline-10                	    3807	     30928 ns/op	 100.23 MB/s	  112993 B/op	    1027 allocs/op
+BenchmarkParseXML/addresses=10-10         	    1851	     63899 ns/op	  11.31 MB/s	  175419 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-10       	      24	   5084057 ns/op	  13.87 MB/s	16574281 B/op	   63590 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/huawei/rules=10-10         	    1100	    102836 ns/op	  23.15 MB/s	  343977 B/op	    1795 allocs/op
+BenchmarkParse/huawei/rules=100-10        	     136	    871994 ns/op	  23.79 MB/s	 3151412 B/op	   13713 allocs/op
+BenchmarkParse/huawei/rules=1000-10       	      12	   9369684 ns/op	  22.16 MB/s	37414222 B/op	  131838 allocs/op
+BenchmarkScan/short-10                    	    4927	     24627 ns/op	 109.63 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-10                     	      85	   1463185 ns/op	 403.12 MB/s	 3841281 B/op	      42 allocs/op
+BenchmarkScan/multiline-10                	    3961	     30154 ns/op	 102.81 MB/s	  112993 B/op	    1027 allocs/op
+BenchmarkParseXML/addresses=10-10         	    1818	     62347 ns/op	  11.60 MB/s	  175277 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-10       	      24	   4962778 ns/op	  14.21 MB/s	16801807 B/op	   63598 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/huawei/rules=10-10         	    1089	    103090 ns/op	  23.10 MB/s	  343762 B/op	    1795 allocs/op
+BenchmarkParse/huawei/rules=100-10        	     136	    875804 ns/op	  23.68 MB/s	 3148568 B/op	   13713 allocs/op
+BenchmarkParse/huawei/rules=1000-10       	      12	   9302990 ns/op	  22.32 MB/s	37414773 B/op	  131838 allocs/op
+BenchmarkScan/short-10                    	    4842	     25607 ns/op	 105.44 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-10                     	      78	   1497613 ns/op	 393.86 MB/s	 3841285 B/op	      42 allocs/op
+BenchmarkScan/multiline-10                	    3738	     31081 ns/op	  99.74 MB/s	  112993 B/op	    1027 allocs/op
+BenchmarkParseXML/addresses=10-10         	    1953	     62631 ns/op	  11.54 MB/s	  175291 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-10       	      24	   4963519 ns/op	  14.20 MB/s	16801608 B/op	   63598 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/huawei/rules=10-10         	    1047	    104075 ns/op	  22.88 MB/s	  344187 B/op	    1795 allocs/op
+BenchmarkParse/huawei/rules=100-10        	     136	    869968 ns/op	  23.84 MB/s	 3131560 B/op	   13711 allocs/op
+BenchmarkParse/huawei/rules=1000-10       	      12	   9311535 ns/op	  22.30 MB/s	37414618 B/op	  131838 allocs/op
+BenchmarkScan/short-10                    	    4996	     24517 ns/op	 110.13 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-10                     	      82	   1474110 ns/op	 400.13 MB/s	 3841285 B/op	      42 allocs/op
+BenchmarkScan/multiline-10                	    3877	     30250 ns/op	 102.48 MB/s	  112993 B/op	    1027 allocs/op
+BenchmarkParseXML/addresses=10-10         	    1882	     62767 ns/op	  11.52 MB/s	  175371 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-10       	      25	   4974357 ns/op	  14.17 MB/s	16805785 B/op	   63598 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/huawei/rules=10-10         	    1040	    103787 ns/op	  22.94 MB/s	  344180 B/op	    1795 allocs/op
+BenchmarkParse/huawei/rules=100-10        	     136	    873971 ns/op	  23.73 MB/s	 3157071 B/op	   13713 allocs/op
+BenchmarkParse/huawei/rules=1000-10       	      12	   9419045 ns/op	  22.04 MB/s	37413914 B/op	  131837 allocs/op
+BenchmarkScan/short-10                    	    4891	     24906 ns/op	 108.41 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-10                     	      84	   1492784 ns/op	 395.13 MB/s	 3841282 B/op	      42 allocs/op
+BenchmarkScan/multiline-10                	    3752	     30229 ns/op	 102.55 MB/s	  112993 B/op	    1027 allocs/op
+BenchmarkParseXML/addresses=10-10         	    1887	     62404 ns/op	  11.59 MB/s	  175458 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-10       	      24	   5006745 ns/op	  14.08 MB/s	16763676 B/op	   63597 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/huawei/rules=10-10         	    1063	    105113 ns/op	  22.65 MB/s	  344424 B/op	    1795 allocs/op
+BenchmarkParse/huawei/rules=100-10        	     135	    880965 ns/op	  23.54 MB/s	 3162512 B/op	   13714 allocs/op
+BenchmarkParse/huawei/rules=1000-10       	      12	   9571156 ns/op	  21.69 MB/s	37414224 B/op	  131838 allocs/op
+BenchmarkScan/short-10                    	    4803	     25048 ns/op	 107.79 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-10                     	      82	   1512535 ns/op	 389.97 MB/s	 3841288 B/op	      42 allocs/op
+BenchmarkScan/multiline-10                	    3868	     30702 ns/op	 100.97 MB/s	  112993 B/op	    1027 allocs/op
+BenchmarkParseXML/addresses=10-10         	    1870	     62530 ns/op	  11.56 MB/s	  175482 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-10       	      22	   5036750 ns/op	  14.00 MB/s	16791181 B/op	   63597 allocs/op
+PASS

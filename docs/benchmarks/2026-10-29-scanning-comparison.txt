@@ -1,0 +1,53 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                           │ .superpowers/sdd/2026-10-29-computation-contracts/scan-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/scan-after.txt │
+                           │                              sec/op                               │                  sec/op                    vs base               │
+Parse/huawei/rules=10-10                                                           103.9µ ± 1%                                105.0µ ± 24%        ~ (p=0.093 n=6)
+Parse/huawei/rules=100-10                                                          873.0µ ± 1%                                880.3µ ±  1%   +0.84% (p=0.041 n=6)
+Parse/huawei/rules=1000-10                                                         9.394m ± 2%                                9.469m ±  2%        ~ (p=0.394 n=6)
+Scan/short-10                                                                      24.98µ ± 3%                                26.56µ ±  2%   +6.34% (p=0.002 n=6)
+Scan/long-10                                                                       1.483m ± 2%                                1.634m ±  4%  +10.17% (p=0.002 n=6)
+Scan/multiline-10                                                                  30.48µ ± 2%                                30.56µ ±  3%        ~ (p=0.818 n=6)
+ParseXML/addresses=10-10                                                           62.58µ ± 2%                                63.57µ ±  2%        ~ (p=0.310 n=6)
+ParseXML/addresses=1000-10                                                         4.991m ± 2%                                5.015m ±  1%        ~ (p=0.699 n=6)
+geomean                                                                            362.9µ                                     372.4µ         +2.63%
+
+                           │ .superpowers/sdd/2026-10-29-computation-contracts/scan-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/scan-after.txt │
+                           │                                B/s                                │                    B/s                      vs base              │
+Parse/huawei/rules=10-10                                                          21.85Mi ± 1%                                21.63Mi ± 20%       ~ (p=0.102 n=6)
+Parse/huawei/rules=100-10                                                         22.66Mi ± 1%                                22.47Mi ±  1%  -0.84% (p=0.037 n=6)
+Parse/huawei/rules=1000-10                                                        21.08Mi ± 2%                                20.91Mi ±  2%       ~ (p=0.394 n=6)
+Scan/short-10                                                                    103.09Mi ± 3%                                96.95Mi ±  2%  -5.96% (p=0.002 n=6)
+Scan/long-10                                                                      379.2Mi ± 2%                                344.2Mi ±  4%  -9.23% (p=0.002 n=6)
+Scan/multiline-10                                                                 97.01Mi ± 2%                                96.75Mi ±  3%       ~ (p=0.818 n=6)
+ParseXML/addresses=10-10                                                          11.01Mi ± 2%                                10.84Mi ±  2%       ~ (p=0.290 n=6)
+ParseXML/addresses=1000-10                                                        13.47Mi ± 2%                                13.40Mi ±  1%       ~ (p=0.729 n=6)
+geomean                                                                           39.45Mi                                     38.44Mi        -2.57%
+
+                           │ .superpowers/sdd/2026-10-29-computation-contracts/scan-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/scan-after.txt │
+                           │                               B/op                                │                   B/op                    vs base                │
+Parse/huawei/rules=10-10                                                          336.1Ki ± 0%                               336.0Ki ± 0%       ~ (p=0.589 n=6)
+Parse/huawei/rules=100-10                                                         3.008Mi ± 1%                               3.009Mi ± 0%       ~ (p=0.699 n=6)
+Parse/huawei/rules=1000-10                                                        35.68Mi ± 0%                               35.68Mi ± 0%       ~ (p=0.093 n=6)
+Scan/short-10                                                                     77.66Ki ± 0%                               77.66Ki ± 0%       ~ (p=1.000 n=6) ¹
+Scan/long-10                                                                      3.663Mi ± 0%                               3.663Mi ± 0%       ~ (p=0.162 n=6)
+Scan/multiline-10                                                                 110.3Ki ± 0%                               106.4Ki ± 0%  -3.54% (p=0.002 n=6)
+ParseXML/addresses=10-10                                                          171.3Ki ± 0%                               171.3Ki ± 0%       ~ (p=1.000 n=6)
+ParseXML/addresses=1000-10                                                        16.02Mi ± 1%                               16.00Mi ± 0%       ~ (p=0.699 n=6)
+geomean                                                                           1.139Mi                                    1.133Mi       -0.46%
+¹ all samples are equal
+
+                           │ .superpowers/sdd/2026-10-29-computation-contracts/scan-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/scan-after.txt │
+                           │                             allocs/op                             │                allocs/op                  vs base                │
+Parse/huawei/rules=10-10                                                           1.795k ± 0%                                1.795k ± 0%       ~ (p=1.000 n=6) ¹
+Parse/huawei/rules=100-10                                                          13.71k ± 0%                                13.71k ± 0%       ~ (p=0.545 n=6)
+Parse/huawei/rules=1000-10                                                         131.8k ± 0%                                131.8k ± 0%       ~ (p=0.273 n=6)
+Scan/short-10                                                                       925.0 ± 0%                                 925.0 ± 0%       ~ (p=1.000 n=6) ¹
+Scan/long-10                                                                        42.00 ± 0%                                 42.00 ± 0%       ~ (p=1.000 n=6) ¹
+Scan/multiline-10                                                                  1027.0 ± 0%                                 927.0 ± 0%  -9.74% (p=0.002 n=6)
+ParseXML/addresses=10-10                                                            930.0 ± 0%                                 930.0 ± 0%       ~ (p=1.000 n=6) ¹
+ParseXML/addresses=1000-10                                                         63.60k ± 0%                                63.60k ± 0%       ~ (p=0.314 n=6)
+geomean                                                                            3.059k                                     3.020k       -1.27%
+¹ all samples are equal

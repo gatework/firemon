@@ -176,7 +176,22 @@ conflict. Empty roots and zero/nil store handles are invalid. These are error
 contract changes, not a snapshot/journal format migration; existing semantic-v9
 snapshots and operation receipts remain readable.
 
-Usage analysis now applies the existing Rules budget to observations and traversal,
+Usage analysis now applies the MaxVisits budget to observations and traversal,
 so hosts submitting large evidence batches must set an adequate explicit limit.
 Both evidence lists require a valid request window when present. Rule and member
 analyses retain their distinct evidence and deletion-authority semantics.
+
+## Cancellable scanner migration
+
+`config.NewCursor(ctx, source, limits)` and
+`config.NewFragmentCursor(ctx, source, spans, limits)` replace the signatures
+without context. Pass the caller's context; `NewSession` is unchanged. Empty or
+malformed input still observes an already canceled context first. Scanning checks
+cancellation during bounded byte chunks and before returning success. XML also
+checks between decoder calls; standard-library token decoding is not interruptible
+inside an individual call. Structural scans return no partial document on error.
+
+Nil cursors, classifiers and `ParseFunc` callbacks, and invalid stage declarations
+use `config.ErrInvalid`. Malformed source retains `ErrSource`; invalid claims and
+closed transactions retain `ErrClaim` and `ErrClosed`. These changes preserve exact
+source spans, declaration order, staged interpretation and atomic rollback.

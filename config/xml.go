@@ -7,7 +7,6 @@ import (
 	"io"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	fm "github.com/gatework/firemon"
 )
@@ -37,8 +36,8 @@ func XML(ctx context.Context, source Source, limits Limits) (XMLDocument, error)
 	if err := ctx.Err(); err != nil {
 		return XMLDocument{}, err
 	}
-	if len(source.Text) > limits.MaxBytes || !utf8.ValidString(source.Text) {
-		return XMLDocument{}, ErrSource
+	if err := validateSource(ctx, source, limits); err != nil {
+		return XMLDocument{}, err
 	}
 	decoder := xml.NewDecoder(strings.NewReader(source.Text))
 	var document XMLDocument
@@ -51,6 +50,9 @@ func XML(ctx context.Context, source Source, limits Limits) (XMLDocument, error)
 		}
 		start := int(decoder.InputOffset())
 		token, err := decoder.Token()
+		if err := ctx.Err(); err != nil {
+			return XMLDocument{}, err
+		}
 		if err == io.EOF {
 			break
 		}
@@ -60,6 +62,11 @@ func XML(ctx context.Context, source Source, limits Limits) (XMLDocument, error)
 		end := int(decoder.InputOffset())
 		span := fm.Span{First: line, Last: line, StartByte: start, EndByte: end}
 		for i := start; i < end; i++ {
+			if (i-start)%scanChunk == 0 {
+				if err := ctx.Err(); err != nil {
+					return XMLDocument{}, err
+				}
+			}
 			if source.Text[i] == '\n' {
 				line++
 			} else if source.Text[i] == '\r' && (i+1 == len(source.Text) || source.Text[i+1] != '\n') {
@@ -134,7 +141,7 @@ func XML(ctx context.Context, source Source, limits Limits) (XMLDocument, error)
 	if document.Root == nil || len(stack) != 0 {
 		return XMLDocument{}, ErrSource
 	}
-	cursor, err := NewFragmentCursor(source, spans, limits)
+	cursor, err := NewFragmentCursor(ctx, source, spans, limits)
 	if err != nil {
 		return XMLDocument{}, err
 	}

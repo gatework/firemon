@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	fm "github.com/gatework/firemon"
 )
@@ -56,12 +57,18 @@ func (s *Session) Run(ctx context.Context, stages []Stage) error {
 	}
 	done := make(map[string]bool)
 	for _, stage := range stages {
-		if stage.Name == "" || stage.Run == nil || done[stage.Name] {
-			return fmt.Errorf("invalid stage %q", stage.Name)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if strings.TrimSpace(stage.Name) == "" || stage.Run == nil || done[stage.Name] {
+			return fmt.Errorf("%w: stage %q", ErrInvalid, stage.Name)
 		}
 		for _, dep := range stage.Requires {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if !done[dep] {
-				return fmt.Errorf("stage %q requires earlier stage %q", stage.Name, dep)
+				return fmt.Errorf("%w: stage %q requires earlier stage %q", ErrInvalid, stage.Name, dep)
 			}
 		}
 		done[stage.Name] = true
@@ -95,5 +102,5 @@ func (s *Session) Run(ctx context.Context, stages []Stage) error {
 		}
 		s.cursor.tracking = wasTracking
 	}
-	return nil
+	return ctx.Err()
 }

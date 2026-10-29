@@ -225,3 +225,21 @@ rejected when no native empty representation exists; wildcard selectors are
 explicit. Position ties use the graph's position-plus-ID order for creation and
 surviving-rule insertion anchors. Unreferenced supported inline values remain
 semantically inert and never become standalone native declarations.
+
+## Risk preparation and scanning
+
+Compound risk standards are compiled once per analysis call. `MaxRegions` bounds
+the aggregate normalized regions retained across all predicate leaves, as well as
+each algebra operation. `MaxCombinations` independently bounds validation nodes
+and evaluated nodes across rules. Short circuit order is unchanged; cached
+per-rule dimension projections do not refund node visits. Service comparisons
+retain protocol/port/ICMP pairing. No state or caller-owned input is cached across
+calls, so an analyzer can be reused concurrently with immutable inputs.
+
+Cursor constructors take the caller context. UTF-8 validation, line/fragment
+indexing and statement scanning check cancellation in bounded byte chunks;
+XML checks between decoder calls and byte-span scans. Cancellation precedes
+entry validation, and errors return no partial cursor/document. Stages validate
+all names and dependencies before running any callback; failed or canceled stages
+restore their data, source claims and cursor position. `NewSession` remains a
+synchronous constructor with the same signature.

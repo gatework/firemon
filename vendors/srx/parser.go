@@ -46,7 +46,7 @@ func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm
 
 func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor, metadata.ParserVersion = "srx", "srx-go-1"
-	cursor, err := config.NewCursor(source, native.Limits)
+	cursor, err := config.NewCursor(ctx, source, native.Limits)
 	if err != nil {
 		return nil, err
 	}

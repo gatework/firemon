@@ -96,7 +96,7 @@ func nativeAfter(t *testing.T, vendor, raw string, commands []string) string {
 // address/service/rule/interface forms. Unsupported forms fail the test setup.
 func nativePANXML(t *testing.T, raw string) string {
 	t.Helper()
-	cursor, err := config.NewCursor(config.Source{Text: raw, Complete: true}, config.Limits{})
+	cursor, err := config.NewCursor(context.Background(), config.Source{Text: raw, Complete: true}, config.Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}

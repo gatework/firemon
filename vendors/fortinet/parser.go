@@ -53,7 +53,7 @@ func (native Parser) ParseVDOM(ctx context.Context, source config.Source, metada
 		return nil, fmt.Errorf("%w: VDOM is required", config.ErrSource)
 	}
 	metadata.Vendor, metadata.ParserVersion, metadata.Context = "fortinet", "fortios-go-1", vdom
-	cursor, err := config.NewCursor(source, native.Limits)
+	cursor, err := config.NewCursor(ctx, source, native.Limits)
 	if err != nil {
 		return nil, err
 	}

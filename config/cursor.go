@@ -2,11 +2,11 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	fm "github.com/gatework/firemon"
 )
@@ -58,14 +58,21 @@ type Cursor struct {
 	limits   Limits
 }
 
-func NewCursor(source Source, limits Limits) (*Cursor, error) {
+// NewCursor indexes physical lines without consuming semantic evidence.
+func NewCursor(ctx context.Context, source Source, limits Limits) (*Cursor, error) {
 	limits = limits.defaults()
-	if len(source.Text) > limits.MaxBytes || !utf8.ValidString(source.Text) {
-		return nil, ErrSource
+	if err := validateSource(ctx, source, limits); err != nil {
+		return nil, err
 	}
 	c := &Cursor{source: source, limits: limits}
-	start := 0
+	start, nextCheck := 0, scanChunk
 	for i := 0; i < len(source.Text); i++ {
+		if i >= nextCheck {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			nextCheck = i + scanChunk
+		}
 		if source.Text[i] != '\n' && source.Text[i] != '\r' {
 			continue
 		}
@@ -86,26 +93,40 @@ func NewCursor(source Source, limits Limits) (*Cursor, error) {
 	if len(c.lines) > limits.MaxLines {
 		return nil, ErrSource
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
 // NewFragmentCursor tracks a native scanner's exact, contiguous byte partitions.
 // Claim numbers are fragment indexes, while persisted evidence retains physical
 // line/byte spans. Reading and structural scanning do not consume any fragment.
-func NewFragmentCursor(source Source, spans []fm.Span, limits Limits) (*Cursor, error) {
+func NewFragmentCursor(ctx context.Context, source Source, spans []fm.Span, limits Limits) (*Cursor, error) {
 	limits = limits.defaults()
-	if len(source.Text) > limits.MaxBytes || !utf8.ValidString(source.Text) || len(spans) > limits.MaxLines {
+	if err := validateSource(ctx, source, limits); err != nil {
+		return nil, err
+	}
+	if len(spans) > limits.MaxLines {
 		return nil, ErrSource
 	}
 	c := &Cursor{source: source, limits: limits}
 	end, line := 0, 1
 	for _, span := range spans {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if span.StartByte != end || span.EndByte <= end || span.EndByte > len(source.Text) || span.First != line {
 			return nil, ErrSource
 		}
 		raw := source.Text[span.StartByte:span.EndByte]
 		last := line
 		for i := range len(raw) {
+			if i%scanChunk == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
 			if raw[i] == '\n' {
 				line++
 			} else if raw[i] == '\r' && (span.StartByte+i+1 == len(source.Text) || source.Text[span.StartByte+i+1] != '\n') {
@@ -125,6 +146,9 @@ func NewFragmentCursor(source Source, spans []fm.Span, limits Limits) (*Cursor, 
 	}
 	if end != len(source.Text) {
 		return nil, ErrSource
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return c, nil
 }

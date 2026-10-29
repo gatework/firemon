@@ -182,3 +182,19 @@ budget corrections: ordinary risk allocations remain equal and convergence bytes
 fell about 0.4%. Its timing uncertainty reached 82%, so it does not establish the
 CPU overhead of correctness checks and is not mixed into the performance result.
 These synthetic measurements establish neither real-device capacity nor peak RSS.
+
+## Cancellable scanning (2026-10-29)
+
+Six counterbalanced serial samples compare `67fcb6f` with the cancellable scanner,
+using the same host, Go version and 100 ms sample duration as the risk experiment.
+Short CLI scanning increased from 24.98 to 26.56 µs (+6.34%); the 576 KiB quoted
+UTF-8 line increased from 1.483 to 1.634 ms (+10.17%), both p=0.002. These are the
+measured costs of bounded validation and scan checkpoints, retained to support
+prompt cancellation. Multiline scanning was not significantly changed.
+
+Full Huawei parsing at 100 rules increased 0.84% (p=0.041); 10/1,000-rule Huawei
+and 10/1,000-address PAN XML cases had no significant timing change. These scanner
+measurements are correctness overhead, not a performance improvement claim.
+Raw [before](benchmarks/2026-10-29-scanning-before.txt),
+[after](benchmarks/2026-10-29-scanning-after.txt) and
+[comparison](benchmarks/2026-10-29-scanning-comparison.txt) include allocations.

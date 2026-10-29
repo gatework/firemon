@@ -9,7 +9,7 @@ import (
 )
 
 func TestSessionRejectsNilTransactionWithoutChangingEvidence(t *testing.T) {
-	c, _ := NewCursor(Source{Text: "a\n", Complete: true}, Limits{})
+	c, _ := NewCursor(context.Background(), Source{Text: "a\n", Complete: true}, Limits{})
 	s, err := NewSession(c, fm.Metadata{})
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +23,7 @@ func TestSessionRejectsNilTransactionWithoutChangingEvidence(t *testing.T) {
 }
 
 func TestClosedTransactionCannotAccumulateEffects(t *testing.T) {
-	c, _ := NewCursor(Source{Text: "a\n", Complete: true}, Limits{})
+	c, _ := NewCursor(context.Background(), Source{Text: "a\n", Complete: true}, Limits{})
 	tx := c.Begin()
 	tx.Emit(fm.Data{Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "a"}}}})
 	tx.Parse(1)
@@ -46,7 +46,7 @@ func TestClosedTransactionCannotAccumulateEffects(t *testing.T) {
 }
 
 func TestCanceledStageRestoresPriorDataEvidenceAndPosition(t *testing.T) {
-	c, _ := NewCursor(Source{Text: "a\nb\n", Complete: true}, Limits{})
+	c, _ := NewCursor(context.Background(), Source{Text: "a\nb\n", Complete: true}, Limits{})
 	s, err := NewSession(c, fm.Metadata{})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestCanceledStageRestoresPriorDataEvidenceAndPosition(t *testing.T) {
 }
 
 func TestTransactionAndSessionRetainCopyIsolation(t *testing.T) {
-	c, _ := NewCursor(Source{Text: "a\n", Complete: true}, Limits{})
+	c, _ := NewCursor(context.Background(), Source{Text: "a\n", Complete: true}, Limits{})
 	s, err := NewSession(c, fm.Metadata{})
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +104,7 @@ func TestTransactionAndSessionRetainCopyIsolation(t *testing.T) {
 }
 
 func TestNestedStageRollbackRetainsOuterUndo(t *testing.T) {
-	c, _ := NewCursor(Source{Text: "a\nb\n", Complete: true}, Limits{})
+	c, _ := NewCursor(context.Background(), Source{Text: "a\nb\n", Complete: true}, Limits{})
 	s, err := NewSession(c, fm.Metadata{})
 	if err != nil {
 		t.Fatal(err)

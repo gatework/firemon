@@ -12,7 +12,7 @@ import (
 
 func source(t *testing.T, s string) *config.Cursor {
 	t.Helper()
-	c, err := config.NewCursor(config.Source{Text: s, Complete: true}, config.Limits{})
+	c, err := config.NewCursor(context.Background(), config.Source{Text: s, Complete: true}, config.Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestStagesValidateDependenciesAndRollbackFailedStage(t *testing.T) {
 	}
 }
 func TestCursorBoundsAndMultilineTokenSource(t *testing.T) {
-	if _, err := config.NewCursor(config.Source{Text: strings.Repeat("x", 12)}, config.Limits{MaxBytes: 8}); err == nil {
+	if _, err := config.NewCursor(context.Background(), config.Source{Text: strings.Repeat("x", 12)}, config.Limits{MaxBytes: 8}); err == nil {
 		t.Fatal("byte limit ignored")
 	}
 	c := source(t, "banner \"hello\ninterface eth0\nworld\"\ninterface eth1\n")
@@ -167,7 +167,7 @@ func TestNativeBlocksKeepUnknownScopesAndUnclaimedChildren(t *testing.T) {
 func TestFragmentCursorClaimsExactBytesWithinSamePhysicalLine(t *testing.T) {
 	raw := "<known>x</known><unknown>y</unknown>"
 	split := len("<known>x</known>")
-	c, err := config.NewFragmentCursor(config.Source{Text: raw, Complete: true}, []fm.Span{{First: 1, Last: 1, StartByte: 0, EndByte: split}, {First: 1, Last: 1, StartByte: split, EndByte: len(raw)}}, config.Limits{})
+	c, err := config.NewFragmentCursor(context.Background(), config.Source{Text: raw, Complete: true}, []fm.Span{{First: 1, Last: 1, StartByte: 0, EndByte: split}, {First: 1, Last: 1, StartByte: split, EndByte: len(raw)}}, config.Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestFragmentCursorClaimsExactBytesWithinSamePhysicalLine(t *testing.T) {
 	if err := tx.Commit(&d); err == nil || c.Evidence()[1].State != fm.Pending {
 		t.Fatal("fragment rollback leaked source claim")
 	}
-	if _, err := config.NewFragmentCursor(config.Source{Text: raw}, []fm.Span{{First: 1, Last: 1, StartByte: 1, EndByte: len(raw)}}, config.Limits{}); err == nil {
+	if _, err := config.NewFragmentCursor(context.Background(), config.Source{Text: raw}, []fm.Span{{First: 1, Last: 1, StartByte: 1, EndByte: len(raw)}}, config.Limits{}); err == nil {
 		t.Fatal("unclaimed byte gap accepted")
 	}
 }

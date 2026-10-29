@@ -49,7 +49,7 @@ func (adapter Parser) Parse(ctx context.Context, source config.Source, metadata 
 		}
 		c = native.document.Cursor
 	} else {
-		c, err = config.NewCursor(source, adapter.Limits)
+		c, err = config.NewCursor(ctx, source, adapter.Limits)
 		if err != nil {
 			return nil, err
 		}

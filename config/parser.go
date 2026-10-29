@@ -14,5 +14,11 @@ type Parser interface {
 type ParseFunc func(context.Context, Source, fm.Metadata) (*fm.Firewall, error)
 
 func (f ParseFunc) Parse(ctx context.Context, source Source, metadata fm.Metadata) (*fm.Firewall, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if f == nil {
+		return nil, ErrInvalid
+	}
 	return f(ctx, source, metadata)
 }

@@ -21,9 +21,16 @@ type Statement struct {
 // Statements lexes quotes and escapes across physical lines without claiming semantic evidence.
 // A native vendor scanner decides which statements are blocks or members.
 func Statements(ctx context.Context, c *Cursor) ([]Statement, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, ErrInvalid
+	}
 	var out []Statement
 	var words []string
-	var word, raw strings.Builder
+	var word strings.Builder
+	rawStart, rawEnd := 0, 0
 	quote := rune(0)
 	escaped, active := false, false
 	first := 1
@@ -38,8 +45,15 @@ func Statements(ctx context.Context, c *Cursor) ([]Statement, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		raw.WriteString(line.Raw)
-		for _, r := range line.Raw {
+		rawEnd += len(line.Raw)
+		nextCheck := scanChunk
+		for offset, r := range line.Raw {
+			if offset >= nextCheck {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				nextCheck = offset + scanChunk
+			}
 			if escaped {
 				word.WriteRune(r)
 				escaped = false
@@ -72,16 +86,22 @@ func Statements(ctx context.Context, c *Cursor) ([]Statement, error) {
 				active = true
 			}
 		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if quote == 0 && !escaped {
 			flush()
-			out = append(out, Statement{Span: fm.Span{First: first, Last: line.Number}, Words: words, Raw: raw.String()})
+			out = append(out, Statement{Span: fm.Span{First: first, Last: line.Number}, Words: words, Raw: strings.Clone(c.source.Text[rawStart:rawEnd])})
 			words = nil
-			raw.Reset()
+			rawStart = rawEnd
 			first = line.Number + 1
 		}
 	}
 	if quote != 0 || escaped {
 		return nil, fmt.Errorf("%w: unterminated quote or escape at line %d", ErrSource, first)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -111,6 +131,12 @@ type Document struct {
 
 // Blocks is a native-classifier-driven structural pass. Unknown native blocks remain scoped.
 func Blocks(ctx context.Context, c *Cursor, classify Classifier) (Document, error) {
+	if err := ctx.Err(); err != nil {
+		return Document{}, err
+	}
+	if c == nil || classify == nil {
+		return Document{}, ErrInvalid
+	}
 	statements, err := Statements(ctx, c)
 	if err != nil {
 		return Document{}, err
@@ -126,6 +152,9 @@ func Blocks(ctx context.Context, c *Cursor, classify Classifier) (Document, erro
 			path[i] = b.Kind
 		}
 		boundary, kind := classify(line, path)
+		if err := ctx.Err(); err != nil {
+			return Document{}, err
+		}
 		switch boundary {
 		case OpenBlock:
 			if len(stack) >= c.limits.MaxDepth {
@@ -160,6 +189,9 @@ func Blocks(ctx context.Context, c *Cursor, classify Classifier) (Document, erro
 	}
 	for _, b := range stack {
 		d.Diagnostics = append(d.Diagnostics, fm.Diagnostic{Code: "unclosed-block", Span: b.Header.Span, Message: "native block is not closed"})
+	}
+	if err := ctx.Err(); err != nil {
+		return Document{}, err
 	}
 	return d, nil
 }
