@@ -3,7 +3,7 @@ module github.com/gatework/firemon/adapter/netconnector
 go 1.26.0
 
 require (
-	github.com/gatework/firemon v0.0.0-20261029083333-f85f9d6737f9
+	github.com/gatework/firemon v0.0.0-20261029095830-2e301195fa86
 	github.com/gatework/go-net-connector v0.0.0-20261026235641-c68c42b4bbcf
 )
 

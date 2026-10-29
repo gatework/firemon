@@ -24,6 +24,34 @@ Unrecognized source and unsupported semantics remain incomplete; do not describe
 
 The user-confirmed scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. H3C, Topsec, Neteye and other vendors are deferred.
 
+## Computation and scanner delivery (2026-10-29)
+
+Core [`2e301195fa86c0a93bef9276f71ef6855b11a4cb`](https://github.com/gatework/firemon/commit/2e301195fa86c0a93bef9276f71ef6855b11a4cb)
+implements the [computation plan](plans/2026-10-29-computation-contracts.md),
+including both independent-review corrections. Its [exact-commit CI](https://github.com/gatework/firemon/actions/runs/40853833066)
+passed formatting, vet and race tests. SSH publication and exact remote main SHA
+were verified separately from local tests.
+
+The breaking API changes are `MaxRegions`/`MaxVisits`/`MaxCombinations`,
+`Limits.WithDefaults()`, and context-first cursor constructors; see the
+[migration guide](refactoring.md). Candidate/catalog work, lifecycle proofs and
+unknown findings now obey layered budgets. Risk expressions prepare standards
+once per call and cache projections only for the current rule. Seven-vendor
+scope, separate StaticNAT/DynamicNAT and staged evidence remain unchanged.
+
+The adapter now pins published core
+`v0.0.0-20261029095830-2e301195fa86`; connector remains
+`v0.0.0-20261026235641-c68c42b4bbcf`. After tidy, its standalone
+`GOWORK=off GOPROXY=off` race suite passed in 6.140 seconds, with vet and module
+verification. `go list -m -json` confirmed module-cache versions without
+replacement. Current-core workspace race/vet passed separately. Public root CI
+does not test this private-dependency adapter; no private source is published.
+
+Synthetic complex-risk time fell about 72.5% in the largest declared-mode case,
+while cancellable scanning has documented overhead; see [measurements](benchmarks.md).
+This delivery does not establish hardware/firmware certification or perform a
+release or real-device operation. The older deliveries below are historical.
+
 ## Boundary contract delivery (2026-10-29)
 
 Core [`f85f9d6737f9d0fffcee801c58314c803ff9ac2b`](https://github.com/gatework/firemon/commit/f85f9d6737f9d0fffcee801c58314c803ff9ac2b)
