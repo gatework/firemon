@@ -3,9 +3,11 @@ package snapshot_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gatework/firemon/snapshot"
@@ -180,5 +182,42 @@ func TestArchiveAndPublishShareExactBlobIdentity(t *testing.T) {
 	loaded, err := s.Load(ctx, revision)
 	if err != nil || loaded.SemanticDigest() != fw.SemanticDigest() {
 		t.Fatal(err)
+	}
+}
+
+func TestCurrentClassifiesCorruptHeadAsStoredEvidence(t *testing.T) {
+	for _, field := range []string{"revision", "digest"} {
+		t.Run(field, func(t *testing.T) {
+			ctx := context.Background()
+			dir := t.TempDir()
+			s, err := snapshot.Open(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Publish(ctx, graph(t, "fw", "native", true), snapshot.PublishOptions{PublicationID: "first"}); err != nil {
+				t.Fatal(err)
+			}
+			m, err := s.Manifest(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			head := m.Devices["fw"]
+			if field == "revision" {
+				head.Revision = "corrupt"
+			} else {
+				head.SemanticDigest = "corrupt"
+			}
+			m.Devices["fw"] = head
+			data, err := json.Marshal(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := s.Current(ctx, "fw"); !errors.Is(err, snapshot.ErrFormat) || errors.Is(err, snapshot.ErrInvalid) {
+				t.Fatalf("stored head confused with invalid call: %v", err)
+			}
+		})
 	}
 }

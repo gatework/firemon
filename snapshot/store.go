@@ -168,11 +168,14 @@ func (s *Store) Current(ctx context.Context, device string) (*fm.Firewall, Head,
 	if _, reserved := m.Reservations[device]; reserved || !h.Complete {
 		return nil, h, ErrUnavailable
 	}
+	if !validRevision(h.Revision) {
+		return nil, h, ErrFormat
+	}
 	fw, err := s.Load(ctx, h.Revision)
 	if err != nil {
 		return nil, h, err
 	}
-	if fw.Metadata().Device != device || !fw.Complete() {
+	if fw.Metadata().Device != device || !fw.Complete() || h.SemanticDigest != fw.SemanticDigest() || h.SourceDigest != fw.Metadata().SourceDigest {
 		return nil, h, ErrFormat
 	}
 	return fw, h, nil
