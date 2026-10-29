@@ -1,6 +1,6 @@
 # Implementation status
 
-The approved implementation and domain refactoring plans have passed their local checks and independent reviews. The [requirement audit](verification.md) records the evidence and implementation decisions. The capabilities below define the delivered scope; broader native grammar and firmware parity remain unproven. No real device, SQL database or release validation has been performed.
+The approved implementation, domain refactoring and contract/ownership plans have passed their local checks and independent reviews. The [requirement audit](verification.md) records the evidence and implementation decisions. The capabilities below define the delivered scope; broader native grammar and firmware parity remain unproven. No real device, SQL database or release validation has been performed.
 
 | Area | Current evidence | Explicit limits and future coverage |
 | --- | --- | --- |
@@ -15,16 +15,48 @@ The approved implementation and domain refactoring plans have passed their local
 | Netscreen | Scoped ScreenOS passes; VRF/interface route binding; zone/global addresses and paired service groups; policy continuations, top placement, disable and intrazone block/bypass; separate MIP/VIP/DIP/policy NAT with owning-rule identity; original-address/port packet policy; independent create/append/delete readback and CLI snapshots | Virtual systems, Global policies, schedules/predefined services, PBR/route leaks, DIP address shifting, loopback groups/multi-interface NAT, mixed opposite-direction interface/policy translation and edits to NAT-owning policies; broader native/version fixtures |
 | Fortinet | Selected-VDOM scoped config/edit parser; interface/zone/route dependencies; address/group and paired service terms with global source-port defaults; separate fixed VIP, port forwarding, pools and policy-owned source NAT; VIP policy lookup, reverse VIP source priority, original-wire query traces and post-DNAT packet routing; native create/append/delete rendering with independent readback; VDOM-aware CLI snapshots | Central NAT, policy-based NGFW, IPv6 native syntax, schedules, PBR/SD-WAN, additional VRFs/secondary interfaces, non-overload pools, port-forward source forcing, partial-zone interface selectors, unresolved one-sided translated service checks, declared VIP risk, local VIP/pool behavior, native NAT edits; broader fixtures/version evidence |
 | Huawei | Scoped USG sections and indexed object reopening; interface/VPN/route binding; address/service groups and paired ports; separate server maps, source/destination pools and whole policy NAT actions; post-DNAT routing/service policy and permitted source allocation; native create/append/delete with independent readback and offline CLI snapshots | Wider native/version evidence, schedules/time zones, predefined services, IPv6 native syntax, virtual systems, secondary/dynamic interfaces, route leaks/PBR, static policy NAT, multi-address destination allocation, protocol-specific reverse server maps, server-map/policy composition and NAT edits |
-| Embedded operations | Shared seven-vendor parser/renderer registry; revision-bound capture/design/deployment composition; live incomplete-evidence invalidation and idempotent publication | Host inventory, credentials, authorization and projection remain injected |
+| Embedded operations | Shared seven-vendor parser/renderer registry; standalone read-only capture; validated private service dependencies; revision-bound design/deployment; live incomplete-evidence invalidation and idempotent publication | Host inventory, credentials, authorization and projection remain injected |
 | CLI | Offline import/inspect/query/nat/plan; selected Fortinet VDOM survives reload after original file removal | Broader commands, help ergonomics and export contracts |
 | Online | Injected deploy engine, exact-plan authorization, durable operation journal/receipts, reservation, save confirmation, new-session readback, incomplete-live publication and no-write recovery; process-exit tests at five write/save/publication boundaries; mandatory isolation lifecycle, owned PAN lock/queued commit handling, exclusive SRX candidate, selected Fortinet VDOM; separate seven-vendor adapter with native deployment/recovery transcript tests | Real-device interoperability and additional native save/commit response formats |
-| Lifecycle | Exact fixed-point request optimizer; all-zone/future-boundary equivalence; bounded convergence discovery and batch reclamation plans; revision/graph-bound rule/member usage evidence; compound declared/effective risk; explicit zone/chain translation preserving action/logging; optimizer/planner benchmarks | Broader native rendering and schedule migration; native schedule/NAT migration and lifecycle CLI coverage |
+| Lifecycle | Request-local evidence, time and mappings with concurrent reuse regressions; exact fixed-point request optimizer; all-zone/future-boundary equivalence; bounded convergence discovery and batch reclamation plans; revision/graph-bound rule/member usage evidence; compound declared/effective risk; explicit zone/chain translation preserving action/logging; optimizer/planner benchmarks | Broader native rendering and schedule migration; native schedule/NAT migration and lifecycle CLI coverage |
 
 Unrecognized source and unsupported semantics remain incomplete; do not describe that as vendor parity. A successful offline proof is not real-device interoperability or permission to deploy.
 
 The user-confirmed scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. H3C, Topsec, Neteye and other vendors are deferred.
 
-## Domain refactoring delivery (2026-10-29)
+## Contract and ownership delivery (2026-10-29)
+
+Core [`ed34cf431f3a459e3602a45a796768a45945b1ca`](https://github.com/gatework/firemon/commit/ed34cf431f3a459e3602a45a796768a45945b1ca)
+was pushed by SSH to public `gatework/firemon` on `main`; remote SHA readback
+matched. Its [Go workflow](https://github.com/gatework/firemon/actions/runs/40818572566)
+passed formatting, vet and race tests on Ubuntu. Final local root
+`GOWORK=off GOPROXY=off go test -count=1 -race ./...` passed all 23 test packages;
+`go vet ./...`, formatting and diff checks passed. The independent integrated
+source review approved the final route/capture changes with no open findings.
+
+The optional adapter pins core `v0.0.0-20261029043441-ed34cf431f3a`; connector
+`v0.0.0-20261026235641-c68c42b4bbcf` and its dependencies are unchanged. After
+`go mod tidy`, its independent `GOWORK=off GOPROXY=off go test -count=1 -race ./...`
+passed (7.382 seconds), as did vet and module verification. `go list -m -json`
+confirmed the published core and connector versions in the module cache without
+`Replace` fields. This is separate from the earlier current-core workspace check;
+public root CI does not test the private connector dependency.
+
+Breaking Go API changes include canonical `device.Reader`/capture types,
+`config.Parser`, checked private service construction, session cursor ownership,
+`Engine.ResolveRoutes`, and per-call lifecycle request objects. See the
+[migration guide](refactoring.md) before updating a host. Snapshot semantic format
+9, record/CLI fields, native fixture exports, semantic digests and baseline
+approval goldens are unchanged; existing v9 snapshots need no reimport for this
+iteration. Broader native syntax and real-device behavior remain unverified.
+
+The [benchmark record](benchmarks.md) separates the full 87-case comparison from
+the final route/packet follow-up. The final 1,000-route case reduced time about
+25% and allocations about 45%, while the 10-route case still allocates 64 extra
+bytes. Retained-capture validation eliminates the full-graph clone; it excludes
+parsing and device I/O. No production capacity claim is made.
+
+## Previous domain refactoring delivery (2026-10-29)
 
 Core [`c9d9f251ed20cd35ed9fd75743740dab96683b45`](https://github.com/gatework/firemon/commit/c9d9f251ed20cd35ed9fd75743740dab96683b45)
 was pushed through SSH to public `gatework/firemon` on `main`; the remote SHA was
@@ -33,7 +65,7 @@ passed formatting, vet and race tests on Ubuntu. Local root race/vet passed
 across 23 tested packages. The independent final source review found no unresolved
 correctness issues.
 
-The optional adapter now pins core `v0.0.0-20261029031126-c9d9f251ed20` and connector
+At that checkpoint, the optional adapter pinned core `v0.0.0-20261029031126-c9d9f251ed20` and connector
 `v0.0.0-20261026235641-c68c42b4bbcf`. After `go mod tidy`, its standalone
 `GOWORK=off GOPROXY=off go test -count=1 -race ./...` passed (5.604 seconds), as did
 `go vet ./...` and `go mod verify`. `go list -m -json` confirmed both published
