@@ -9,14 +9,29 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-func validateRiskExpression(ctx context.Context, expression RiskExpression, limit int, budget *int, retained *int, depth int) error {
+// preparedRiskExpression owns normalized standards for one Analyze call. A zero
+// dimension denotes a logical node; leaf standards share no caller-owned slices.
+type preparedRiskExpression struct {
+	dimension Dimension
+	relation  Relation
+	standard  flow.Traffic
+	any       bool
+	children  []preparedRiskExpression
+}
+
+type riskPreparation struct {
+	limit          int
+	nodes, regions int
+}
+
+func (p *riskPreparation) compile(ctx context.Context, expression RiskExpression, depth int) (preparedRiskExpression, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return preparedRiskExpression{}, err
 	}
-	if *budget <= 0 || depth >= 64 {
-		return policy.ErrBudget
+	if p.nodes <= 0 || depth >= 64 {
+		return preparedRiskExpression{}, policy.ErrBudget
 	}
-	*budget--
+	p.nodes--
 	kinds := 0
 	if expression.Predicate != nil {
 		kinds++
@@ -28,77 +43,124 @@ func validateRiskExpression(ctx context.Context, expression RiskExpression, limi
 		kinds++
 	}
 	if kinds != 1 {
-		return ErrInvalid
+		return preparedRiskExpression{}, ErrInvalid
 	}
-	if p := expression.Predicate; p != nil {
-		if p.Relation < Intersects || p.Relation > NotEqual {
-			return ErrInvalid
+	if predicate := expression.Predicate; predicate != nil {
+		if predicate.Relation < Intersects || predicate.Relation > NotEqual {
+			return preparedRiskExpression{}, ErrInvalid
 		}
-		standard, err := riskStandard(*p, limit)
+		standard, err := riskStandard(*predicate, p.limit)
 		if err != nil {
-			return err
+			return preparedRiskExpression{}, err
 		}
 		count := len(standard.Boxes())
-		if count > *retained {
-			return flow.ErrBudget
+		if count > p.regions {
+			return preparedRiskExpression{}, flow.ErrBudget
 		}
-		*retained -= count
-		return nil
+		p.regions -= count
+		return preparedRiskExpression{dimension: predicate.Dimension, relation: predicate.Relation, standard: standard}, nil
 	}
 	children := expression.All
-	if len(expression.Any) > 0 {
+	out := preparedRiskExpression{any: len(expression.Any) > 0}
+	if out.any {
 		children = expression.Any
 	}
-	for _, child := range children {
-		if err := validateRiskExpression(ctx, child, limit, budget, retained, depth+1); err != nil {
-			return err
-		}
+	// Do not allocate from an unbounded caller slice before checking node capacity.
+	if len(children) > p.nodes {
+		return preparedRiskExpression{}, policy.ErrBudget
 	}
-	return nil
+	out.children = make([]preparedRiskExpression, 0, len(children))
+	for _, child := range children {
+		prepared, err := p.compile(ctx, child, depth+1)
+		if err != nil {
+			return preparedRiskExpression{}, err
+		}
+		out.children = append(out.children, prepared)
+	}
+	return out, nil
 }
 
-func (a RiskAnalyzer) assessExpression(ctx context.Context, fw *fm.Firewall, rule fm.RuleRecord, q policy.Request, mode RiskMode, actual flow.Traffic, expression RiskExpression, limit int, budget *int) (Truth, error) {
+type riskDimension struct {
+	traffic      flow.Traffic
+	ready, known bool
+}
+
+// riskEvaluation is confined to one rule/context. Even reused projections charge
+// every logical expression node, so caching cannot expand the work allowance.
+type riskEvaluation struct {
+	engine      policy.Engine
+	firewall    *fm.Firewall
+	rule        fm.RuleRecord
+	request     policy.Request
+	mode        RiskMode
+	actual      flow.Traffic
+	limit       int
+	comparisons int
+	dimensions  [3]riskDimension
+}
+
+// Keep expression-only evaluation state out of the paired-standard fast path.
+func (a RiskAnalyzer) assessPrepared(ctx context.Context, fw *fm.Firewall, rule fm.RuleRecord, request policy.Request, mode RiskMode, actual flow.Traffic, expression preparedRiskExpression, limit, comparisons int) (Truth, int, error) {
+	evaluation := riskEvaluation{engine: a.Engine, firewall: fw, rule: rule, request: request, mode: mode, actual: actual, limit: limit, comparisons: comparisons}
+	value, err := evaluation.assess(ctx, expression)
+	return value, evaluation.comparisons, err
+}
+
+func (e *riskEvaluation) projection(ctx context.Context, dimension Dimension) (flow.Traffic, bool, error) {
+	cached := &e.dimensions[int(dimension)-1]
+	if cached.ready {
+		return cached.traffic, cached.known, nil
+	}
+	actual, known := e.actual, true
+	if e.mode == Declared {
+		match := e.rule.Match
+		if dimension != Source {
+			match.Sources, match.AnySource = nil, true
+		}
+		if dimension != Destination {
+			match.Destinations, match.AnyDestination = nil, true
+		}
+		if dimension != Service {
+			match.Services, match.AnyService = nil, true
+		}
+		var err error
+		actual, known, err = e.engine.Match(ctx, e.firewall, match, e.request, e.request.Traffic)
+		if err != nil {
+			return flow.Traffic{}, false, err
+		}
+	}
+	var projected flow.Traffic
+	if known && !actual.Empty() {
+		var err error
+		projected, err = riskProjection(actual, dimension, e.limit)
+		if err != nil {
+			return flow.Traffic{}, false, err
+		}
+	}
+	*cached = riskDimension{traffic: projected, ready: true, known: known}
+	return projected, known, nil
+}
+
+func (e *riskEvaluation) assess(ctx context.Context, expression preparedRiskExpression) (Truth, error) {
 	if err := ctx.Err(); err != nil {
 		return Unknown, err
 	}
-	if *budget <= 0 {
+	if e.comparisons <= 0 {
 		return Unknown, policy.ErrBudget
 	}
-	*budget--
-	if predicate := expression.Predicate; predicate != nil {
-		if mode == Declared {
-			dimensionMatch := rule.Match
-			if predicate.Dimension != Source {
-				dimensionMatch.Sources, dimensionMatch.AnySource = nil, true
-			}
-			if predicate.Dimension != Destination {
-				dimensionMatch.Destinations, dimensionMatch.AnyDestination = nil, true
-			}
-			if predicate.Dimension != Service {
-				dimensionMatch.Services, dimensionMatch.AnyService = nil, true
-			}
-			var known bool
-			var err error
-			actual, known, err = a.Engine.Match(ctx, fw, dimensionMatch, q, q.Traffic)
-			if err != nil {
-				return Unknown, err
-			}
-			if !known {
-				return Unknown, nil
-			}
+	e.comparisons--
+	if expression.dimension != 0 {
+		projected, known, err := e.projection(ctx, expression.dimension)
+		if err != nil {
+			return Unknown, err
 		}
-		if actual.Empty() {
+		if !known {
+			return Unknown, nil
+		}
+		if projected.Empty() {
 			return False, nil
 		}
-		projected, err := riskProjection(actual, predicate.Dimension, limit)
-		if err != nil {
-			return Unknown, err
-		}
-		standard, err := riskStandard(*predicate, limit)
-		if err != nil {
-			return Unknown, err
-		}
-		value, err := compareTraffic(projected, standard, predicate.Relation, limit)
+		value, err := compareTraffic(projected, expression.standard, expression.relation, e.limit)
 		if err != nil {
 			return Unknown, err
 		}
@@ -107,13 +169,13 @@ func (a RiskAnalyzer) assessExpression(ctx context.Context, fw *fm.Firewall, rul
 		}
 		return False, nil
 	}
-	children, identity, decisive := expression.All, True, False
-	if len(expression.Any) > 0 {
-		children, identity, decisive = expression.Any, False, True
+	identity, decisive := True, False
+	if expression.any {
+		identity, decisive = False, True
 	}
 	value := identity
-	for _, child := range children {
-		result, err := a.assessExpression(ctx, fw, rule, q, mode, actual, child, limit, budget)
+	for _, child := range expression.children {
+		result, err := e.assess(ctx, child)
 		if err != nil {
 			return Unknown, err
 		}

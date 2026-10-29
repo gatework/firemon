@@ -1,0 +1,174 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkConvergence/rules=4-10         	      54	   2088873 ns/op	 3265424 B/op	   15021 allocs/op
+BenchmarkConvergence/rules=10-10        	       3	  37046097 ns/op	58509997 B/op	  218595 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	   12118	      9903 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	   10000	     11614 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1219	     98474 ns/op	  179041 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	    1053	    113784 ns/op	  220441 B/op	    2634 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=1-10         	    5337	     22477 ns/op	   42400 B/op	     522 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=2-10         	    4843	     23615 ns/op	   59576 B/op	     438 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=1-10         	    2192	     54278 ns/op	   94544 B/op	    1046 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=2-10         	    3913	     30055 ns/op	   72920 B/op	     542 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=1-10        	    1738	     69770 ns/op	  117328 B/op	    1222 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=2-10        	    2653	     45216 ns/op	   95704 B/op	     718 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=1-10        	     529	    226214 ns/op	  416753 B/op	    5115 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=2-10        	     260	    464676 ns/op	 1257408 B/op	    3898 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=1-10        	     219	    544876 ns/op	  921780 B/op	   10229 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=2-10        	     230	    525697 ns/op	 1374434 B/op	    4812 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=1-10       	     174	    687425 ns/op	 1082807 B/op	   11485 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=2-10       	     181	    662244 ns/op	 1535463 B/op	    6068 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=1-10       	      51	   2345908 ns/op	 4077656 B/op	   51018 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=2-10       	       4	  27369740 ns/op	69204920 B/op	   38150 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=1-10       	      19	   5659875 ns/op	 9111489 B/op	  102032 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=2-10       	       4	  28300625 ns/op	70358744 B/op	   47164 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=1-10      	      15	   7203842 ns/op	10654940 B/op	  114088 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=2-10      	       4	  29656031 ns/op	71902140 B/op	   59219 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkConvergence/rules=4-10         	      73	   1620123 ns/op	 3261108 B/op	   15015 allocs/op
+BenchmarkConvergence/rules=10-10        	       3	  37376958 ns/op	58402946 B/op	  218532 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	   12001	     10000 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	   10000	     11703 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1210	     99681 ns/op	  179040 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	    1056	    114837 ns/op	  220441 B/op	    2634 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=1-10         	    5278	     22424 ns/op	   42400 B/op	     522 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=2-10         	    5151	     24132 ns/op	   59576 B/op	     438 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=1-10         	    2152	     54510 ns/op	   94544 B/op	    1046 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=2-10         	    4089	     30079 ns/op	   72920 B/op	     542 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=1-10        	    1702	     70618 ns/op	  117328 B/op	    1222 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=2-10        	    2582	     45553 ns/op	   95704 B/op	     718 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=1-10        	     523	    226497 ns/op	  416753 B/op	    5115 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=2-10        	     258	    463713 ns/op	 1257408 B/op	    3898 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=1-10        	     217	    549132 ns/op	  921783 B/op	   10229 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=2-10        	     228	    527429 ns/op	 1374437 B/op	    4812 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=1-10       	     171	    695190 ns/op	 1082808 B/op	   11485 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=2-10       	     180	    666271 ns/op	 1535461 B/op	    6068 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=1-10       	      50	   2350978 ns/op	 4077650 B/op	   51018 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=2-10       	       4	  27467677 ns/op	69204976 B/op	   38150 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=1-10       	      20	   5731035 ns/op	 9111516 B/op	  102032 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=2-10       	       4	  28635771 ns/op	70358912 B/op	   47165 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=1-10      	      15	   7242581 ns/op	10654940 B/op	  114088 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=2-10      	       4	  29761448 ns/op	71902084 B/op	   59219 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkConvergence/rules=4-10         	      61	   1643401 ns/op	 3261578 B/op	   15016 allocs/op
+BenchmarkConvergence/rules=10-10        	       3	  37460958 ns/op	58495629 B/op	  218594 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	   12001	     10016 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	   10000	     11666 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1207	     99041 ns/op	  179041 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	    1074	    113409 ns/op	  220441 B/op	    2634 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=1-10         	    5432	     22146 ns/op	   42400 B/op	     522 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=2-10         	    5295	     23729 ns/op	   59576 B/op	     438 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=1-10         	    2228	     54395 ns/op	   94544 B/op	    1046 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=2-10         	    3691	     30155 ns/op	   72920 B/op	     542 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=1-10        	    1731	     70162 ns/op	  117328 B/op	    1222 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=2-10        	    2565	     45965 ns/op	   95704 B/op	     718 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=1-10        	     534	    225115 ns/op	  416755 B/op	    5115 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=2-10        	     259	    461740 ns/op	 1257410 B/op	    3898 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=1-10        	     222	    540594 ns/op	  921781 B/op	   10229 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=2-10        	     230	    522061 ns/op	 1374433 B/op	    4812 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=1-10       	     174	    684557 ns/op	 1082807 B/op	   11485 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=2-10       	     177	    670355 ns/op	 1535461 B/op	    6068 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=1-10       	      50	   2333773 ns/op	 4077650 B/op	   51018 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=2-10       	       4	  27912386 ns/op	69204864 B/op	   38149 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=1-10       	      19	   5758515 ns/op	 9111477 B/op	  102032 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=2-10       	       4	  28086104 ns/op	70358800 B/op	   47164 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=1-10      	      15	   7222267 ns/op	10654896 B/op	  114088 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=2-10      	       4	  29822990 ns/op	71902112 B/op	   59219 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkConvergence/rules=4-10         	      62	   1621700 ns/op	 3261572 B/op	   15016 allocs/op
+BenchmarkConvergence/rules=10-10        	       3	  37813333 ns/op	58485320 B/op	  218584 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	   10000	     10016 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	   10000	     11745 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1201	     99904 ns/op	  179041 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	    1052	    113060 ns/op	  220441 B/op	    2634 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=1-10         	    5431	     22300 ns/op	   42400 B/op	     522 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=2-10         	    5194	     23847 ns/op	   59576 B/op	     438 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=1-10         	    2179	     54033 ns/op	   94544 B/op	    1046 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=2-10         	    3942	     30217 ns/op	   72920 B/op	     542 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=1-10        	    1728	     70250 ns/op	  117328 B/op	    1222 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=2-10        	    2563	     45645 ns/op	   95704 B/op	     718 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=1-10        	     528	    226706 ns/op	  416754 B/op	    5115 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=2-10        	     261	    458322 ns/op	 1257412 B/op	    3898 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=1-10        	     218	    545875 ns/op	  921783 B/op	   10229 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=2-10        	     230	    519759 ns/op	 1374432 B/op	    4812 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=1-10       	     175	    682042 ns/op	 1082806 B/op	   11485 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=2-10       	     181	    657589 ns/op	 1535465 B/op	    6068 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=1-10       	      48	   2382043 ns/op	 4077657 B/op	   51018 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=2-10       	       4	  27846021 ns/op	69205032 B/op	   38151 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=1-10       	      20	   5664862 ns/op	 9111488 B/op	  102032 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=2-10       	       4	  28459073 ns/op	70358716 B/op	   47163 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=1-10      	      15	   7138056 ns/op	10654963 B/op	  114088 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=2-10      	       4	  29897562 ns/op	71902084 B/op	   59219 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkConvergence/rules=4-10         	      73	   1624799 ns/op	 3262256 B/op	   15017 allocs/op
+BenchmarkConvergence/rules=10-10        	       3	  37365930 ns/op	58505074 B/op	  218597 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	   12016	      9993 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	   10000	     11667 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1213	     99926 ns/op	  179041 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	    1041	    116499 ns/op	  220440 B/op	    2634 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=1-10         	    5263	     22542 ns/op	   42400 B/op	     522 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=2-10         	    5020	     24011 ns/op	   59576 B/op	     438 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=1-10         	    2127	     54634 ns/op	   94544 B/op	    1046 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=2-10         	    4027	     30034 ns/op	   72920 B/op	     542 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=1-10        	    1714	     70235 ns/op	  117328 B/op	    1222 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=2-10        	    2612	     45334 ns/op	   95704 B/op	     718 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=1-10        	     537	    224739 ns/op	  416754 B/op	    5115 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=2-10        	     256	    469021 ns/op	 1257407 B/op	    3898 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=1-10        	     217	    551031 ns/op	  921782 B/op	   10229 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=2-10        	     224	    531377 ns/op	 1374431 B/op	    4812 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=1-10       	     171	    695560 ns/op	 1082807 B/op	   11485 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=2-10       	     180	    661845 ns/op	 1535464 B/op	    6068 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=1-10       	      51	   2416636 ns/op	 4077652 B/op	   51018 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=2-10       	       4	  27892125 ns/op	69204836 B/op	   38149 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=1-10       	      20	   5686073 ns/op	 9111495 B/op	  102032 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=2-10       	       4	  28546188 ns/op	70358576 B/op	   47162 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=1-10      	      15	   7228781 ns/op	10654904 B/op	  114088 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=2-10      	       4	  30264260 ns/op	71902196 B/op	   59220 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkConvergence/rules=4-10         	      72	   1640357 ns/op	 3262278 B/op	   15017 allocs/op
+BenchmarkConvergence/rules=10-10        	       3	  37888292 ns/op	58535554 B/op	  218620 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	   10000	     10067 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	   10000	     11869 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1198	    100501 ns/op	  179041 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	    1036	    115076 ns/op	  220441 B/op	    2634 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=1-10         	    5365	     22274 ns/op	   42400 B/op	     522 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=1/mode=2-10         	    4981	     23891 ns/op	   59576 B/op	     438 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=1-10         	    2215	     56185 ns/op	   94544 B/op	    1046 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=4/mode=2-10         	    3884	     30296 ns/op	   72920 B/op	     542 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=1-10        	    1716	     70232 ns/op	  117329 B/op	    1222 allocs/op
+BenchmarkRiskExpression/rules=10/leaves=16/mode=2-10        	    2598	     46920 ns/op	   95704 B/op	     718 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=1-10        	     526	    227630 ns/op	  416755 B/op	    5115 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=1/mode=2-10        	     255	    467650 ns/op	 1257408 B/op	    3898 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=1-10        	     216	    549189 ns/op	  921780 B/op	   10229 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=4/mode=2-10        	     226	    529267 ns/op	 1374435 B/op	    4812 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=1-10       	     171	    700902 ns/op	 1082802 B/op	   11485 allocs/op
+BenchmarkRiskExpression/rules=100/leaves=16/mode=2-10       	     177	    671612 ns/op	 1535463 B/op	    6068 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=1-10       	      50	   2372277 ns/op	 4077663 B/op	   51018 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=1/mode=2-10       	       4	  27917312 ns/op	69204920 B/op	   38150 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=1-10       	      19	   5757566 ns/op	 9111489 B/op	  102032 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=4/mode=2-10       	       4	  28698531 ns/op	70358828 B/op	   47164 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=1-10      	      15	   7212203 ns/op	10654933 B/op	  114088 allocs/op
+BenchmarkRiskExpression/rules=1000/leaves=16/mode=2-10      	       4	  30063062 ns/op	71902196 B/op	   59220 allocs/op
+PASS

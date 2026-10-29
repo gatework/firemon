@@ -1,0 +1,89 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                                              │ .superpowers/sdd/2026-10-29-computation-contracts/risk-final-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/risk-final-after.txt │
+                                              │                                 sec/op                                  │                     sec/op                       vs base               │
+Convergence/rules=4-10                                                                                      1.640m ± 1%                                      1.633m ± 28%        ~ (p=0.937 n=6)
+Convergence/rules=10-10                                                                                     37.55m ± 1%                                      37.42m ±  1%        ~ (p=0.818 n=6)
+Risk/rules=10/mode=1-10                                                                                     10.06µ ± 2%                                      10.01µ ±  1%        ~ (p=0.084 n=6)
+Risk/rules=10/mode=2-10                                                                                     11.82µ ± 1%                                      11.69µ ±  2%        ~ (p=0.065 n=6)
+Risk/rules=100/mode=1-10                                                                                    99.28µ ± 2%                                      99.79µ ±  1%        ~ (p=0.619 n=6)
+Risk/rules=100/mode=2-10                                                                                    113.9µ ± 2%                                      114.3µ ±  2%        ~ (p=0.818 n=6)
+RiskExpression/rules=10/leaves=1/mode=1-10                                                                  23.21µ ± 2%                                      22.36µ ±  1%   -3.67% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=1/mode=2-10                                                                  25.02µ ± 6%                                      23.87µ ±  1%   -4.60% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=4/mode=1-10                                                                  68.69µ ± 2%                                      54.45µ ±  3%  -20.73% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=4/mode=2-10                                                                  36.00µ ± 2%                                      30.12µ ±  1%  -16.35% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=16/mode=1-10                                                                248.98µ ± 1%                                      70.23µ ±  1%  -71.79% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=16/mode=2-10                                                                 79.22µ ± 2%                                      45.60µ ±  3%  -42.44% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=1/mode=1-10                                                                 237.3µ ± 2%                                      226.4µ ±  1%   -4.62% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=1/mode=2-10                                                                 477.3µ ± 2%                                      464.2µ ±  1%   -2.75% (p=0.009 n=6)
+RiskExpression/rules=100/leaves=4/mode=1-10                                                                 694.4µ ± 1%                                      547.5µ ±  1%  -21.15% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=4/mode=2-10                                                                 586.9µ ± 2%                                      526.6µ ±  1%  -10.27% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=16/mode=1-10                                                               2518.5µ ± 2%                                      691.3µ ±  1%  -72.55% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=16/mode=2-10                                                               1012.3µ ± 2%                                      664.3µ ±  1%  -34.38% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=1/mode=1-10                                                                2.454m ± 2%                                      2.362m ±  2%   -3.75% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=1/mode=2-10                                                                27.69m ± 3%                                      27.87m ±  2%        ~ (p=0.589 n=6)
+RiskExpression/rules=1000/leaves=4/mode=1-10                                                                7.258m ± 2%                                      5.709m ±  1%  -21.34% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=4/mode=2-10                                                                29.21m ± 2%                                      28.50m ±  1%   -2.42% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=16/mode=1-10                                                              26.090m ± 2%                                      7.217m ±  1%  -72.34% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=16/mode=2-10                                                               33.47m ± 2%                                      29.86m ±  1%  -10.79% (p=0.002 n=6)
+geomean                                                                                                     592.3µ                                           458.2µ        -22.64%
+
+                                              │ .superpowers/sdd/2026-10-29-computation-contracts/risk-final-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/risk-final-after.txt │
+                                              │                                  B/op                                   │                     B/op                       vs base                 │
+Convergence/rules=4-10                                                                                     3.112Mi ± 0%                                    3.111Mi ± 0%        ~ (p=0.485 n=6)
+Convergence/rules=10-10                                                                                    55.76Mi ± 0%                                    55.79Mi ± 0%        ~ (p=0.485 n=6)
+Risk/rules=10/mode=1-10                                                                                    18.09Ki ± 0%                                    18.09Ki ± 0%        ~ (p=1.000 n=6) ¹
+Risk/rules=10/mode=2-10                                                                                    23.37Ki ± 0%                                    23.37Ki ± 0%        ~ (p=1.000 n=6) ¹
+Risk/rules=100/mode=1-10                                                                                   174.8Ki ± 0%                                    174.8Ki ± 0%        ~ (p=1.000 n=6)
+Risk/rules=100/mode=2-10                                                                                   215.3Ki ± 0%                                    215.3Ki ± 0%        ~ (p=1.000 n=6)
+RiskExpression/rules=10/leaves=1/mode=1-10                                                                 45.56Ki ± 0%                                    41.41Ki ± 0%   -9.12% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=1/mode=2-10                                                                 62.34Ki ± 0%                                    58.18Ki ± 0%   -6.67% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=4/mode=1-10                                                                126.69Ki ± 0%                                    92.33Ki ± 0%  -27.12% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=4/mode=2-10                                                                 91.12Ki ± 0%                                    71.21Ki ± 0%  -21.85% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=16/mode=1-10                                                                451.2Ki ± 0%                                    114.6Ki ± 0%  -74.61% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=16/mode=2-10                                                               206.24Ki ± 0%                                    93.46Ki ± 0%  -54.68% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=1/mode=1-10                                                                449.1Ki ± 0%                                    407.0Ki ± 0%   -9.38% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=1/mode=2-10                                                                1.240Mi ± 0%                                    1.199Mi ± 0%   -3.32% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=4/mode=1-10                                                               1246.0Ki ± 0%                                    900.2Ki ± 0%  -27.76% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=4/mode=2-10                                                                1.507Mi ± 0%                                    1.311Mi ± 0%  -13.04% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=16/mode=1-10                                                               4.330Mi ± 0%                                    1.033Mi ± 0%  -76.15% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=16/mode=2-10                                                               2.576Mi ± 0%                                    1.464Mi ± 0%  -43.15% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=1/mode=1-10                                                               4.301Mi ± 0%                                    3.889Mi ± 0%   -9.58% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=1/mode=2-10                                                               66.41Mi ± 0%                                    66.00Mi ± 0%   -0.62% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=4/mode=1-10                                                              12.069Mi ± 0%                                    8.689Mi ± 0%  -28.00% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=4/mode=2-10                                                               69.07Mi ± 0%                                    67.10Mi ± 0%   -2.85% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=16/mode=1-10                                                              43.14Mi ± 0%                                    10.16Mi ± 0%  -76.45% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=16/mode=2-10                                                              79.69Mi ± 0%                                    68.57Mi ± 0%  -13.96% (p=0.002 n=6)
+geomean                                                                                                    1.186Mi                                         887.2Ki       -26.98%
+¹ all samples are equal
+
+                                              │ .superpowers/sdd/2026-10-29-computation-contracts/risk-final-before.txt │ .superpowers/sdd/2026-10-29-computation-contracts/risk-final-after.txt │
+                                              │                                allocs/op                                │                   allocs/op                    vs base                 │
+Convergence/rules=4-10                                                                                      15.02k ± 0%                                     15.02k ± 0%        ~ (p=0.738 n=6)
+Convergence/rules=10-10                                                                                     218.6k ± 0%                                     218.6k ± 0%        ~ (p=0.558 n=6)
+Risk/rules=10/mode=1-10                                                                                      250.0 ± 0%                                      250.0 ± 0%        ~ (p=1.000 n=6) ¹
+Risk/rules=10/mode=2-10                                                                                      285.0 ± 0%                                      285.0 ± 0%        ~ (p=1.000 n=6) ¹
+Risk/rules=100/mode=1-10                                                                                    2.413k ± 0%                                     2.413k ± 0%        ~ (p=1.000 n=6) ¹
+Risk/rules=100/mode=2-10                                                                                    2.634k ± 0%                                     2.634k ± 0%        ~ (p=1.000 n=6) ¹
+RiskExpression/rules=10/leaves=1/mode=1-10                                                                   561.0 ± 0%                                      522.0 ± 0%   -6.95% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=1/mode=2-10                                                                   477.0 ± 0%                                      438.0 ± 0%   -8.18% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=4/mode=1-10                                                                  1.425k ± 0%                                     1.046k ± 0%  -26.60% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=4/mode=2-10                                                                   721.0 ± 0%                                      542.0 ± 0%  -24.83% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=16/mode=1-10                                                                 4.881k ± 0%                                     1.222k ± 0%  -74.96% (p=0.002 n=6)
+RiskExpression/rules=10/leaves=16/mode=2-10                                                                 1697.0 ± 0%                                      718.0 ± 0%  -57.69% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=1/mode=1-10                                                                 5.514k ± 0%                                     5.115k ± 0%   -7.24% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=1/mode=2-10                                                                 4.297k ± 0%                                     3.898k ± 0%   -9.29% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=4/mode=1-10                                                                 14.03k ± 0%                                     10.23k ± 0%  -27.08% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=4/mode=2-10                                                                 6.611k ± 0%                                     4.812k ± 0%  -27.21% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=16/mode=1-10                                                                48.08k ± 0%                                     11.48k ± 0%  -76.11% (p=0.002 n=6)
+RiskExpression/rules=100/leaves=16/mode=2-10                                                               15.867k ± 0%                                     6.068k ± 0%  -61.76% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=1/mode=1-10                                                                55.02k ± 0%                                     51.02k ± 0%   -7.27% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=1/mode=2-10                                                                42.15k ± 0%                                     38.15k ± 0%   -9.49% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=4/mode=1-10                                                                140.0k ± 0%                                     102.0k ± 0%  -27.14% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=4/mode=2-10                                                                65.16k ± 0%                                     47.16k ± 0%  -27.62% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=16/mode=1-10                                                               480.1k ± 0%                                     114.1k ± 0%  -76.24% (p=0.002 n=6)
+RiskExpression/rules=1000/leaves=16/mode=2-10                                                              157.22k ± 0%                                     59.22k ± 0%  -62.33% (p=0.002 n=6)
+geomean                                                                                                     8.220k                                          5.551k       -32.48%
+¹ all samples are equal

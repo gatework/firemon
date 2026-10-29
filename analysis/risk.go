@@ -85,6 +85,7 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 	limits := a.Engine.Limits.WithDefaults()
 	limit, comparisons := limits.MaxRegions, limits.MaxCombinations
 	budget := visitBudget(limits.MaxVisits)
+	var prepared preparedRiskExpression
 	if definition.Expression == nil {
 		if definition.Traffic.Empty() || definition.Relation < Intersects || definition.Relation > NotEqual {
 			return nil, ErrInvalid
@@ -93,8 +94,10 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 		if !definition.Traffic.Empty() || definition.Relation != 0 {
 			return nil, ErrInvalid
 		}
-		validationBudget, retained := comparisons, limit
-		if err := validateRiskExpression(ctx, *definition.Expression, limit, &validationBudget, &retained, 0); err != nil {
+		preparation := riskPreparation{limit: limit, nodes: comparisons, regions: limit}
+		var err error
+		prepared, err = preparation.compile(ctx, *definition.Expression, 0)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -148,14 +151,15 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 		if err := budget.take(ctx, 1); err != nil {
 			return nil, err
 		}
-		r := fw.Rule(rows[i].Rule).Record()
-		if !r.Action.Valid() || len(r.Unsupported) > 0 {
+		rule := fw.Rule(rows[i].Rule)
+		if !rule.Action().Valid() || rule.HasUnsupported() {
 			continue
 		}
-		if !slices.Contains(actions, r.Action) {
+		if !slices.Contains(actions, rule.Action()) {
 			rows[i].Value = False
 			continue
 		}
+		r := rule.Record()
 		actual := effective[r.ID]
 		known := true
 		if definition.Mode == Declared {
@@ -176,7 +180,8 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 			continue
 		}
 		if definition.Expression != nil {
-			value, err := a.assessExpression(ctx, fw, r, q, definition.Mode, actual, *definition.Expression, limit, &comparisons)
+			value, remaining, err := a.assessPrepared(ctx, fw, r, q, definition.Mode, actual, prepared, limit, comparisons)
+			comparisons = remaining
 			if err != nil {
 				return nil, err
 			}

@@ -1,0 +1,42 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkConvergence/rules=4-10         	      33	   3542001 ns/op	 3281504 B/op	   15289 allocs/op
+BenchmarkConvergence/rules=4-10         	      34	   3471930 ns/op	 3280172 B/op	   15279 allocs/op
+BenchmarkConvergence/rules=4-10         	      36	   3049027 ns/op	 3278468 B/op	   15278 allocs/op
+BenchmarkConvergence/rules=4-10         	      33	   3994271 ns/op	 3271826 B/op	   15272 allocs/op
+BenchmarkConvergence/rules=4-10         	      30	   4946964 ns/op	 3277500 B/op	   15277 allocs/op
+BenchmarkConvergence/rules=4-10         	      40	   2851599 ns/op	 3272390 B/op	   15272 allocs/op
+BenchmarkConvergence/rules=10-10        	       2	  57340020 ns/op	58757176 B/op	  223354 allocs/op
+BenchmarkConvergence/rules=10-10        	       2	  62786625 ns/op	58467824 B/op	  223188 allocs/op
+BenchmarkConvergence/rules=10-10        	       2	  66862666 ns/op	58530280 B/op	  223229 allocs/op
+BenchmarkConvergence/rules=10-10        	       2	  52985708 ns/op	58721092 B/op	  223332 allocs/op
+BenchmarkConvergence/rules=10-10        	       2	  51660520 ns/op	58724644 B/op	  223343 allocs/op
+BenchmarkConvergence/rules=10-10        	       2	  59942500 ns/op	58807432 B/op	  223383 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	    8006	     20147 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	    6994	     18851 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	    6826	     16998 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	   10000	     14429 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	   10000	     16127 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=1-10        	    6873	     16493 ns/op	   18528 B/op	     250 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	    9765	     14431 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	   10000	     27534 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	    9102	     27309 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	    7584	     15749 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	   10000	     13914 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=10/mode=2-10        	    9304	     13677 ns/op	   23928 B/op	     285 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1090	    111023 ns/op	  179041 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1076	    111370 ns/op	  179041 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1040	    110914 ns/op	  179041 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1104	    103040 ns/op	  179041 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1174	    101492 ns/op	  179040 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=1-10       	    1164	    106783 ns/op	  179040 B/op	    2413 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	     982	    130390 ns/op	  220442 B/op	    2634 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	     990	    122782 ns/op	  220442 B/op	    2634 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	     937	    129755 ns/op	  220441 B/op	    2634 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	     950	    124642 ns/op	  220440 B/op	    2634 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	     960	    130718 ns/op	  220441 B/op	    2634 allocs/op
+BenchmarkRisk/rules=100/mode=2-10       	     924	    120315 ns/op	  220441 B/op	    2634 allocs/op
+PASS
+ok  	github.com/gatework/firemon/benchmarks	5.191s

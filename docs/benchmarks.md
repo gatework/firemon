@@ -153,3 +153,32 @@ route result. The final [route/packet before](benchmarks/2026-10-29-contracts-ro
 [after](benchmarks/2026-10-29-contracts-route-after.txt) and
 [comparison](benchmarks/2026-10-29-contracts-route-comparison.txt) supersede only
 those affected rows. These are separate measurements, not merged samples.
+
+## Prepared risk expressions (2026-10-29)
+
+Baseline `8340b50` includes the corrected layered budgets and aggregate standard
+region limit. Six counterbalanced serial samples per binary use Go 1.27.1,
+Darwin/arm64 Apple M5, `-benchtime=100ms`, with 10/100/1,000 rules and 1/4/16
+expression leaves in declared/effective modes. Allocation profiling of the
+1,000-rule, 16-leaf declared case attributed 92.74% of allocated bytes to recursive
+expression assessment (including repeated match/projection); CPU sampling was too
+noisy for a precise CPU attribution. Standards are now prepared once per call and
+dimension projections once per rule, with no global cache.
+
+At 1,000 rules and 16 leaves, declared assessment fell from 26.090 ms to 7.217 ms
+(-72.34%), 43.14 MiB to 10.16 MiB (-76.45%), and 480,100 to 114,100 allocations.
+Effective assessment fell from 33.47 ms to 29.86 ms (-10.79%), with bytes down
+13.96%. Both timing differences have p=0.002, n=6. Ordinary paired-risk and
+convergence controls show no significant timing regression, and ordinary risk
+allocations are unchanged. Initial testing exposed a counter pointer escaping
+onto the heap; value-owned evaluation state removed that extra allocation before
+this final measurement.
+
+Raw [before](benchmarks/2026-10-29-risk-before.txt),
+[after](benchmarks/2026-10-29-risk-after.txt) and
+[comparison](benchmarks/2026-10-29-risk-comparison.txt) are retained. The separate
+[original baseline](benchmarks/2026-10-29-computation-original.txt) predates the
+budget corrections: ordinary risk allocations remain equal and convergence bytes
+fell about 0.4%. Its timing uncertainty reached 82%, so it does not establish the
+CPU overhead of correctness checks and is not mixed into the performance result.
+These synthetic measurements establish neither real-device capacity nor peak RSS.
