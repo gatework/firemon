@@ -1,0 +1,30 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/analysis
+cpu: Apple M5
+BenchmarkReclaimerUsage/rules=10/samples=2-10         	    9651	     11681 ns/op	   10318 B/op	      86 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=2-10         	   14293	      8432 ns/op	   10318 B/op	      86 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=2-10         	   13963	      8512 ns/op	   10317 B/op	      86 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=2-10         	   14554	      8245 ns/op	   10317 B/op	      86 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=2-10         	   14354	      8332 ns/op	   10318 B/op	      86 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=2-10         	   14509	      8281 ns/op	   10318 B/op	      86 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=16-10        	    6630	     18595 ns/op	   25049 B/op	     116 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=16-10        	    7089	     18122 ns/op	   25048 B/op	     116 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=16-10        	    7107	     18168 ns/op	   25048 B/op	     116 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=16-10        	    6980	     18194 ns/op	   25048 B/op	     116 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=16-10        	    6954	     18179 ns/op	   25049 B/op	     116 allocs/op
+BenchmarkReclaimerUsage/rules=10/samples=16-10        	    7106	     18185 ns/op	   25048 B/op	     116 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=2-10       	     142	    826420 ns/op	  945372 B/op	    7021 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=2-10       	     148	    812054 ns/op	  945358 B/op	    7021 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=2-10       	     144	    826756 ns/op	  945321 B/op	    7021 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=2-10       	     148	    802249 ns/op	  945328 B/op	    7021 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=2-10       	     150	    800009 ns/op	  945319 B/op	    7021 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=2-10       	     148	    799721 ns/op	  945271 B/op	    7020 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=16-10      	      69	   1844761 ns/op	 2417409 B/op	   10021 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=16-10      	      64	   1880710 ns/op	 2417312 B/op	   10020 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=16-10      	      58	   1887348 ns/op	 2417471 B/op	   10022 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=16-10      	      68	   1877160 ns/op	 2417351 B/op	   10021 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=16-10      	      60	   1883678 ns/op	 2417466 B/op	   10022 allocs/op
+BenchmarkReclaimerUsage/rules=1000/samples=16-10      	      63	   1892928 ns/op	 2417331 B/op	   10021 allocs/op
+PASS
+ok  	github.com/gatework/firemon/analysis	3.357s

@@ -6,12 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"slices"
-	"strings"
 	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/plan"
-	"github.com/gatework/firemon/policy"
 )
 
 type Truth uint8
@@ -89,16 +87,23 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 	if fw == nil {
 		return nil, ErrInvalid
 	}
-	hasWindow := !request.Window.Start.IsZero() || !request.Window.End.IsZero()
-	if hasWindow && (!request.Window.Start.Before(request.Window.End) || request.At.IsZero() || request.Window.End.After(request.At) || strings.TrimSpace(request.Revision) == "") {
-		return nil, ErrInvalid
+	hasWindow, err := request.validate()
+	if err != nil {
+		return nil, err
 	}
-	if !hasWindow && len(request.Observations) > 0 {
-		return nil, ErrInvalid
+	budget := r.usageBudget()
+	if err := budget.take(ctx, len(request.Observations)); err != nil {
+		return nil, err
 	}
 	rules := fw.Rules()
+	if err := budget.take(ctx, len(rules)); err != nil {
+		return nil, err
+	}
 	rows := make([]Reclamation, 0, len(rules))
 	for _, rule := range rules {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		id := rule.ID()
 		digest, err := RuleDigest(fw, id)
 		if err != nil {
@@ -109,20 +114,34 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 	if !fw.Complete() {
 		return rows, nil
 	}
+	var evidence []usageEvidence
+	if hasWindow {
+		evidence = make([]usageEvidence, len(rows))
+		index := make(usageIndex[RuleIdentity], len(rows))
+		for i, row := range rows {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			identity, _ := IdentifyRule(fw, row.Rule)
+			evidence[i].digest = row.RuleDigest
+			index[identity] = &evidence[i]
+		}
+		for _, o := range request.Observations {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			index.observe(o.Identity, o, request)
+		}
+	}
 	contexts, err := r.Planner.Engine.Contexts(ctx, request.At, fw)
 	if err != nil {
 		return nil, err
 	}
-	budget := r.Planner.Engine.Limits.Rules
-	if budget <= 0 {
-		budget = 100000
-	}
 	seen := make(map[fm.ID]bool)
 	for _, q := range contexts {
-		if len(rules) > budget {
-			return nil, policy.ErrBudget
+		if err := budget.take(ctx, len(rules)); err != nil {
+			return nil, err
 		}
-		budget -= len(rules)
 		result, err := r.Planner.Engine.Query(ctx, fw, q)
 		if err != nil {
 			return nil, err
@@ -137,7 +156,7 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 		}
 	}
 	for i, rule := range rules {
-		if err := ctx.Err(); err != nil {
+		if err := budget.take(ctx, 1); err != nil {
 			return nil, err
 		}
 		row := &rows[i]
@@ -160,57 +179,13 @@ func (r Reclaimer) Analyze(ctx context.Context, fw *fm.Firewall, request Reclama
 		}
 		row.Removable = !rule.Builtin() && (row.Disabled == True || row.Expired == True || row.Redundant == True)
 		if hasWindow {
-			identity, _ := IdentifyRule(fw, rule.ID())
-			row.Unused = unused(request.Observations, identity, request.Revision, row.RuleDigest, request.Window)
+			row.Unused, err = evidence[i].unused(ctx, request.Window)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return rows, nil
-}
-
-func unused(observations []UsageObservation, id RuleIdentity, revision, digest string, window fm.TimeWindow) Truth {
-	var covered []fm.TimeWindow
-	uncertain := false
-	for _, o := range observations {
-		if o.Identity != id || o.Revision != revision || o.RuleDigest != digest || strings.TrimSpace(o.Source) == "" {
-			continue
-		}
-		if !o.Start.Before(o.End) {
-			uncertain = true
-			continue
-		}
-		if !o.Start.Before(window.End) || !o.End.After(window.Start) {
-			continue
-		}
-		if o.Hits > 0 {
-			if !o.Start.Before(window.Start) && !o.End.After(window.End) {
-				return False
-			}
-			uncertain = true
-			continue
-		}
-		if !o.Complete || o.CounterReset {
-			uncertain = true
-			continue
-		}
-		covered = append(covered, fm.TimeWindow{Start: o.Start, End: o.End})
-	}
-	if uncertain {
-		return Unknown
-	}
-	slices.SortFunc(covered, func(a, b fm.TimeWindow) int { return a.Start.Compare(b.Start) })
-	end := window.Start
-	for _, w := range covered {
-		if w.Start.After(end) {
-			return Unknown
-		}
-		if w.End.After(end) {
-			end = w.End
-		}
-		if !end.Before(window.End) {
-			return True
-		}
-	}
-	return Unknown
 }
 
 func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, request ReclamationRequest, ids []fm.ID) (*plan.Plan, error) {

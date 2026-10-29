@@ -1,0 +1,27 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/analysis
+cpu: Apple M5
+                                        │ docs/benchmarks/2026-10-29-usage-before.txt │ docs/benchmarks/2026-10-29-usage-after.txt │
+                                        │                   sec/op                    │       sec/op         vs base               │
+ReclaimerUsage/rules=10/samples=2-10                                     8.184µ ± 51%          8.382µ ± 39%        ~ (p=0.240 n=6)
+ReclaimerUsage/rules=10/samples=16-10                                    22.15µ ±  1%          18.18µ ±  2%  -17.93% (p=0.002 n=6)
+ReclaimerUsage/rules=1000/samples=2-10                                 12530.0µ ±  3%          807.2µ ±  2%  -93.56% (p=0.002 n=6)
+ReclaimerUsage/rules=1000/samples=16-10                                 95.541m ±  1%          1.882m ±  2%  -98.03% (p=0.002 n=6)
+geomean                                                                  682.6µ                123.4µ        -81.93%
+
+                                        │ docs/benchmarks/2026-10-29-usage-before.txt │ docs/benchmarks/2026-10-29-usage-after.txt │
+                                        │                    B/op                     │        B/op          vs base               │
+ReclaimerUsage/rules=10/samples=2-10                                     8.066Ki ± 0%         10.076Ki ± 0%  +24.92% (p=0.002 n=6)
+ReclaimerUsage/rules=10/samples=16-10                                    22.45Ki ± 0%          24.46Ki ± 0%   +8.95% (p=0.002 n=6)
+ReclaimerUsage/rules=1000/samples=2-10                                   682.9Ki ± 0%          923.2Ki ± 0%  +35.18% (p=0.002 n=6)
+ReclaimerUsage/rules=1000/samples=16-10                                  2.070Mi ± 0%          2.305Mi ± 0%  +11.37% (p=0.002 n=6)
+geomean                                                                  127.2Ki               152.2Ki       +19.64%
+
+                                        │ docs/benchmarks/2026-10-29-usage-before.txt │ docs/benchmarks/2026-10-29-usage-after.txt │
+                                        │                  allocs/op                  │      allocs/op        vs base              │
+ReclaimerUsage/rules=10/samples=2-10                                       82.00 ± 0%             86.00 ± 0%  +4.88% (p=0.002 n=6)
+ReclaimerUsage/rules=10/samples=16-10                                      112.0 ± 0%             116.0 ± 0%  +3.57% (p=0.002 n=6)
+ReclaimerUsage/rules=1000/samples=2-10                                    7.014k ± 0%            7.021k ± 0%  +0.10% (p=0.002 n=6)
+ReclaimerUsage/rules=1000/samples=16-10                                   10.01k ± 0%            10.02k ± 0%  +0.09% (p=0.002 n=6)
+geomean                                                                    896.1                  915.3       +2.14%

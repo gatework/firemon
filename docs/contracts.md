@@ -164,3 +164,17 @@ use that sentinel for a retryable representation rejection: Planner propagates a
 other errors instead of silently trying another candidate. Preserve also validates
 an empty change list. Native creation supports front insertion (ASA supports ACL
 line placement); an unsupported destination position is rejected, never guessed.
+
+Rule and member usage share request validation and an identity-indexed interval
+assessment. An observation's identity, revision, digest and nonempty source must
+match before it contributes evidence. Positive hits wholly inside the requested
+window override uncertain zero counts. Invalid/reset/incomplete or boundary-spanning
+hit evidence cannot establish non-use. Only continuous complete zero-hit coverage
+establishes non-use, which still does not authorize deletion.
+
+Each call charges its consumed observation list and rule/member traversal against
+`Engine.Limits.Rules` (default 100000); rule analysis also charges every rule in
+each policy context and its result pass. Both request lists require a window if
+present, although each analysis consumes only its own evidence. Budget exhaustion
+and cancellation return no partial results. Interval sorting uses bounded chunks
+and cancellable merges. Request data is neither retained nor mutated.

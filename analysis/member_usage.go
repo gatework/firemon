@@ -3,7 +3,6 @@ package analysis
 import (
 	"context"
 	"slices"
-	"strings"
 	"time"
 
 	fm "github.com/gatework/firemon"
@@ -54,27 +53,13 @@ func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall, request 
 	if fw == nil {
 		return nil, ErrInvalid
 	}
-	hasWindow := !request.Window.Start.IsZero() || !request.Window.End.IsZero()
-	if hasWindow && (!request.Window.Start.Before(request.Window.End) || request.At.IsZero() || request.Window.End.After(request.At) || strings.TrimSpace(request.Revision) == "") {
-		return nil, ErrInvalid
+	hasWindow, err := request.validate()
+	if err != nil {
+		return nil, err
 	}
-	if !hasWindow && len(request.MemberObservations) > 0 {
-		return nil, ErrInvalid
-	}
-	budget := r.Planner.Engine.Limits.Rules
-	if budget <= 0 {
-		budget = 100000
-	}
-	if len(request.MemberObservations) > budget {
-		return nil, policy.ErrBudget
-	}
-	budget -= len(request.MemberObservations)
-	observations := make(map[MemberIdentity][]UsageObservation)
-	for _, o := range request.MemberObservations {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		observations[o.Identity] = append(observations[o.Identity], UsageObservation{Identity: o.Identity.Rule, Revision: o.Revision, RuleDigest: o.GraphDigest, Source: o.Source, Start: o.Start, End: o.End, Hits: o.Hits, CounterReset: o.CounterReset, Complete: o.Complete})
+	budget := r.usageBudget()
+	if err := budget.take(ctx, len(request.MemberObservations)); err != nil {
+		return nil, err
 	}
 	var rows []MemberUsage
 	index := make(map[MemberIdentity]int)
@@ -83,10 +68,12 @@ func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall, request 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if budget <= 0 || len(path) >= 64 {
+		if len(path) >= 64 {
 			return policy.ErrBudget
 		}
-		budget--
+		if err := budget.take(ctx, 1); err != nil {
+			return err
+		}
 		cycle := slices.Contains(path, member)
 		path = append(slices.Clone(path), member)
 		identity := MemberIdentity{Rule: rule, Role: role, Kind: member.Kind, ID: member.ID}
@@ -123,10 +110,9 @@ func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall, request 
 		return nil
 	}
 	for _, rule := range fw.Rules() {
-		if budget <= 0 {
-			return nil, policy.ErrBudget
+		if err := budget.take(ctx, 1); err != nil {
+			return nil, err
 		}
-		budget--
 		record := rule.Record()
 		identity, _ := IdentifyRule(fw, record.ID)
 		for _, pair := range []struct {
@@ -146,12 +132,30 @@ func (r Reclaimer) AnalyzeMembers(ctx context.Context, fw *fm.Firewall, request 
 		}
 	}
 	if fw.Complete() && hasWindow {
+		evidence := make([]usageEvidence, len(rows))
+		observations := make(usageIndex[MemberIdentity], len(rows))
+		for i, row := range rows {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			evidence[i].digest = row.GraphDigest
+			observations[row.Identity] = &evidence[i]
+		}
+		for _, o := range request.MemberObservations {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			observations.observe(o.Identity, UsageObservation{Revision: o.Revision, RuleDigest: o.GraphDigest, Source: o.Source, Start: o.Start, End: o.End, Hits: o.Hits, CounterReset: o.CounterReset, Complete: o.Complete}, request)
+		}
 		for i := range rows {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 			row := &rows[i]
-			row.Unused = unused(observations[row.Identity], row.Identity.Rule, request.Revision, row.GraphDigest, request.Window)
+			row.Unused, err = evidence[i].unused(ctx, request.Window)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return rows, nil
