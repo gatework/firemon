@@ -37,10 +37,12 @@ func prefix(values []string) (netip.Prefix, bool) {
 	}
 	return netip.PrefixFrom(a, bits), true
 }
-func (p *parser) network(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) network(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var d fm.Data
+	interfaces := make(map[fm.ID]fm.InterfaceRecord)
+	zones := make(map[fm.ID]fm.ZoneRecord)
 	err := p.each(ctx, tx, "system interface", func(b *config.Block) {
 		// Global interfaces carry their own VDOM. Inspect only this selector
 		// before interpreting fields, so another domain's syntax stays opaque.
@@ -98,7 +100,7 @@ func (p *parser) network(ctx context.Context, s *config.Session) error {
 		f.ignore("alias", "description", "allowaccess", "role", "snmp-index")
 		f.finish()
 		d.Interfaces = append(d.Interfaces, r)
-		p.interfaces[r.ID] = r
+		interfaces[r.ID] = r
 	})
 	if err != nil {
 		return err
@@ -110,7 +112,7 @@ func (p *parser) network(ctx context.Context, s *config.Session) error {
 		f := readFields(tx, b, &z.Object)
 		for _, name := range f.list("interface") {
 			id := fm.ID(name)
-			if _, ok := p.interfaces[id]; !ok {
+			if _, ok := interfaces[id]; !ok {
 				f.invalid("missing zone interface")
 			}
 			if old, ok := members[id]; ok && old != z.ID {
@@ -123,7 +125,7 @@ func (p *parser) network(ctx context.Context, s *config.Session) error {
 		}
 		f.ignore("description")
 		f.finish()
-		p.zones[z.ID] = z
+		zones[z.ID] = z
 		d.Zones = append(d.Zones, z)
 	})
 	if err != nil {
@@ -134,24 +136,24 @@ func (p *parser) network(ctx context.Context, s *config.Session) error {
 		r.Zone = members[r.ID]
 		if r.Zone == "" {
 			r.Zone = r.ID
-			if _, exists := p.zones[r.ID]; exists {
+			if _, exists := zones[r.ID]; exists {
 				r.Unsupported = append(r.Unsupported, "interface and zone name collision")
 			} else {
 				z := fm.ZoneRecord{Object: object(string(r.ID), r.Name, p.vdom)}
 				d.Zones = append(d.Zones, z)
-				p.zones[z.ID] = z
+				zones[z.ID] = z
 			}
 		}
-		p.interfaces[r.ID] = *r
+		interfaces[r.ID] = *r
 	}
 	return p.commit(s, tx, d)
 }
 
-func (p *parser) routes(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) routes(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var d fm.Data
-	for _, iface := range p.data.Interfaces {
+	for _, iface := range p.builder.Interfaces() {
 		if iface.Disabled {
 			continue
 		}
@@ -211,7 +213,7 @@ func (p *parser) routes(ctx context.Context, s *config.Session) error {
 	return p.commit(s, tx, d)
 }
 
-func (p *parser) policyZones(f *fields, key string) ([]fm.ID, bool) {
+func (p *parser) policyZones(f *fields, key string, interfaces []fm.InterfaceRecord) ([]fm.ID, bool) {
 	names := f.list(key)
 	if len(names) == 1 && names[0] == "any" {
 		return nil, true
@@ -221,9 +223,9 @@ func (p *parser) policyZones(f *fields, key string) ([]fm.ID, bool) {
 	explicit := make(map[fm.ID]bool)
 	for _, name := range names {
 		id := fm.ID(name)
-		if _, ok := p.zones[id]; ok {
+		if _, ok := p.builder.Zone(id); ok {
 			explicit[id] = true
-		} else if iface, ok := p.interfaces[id]; ok {
+		} else if iface, ok := p.builder.Interface(id); ok {
 			selected[id] = true
 			id = iface.Zone
 		} else {
@@ -233,7 +235,7 @@ func (p *parser) policyZones(f *fields, key string) ([]fm.ID, bool) {
 			result = append(result, id)
 		}
 	}
-	for _, iface := range p.data.Interfaces {
+	for _, iface := range interfaces {
 		if slices.Contains(result, iface.Zone) && !explicit[iface.Zone] && !selected[iface.ID] {
 			f.invalid("partial interface coverage in zone")
 		}

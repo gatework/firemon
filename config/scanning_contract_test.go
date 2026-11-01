@@ -87,24 +87,22 @@ func TestStatementScanCancelsInsideLongQuotedLine(t *testing.T) {
 	}
 }
 
-func TestInvalidStagesWrapErrInvalidBeforeRunning(t *testing.T) {
+func TestInvalidPhasesFailBeforeRunning(t *testing.T) {
 	called := false
-	run := func(context.Context, *config.Session) error { called = true; return nil }
-	for _, stages := range [][]config.Stage{
-		{{Name: "", Run: run}}, {{Name: "  ", Run: run}}, {{Name: "interfaces"}},
-		{{Name: "interfaces", Run: run}, {Name: "interfaces", Run: run}},
-		{{Name: "routes", Requires: []string{"interfaces"}, Run: run}},
-	} {
-		session, err := config.NewSession(source(t, "pending\n"), fm.Metadata{})
+	run := func(context.Context, *config.Builder) error { called = true; return nil }
+	for _, tc := range []struct {
+		name string
+		run  func(context.Context, *config.Builder) error
+	}{{"", run}, {"  ", run}, {"interfaces", nil}} {
+		b, err := config.NewBuilder(source(t, "pending\n"), fm.Metadata{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = session.Run(context.Background(), stages); !errors.Is(err, config.ErrInvalid) || called {
-			t.Fatalf("invalid stages: called=%v, err=%v", called, err)
+		if err = b.Phase(context.Background(), tc.name, tc.run); !errors.Is(err, config.ErrInvalid) || called {
+			t.Fatalf("invalid phase: called=%v, error=%v", called, err)
 		}
 	}
 }
-
 func TestBlocksCancellationAfterClassifierReturnsNoPartialDocument(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d, err := config.Blocks(ctx, source(t, "member\n"), func(config.Statement, []string) (config.Boundary, string) { cancel(); return config.Member, "" })
@@ -113,15 +111,15 @@ func TestBlocksCancellationAfterClassifierReturnsNoPartialDocument(t *testing.T)
 	}
 }
 
-func TestCursorConstructionHonorsCancellationAndSourceErrors(t *testing.T) {
+func TestContentConstructionHonorsCancellationAndSourceErrors(t *testing.T) {
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	for _, raw := range []string{"", "\xff", strings.Repeat("界", 1<<16)} {
-		c, err := config.NewCursor(canceled, config.Source{Text: raw}, config.Limits{MaxBytes: 1})
+		c, err := config.NewContent(canceled, config.Source{Text: raw}, config.Limits{MaxBytes: 1})
 		if c != nil || !errors.Is(err, context.Canceled) {
 			t.Fatalf("cursor precedence: %v, %v", c, err)
 		}
-		c, err = config.NewFragmentCursor(canceled, config.Source{Text: raw}, []fm.Span{{First: 9}}, config.Limits{MaxBytes: 1})
+		c, err = config.NewFragmentContent(canceled, config.Source{Text: raw}, []fm.Span{{First: 9}}, config.Limits{MaxBytes: 1})
 		if c != nil || !errors.Is(err, context.Canceled) {
 			t.Fatalf("fragment precedence: %v, %v", c, err)
 		}
@@ -129,12 +127,12 @@ func TestCursorConstructionHonorsCancellationAndSourceErrors(t *testing.T) {
 	raw := strings.Repeat("界", 1<<16)
 	for _, fragment := range []bool{false, true} {
 		ctx := &scanCancellation{Context: context.Background(), remaining: 8}
-		var c *config.Cursor
+		var c *config.Content
 		var err error
 		if fragment {
-			c, err = config.NewFragmentCursor(ctx, config.Source{Text: raw}, []fm.Span{{First: 1, Last: 1, EndByte: len(raw)}}, config.Limits{})
+			c, err = config.NewFragmentContent(ctx, config.Source{Text: raw}, []fm.Span{{First: 1, Last: 1, EndByte: len(raw)}}, config.Limits{})
 		} else {
-			c, err = config.NewCursor(ctx, config.Source{Text: raw}, config.Limits{})
+			c, err = config.NewContent(ctx, config.Source{Text: raw}, config.Limits{})
 		}
 		if c != nil || !errors.Is(err, context.Canceled) {
 			t.Fatalf("long construction: %v, %v", c, err)
@@ -144,7 +142,7 @@ func TestCursorConstructionHonorsCancellationAndSourceErrors(t *testing.T) {
 	// continuations and truncation retain ErrSource, rather than replacement text.
 	for _, suffix := range []string{"界\r\nlast", "\xff", "\xe7\x95"} {
 		raw := strings.Repeat("x", 4095) + suffix
-		c, err := config.NewCursor(context.Background(), config.Source{Text: raw}, config.Limits{})
+		c, err := config.NewContent(context.Background(), config.Source{Text: raw}, config.Limits{})
 		if suffix == "界\r\nlast" {
 			if err != nil || len(c.Lines()) != 2 || c.Lines()[0].Raw != raw[:len(raw)-4] {
 				t.Fatalf("UTF8 boundary: %v", err)
@@ -158,7 +156,7 @@ func TestCursorConstructionHonorsCancellationAndSourceErrors(t *testing.T) {
 func TestFragmentScannerPreservesSplitUTF8AndPhysicalSpans(t *testing.T) {
 	raw := "界\r\nlast"
 	spans := []fm.Span{{First: 1, Last: 1, StartByte: 0, EndByte: 1}, {First: 1, Last: 1, StartByte: 1, EndByte: 5}, {First: 2, Last: 2, StartByte: 5, EndByte: len(raw)}}
-	c, err := config.NewFragmentCursor(context.Background(), config.Source{Text: raw}, spans, config.Limits{})
+	c, err := config.NewFragmentContent(context.Background(), config.Source{Text: raw}, spans, config.Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,18 +167,18 @@ func TestFragmentScannerPreservesSplitUTF8AndPhysicalSpans(t *testing.T) {
 	}
 }
 
-func TestCursorCancelsAfterUTF8Validation(t *testing.T) {
+func TestContentCancelsAfterUTF8Validation(t *testing.T) {
 	raw := strings.Repeat("x", 4096*8)
 	// Eight validation chunks plus entry/exit checks complete before cancellation;
 	// the next checks occur inside the physical-line and fragment byte scans.
 	for _, fragment := range []bool{false, true} {
 		ctx := &scanCancellation{Context: context.Background(), remaining: 14}
-		var c *config.Cursor
+		var c *config.Content
 		var err error
 		if fragment {
-			c, err = config.NewFragmentCursor(ctx, config.Source{Text: raw}, []fm.Span{{First: 1, Last: 1, EndByte: len(raw)}}, config.Limits{})
+			c, err = config.NewFragmentContent(ctx, config.Source{Text: raw}, []fm.Span{{First: 1, Last: 1, EndByte: len(raw)}}, config.Limits{})
 		} else {
-			c, err = config.NewCursor(ctx, config.Source{Text: raw}, config.Limits{})
+			c, err = config.NewContent(ctx, config.Source{Text: raw}, config.Limits{})
 		}
 		if c != nil || !errors.Is(err, context.Canceled) {
 			t.Fatalf("post-validation scan: %v, %v", c, err)
@@ -192,7 +190,7 @@ func TestXMLCancelsDuringLargeTextToken(t *testing.T) {
 	raw := "<config>" + strings.Repeat("x", 4096*16) + "</config>"
 	ctx := &scanCancellation{Context: context.Background(), remaining: 30}
 	d, err := config.XML(ctx, config.Source{Text: raw}, config.Limits{})
-	if !errors.Is(err, context.Canceled) || d.Root != nil || d.Cursor != nil {
+	if !errors.Is(err, context.Canceled) || d.Root != nil || d.Content != nil {
 		t.Fatalf("partial XML returned: %v", err)
 	}
 }

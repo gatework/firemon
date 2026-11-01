@@ -6,6 +6,7 @@ Vendor scope approved by the user: Palo Alto, SRX, Huawei, Hillstone, Fortinet, 
 
 - Concrete immutable firewall graph; separate StaticNAT and DynamicNAT domain objects.
 - Read docs/spec.md and docs/plans/go-firewall.md before architectural changes.
+- When business semantics, algorithms or vendor behavior are unclear, inspect the actual Perl implementation and callers under `/Users/crate/Works/perl/algosec/backend/lib/Firewall`. Record the reference and verify differences; preserve Go's exact traffic, unknown-condition and change-safety proofs instead of copying historical defects.
 - Preserve pending/unknown evidence. Never turn unsupported syntax into an unrestricted match.
 - Stateful scoped parsers commit drafts and source evidence atomically. Bind interfaces before routes.
 - Snapshot files are the persistence authority. Loading never reparses or consults a database.

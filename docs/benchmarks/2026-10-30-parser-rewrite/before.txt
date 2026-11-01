@@ -1,0 +1,320 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    1927	    120515 ns/op	  12.57 MB/s	  307308 B/op	    1826 allocs/op
+BenchmarkParse/asa/rules=100-4         	     304	    780211 ns/op	  17.05 MB/s	 2427392 B/op	   13734 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      26	   8731835 ns/op	  15.30 MB/s	26328874 B/op	  132817 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    2059	    110621 ns/op	  20.01 MB/s	  394762 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     238	    988447 ns/op	  20.36 MB/s	 3733602 B/op	   17910 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      21	  10985520 ns/op	  18.43 MB/s	44121465 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    2005	    114283 ns/op	  12.69 MB/s	  352620 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     226	   1044890 ns/op	  11.90 MB/s	 3407039 B/op	   15358 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      19	  11752039 ns/op	  10.68 MB/s	41605265 B/op	  147893 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2281	     99010 ns/op	  24.05 MB/s	  343415 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     289	    823579 ns/op	  25.18 MB/s	 3111870 B/op	   13711 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      25	   9363167 ns/op	  22.17 MB/s	37409700 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1741	    129774 ns/op	  10.20 MB/s	  304391 B/op	    2070 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     237	    998915 ns/op	  11.24 MB/s	 2502876 B/op	   14710 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      21	  11226837 ns/op	  10.11 MB/s	29853667 B/op	  141875 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1513	    150377 ns/op	  28.61 MB/s	  406386 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     181	   1330855 ns/op	  30.76 MB/s	 3722536 B/op	   19981 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      15	  14671883 ns/op	  28.35 MB/s	45321865 B/op	  194830 allocs/op
+BenchmarkParse/srx/rules=10-4          	    2064	    111522 ns/op	  42.97 MB/s	  284410 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     243	    981307 ns/op	  45.70 MB/s	 2626466 B/op	   18321 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      21	  10578708 ns/op	  42.66 MB/s	28994836 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    9470	     25339 ns/op	 106.56 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     148	   1610307 ns/op	 366.29 MB/s	 3841273 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    8598	     28836 ns/op	 107.50 MB/s	  108992 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    4029	     60623 ns/op	  11.93 MB/s	  175158 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      48	   4825168 ns/op	  14.61 MB/s	16684311 B/op	   63594 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13083620 ns/op	  12.43 MB/s	39473428 B/op	  156658 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    2029	    106790 ns/op	  14.19 MB/s	  307321 B/op	    1826 allocs/op
+BenchmarkParse/asa/rules=100-4         	     294	    811836 ns/op	  16.39 MB/s	 2433005 B/op	   13737 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      26	   8681514 ns/op	  15.39 MB/s	26328900 B/op	  132818 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    2068	    111567 ns/op	  19.84 MB/s	  394995 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     240	    994000 ns/op	  20.25 MB/s	 3726143 B/op	   17910 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      21	  11008222 ns/op	  18.39 MB/s	44121484 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    1940	    119363 ns/op	  12.15 MB/s	  352739 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     226	   1052250 ns/op	  11.81 MB/s	 3391723 B/op	   15356 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      19	  11659557 ns/op	  10.76 MB/s	41822481 B/op	  147895 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2277	    100653 ns/op	  23.66 MB/s	  343694 B/op	    1794 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     284	    838924 ns/op	  24.72 MB/s	 3119915 B/op	   13711 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      25	   9287067 ns/op	  22.35 MB/s	37409652 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1717	    130282 ns/op	  10.16 MB/s	  303592 B/op	    2069 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     240	    996437 ns/op	  11.27 MB/s	 2516069 B/op	   14711 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      20	  11215338 ns/op	  10.12 MB/s	30404079 B/op	  141880 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1526	    151099 ns/op	  28.48 MB/s	  406466 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     180	   1323427 ns/op	  30.93 MB/s	 3664948 B/op	   19977 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      16	  14471508 ns/op	  28.74 MB/s	44874542 B/op	  194826 allocs/op
+BenchmarkParse/srx/rules=10-4          	    1992	    115406 ns/op	  41.52 MB/s	  284518 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     247	    971364 ns/op	  46.16 MB/s	 2612300 B/op	   18320 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      22	  10456907 ns/op	  43.16 MB/s	28994821 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    9559	     24984 ns/op	 108.07 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     152	   1563393 ns/op	 377.28 MB/s	 3841278 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    8379	     28814 ns/op	 107.59 MB/s	  108992 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    3933	     60184 ns/op	  12.01 MB/s	  175068 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      48	   4769049 ns/op	  14.78 MB/s	16627512 B/op	   63592 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13075924 ns/op	  12.44 MB/s	39473478 B/op	  156659 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    2044	    104823 ns/op	  14.45 MB/s	  307334 B/op	    1826 allocs/op
+BenchmarkParse/asa/rules=100-4         	     297	    805739 ns/op	  16.51 MB/s	 2434287 B/op	   13736 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      26	   8733660 ns/op	  15.29 MB/s	26328622 B/op	  132815 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    2025	    113093 ns/op	  19.58 MB/s	  394984 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     241	    999726 ns/op	  20.13 MB/s	 3739200 B/op	   17911 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      21	  11194821 ns/op	  18.09 MB/s	44121473 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    1998	    118802 ns/op	  12.21 MB/s	  352472 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     226	   1042478 ns/op	  11.92 MB/s	 3352472 B/op	   15353 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      19	  11731818 ns/op	  10.70 MB/s	41605145 B/op	  147892 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2288	    100052 ns/op	  23.80 MB/s	  343124 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     288	    833811 ns/op	  24.87 MB/s	 3098229 B/op	   13710 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      25	   9401262 ns/op	  22.08 MB/s	37409701 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1713	    130524 ns/op	  10.14 MB/s	  303819 B/op	    2069 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     238	    999800 ns/op	  11.23 MB/s	 2495156 B/op	   14709 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      20	  12407254 ns/op	   9.15 MB/s	29784876 B/op	  141874 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1495	    149729 ns/op	  28.74 MB/s	  405856 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     180	   1323008 ns/op	  30.94 MB/s	 3684212 B/op	   19978 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      15	  14884025 ns/op	  27.94 MB/s	44220864 B/op	  194820 allocs/op
+BenchmarkParse/srx/rules=10-4          	    1959	    115279 ns/op	  41.57 MB/s	  284146 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     247	    967756 ns/op	  46.34 MB/s	 2616949 B/op	   18320 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      22	  10561146 ns/op	  42.73 MB/s	28994863 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    9300	     25406 ns/op	 106.27 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     148	   1604836 ns/op	 367.54 MB/s	 3841277 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    7599	     29569 ns/op	 104.84 MB/s	  108992 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    3951	     60378 ns/op	  11.97 MB/s	  175132 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      46	   4840430 ns/op	  14.57 MB/s	16753516 B/op	   63596 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13174581 ns/op	  12.34 MB/s	39473524 B/op	  156659 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    1990	    107790 ns/op	  14.06 MB/s	  307242 B/op	    1826 allocs/op
+BenchmarkParse/asa/rules=100-4         	     292	    814615 ns/op	  16.33 MB/s	 2427016 B/op	   13735 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      25	   8840587 ns/op	  15.11 MB/s	26363722 B/op	  132818 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    2023	    112865 ns/op	  19.62 MB/s	  394942 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     235	   1011386 ns/op	  19.90 MB/s	 3731154 B/op	   17910 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      21	  11185496 ns/op	  18.10 MB/s	44121498 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    1854	    121411 ns/op	  11.94 MB/s	  352892 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     225	   1059673 ns/op	  11.73 MB/s	 3386594 B/op	   15356 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      20	  11765648 ns/op	  10.67 MB/s	41442232 B/op	  147891 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2197	    101886 ns/op	  23.37 MB/s	  343578 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     279	    856039 ns/op	  24.23 MB/s	 3120014 B/op	   13711 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      24	   9519349 ns/op	  21.81 MB/s	37409682 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1718	    133473 ns/op	   9.92 MB/s	  303753 B/op	    2069 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     236	   1010195 ns/op	  11.11 MB/s	 2501427 B/op	   14710 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      19	  11447706 ns/op	   9.91 MB/s	30143372 B/op	  141878 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1508	    153643 ns/op	  28.01 MB/s	  406593 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     176	   1358415 ns/op	  30.13 MB/s	 3694628 B/op	   19979 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      15	  15096183 ns/op	  27.55 MB/s	45046537 B/op	  194828 allocs/op
+BenchmarkParse/srx/rules=10-4          	    1952	    119030 ns/op	  40.26 MB/s	  284669 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     235	   1010886 ns/op	  44.36 MB/s	 2623492 B/op	   18321 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      21	  10803472 ns/op	  41.77 MB/s	28994832 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    8635	     26936 ns/op	 100.24 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     150	   1590398 ns/op	 370.88 MB/s	 3841282 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    8386	     29974 ns/op	 103.42 MB/s	  108992 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    3732	     61328 ns/op	  11.79 MB/s	  175095 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      52	   4821767 ns/op	  14.62 MB/s	16614438 B/op	   63591 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13118815 ns/op	  12.40 MB/s	39473497 B/op	  156659 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    2010	    104973 ns/op	  14.43 MB/s	  307339 B/op	    1826 allocs/op
+BenchmarkParse/asa/rules=100-4         	     296	    801949 ns/op	  16.59 MB/s	 2425699 B/op	   13734 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      26	   8712245 ns/op	  15.33 MB/s	26258771 B/op	  132813 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    2068	    112008 ns/op	  19.77 MB/s	  394583 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     237	   1005659 ns/op	  20.01 MB/s	 3741466 B/op	   17911 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      21	  11112381 ns/op	  18.22 MB/s	44121491 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    1982	    117896 ns/op	  12.30 MB/s	  352345 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     226	   1054873 ns/op	  11.78 MB/s	 3381530 B/op	   15356 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      19	  11671888 ns/op	  10.75 MB/s	42039897 B/op	  147897 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2284	    101706 ns/op	  23.41 MB/s	  343198 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     282	    845698 ns/op	  24.53 MB/s	 3100324 B/op	   13710 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      25	   9402157 ns/op	  22.08 MB/s	37409713 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1725	    133232 ns/op	   9.94 MB/s	  303581 B/op	    2069 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     234	   1014381 ns/op	  11.07 MB/s	 2502725 B/op	   14710 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      20	  11325281 ns/op	  10.02 MB/s	29784896 B/op	  141875 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1471	    153693 ns/op	  28.00 MB/s	  406256 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     177	   1346883 ns/op	  30.39 MB/s	 3679496 B/op	   19978 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      15	  14881156 ns/op	  27.95 MB/s	45597060 B/op	  194833 allocs/op
+BenchmarkParse/srx/rules=10-4          	    1996	    116592 ns/op	  41.10 MB/s	  284654 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     240	    994722 ns/op	  45.08 MB/s	 2607760 B/op	   18320 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      21	  10602603 ns/op	  42.57 MB/s	28994836 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    9128	     25984 ns/op	 103.91 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     150	   1590542 ns/op	 370.84 MB/s	 3841282 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    8529	     29431 ns/op	 105.33 MB/s	  108992 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    3926	     60492 ns/op	  11.95 MB/s	  175163 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      52	   5107168 ns/op	  13.80 MB/s	16614379 B/op	   63591 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13140266 ns/op	  12.38 MB/s	39473528 B/op	  156659 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    2002	    107571 ns/op	  14.08 MB/s	  307279 B/op	    1826 allocs/op
+BenchmarkParse/asa/rules=100-4         	     295	    816130 ns/op	  16.30 MB/s	 2444989 B/op	   13739 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      26	   8749933 ns/op	  15.27 MB/s	26293753 B/op	  132815 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    2067	    112328 ns/op	  19.71 MB/s	  394607 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     230	   1025011 ns/op	  19.63 MB/s	 3729733 B/op	   17910 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      21	  11184742 ns/op	  18.10 MB/s	44121457 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    1988	    119498 ns/op	  12.13 MB/s	  352373 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     229	   1047107 ns/op	  11.87 MB/s	 3349283 B/op	   15353 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      19	  11797533 ns/op	  10.64 MB/s	42474344 B/op	  147901 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2302	    101048 ns/op	  23.56 MB/s	  342709 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     283	    848111 ns/op	  24.46 MB/s	 3126483 B/op	   13712 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      25	   9429673 ns/op	  22.02 MB/s	37409692 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1732	    130519 ns/op	  10.14 MB/s	  303434 B/op	    2069 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     234	   1012160 ns/op	  11.09 MB/s	 2528667 B/op	   14712 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      20	  11282804 ns/op	  10.06 MB/s	29578428 B/op	  141872 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1521	    152220 ns/op	  28.27 MB/s	  406635 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     177	   1341244 ns/op	  30.52 MB/s	 3666455 B/op	   19977 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      15	  14875678 ns/op	  27.96 MB/s	45321869 B/op	  194830 allocs/op
+BenchmarkParse/srx/rules=10-4          	    1976	    115956 ns/op	  41.33 MB/s	  283784 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     246	    983012 ns/op	  45.62 MB/s	 2582210 B/op	   18318 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      21	  10638992 ns/op	  42.42 MB/s	28994835 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    9162	     25637 ns/op	 105.32 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     147	   1627517 ns/op	 362.42 MB/s	 3841280 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    8002	     29488 ns/op	 105.13 MB/s	  108993 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    3888	     60791 ns/op	  11.89 MB/s	  175126 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      49	   4798733 ns/op	  14.69 MB/s	16540513 B/op	   63588 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13065961 ns/op	  12.45 MB/s	39473397 B/op	  156658 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    2056	    104567 ns/op	  14.49 MB/s	  307262 B/op	    1825 allocs/op
+BenchmarkParse/asa/rules=100-4         	     295	    810828 ns/op	  16.41 MB/s	 2435490 B/op	   13737 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      26	   8798974 ns/op	  15.18 MB/s	26363750 B/op	  132818 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    2040	    111880 ns/op	  19.79 MB/s	  395042 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     238	   1010787 ns/op	  19.91 MB/s	 3738431 B/op	   17911 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      20	  11289006 ns/op	  17.94 MB/s	44121476 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    1976	    117639 ns/op	  12.33 MB/s	  352020 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     232	   1035987 ns/op	  12.00 MB/s	 3331151 B/op	   15352 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      19	  11701625 ns/op	  10.73 MB/s	40953333 B/op	  147886 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2274	    101096 ns/op	  23.55 MB/s	  343156 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     285	    833780 ns/op	  24.88 MB/s	 3094535 B/op	   13709 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      25	   9418567 ns/op	  22.04 MB/s	37409656 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1749	    130894 ns/op	  10.12 MB/s	  303306 B/op	    2069 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     238	    996297 ns/op	  11.27 MB/s	 2456885 B/op	   14707 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      20	  11263206 ns/op	  10.08 MB/s	30197563 B/op	  141878 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1519	    151756 ns/op	  28.35 MB/s	  406116 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     178	   1343444 ns/op	  30.47 MB/s	 3690429 B/op	   19979 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      15	  14786392 ns/op	  28.13 MB/s	44771490 B/op	  194825 allocs/op
+BenchmarkParse/srx/rules=10-4          	    1933	    115658 ns/op	  41.43 MB/s	  284167 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     246	    980538 ns/op	  45.73 MB/s	 2596269 B/op	   18319 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      21	  10568552 ns/op	  42.70 MB/s	28994815 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    9362	     25569 ns/op	 105.60 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     148	   1612269 ns/op	 365.85 MB/s	 3841273 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    8282	     28624 ns/op	 108.30 MB/s	  108992 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    3840	     60125 ns/op	  12.02 MB/s	  175167 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      50	   4837253 ns/op	  14.58 MB/s	16638892 B/op	   63592 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13116243 ns/op	  12.40 MB/s	39473460 B/op	  156659 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    2029	    108366 ns/op	  13.98 MB/s	  307247 B/op	    1826 allocs/op
+BenchmarkParse/asa/rules=100-4         	     295	    808561 ns/op	  16.46 MB/s	 2427796 B/op	   13735 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      25	   8767093 ns/op	  15.24 MB/s	26363800 B/op	  132818 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    2026	    112949 ns/op	  19.60 MB/s	  394701 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     238	   1014159 ns/op	  19.84 MB/s	 3731974 B/op	   17910 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      21	  11149696 ns/op	  18.16 MB/s	44121468 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    1873	    120443 ns/op	  12.04 MB/s	  352653 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     224	   1063994 ns/op	  11.68 MB/s	 3393590 B/op	   15356 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      20	  11742231 ns/op	  10.69 MB/s	42061482 B/op	  147897 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2266	    102231 ns/op	  23.29 MB/s	  342962 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     282	    847187 ns/op	  24.48 MB/s	 3115314 B/op	   13711 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      25	   9375723 ns/op	  22.14 MB/s	37409713 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1725	    132641 ns/op	   9.98 MB/s	  303695 B/op	    2069 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     237	   1010844 ns/op	  11.10 MB/s	 2519748 B/op	   14711 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      20	  11283108 ns/op	  10.06 MB/s	29326368 B/op	  141868 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1522	    153038 ns/op	  28.12 MB/s	  406042 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     177	   1339516 ns/op	  30.56 MB/s	 3699036 B/op	   19979 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      15	  14735942 ns/op	  28.22 MB/s	43945749 B/op	  194818 allocs/op
+BenchmarkParse/srx/rules=10-4          	    1959	    117114 ns/op	  40.92 MB/s	  284435 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     242	    991246 ns/op	  45.24 MB/s	 2607033 B/op	   18320 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      21	  10569042 ns/op	  42.70 MB/s	28994873 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    9338	     25768 ns/op	 104.78 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     152	   1570711 ns/op	 375.53 MB/s	 3841280 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    8691	     29685 ns/op	 104.43 MB/s	  108992 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    3771	     61796 ns/op	  11.70 MB/s	  175140 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      46	   4943745 ns/op	  14.26 MB/s	16694162 B/op	   63594 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13112310 ns/op	  12.40 MB/s	39473481 B/op	  156659 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    2058	    106592 ns/op	  14.21 MB/s	  307255 B/op	    1826 allocs/op
+BenchmarkParse/asa/rules=100-4         	     294	    811435 ns/op	  16.40 MB/s	 2436563 B/op	   13736 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      25	   8792777 ns/op	  15.19 MB/s	26254607 B/op	  132814 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    1966	    113273 ns/op	  19.55 MB/s	  394820 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     237	   1008844 ns/op	  19.95 MB/s	 3710628 B/op	   17909 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      21	  11134446 ns/op	  18.19 MB/s	44121475 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    1904	    119643 ns/op	  12.12 MB/s	  352672 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     226	   1052446 ns/op	  11.81 MB/s	 3359414 B/op	   15354 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      19	  11789715 ns/op	  10.65 MB/s	42257116 B/op	  147899 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2238	    103095 ns/op	  23.10 MB/s	  342896 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     280	    845114 ns/op	  24.54 MB/s	 3099688 B/op	   13710 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      25	   9419447 ns/op	  22.04 MB/s	37409722 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1759	    132650 ns/op	   9.98 MB/s	  302986 B/op	    2069 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     240	    995714 ns/op	  11.27 MB/s	 2468048 B/op	   14707 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      21	  11304815 ns/op	  10.04 MB/s	30246845 B/op	  141879 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1515	    151708 ns/op	  28.36 MB/s	  406327 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     178	   1345047 ns/op	  30.43 MB/s	 3677498 B/op	   19978 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      15	  14853333 ns/op	  28.00 MB/s	44496162 B/op	  194823 allocs/op
+BenchmarkParse/srx/rules=10-4          	    1987	    115613 ns/op	  41.45 MB/s	  284621 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     244	    982388 ns/op	  45.65 MB/s	 2590575 B/op	   18318 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      21	  10666827 ns/op	  42.31 MB/s	28994827 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    8647	     25893 ns/op	 104.28 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     151	   1642999 ns/op	 359.00 MB/s	 3841276 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    5776	     36831 ns/op	  84.17 MB/s	  108992 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    3667	     60761 ns/op	  11.90 MB/s	  175000 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      50	   4821222 ns/op	  14.62 MB/s	16638920 B/op	   63592 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13158470 ns/op	  12.36 MB/s	39473608 B/op	  156660 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/asa/rules=10-4 	    2031	    118003 ns/op	  12.84 MB/s	  307301 B/op	    1826 allocs/op
+BenchmarkParse/asa/rules=100-4         	     285	    819659 ns/op	  16.23 MB/s	 2413820 B/op	   13729 allocs/op
+BenchmarkParse/asa/rules=1000-4        	      25	   9046863 ns/op	  14.76 MB/s	26327553 B/op	  132818 allocs/op
+BenchmarkParse/fortinet/rules=10-4     	    1988	    121189 ns/op	  18.27 MB/s	  395433 B/op	    2227 allocs/op
+BenchmarkParse/fortinet/rules=100-4    	     205	   1127658 ns/op	  17.85 MB/s	 3732354 B/op	   17910 allocs/op
+BenchmarkParse/fortinet/rules=1000-4   	      20	  11456100 ns/op	  17.68 MB/s	44121493 B/op	  173835 allocs/op
+BenchmarkParse/hillstone/rules=10-4    	    1987	    122108 ns/op	  11.87 MB/s	  352553 B/op	    1991 allocs/op
+BenchmarkParse/hillstone/rules=100-4   	     218	   1087485 ns/op	  11.43 MB/s	 3378927 B/op	   15355 allocs/op
+BenchmarkParse/hillstone/rules=1000-4  	      19	  11938864 ns/op	  10.51 MB/s	42039718 B/op	  147896 allocs/op
+BenchmarkParse/huawei/rules=10-4       	    2253	    105401 ns/op	  22.59 MB/s	  343600 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4      	     282	    841213 ns/op	  24.66 MB/s	 3108514 B/op	   13710 allocs/op
+BenchmarkParse/huawei/rules=1000-4     	      24	   9575714 ns/op	  21.68 MB/s	37409670 B/op	  131836 allocs/op
+BenchmarkParse/netscreen/rules=10-4    	    1797	    132833 ns/op	   9.97 MB/s	  303362 B/op	    2069 allocs/op
+BenchmarkParse/netscreen/rules=100-4   	     240	   1013534 ns/op	  11.08 MB/s	 2503234 B/op	   14710 allocs/op
+BenchmarkParse/netscreen/rules=1000-4  	      20	  11374950 ns/op	   9.98 MB/s	29372043 B/op	  141871 allocs/op
+BenchmarkParse/paloalto/rules=10-4     	    1557	    153588 ns/op	  28.02 MB/s	  405961 B/op	    2380 allocs/op
+BenchmarkParse/paloalto/rules=100-4    	     180	   1334757 ns/op	  30.67 MB/s	 3694856 B/op	   19979 allocs/op
+BenchmarkParse/paloalto/rules=1000-4   	      16	  14614781 ns/op	  28.46 MB/s	43842453 B/op	  194816 allocs/op
+BenchmarkParse/srx/rules=10-4          	    1731	    116627 ns/op	  41.09 MB/s	  284342 B/op	    2197 allocs/op
+BenchmarkParse/srx/rules=100-4         	     246	    977370 ns/op	  45.88 MB/s	 2602518 B/op	   18319 allocs/op
+BenchmarkParse/srx/rules=1000-4        	      21	  10616966 ns/op	  42.51 MB/s	28994840 B/op	  178704 allocs/op
+BenchmarkScan/short-4                  	    9468	     25191 ns/op	 107.18 MB/s	   79520 B/op	     925 allocs/op
+BenchmarkScan/long-4                   	     147	   1614929 ns/op	 365.24 MB/s	 3841272 B/op	      42 allocs/op
+BenchmarkScan/multiline-4              	    8544	     29014 ns/op	 106.84 MB/s	  108992 B/op	     927 allocs/op
+BenchmarkParseXML/addresses=10-4       	    3867	     60345 ns/op	  11.98 MB/s	  175130 B/op	     930 allocs/op
+BenchmarkParseXML/addresses=1000-4     	      50	   5167288 ns/op	  13.64 MB/s	16693424 B/op	   63594 allocs/op
+BenchmarkFortinetTopology-4            	      18	  13261887 ns/op	  12.26 MB/s	39473437 B/op	  156658 allocs/op
+PASS

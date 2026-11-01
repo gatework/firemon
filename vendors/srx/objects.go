@@ -33,8 +33,8 @@ func bookPath(w []string) (scope string, rest []string, ok bool) {
 	}
 	return "", nil, false
 }
-func (p *parser) objects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) objects(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var addresses catalog[fm.AddressRecord]
 	var groups catalog[fm.AddressGroupRecord]
@@ -181,10 +181,7 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 		if len(attached) > 1 {
 			d.Diagnostics = append(d.Diagnostics, diagnostic("ambiguous-address-book", "zone has multiple attached address books"))
 		}
-		found := false
-		for _, zone := range p.data.Zones {
-			found = found || zone.Name == name
-		}
+		_, found := p.builder.Zone(fm.ID(name))
 		if !found {
 			d.Diagnostics = append(d.Diagnostics, diagnostic("missing-address-book-zone", "address book attached to an undefined zone"))
 		}
@@ -256,12 +253,11 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 	if err := s.Commit(tx); err != nil {
 		return err
 	}
-	p.data = s.Data()
 	p.addresses = make(map[fm.ID]fm.AddressRef)
-	for _, a := range p.data.Addresses {
+	for _, a := range p.builder.Addresses() {
 		p.addresses[a.ID] = fm.AddressRef{Kind: fm.AddressObject, ID: a.ID}
 	}
-	for _, g := range p.data.AddressGroups {
+	for _, g := range p.builder.AddressGroups() {
 		p.addresses[g.ID] = fm.AddressRef{Kind: fm.AddressGroupObject, ID: g.ID}
 	}
 	return nil
@@ -300,10 +296,8 @@ func (p *parser) addressRef(zone, name string, d *fm.Data) fm.AddressRef {
 	return fm.AddressRef{Kind: fm.AddressObject, ID: nativeID("missing-address", zone, name)}
 }
 func (p *parser) serviceRef(name string) fm.ServiceRef {
-	for _, g := range p.data.ServiceGroups {
-		if g.ID == fm.ID(name) {
-			return fm.ServiceRef{Kind: fm.ServiceGroupObject, ID: g.ID}
-		}
+	if p.builder.HasServiceGroup(fm.ID(name)) {
+		return fm.ServiceRef{Kind: fm.ServiceGroupObject, ID: fm.ID(name)}
 	}
 	return fm.ServiceRef{Kind: fm.ServiceObject, ID: fm.ID(name)}
 }

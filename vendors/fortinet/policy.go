@@ -9,10 +9,11 @@ import (
 	"github.com/gatework/firemon/config"
 )
 
-func (p *parser) policies(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) policies(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var d fm.Data
+	interfaces := s.Interfaces()
 	err := p.each(ctx, tx, "firewall policy", func(b *config.Block) {
 		id := b.Header.Words[1]
 		r := fm.RuleRecord{Object: object(id, id, p.vdom), RuleSet: "security", Position: len(d.Rules), Action: fm.Deny, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant}
@@ -29,8 +30,8 @@ func (p *parser) policies(ctx context.Context, s *config.Session) error {
 		case "ipsec":
 			f.invalid("IPsec policy action")
 		}
-		r.Match.FromZones, r.Match.AnyFromZone = p.policyZones(f, "srcintf")
-		r.Match.ToZones, r.Match.AnyToZone = p.policyZones(f, "dstintf")
+		r.Match.FromZones, r.Match.AnyFromZone = p.policyZones(f, "srcintf", interfaces)
+		r.Match.ToZones, r.Match.AnyToZone = p.policyZones(f, "dstintf", interfaces)
 		for _, name := range f.list("srcaddr") {
 			r.Match.Sources = append(r.Match.Sources, p.addressRef(name))
 		}
@@ -67,14 +68,14 @@ func (p *parser) policies(ctx context.Context, s *config.Session) error {
 			case "disable":
 				r.MatchVIP = fm.Irrelevant
 			case "":
-				r.MatchVIP = defaultMatchVIP(p.data.Metadata.Software)
+				r.MatchVIP = defaultMatchVIP(p.builder.Metadata().Software)
 			default:
 				f.invalid("match-vip")
 			}
 		} else if mode != "" && mode != "disable" {
 			f.invalid("match-vip on accepting policy")
 		}
-		nat := p.policyNAT(f, r)
+		nat := p.policyNAT(f, r, interfaces)
 		f.finish()
 		if nat != nil {
 			nat.Unsupported = append(nat.Unsupported, r.Unsupported...)

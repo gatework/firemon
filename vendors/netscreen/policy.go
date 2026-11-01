@@ -13,10 +13,11 @@ type policyNAT struct {
 	pool, destination, port string
 }
 
-func (p *parser) policies(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) policies(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	d := fm.Data{}
+	var rules catalog[fm.RuleRecord]
 	for _, row := range p.rows {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -29,7 +30,7 @@ func (p *parser) policies(ctx context.Context, s *config.Session) error {
 		if !ok {
 			continue
 		}
-		r := p.rules.entries[string(id)]
+		r := rules.entries[string(id)]
 		valid := false
 		if begins(w, "set", "policy", "id") {
 			rest := w[4:]
@@ -48,10 +49,10 @@ func (p *parser) policies(ctx context.Context, s *config.Session) error {
 					d.Diagnostics = append(d.Diagnostics, invalid("", "duplicate native policy ID"))
 					continue
 				}
-				r = p.rules.get(string(id))
+				r = rules.get(string(id))
 				*r = fm.RuleRecord{Object: object(id, name, ""), RuleSet: "security", Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant, Match: fm.Match{FromZones: []fm.ID{fm.ID(rest[1])}, ToZones: []fm.ID{fm.ID(rest[3])}}}
 				if top {
-					p.rules.names = append([]string{string(id)}, p.rules.names[:len(p.rules.names)-1]...)
+					rules.names = append([]string{string(id)}, rules.names[:len(rules.names)-1]...)
 				}
 				p.addAddress(r, true, rest[4], &d)
 				p.addAddress(r, false, rest[5], &d)
@@ -101,12 +102,12 @@ func (p *parser) policies(ctx context.Context, s *config.Session) error {
 			r.Unsupported = append(r.Unsupported, "unsupported native policy condition")
 		}
 	}
-	for pos, name := range p.rules.names {
-		r := p.rules.entries[name]
+	for pos, name := range rules.names {
+		r := rules.entries[name]
 		r.Position = pos
 		d.Rules = append(d.Rules, *r)
 	}
-	for _, z := range p.data.Zones {
+	for _, z := range p.builder.Zones() {
 		if p.intraBlocked[z.ID] {
 			continue
 		}

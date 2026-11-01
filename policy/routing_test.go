@@ -46,6 +46,12 @@ func TestPANPacketUsesOriginalDestinationWithPostDNATZone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(result.Paths) == 1 {
+		native := result.Paths[0].NativeRequests
+		if len(native) != 1 || native[0].EgressInterface != "in" || native[0].ToZone != "inside" || native[0].Traffic.Regions()[0].Destination != rangeOf("203.0.113.10/32") {
+			t.Fatal("native request lost original PAN destination", native)
+		}
+	}
 	if !result.Complete || len(result.Paths) != 1 || result.Paths[0].ToZone != "inside" || result.Paths[0].Policy.Allowed.Empty() {
 		t.Fatal("wrong PAN packet perspective", result)
 	}
@@ -71,5 +77,30 @@ func TestDisabledOrUnsupportedEgressCannotAuthorizePacketPath(t *testing.T) {
 				t.Fatal("unusable egress authorized traffic", result)
 			}
 		})
+	}
+}
+
+func TestPANOffsetDNATRoutePartitionsKeepExactRelations(t *testing.T) {
+	d := fm.Data{Metadata: fm.Metadata{Device: "pan", Vendor: "paloalto"}, Zones: []fm.ZoneRecord{{Object: fm.Object{ID: "outside"}}, {Object: fm.Object{ID: "left"}}, {Object: fm.Object{ID: "right"}}}, Interfaces: []fm.InterfaceRecord{{Object: fm.Object{ID: "out", Scope: "vr"}, Zone: "outside"}, {Object: fm.Object{ID: "l", Scope: "vr"}, Zone: "left"}, {Object: fm.Object{ID: "r", Scope: "vr"}, Zone: "right"}}, Routes: []fm.RouteRecord{{Object: fm.Object{ID: "default", Scope: "vr"}, Destination: netip.MustParsePrefix("0.0.0.0/0"), Interface: "out"}, {Object: fm.Object{ID: "left", Scope: "vr"}, Destination: netip.MustParsePrefix("10.0.0.0/25"), Interface: "l"}, {Object: fm.Object{ID: "right", Scope: "vr"}, Destination: netip.MustParsePrefix("10.0.0.128/25"), Interface: "r"}}, Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "public"}, Ranges: []flow.AddressRange{rangeOf("203.0.113.0/24")}}}}
+	match := anyMatch()
+	match.AnyDestination = false
+	match.Destinations = []fm.AddressRef{{Kind: fm.AddressObject, ID: "public"}}
+	d.DynamicNATs = []fm.DynamicNATRecord{{Object: fm.Object{ID: "publish"}, Match: match, SourceMode: fm.NoTranslation, DestinationMode: fm.StaticIP, Destination: []fm.Mapping{{Original: rangeOf("203.0.113.0/24"), Translated: rangeOf("10.0.0.0/24"), Mode: fm.Offset}}}}
+	fw, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := (policy.Engine{}).QueryPacket(t.Context(), fw, policy.PacketRequest{Request: policy.Request{Traffic: traffic(t, "198.51.100.1/32", "203.0.113.0/24"), FromZone: "outside"}, VRF: "vr"})
+	if err != nil || !result.Complete || len(result.Paths) != 2 {
+		t.Fatal(result, err)
+	}
+	for _, path := range result.Paths {
+		public, real := "203.0.113.0/25", "10.0.0.0/25"
+		if path.ToZone == "right" {
+			public, real = "203.0.113.128/25", "10.0.0.128/25"
+		}
+		if len(path.NAT.Original.Regions()) != 1 || path.NAT.Original.Regions()[0].Destination != rangeOf(public) || path.NAT.Translated.Regions()[0].Destination != rangeOf(real) || len(path.NAT.Steps) != 1 || !path.NAT.Exact || path.NAT.PossibleAllocation {
+			t.Fatal("parent NAT relation leaked into partition", path)
+		}
 	}
 }

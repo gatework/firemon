@@ -61,8 +61,8 @@ func number(v string, min, max uint64) (uint64, bool) {
 	n, e := strconv.ParseUint(v, 10, 64)
 	return n, e == nil && n >= min && n <= max
 }
-func (p *parser) network(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) network(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	groups, err := p.grouped("interface", func(w []string) (string, string, error) {
@@ -154,8 +154,8 @@ func (p *parser) network(ctx context.Context, s *config.Session) error {
 	}
 	return p.commit(s, tx, d)
 }
-func (p *parser) routes(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) routes(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	seen := make(map[fm.ID]bool)
@@ -166,7 +166,7 @@ func (p *parser) routes(ctx context.Context, s *config.Session) error {
 			seen[r.ID] = true
 		}
 	}
-	for _, iface := range p.data.Interfaces {
+	for _, iface := range p.builder.Interfaces() {
 		if iface.Disabled {
 			continue
 		}

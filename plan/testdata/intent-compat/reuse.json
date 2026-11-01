@@ -1,0 +1,102 @@
+{
+  "Before": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+  "After": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+  "Report": {
+    "version": 1,
+    "generation": 0,
+    "inputs": null,
+    "devices": [
+      {
+        "sources": null,
+        "device": "fw",
+        "revision": "",
+        "semantic_digest": "",
+        "inputs": null,
+        "plan": {
+          "digest": "88b3645167fb4da00bb44e2adff428112d843d020f2043ec6ce5dc644280c62e",
+          "targets": [
+            {
+              "traffic": [
+                {
+                  "Source": {
+                    "First": "192.0.2.1",
+                    "Last": "192.0.2.1"
+                  },
+                  "Destination": {
+                    "First": "198.51.100.1",
+                    "Last": "198.51.100.1"
+                  },
+                  "Protocol": {
+                    "Low": 6,
+                    "High": 6
+                  },
+                  "SourcePort": {
+                    "Low": 0,
+                    "High": 65535
+                  },
+                  "DestinationPort": {
+                    "Low": 443,
+                    "High": 443
+                  },
+                  "ICMPType": {
+                    "Low": 0,
+                    "High": 255
+                  },
+                  "ICMPCode": {
+                    "Low": 0,
+                    "High": 255
+                  }
+                }
+              ],
+              "ruleset": "security",
+              "from_zone": "",
+              "to_zone": "",
+              "at": "0001-01-01T00:00:00Z"
+            }
+          ],
+          "input_requests": [],
+          "proof": {
+            "BaseDigest": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+            "ResultDigest": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+            "TargetAllowed": true,
+            "OutsidePreserved": true,
+            "NATUnchanged": true,
+            "TargetSatisfied": true
+          },
+          "cost": {
+            "NewRules": 0,
+            "AppendedMembers": 0,
+            "NewObjects": 0,
+            "ModifiedRules": 0,
+            "Moves": 0,
+            "Position": 0,
+            "ID": ""
+          },
+          "changes": null,
+          "commands": null
+        }
+      }
+    ],
+    "issues": null
+  },
+  "Options": {
+    "MaxCandidates": 0,
+    "Limits": {
+      "MaxRegions": 0,
+      "MaxVisits": 0,
+      "MaxCombinations": 0
+    }
+  },
+  "Preserved": false,
+  "Preservation": {
+    "BaseDigest": "",
+    "ResultDigest": "",
+    "From": "0001-01-01T00:00:00Z",
+    "Contexts": 0
+  },
+  "Readback": {
+    "PlanDigest": "88b3645167fb4da00bb44e2adff428112d843d020f2043ec6ce5dc644280c62e",
+    "ObservedDigest": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+    "SourceDigest": ""
+  }
+}

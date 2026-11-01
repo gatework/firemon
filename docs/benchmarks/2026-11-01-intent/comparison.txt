@@ -1,0 +1,52 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                                                │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/before.txt │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/after.txt │
+                                                │                                   sec/op                                   │                       sec/op                         vs base              │
+BusinessPlanBatch/rules=1000/requests=8                                                                         3.491m ± 10%                                           3.487m ± 8%       ~ (p=0.818 n=6)
+BusinessPlanBatchAddition/rules=1000/requests=8                                                                 42.07m ±  6%                                           42.53m ± 3%       ~ (p=0.589 n=6)
+geomean                                                                                                         12.12m                                                 12.18m       +0.49%
+
+                                                │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/before.txt │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/after.txt │
+                                                │                                    B/op                                    │                        B/op                          vs base              │
+BusinessPlanBatch/rules=1000/requests=8                                                                         3.715Mi ± 0%                                          3.714Mi ± 0%  -0.01% (p=0.032 n=6)
+BusinessPlanBatchAddition/rules=1000/requests=8                                                                 55.92Mi ± 0%                                          55.92Mi ± 0%  -0.00% (p=0.026 n=6)
+geomean                                                                                                         14.41Mi                                               14.41Mi       -0.00%
+
+                                                │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/before.txt │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/after.txt │
+                                                │                                 allocs/op                                  │                      allocs/op                       vs base              │
+BusinessPlanBatch/rules=1000/requests=8                                                                          60.98k ± 0%                                           60.98k ± 0%  +0.00% (p=0.015 n=6)
+BusinessPlanBatchAddition/rules=1000/requests=8                                                                  451.0k ± 0%                                           451.0k ± 0%       ~ (p=0.190 n=6)
+geomean                                                                                                          165.8k                                                165.8k       +0.00%
+
+pkg: github.com/gatework/firemon/operations
+                               │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/before.txt │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/after.txt │
+                               │                                   sec/op                                   │                       sec/op                         vs base              │
+IntentLifecycle/policy/Plan                                                                    123.6µ ± 40%                                          124.0µ ± 39%       ~ (p=0.937 n=6)
+IntentLifecycle/policy/Encode                                                                  2.397µ ±  0%                                          2.423µ ±  1%  +1.08% (p=0.002 n=6)
+IntentLifecycle/policy/Restore                                                                 228.2µ ±  0%                                          230.7µ ±  1%  +1.09% (p=0.002 n=6)
+IntentLifecycle/finite/Plan                                                                    686.9µ ±  1%                                          688.7µ ±  1%       ~ (p=0.818 n=6)
+IntentLifecycle/finite/Encode                                                                  5.307µ ±  1%                                          4.910µ ±  0%  -7.48% (p=0.002 n=6)
+IntentLifecycle/finite/Restore                                                                 809.4µ ±  3%                                          806.4µ ±  1%       ~ (p=0.310 n=6)
+geomean                                                                                        76.44µ                                                75.75µ        -0.90%
+
+                               │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/before.txt │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/after.txt │
+                               │                                    B/op                                    │                        B/op                         vs base               │
+IntentLifecycle/policy/Plan                                                                    188.0Ki ± 0%                                         187.8Ki ± 0%   -0.12% (p=0.002 n=6)
+IntentLifecycle/policy/Encode                                                                  2.250Ki ± 0%                                         2.125Ki ± 0%   -5.56% (p=0.002 n=6)
+IntentLifecycle/policy/Restore                                                                 286.0Ki ± 0%                                         286.0Ki ± 0%   +0.01% (p=0.002 n=6)
+IntentLifecycle/finite/Plan                                                                    637.7Ki ± 0%                                         637.2Ki ± 0%   -0.08% (p=0.002 n=6)
+IntentLifecycle/finite/Encode                                                                  4.766Ki ± 0%                                         3.781Ki ± 0%  -20.66% (p=0.002 n=6)
+IntentLifecycle/finite/Restore                                                                 744.2Ki ± 0%                                         744.1Ki ± 0%   -0.02% (p=0.002 n=6)
+geomean                                                                                        80.57Ki                                              76.76Ki        -4.73%
+
+                               │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/before.txt │ /Users/crate/Works/go/firemon/docs/benchmarks/2026-11-01-intent/after.txt │
+                               │                                 allocs/op                                  │                     allocs/op                       vs base               │
+IntentLifecycle/policy/Plan                                                                     1.194k ± 0%                                          1.195k ± 0%   +0.08% (p=0.002 n=6)
+IntentLifecycle/policy/Encode                                                                    9.000 ± 0%                                           8.000 ± 0%  -11.11% (p=0.002 n=6)
+IntentLifecycle/policy/Restore                                                                  2.865k ± 0%                                          2.868k ± 0%   +0.10% (p=0.002 n=6)
+IntentLifecycle/finite/Plan                                                                     3.998k ± 0%                                          3.997k ± 0%   -0.03% (p=0.002 n=6)
+IntentLifecycle/finite/Encode                                                                    16.00 ± 0%                                           10.00 ± 0%  -37.50% (p=0.002 n=6)
+IntentLifecycle/finite/Restore                                                                  5.688k ± 0%                                          5.689k ± 0%   +0.02% (p=0.002 n=6)
+geomean                                                                                          473.0                                                429.0        -9.30%

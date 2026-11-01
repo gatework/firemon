@@ -1,0 +1,52 @@
+{
+   "cases" : [
+      {
+         "case" : "source_pool",
+         "commands" : [
+            "set interface ethernet0/0 dip 368 192.0.2.100 192.0.2.100"
+         ],
+         "direction" : "natSrc",
+         "public" : "192.0.2.100/32",
+         "real" : "192.0.2.10/32",
+         "returned" : [
+            {
+               "ips" : [
+                  "192.0.2.10/32"
+               ],
+               "natStr" : " nat src  dip-id 368"
+            }
+         ]
+      },
+      {
+         "case" : "source_interface",
+         "commands" : [],
+         "direction" : "natSrc",
+         "public" : null,
+         "real" : "192.0.2.10/32",
+         "returned" : [
+            {
+               "ips" : [
+                  "192.0.2.10/32"
+               ],
+               "natStr" : " nat src  "
+            }
+         ]
+      },
+      {
+         "case" : "destination",
+         "commands" : [],
+         "direction" : "natDst",
+         "public" : "203.0.113.10/32",
+         "real" : "192.0.2.10/32",
+         "returned" : [
+            {
+               "ips" : [
+                  "203.0.113.10/32"
+               ],
+               "natStr" : " nat dst ip 192.0.2.10"
+            }
+         ]
+      }
+   ],
+   "vendor" : "netscreen"
+}

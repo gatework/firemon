@@ -1,0 +1,57 @@
+[
+   {
+      "case" : "source_range",
+      "commands" : [
+         "nat address-group natPool_203.0.113.10-203.0.113.20",
+         "mode pat",
+         "section 203.0.113.10 203.0.113.20",
+         "quit",
+         "nat-policy",
+         "rule name policy_nat20261030_150555_87140",
+         "source-zone inside",
+         "destination-zone outside",
+         "source-address 192.0.2.0 24",
+         "action source-nat address-group natPool_203.0.113.10-203.0.113.20",
+         "quit"
+      ],
+      "public" : "203.0.113.10-203.0.113.20",
+      "real" : "192.0.2.0/24",
+      "type" : "natSrc"
+   },
+   {
+      "case" : "source_prefix",
+      "commands" : [
+         "nat address-group natPool_203.0.113.10/32",
+         "mode pat",
+         "quit",
+         "nat-policy",
+         "rule name policy_nat20261030_150555_23825",
+         "source-zone inside",
+         "destination-zone outside",
+         "source-address 192.0.2.10 32",
+         "action source-nat address-group natPool_203.0.113.10/32",
+         "quit"
+      ],
+      "public" : "203.0.113.10/32",
+      "real" : "192.0.2.10/32",
+      "type" : "natSrc"
+   },
+   {
+      "case" : "destination_port",
+      "commands" : [
+         "destination-nat address-group natPool_203.0.113.10/32",
+         "quit",
+         "nat-policy",
+         "rule name policy_nat20261030_150555_13502",
+         "source-zone inside",
+         "destination-zone outside",
+         "destination-address 203.0.113.10 32",
+         "service protocol tcp destination-port 443",
+         "action destination-nat address-group natPool_203.0.113.10/32 8443",
+         "quit"
+      ],
+      "public" : "203.0.113.10/32",
+      "real" : "192.0.2.10/32",
+      "type" : "natDst"
+   }
+]

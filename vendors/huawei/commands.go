@@ -111,12 +111,32 @@ func serviceText(fw *fm.Firewall, ref fm.ServiceRef) ([]string, error) {
 	return []string{name}, err
 }
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	batch, err := render.Prepare(ctx, "huawei", before, after, changes)
+	return renderCommands(ctx, before, after, changes)
+}
+
+func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
+	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
+		return nil, err
+	}
+	n, err := nativeCommands(ctx, before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	timed, err := render.ScheduleCommands(before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	n.Commands = append(timed, n.Commands...)
+	return renderCommands(ctx, before, after, changes.Rules, n)
+}
+
+func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
+	batch, err := render.Prepare(ctx, "huawei", before, after, changes, native...)
 	if err != nil {
 		return nil, err
 	}
 	changes = batch.Changes()
-	if len(changes) == 0 {
+	if len(changes) == 0 && len(native) == 0 {
 		return nil, nil
 	}
 	commands := []string{"system-view"}
@@ -163,6 +183,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			commands = append(commands, fmt.Sprintf("service %d %s", i, text))
 		}
 		commands = append(commands, "quit")
+	}
+	if len(native) == 1 {
+		commands = append(commands, native[0].Commands...)
 	}
 	ordered := slices.Clone(changes)
 	for _, c := range ordered {
@@ -213,7 +236,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		r := after.Rule(c.Rule).Record()
 		m := r.Match
 		name, err := quoted(r.Name)
-		if err != nil || r.Scope != "" || r.ID != fm.ID(r.Name) || r.RuleSet != "security" || r.Disabled || r.Builtin || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || m.Schedule != "" || len(m.Applications) > 0 || len(m.Users) > 0 || m.ZoneRelation != fm.AnyZoneRelation {
+		if err != nil || r.Scope != "" || r.ID != fm.ID(r.Name) || r.RuleSet != "security" || r.Disabled || r.Builtin || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || m.Schedule != "" && len(native) == 0 || len(m.Applications) > 0 || len(m.Users) > 0 || m.ZoneRelation != fm.AnyZoneRelation {
 			return nil, ErrRender
 		}
 		commands = append(commands, "security-policy", "rule name "+name)
@@ -292,6 +315,11 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			if action == "" || r.LogStart != fm.Irrelevant || r.Log != r.LogEnd || (r.Log != fm.Known && r.Log != fm.Irrelevant) {
 				return nil, ErrRender
 			}
+			if name, err := render.ScheduleReference(after, m.Schedule, native...); err != nil {
+				return nil, err
+			} else if name != "" {
+				commands = append(commands, "time-range "+name)
+			}
 			commands = append(commands, "action "+action)
 			if r.Log == fm.Known {
 				commands = append(commands, "policy logging")
@@ -310,7 +338,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		commands = append(commands, "quit")
 	}
-	if len(commands) == 1 || len(changes) == 0 {
+	if len(commands) == 1 || len(changes) == 0 && len(native) == 0 {
 		return nil, ErrRender
 	}
 	if err := ctx.Err(); err != nil {

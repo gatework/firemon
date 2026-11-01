@@ -1,0 +1,41 @@
+{
+   "cases" : [
+      {
+         "case" : "source_pool",
+         "commands" : [
+            "nat",
+            "snatrule from \"192.0.2.10/32\" to \"Any\" service \"Any\" trans-to 203.0.113.30/32 mode dynamicport",
+            "exit"
+         ],
+         "direction" : "natSrc",
+         "public" : "203.0.113.30/32",
+         "real" : "192.0.2.10/32",
+         "returned" : 3
+      },
+      {
+         "case" : "source_interface",
+         "commands" : [
+            "nat",
+            "snatrule from \"192.0.2.10/32\" to \"Any\" service \"Any\" trans-to eif-ip mode dynamicport",
+            "exit"
+         ],
+         "direction" : "natSrc",
+         "public" : null,
+         "real" : "192.0.2.10/32",
+         "returned" : 3
+      },
+      {
+         "case" : "destination",
+         "commands" : [
+            "nat",
+            "dnatrule from \"Any\" to \"203.0.113.10/32\" service \"Any\" trans-to \"192.0.2.10/32\"",
+            "exit"
+         ],
+         "direction" : "natDst",
+         "public" : "203.0.113.10/32",
+         "real" : "192.0.2.10/32",
+         "returned" : 3
+      }
+   ],
+   "vendor" : "hillstone"
+}

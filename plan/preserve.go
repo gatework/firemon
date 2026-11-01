@@ -11,13 +11,6 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-func (p *Plan) Preservation() (policy.Equivalence, bool) {
-	if p == nil || p.preservation == nil {
-		return policy.Equivalence{}, false
-	}
-	return *p.preservation, true
-}
-
 // Preserve creates a renderable lifecycle plan whose full future policy and
 // logging are equivalent. It shares authorization/readback/deploy contracts
 // with access-request plans; it never authorizes deleting from usage alone.
@@ -45,7 +38,7 @@ func (p Planner) Preserve(ctx context.Context, before, after *fm.Firewall, chang
 		}
 		return nil, err
 	}
-	result := &Plan{before: before, after: after, changes: changes, preservation: &proof, engine: p.Engine,
+	result := &Plan{before: before, after: after, changes: changes, intent: preservationIntent{proof: proof}, engine: p.Engine,
 		proof: Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), OutsidePreserved: true, NATUnchanged: true}}
 	result.changes = result.Changes()
 	if len(changes) > 0 {

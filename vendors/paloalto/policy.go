@@ -13,19 +13,19 @@ import (
 )
 
 func (p *parser) addressRef(name string, d *fm.Data) fm.AddressRef {
-	for _, a := range p.data.Addresses {
-		if string(a.ID) == name {
-			return fm.AddressRef{Kind: fm.AddressObject, ID: a.ID}
-		}
+	id := fm.ID(name)
+	if p.builder.HasAddress(id) {
+		return fm.AddressRef{Kind: fm.AddressObject, ID: id}
 	}
-	for _, g := range p.data.AddressGroups {
-		if string(g.ID) == name {
-			return fm.AddressRef{Kind: fm.AddressGroupObject, ID: g.ID}
-		}
+	if p.builder.HasAddressGroup(id) {
+		return fm.AddressRef{Kind: fm.AddressGroupObject, ID: id}
 	}
 	if r, err := address(name); err == nil {
 		id := fm.ID("$literal:" + name)
-		for _, a := range append(slices.Clone(p.data.Addresses), d.Addresses...) {
+		if p.builder.HasAddress(id) {
+			return fm.AddressRef{Kind: fm.AddressObject, ID: id}
+		}
+		for _, a := range d.Addresses {
 			if a.ID == id {
 				return fm.AddressRef{Kind: fm.AddressObject, ID: id}
 			}
@@ -36,10 +36,8 @@ func (p *parser) addressRef(name string, d *fm.Data) fm.AddressRef {
 	return fm.AddressRef{Kind: fm.AddressObject, ID: fm.ID(name)}
 }
 func (p *parser) serviceRef(name string) fm.ServiceRef {
-	for _, g := range p.data.ServiceGroups {
-		if string(g.ID) == name {
-			return fm.ServiceRef{Kind: fm.ServiceGroupObject, ID: g.ID}
-		}
+	if p.builder.HasServiceGroup(fm.ID(name)) {
+		return fm.ServiceRef{Kind: fm.ServiceGroupObject, ID: fm.ID(name)}
 	}
 	return fm.ServiceRef{Kind: fm.ServiceObject, ID: fm.ID(name)}
 }
@@ -108,8 +106,8 @@ func ensureSelectors(m *fm.Match) {
 		m.Unsupported = append(m.Unsupported, "missing destination zone")
 	}
 }
-func (p *parser) rules(_ context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) rules(_ context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	rules := make(map[string]fm.RuleRecord)
 	var order []string
 	d := fm.Data{}
@@ -239,7 +237,6 @@ func (p *parser) rules(_ context.Context, s *config.Session) error {
 	if err := s.Commit(tx); err != nil {
 		return err
 	}
-	p.data = s.Data()
 	return nil
 }
 func (p *parser) ranges(ctx context.Context, name string) ([]flow.AddressRange, bool, error) {
@@ -268,13 +265,13 @@ type natDraft struct {
 	hasSource                           bool
 }
 
-func (p *parser) nat(ctx context.Context, s *config.Session) error {
+func (p *parser) nat(ctx context.Context, s *config.Builder) error {
 	var err error
-	p.graph, err = fm.Seal(p.data)
+	p.graph, err = p.builder.Seal()
 	if err != nil {
 		return err
 	}
-	tx := s.Cursor().Begin()
+	tx := s.Begin()
 	drafts := make(map[string]natDraft)
 	var order []string
 	d := fm.Data{}
@@ -439,10 +436,8 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 			} else {
 				for _, ref := range r.match.Services {
 					var terms []fm.ServiceTerm
-					for _, service := range p.data.Services {
-						if service.ID == ref.ID {
-							terms = service.Terms
-						}
+					if service, ok := p.builder.Service(ref.ID); ok {
+						terms = service.Terms
 					}
 					if len(terms) == 0 {
 						r.object.Unsupported = append(r.object.Unsupported, "unresolved NAT original service")

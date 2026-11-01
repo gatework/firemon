@@ -1,0 +1,25 @@
+{
+   "cases" : [
+      {
+         "name" : "covered",
+         "rule" : "inside<|>inside<|>allow",
+         "type" : "ignore"
+      },
+      {
+         "name" : "append-source",
+         "rule" : "inside<|>inside<|>allow",
+         "type" : "modify"
+      },
+      {
+         "name" : "create-two-axes",
+         "rule" : null,
+         "type" : "new"
+      },
+      {
+         "name" : "append-service",
+         "rule" : "inside<|>inside<|>allow",
+         "type" : "modify"
+      }
+   ],
+   "vendor" : "srx"
+}

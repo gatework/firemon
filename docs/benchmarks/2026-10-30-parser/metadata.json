@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-30",
+  "base_commit": "19d1fb999feb63a2f5cf7c2450dec1e7e63da01a",
+  "working_tree": "uncommitted local parser refinement",
+  "go": "go version go1.27.1 darwin/arm64",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "cpu": "Apple M5",
+  "gomaxprocs": 4,
+  "samples": 10,
+  "benchtime": "200ms",
+  "ordering": "serial alternating before/after, reversed on odd samples",
+  "benchmark_filter": "^BenchmarkParse$/(hillstone|huawei)$",
+  "perl_image": "sha256:01405e21111b41c379e6f75d1aaf82cb56ee0b0908faae82c6aabb247b18e609",
+  "perl_reference_sha256": {
+    "Config/Parser/Role.pm": "97ebd4e3f7c941936afbd04cab2ffca596ad739703a7b3739971c9b2be94cc9c",
+    "Config/Parser/Elements.pm": "26511fb0dc6f78bad705079c950b77843598335e7ebbb0b5688f6458302425c6",
+    "Config/Parser/Report.pm": "bf33ef1cc8b5d238434079656c97dd28ec198039e5543ecc6689dfb275fd2a4c",
+    "Config/Parser/Hillstone.pm": "f8604905ada19a92c91693b0f453d6e94c77cd0e57a320dd5092d4247f60bf29",
+    "Config/Parser/Fortinet.pm": "dda58832a8c752e58834bb727b5fcdb9402dcc4959f7439a3c032601cffc6936",
+    "Config/Parser/Huawei.pm": "4f8b9c5330dda13dd1e51573a0153c72cb9432afe8942d30355a9cdbf651baa8",
+    "Config/Parser/Srx.pm": "330486429e74db4818423272cf5431af813dd835c81507a389c5ccf9d3a2455f",
+    "Config/Parser/Netscreen.pm": "5bf5d15782e347893391b4bfd7faba7451c4fad91aefaedad38f64c83bbb8934",
+    "Config/Parser/Asa.pm": "bd5954ffd213d7e68249dd66fac8c732a8496822503fd54469729bc5c568c9d9",
+    "Config/Content/Role.pm": "0958fd0be3df40dd3c90a04b66b74c60d9c6011945a16a931728ac3122d51554",
+    "Config/Content/Static.pm": "2abd7d4a5bc5bb4af9aa6b40bd23ec88be9fabc3fd9fa5c096adf48eaecd7fbf"
+  },
+  "checks": {
+    "root_baseline": 0,
+    "root_race": 0,
+    "root_vet": 0,
+    "root_build": 0,
+    "go_mod_verify": 0,
+    "original_regressions": 1,
+    "perl_oracle_compare": 0,
+    "seven_vendor_export_compare": 0,
+    "perl_service_precedence_both_orders": 0
+  },
+  "fixture_comparison": "ParserVersion normalized to comparison on both sides; raw/export/evidence and semantic data otherwise preserved",
+  "implementation_sha256": {
+    "vendors/hillstone/commands.go": "489bd431276bccef09a22b2aaaad9b7dbbf416412efd3baa5a3f7360193d454f",
+    "vendors/hillstone/nat.go": "5d4f653c8aa2b3073ae2e2b18c9ce939b6c1578d7adc5f928b62b39545f4809b",
+    "vendors/hillstone/network.go": "2370be6c69e121084d1c5625ac3f36f3e8e9e4843eca2540269e3b3460d6eb68",
+    "vendors/hillstone/objects.go": "d9cca6ef3f419ca4df9b07820c3cbc471c1a8f03950f40e89b4fcfdf192072ec",
+    "vendors/hillstone/parser.go": "eab8ba57c0bf322a79848995074472d45a98413b92f4ff5665c9be09ca9fe013",
+    "vendors/hillstone/policy.go": "e03c9760281392bc47ebf8b6a4fa428dd775d0820ba418f796a49ada14d648c6",
+    "vendors/hillstone/structure.go": "a192f9ff709087e0ebc441fc870ff9483b107aee6bfe6ffc7cc5fdef39fbadcc"
+  },
+  "review": "Independent read-only review and follow-up service precedence review: no blocking issues"
+}

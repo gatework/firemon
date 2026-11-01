@@ -1,0 +1,44 @@
+[
+   {
+      "commands" : [
+         "nat",
+         "bnatrule virtual ip 203.0.113.10/32 real ip 192.0.2.10/32",
+         "exit"
+      ],
+      "vendor" : "hillstone"
+   },
+   {
+      "commands" : [
+         "set security nat static rule-set synthetic rule host_203_0_113_10 match destination-address 203.0.113.10/32",
+         "set security nat static rule-set synthetic rule host_203_0_113_10 then static-nat prefix 192.0.2.10/32"
+      ],
+      "vendor" : "srx"
+   },
+   {
+      "commands" : [
+         "config firewall vip",
+         "edit \"vip203.0.113.10/32\"",
+         "set extip 203.0.113.10/32",
+         "extintf \"ethernet0/1\"",
+         "set mappedip 192.0.2.10/32",
+         "next",
+         "end"
+      ],
+      "vendor" : "fortinet"
+   },
+   {
+      "commands" : [
+         "set interface ethernet0/1 mip 203.0.113.10 host 192.0.2.10 netmask 255.255.255.255"
+      ],
+      "vendor" : "netscreen"
+   },
+   {
+      "commands" : [
+         "object network obj-192.0.2.10",
+         "host 192.0.2.10",
+         "nat (inside,outside) static 203.0.113.10",
+         "exit"
+      ],
+      "vendor" : "asa"
+   }
+]

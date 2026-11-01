@@ -1,0 +1,47 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                                            │ docs/benchmarks/2026-10-31-business/before.txt │ docs/benchmarks/2026-10-31-business/after.txt │
+                                            │                     sec/op                     │         sec/op          vs base               │
+BusinessCandidates/sparse/rules=1000                                            16.959m ± 6%             1.681m ±  6%  -90.09% (p=0.002 n=6)
+BusinessCandidates/dense-probe/rules=1000                                        30.72m ± 5%             31.54m ±  2%   +2.65% (p=0.026 n=6)
+BusinessCandidates/sparse/rules=10000                                          1678.07m ± 0%             18.82m ±  8%  -98.88% (p=0.002 n=6)
+BusinessCandidates/dense-probe/rules=10000                                       316.4m ± 7%             333.6m ±  4%   +5.43% (p=0.009 n=6)
+BusinessSharedGroups/rules=1000/members=16                                       8.770m ± 3%             8.747m ±  2%        ~ (p=0.937 n=6)
+BusinessSharedGroups/rules=10000/members=16                                     102.45m ± 4%             99.06m ± 18%        ~ (p=0.818 n=6)
+Optimize/adjacent/requests=10                                                    7.635µ ± 3%             7.615µ ±  3%        ~ (p=0.853 n=6)
+Optimize/adjacent/requests=100                                                   384.7µ ± 1%             385.6µ ±  0%        ~ (p=0.240 n=6)
+Optimize/paired/requests=10                                                      15.41µ ± 1%             15.46µ ±  1%        ~ (p=0.394 n=6)
+Optimize/paired/requests=100                                                     1.152m ± 1%             1.165m ±  1%   +1.15% (p=0.002 n=6)
+geomean                                                                          5.143m                  2.620m        -49.06%
+
+                                            │ docs/benchmarks/2026-10-31-business/before.txt │ docs/benchmarks/2026-10-31-business/after.txt │
+                                            │                      B/op                      │         B/op          vs base                 │
+BusinessCandidates/sparse/rules=1000                                            1.881Mi ± 0%           3.550Mi ± 0%  +88.74% (p=0.002 n=6)
+BusinessCandidates/dense-probe/rules=1000                                       43.48Mi ± 2%           47.81Mi ± 0%   +9.97% (p=0.002 n=6)
+BusinessCandidates/sparse/rules=10000                                           24.55Mi ± 0%           40.93Mi ± 0%  +66.70% (p=0.002 n=6)
+BusinessCandidates/dense-probe/rules=10000                                      464.9Mi ± 9%           478.8Mi ± 8%   +2.99% (p=0.028 n=6)
+BusinessSharedGroups/rules=1000/members=16                                      23.63Mi ± 0%           23.63Mi ± 0%        ~ (p=1.000 n=6) ¹
+BusinessSharedGroups/rules=10000/members=16                                     232.0Mi ± 0%           232.0Mi ± 0%        ~ (p=1.000 n=6) ¹
+Optimize/adjacent/requests=10                                                   23.59Ki ± 0%           23.59Ki ± 0%        ~ (p=1.000 n=6) ¹
+Optimize/adjacent/requests=100                                                  914.7Ki ± 0%           914.7Ki ± 0%        ~ (p=1.000 n=6) ¹
+Optimize/paired/requests=10                                                     40.79Ki ± 0%           40.79Ki ± 0%        ~ (p=1.000 n=6) ¹
+Optimize/paired/requests=100                                                    2.292Mi ± 0%           2.292Mi ± 0%        ~ (p=1.000 n=6) ¹
+geomean                                                                         4.992Mi                5.668Mi       +13.55%
+¹ all samples are equal
+
+                                            │ docs/benchmarks/2026-10-31-business/before.txt │ docs/benchmarks/2026-10-31-business/after.txt │
+                                            │                   allocs/op                    │      allocs/op       vs base                  │
+BusinessCandidates/sparse/rules=1000                                             5.013k ± 0%          10.034k ± 0%  +100.16% (p=0.002 n=6)
+BusinessCandidates/dense-probe/rules=1000                                        290.4k ± 0%           294.4k ± 0%    +1.39% (p=0.002 n=6)
+BusinessCandidates/sparse/rules=10000                                            50.02k ± 0%          100.10k ± 0%  +100.12% (p=0.002 n=6)
+BusinessCandidates/dense-probe/rules=10000                                       2.892M ± 0%           2.932M ± 0%    +1.38% (p=0.002 n=6)
+BusinessSharedGroups/rules=1000/members=16                                       58.17k ± 0%           58.17k ± 0%         ~ (p=1.000 n=6) ¹
+BusinessSharedGroups/rules=10000/members=16                                      581.1k ± 0%           581.1k ± 0%         ~ (p=1.000 n=6) ¹
+Optimize/adjacent/requests=10                                                     82.00 ± 0%            82.00 ± 0%         ~ (p=1.000 n=6) ¹
+Optimize/adjacent/requests=100                                                    737.0 ± 0%            737.0 ± 0%         ~ (p=1.000 n=6) ¹
+Optimize/paired/requests=10                                                       212.0 ± 0%            212.0 ± 0%         ~ (p=1.000 n=6) ¹
+Optimize/paired/requests=100                                                     15.49k ± 0%           15.49k ± 0%         ~ (p=1.000 n=6) ¹
+geomean                                                                          16.41k                18.90k        +15.20%
+¹ all samples are equal

@@ -1,0 +1,6 @@
+=== RUN   TestDefaultSparseBudgetProbe
+    default_probe_test.go:7: rules=1000 rows=0 error=<nil>
+    default_probe_test.go:7: rules=10000 rows=0 error=<nil>
+--- PASS: TestDefaultSparseBudgetProbe (0.16s)
+PASS
+ok  	github.com/gatework/firemon/benchmarks	0.642s

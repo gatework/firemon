@@ -160,8 +160,9 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				return PacketResult{}, err
 			}
 			request := q.Request
-			request.Traffic, request.ToZone = actual, path.Zone.ID()
-			evaluated, err := e.asaAccess(ctx, fw, request, ingress, path.Interface)
+			request.Traffic, request.ToZone, request.EgressInterface = actual, path.Zone.ID(), path.Interface.ID()
+			var native []Request
+			evaluated, err := e.asaAccess(ctx, fw, request, ingress, path.Interface, &native)
 			if err != nil {
 				return PacketResult{}, err
 			}
@@ -179,7 +180,7 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 			if len(result.Paths) >= limits.MaxRegions {
 				return PacketResult{}, ErrBudget
 			}
-			result.Paths = append(result.Paths, PacketPath{Original: original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: selectedRelation, Policy: evaluated})
+			result.Paths = append(result.Paths, PacketPath{Real: actual, Original: original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: selectedRelation, Policy: evaluated, NativeRequests: native, DesignUnsupported: "ASA ACL composition and security-level effects require a native chain plan"})
 		}
 	}
 	return result, nil
@@ -188,7 +189,7 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 // asaAccess evaluates new through-the-box flows using the bound inbound and
 // outbound ACLs. Returning sessions, control-plane/VPN and same-security permit
 // commands need additional native evidence and remain unsupported by parsing.
-func (e Engine) asaAccess(ctx context.Context, fw *fm.Firewall, q Request, ingress, egress *fm.Interface) (Result, error) {
+func (e Engine) asaAccess(ctx context.Context, fw *fm.Firewall, q Request, ingress, egress *fm.Interface, native *[]Request) (Result, error) {
 	// Multicast/broadcast needs native routing/relay evidence beyond an ACL.
 	for _, box := range q.Traffic.Regions() {
 		for _, cidr := range []string{"224.0.0.0/4", "ff00::/8", "255.255.255.255/32"} {
@@ -225,6 +226,7 @@ func (e Engine) asaAccess(ctx context.Context, fw *fm.Firewall, q Request, ingre
 	query := func(name string, traffic flow.Traffic) (Result, error) {
 		request := q
 		request.RuleSet, request.Traffic = name, traffic
+		*native = append(*native, request)
 		r, err := e.Query(ctx, fw, request)
 		if err != nil {
 			return Result{}, err

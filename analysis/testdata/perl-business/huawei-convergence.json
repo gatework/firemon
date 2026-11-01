@@ -1,0 +1,12 @@
+{
+   "candidates" : [
+      {
+         "kind" : "contain",
+         "rules" : [
+            "allow",
+            "duplicate"
+         ]
+      }
+   ],
+   "vendor" : "huawei"
+}

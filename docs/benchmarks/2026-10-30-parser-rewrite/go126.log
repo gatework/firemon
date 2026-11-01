@@ -1,0 +1,10 @@
+ok  	github.com/gatework/firemon/config	0.426s
+ok  	github.com/gatework/firemon/vendors	0.543s
+ok  	github.com/gatework/firemon/vendors/asa	1.354s
+ok  	github.com/gatework/firemon/vendors/fortinet	3.045s
+ok  	github.com/gatework/firemon/vendors/hillstone	2.650s
+ok  	github.com/gatework/firemon/vendors/huawei	3.437s
+?   	github.com/gatework/firemon/vendors/internal/render	[no test files]
+ok  	github.com/gatework/firemon/vendors/netscreen	1.790s
+ok  	github.com/gatework/firemon/vendors/paloalto	0.925s
+ok  	github.com/gatework/firemon/vendors/srx	2.158s

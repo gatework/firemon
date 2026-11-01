@@ -1,0 +1,17 @@
+{
+  "timestamp_utc": "2026-10-30T13:14:31.805269+00:00",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "go": "go version go1.27.1 darwin/arm64",
+  "GOMAXPROCS": 4,
+  "pairs": 10,
+  "benchtime": "200ms",
+  "baseline": "full working tree including preceding uncommitted Hillstone refinement; git HEAD 19d1fb999feb63a2f5cf7c2450dec1e7e63da01a",
+  "last_pair_rerun": "Pair 10 rerun after adapter tests ended to avoid known CPU contention; replacement selected before inspecting rerun results",
+  "method": "Alternating serial processes; reported medians; exact two-sided paired log-time sign-flip p (1024 sign permutations), exploratory not adjusted for multiple comparisons",
+  "binary_sha256": {
+    "before": "48097de0cf181cd6488c129088aae9095990d4397d4295aa0f22f4dd360bf361",
+    "after": "0aeaab4b34dc929ecfd3f962d374d8b28d6cd3f95efb77bfb9334d93530d2703"
+  },
+  "cpu": "Apple M5",
+  "verification": "local only; no CI, publication or devices"
+}

@@ -1,0 +1,145 @@
+{
+  "Before": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+  "After": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+  "Report": {
+    "version": 1,
+    "generation": 0,
+    "inputs": null,
+    "devices": [
+      {
+        "sources": null,
+        "device": "fw",
+        "revision": "",
+        "semantic_digest": "",
+        "inputs": null,
+        "plan": {
+          "digest": "d364ba1ced8475e0641c96a3d77b6d645c61e341f1bd910f4257f6a10ef205e4",
+          "targets": [
+            {
+              "traffic": [
+                {
+                  "Source": {
+                    "First": "192.0.2.1",
+                    "Last": "192.0.2.1"
+                  },
+                  "Destination": {
+                    "First": "198.51.100.1",
+                    "Last": "198.51.100.1"
+                  },
+                  "Protocol": {
+                    "Low": 6,
+                    "High": 6
+                  },
+                  "SourcePort": {
+                    "Low": 0,
+                    "High": 65535
+                  },
+                  "DestinationPort": {
+                    "Low": 443,
+                    "High": 443
+                  },
+                  "ICMPType": {
+                    "Low": 0,
+                    "High": 255
+                  },
+                  "ICMPCode": {
+                    "Low": 0,
+                    "High": 255
+                  }
+                }
+              ],
+              "ruleset": "security",
+              "from_zone": "",
+              "to_zone": "",
+              "at": "2026-11-01T00:00:00Z"
+            }
+          ],
+          "input_requests": [
+            {
+              "from_zone": "",
+              "to_zone": "",
+              "at": "0001-01-01T00:00:00Z"
+            },
+            {
+              "traffic": [
+                {
+                  "Source": {
+                    "First": "192.0.2.1",
+                    "Last": "192.0.2.1"
+                  },
+                  "Destination": {
+                    "First": "198.51.100.1",
+                    "Last": "198.51.100.1"
+                  },
+                  "Protocol": {
+                    "Low": 6,
+                    "High": 6
+                  },
+                  "SourcePort": {
+                    "Low": 0,
+                    "High": 65535
+                  },
+                  "DestinationPort": {
+                    "Low": 443,
+                    "High": 443
+                  },
+                  "ICMPType": {
+                    "Low": 0,
+                    "High": 255
+                  },
+                  "ICMPCode": {
+                    "Low": 0,
+                    "High": 255
+                  }
+                }
+              ],
+              "from_zone": "",
+              "to_zone": "",
+              "at": "2026-11-01T08:00:00+08:00"
+            }
+          ],
+          "proof": {
+            "BaseDigest": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+            "ResultDigest": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+            "TargetAllowed": true,
+            "OutsidePreserved": true,
+            "NATUnchanged": true,
+            "TargetSatisfied": true
+          },
+          "cost": {
+            "NewRules": 0,
+            "AppendedMembers": 0,
+            "NewObjects": 0,
+            "ModifiedRules": 0,
+            "Moves": 0,
+            "Position": 0,
+            "ID": ""
+          },
+          "changes": null,
+          "commands": null
+        }
+      }
+    ],
+    "issues": null
+  },
+  "Options": {
+    "MaxCandidates": 17,
+    "Limits": {
+      "MaxRegions": 4096,
+      "MaxVisits": 100000,
+      "MaxCombinations": 4096
+    }
+  },
+  "Preserved": false,
+  "Preservation": {
+    "BaseDigest": "",
+    "ResultDigest": "",
+    "From": "0001-01-01T00:00:00Z",
+    "Contexts": 0
+  },
+  "Readback": {
+    "PlanDigest": "d364ba1ced8475e0641c96a3d77b6d645c61e341f1bd910f4257f6a10ef205e4",
+    "ObservedDigest": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+    "SourceDigest": ""
+  }
+}

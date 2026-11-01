@@ -1,0 +1,12 @@
+{
+   "candidates" : [
+      {
+         "kind" : "contain",
+         "rules" : [
+            "1",
+            "2"
+         ]
+      }
+   ],
+   "vendor" : "hillstone"
+}

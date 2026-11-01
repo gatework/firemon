@@ -1,0 +1,28 @@
+ok  	github.com/gatework/firemon	(cached)
+ok  	github.com/gatework/firemon/analysis	2.430s
+ok  	github.com/gatework/firemon/benchmarks	1.914s
+ok  	github.com/gatework/firemon/cmd/firemon	2.461s
+ok  	github.com/gatework/firemon/config	2.840s
+ok  	github.com/gatework/firemon/deploy	(cached)
+?   	github.com/gatework/firemon/device	[no test files]
+ok  	github.com/gatework/firemon/flow	(cached)
+ok  	github.com/gatework/firemon/internal/capture	(cached)
+?   	github.com/gatework/firemon/internal/dependency	[no test files]
+ok  	github.com/gatework/firemon/internal/durablefile	(cached)
+ok  	github.com/gatework/firemon/internal/nativename	(cached)
+ok  	github.com/gatework/firemon/internal/servicecoverage	(cached)
+ok  	github.com/gatework/firemon/inventory	(cached)
+ok  	github.com/gatework/firemon/operations	5.335s
+ok  	github.com/gatework/firemon/plan	10.353s
+ok  	github.com/gatework/firemon/policy	(cached)
+ok  	github.com/gatework/firemon/projection	(cached)
+ok  	github.com/gatework/firemon/snapshot	(cached)
+ok  	github.com/gatework/firemon/vendors	3.325s
+ok  	github.com/gatework/firemon/vendors/asa	(cached)
+ok  	github.com/gatework/firemon/vendors/fortinet	3.755s
+ok  	github.com/gatework/firemon/vendors/hillstone	(cached)
+ok  	github.com/gatework/firemon/vendors/huawei	4.937s
+?   	github.com/gatework/firemon/vendors/internal/render	[no test files]
+ok  	github.com/gatework/firemon/vendors/netscreen	(cached)
+ok  	github.com/gatework/firemon/vendors/paloalto	(cached)
+ok  	github.com/gatework/firemon/vendors/srx	5.419s

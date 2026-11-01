@@ -2,6 +2,11 @@
 
 ## Unreleased — Go implementation
 
+- Add Perl-grounded business request batches with independent input dispositions, frozen topology/revisions, exact whole-device policy/NAT proofs, 20 native NAT creation forms, four-vendor finite schedules with verified capture clocks, native usage evidence and offline lifecycle reports/plans. Persist explicitly selected device plans for exact reconstruction and no-write recovery through the existing deployment engine. See [business contracts and verification](docs/business-lifecycle.md).
+
+- Rewrite seven-vendor parser construction around Content, one typed ordered Builder and explicit phases. Validate identities before claiming source, support atomic replacement/rollback, remove duplicate accepted graph copies, and cache immutable intermediate graphs. Preserve native semantics, business Parse APIs and snapshot format 9; low-level Cursor/Session/Stage APIs are replaced. See [migration and evidence](docs/parser-design.md).
+
+- Refine Hillstone parsing around ordered named definitions: retain reopened object members, forward group identity and unsupported block-header evidence; make service/group lookup follow Perl's explicit precedence. Separate native structure/network/object/policy responsibilities and remove an unused full draft copy. The preceding refinement used `hillstone-go-3`, superseded by the rewrite; see [parser design and migration](docs/parser-design.md).
 - Replace the Ruby gem skeleton with a Go module and offline CLI.
 - Add the immutable firewall graph, separate StaticNAT and DynamicNAT catalogs, staged configuration parsing, exact policy and NAT evaluation, snapshot persistence, change proofs, deployment orchestration and lifecycle analysis.
 - Add staged implementations for Hillstone, Palo Alto, ASA, SRX, Netscreen, Fortinet and Huawei with synthetic tests. See [implementation status](docs/status.md) for supported behavior and remaining work; this is not a release or full vendor parity.

@@ -33,10 +33,9 @@ func (p *parser) natAddress(name string, d *fm.Data) (fm.AddressRef, bool) {
 	}
 	return fm.AddressRef{Kind: fm.AddressObject, ID: id}, true
 }
-func (p *parser) nat(ctx context.Context, s *config.Session) error {
-	p.data = s.Data()
+func (p *parser) nat(ctx context.Context, s *config.Builder) error {
 	var err error
-	p.graph, err = fm.Seal(p.data)
+	p.graph, err = s.Seal()
 	if err != nil {
 		return err
 	}
@@ -183,7 +182,7 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 				d.DynamicNATs = append(d.DynamicNATs, r)
 			}
 		}
-		tx := s.Cursor().Begin()
+		tx := s.Begin()
 		tx.Parse(row.line.Lines()...)
 		tx.Emit(d)
 		if err := s.Commit(tx); err != nil {

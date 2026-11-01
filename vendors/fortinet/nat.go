@@ -25,8 +25,9 @@ func equalSize(a, b flow.AddressRange) bool {
 	}
 	return a.Valid() && b.Valid() && size(a).Cmp(size(b)) == 0
 }
-func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) natObjects(ctx context.Context, s *config.Builder) error {
+	interfaces := s.Interfaces()
+	tx := s.Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	err := p.each(ctx, tx, "firewall ippool", func(b *config.Block) {
@@ -75,11 +76,11 @@ func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
 		ifaceID := fm.ID("")
 		if external != "any" {
 			ifaceID = fm.ID(external)
-			if iface, ok := p.interfaces[ifaceID]; ok {
+			if iface, ok := p.builder.Interface(ifaceID); ok {
 				match.AnyFromZone = false
 				match.FromZones = []fm.ID{iface.Zone}
 				count := 0
-				for _, i := range p.data.Interfaces {
+				for _, i := range interfaces {
 					if i.Zone == iface.Zone {
 						count++
 					}
@@ -219,7 +220,7 @@ func (p *parser) natObjects(ctx context.Context, s *config.Session) error {
 	return p.commit(s, tx, d)
 }
 
-func (p *parser) policyNAT(f *fields, r fm.RuleRecord) *fm.DynamicNATRecord {
+func (p *parser) policyNAT(f *fields, r fm.RuleRecord, interfaces []fm.InterfaceRecord) *fm.DynamicNATRecord {
 	enabled := f.choice("nat", "disable", "enable", "disable") == "enable"
 	poolEnabled := f.choice("ippool", "disable", "enable", "disable") == "enable"
 	pools := f.list("poolname")
@@ -241,7 +242,7 @@ func (p *parser) policyNAT(f *fields, r fm.RuleRecord) *fm.DynamicNATRecord {
 		}
 	} else {
 		var candidates []fm.InterfaceRecord
-		for _, iface := range p.data.Interfaces {
+		for _, iface := range interfaces {
 			if !iface.Disabled && slices.Contains(r.Match.ToZones, iface.Zone) {
 				candidates = append(candidates, iface)
 			}

@@ -1,0 +1,27 @@
+{
+   "cases" : [
+      {
+         "case" : "source_pool",
+         "commands" : [],
+         "direction" : "natSrc",
+         "public" : "203.0.113.30/32",
+         "real" : "192.0.2.10/32",
+         "returned" : [
+            "set nat enable",
+            "set ippool enable",
+            "set poolname \"existing-wide\""
+         ]
+      },
+      {
+         "case" : "source_interface",
+         "commands" : [],
+         "direction" : "natSrc",
+         "public" : null,
+         "real" : "192.0.2.10/32",
+         "returned" : [
+            "set nat enable"
+         ]
+      }
+   ],
+   "vendor" : "fortinet"
+}

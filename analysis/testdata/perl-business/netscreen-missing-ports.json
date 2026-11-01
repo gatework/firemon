@@ -1,0 +1,17 @@
+{
+   "rules" : {
+      "1" : {
+         "destinations" : [
+            "192.0.2.10"
+         ],
+         "hit" : 1,
+         "services" : [
+            "tcp_65535"
+         ],
+         "sources" : [
+            "192.0.2.10"
+         ]
+      }
+   },
+   "vendor" : "netscreen"
+}

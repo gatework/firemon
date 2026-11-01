@@ -1,0 +1,32 @@
+[
+  {
+    "vendor": "hillstone",
+    "perl": "matched",
+    "go": "matched and complete"
+  },
+  {
+    "vendor": "huawei",
+    "perl": "matched",
+    "go": "matched and complete"
+  },
+  {
+    "vendor": "fortinet",
+    "perl": "matched",
+    "go": "matched and complete"
+  },
+  {
+    "vendor": "srx",
+    "perl": "matched",
+    "go": "matched and complete"
+  },
+  {
+    "vendor": "netscreen",
+    "perl": "matched",
+    "go": "matched and complete"
+  },
+  {
+    "vendor": "asa",
+    "perl": "matched",
+    "go": "matched and complete"
+  }
+]

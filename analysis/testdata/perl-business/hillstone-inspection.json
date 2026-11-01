@@ -1,0 +1,17 @@
+{
+   "cases" : [
+      {
+         "groups" : {},
+         "input" : "192.0.2.10/32"
+      },
+      {
+         "groups" : {},
+         "input" : "192.0.2.0/24"
+      },
+      {
+         "groups" : {},
+         "input" : "192.0.2.11/32"
+      }
+   ],
+   "vendor" : "hillstone"
+}

@@ -3,6 +3,7 @@ package analysis
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -66,15 +67,30 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Ti
 	if err := visits.take(ctx, len(rules)); err != nil {
 		return nil, err
 	}
-	signatures := make([]fm.RuleRecord, len(rules))
+	// JSON includes every signature field and preserves nil versus empty slices.
+	// Exact keys avoid lossy hashes and preserve structural compatibility.
+	groups := make(map[string][]int)
+	keys := make([]string, len(rules))
 	for i, rule := range rules {
-		signatures[i] = convergenceSignature(rule)
+		if err := visits.take(ctx, 1); err != nil {
+			return nil, err
+		}
+		encoded, err := json.Marshal(convergenceSignature(rule))
+		if err != nil {
+			return nil, err
+		}
+		keys[i] = string(encoded)
+		groups[keys[i]] = append(groups[keys[i]], i)
 	}
 	var contexts []policy.Request
 	contextsReady := false
 	var candidates []ConvergenceCandidate
 	for i, a := range rules {
-		for offset, b := range rules[i+1:] {
+		for _, j := range groups[keys[i]] {
+			if j <= i {
+				continue
+			}
+			b := rules[j]
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
@@ -82,9 +98,6 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Ti
 				return nil, policy.ErrBudget
 			}
 			budget--
-			if !sameConvergenceSignature(signatures[i], signatures[i+1+offset]) {
-				continue
-			}
 			if !contextsReady {
 				var err error
 				contexts, err = c.Planner.Engine.Contexts(ctx, from, fw)

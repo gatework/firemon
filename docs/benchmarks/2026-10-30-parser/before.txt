@@ -1,0 +1,110 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    2083	    114016 ns/op	  12.72 MB/s	  370077 B/op	    2066 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     229	   1044654 ns/op	  11.90 MB/s	 3541201 B/op	   15969 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11770980 ns/op	  10.66 MB/s	43059298 B/op	  153903 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2380	     99490 ns/op	  23.93 MB/s	  342412 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     289	    839642 ns/op	  24.70 MB/s	 3125146 B/op	   13712 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      25	   9317920 ns/op	  22.28 MB/s	37409686 B/op	  131836 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    1845	    116378 ns/op	  12.46 MB/s	  371090 B/op	    2067 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     225	   1058374 ns/op	  11.75 MB/s	 3514733 B/op	   15967 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11838923 ns/op	  10.60 MB/s	43059291 B/op	  153903 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2289	     99361 ns/op	  23.96 MB/s	  342942 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     276	    856115 ns/op	  24.23 MB/s	 3124828 B/op	   13712 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      25	   9318388 ns/op	  22.28 MB/s	37409691 B/op	  131836 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    1836	    116202 ns/op	  12.48 MB/s	  370549 B/op	    2067 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     225	   1056744 ns/op	  11.76 MB/s	 3531639 B/op	   15969 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11871322 ns/op	  10.57 MB/s	42841978 B/op	  153901 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2282	    101273 ns/op	  23.51 MB/s	  342539 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     289	    833842 ns/op	  24.87 MB/s	 3099896 B/op	   13710 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      25	   9293912 ns/op	  22.34 MB/s	37409662 B/op	  131836 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    1861	    115633 ns/op	  12.54 MB/s	  370379 B/op	    2067 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     226	   1054293 ns/op	  11.79 MB/s	 3541838 B/op	   15969 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11797349 ns/op	  10.64 MB/s	42407405 B/op	  153897 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2313	    101479 ns/op	  23.46 MB/s	  342630 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     286	    839282 ns/op	  24.71 MB/s	 3097399 B/op	   13709 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      24	   9389882 ns/op	  22.11 MB/s	37409676 B/op	  131836 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    1839	    115931 ns/op	  12.51 MB/s	  370623 B/op	    2067 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     225	   1055404 ns/op	  11.78 MB/s	 3550605 B/op	   15970 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11933259 ns/op	  10.52 MB/s	43276512 B/op	  153905 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2376	     99384 ns/op	  23.96 MB/s	  342735 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     284	    836503 ns/op	  24.79 MB/s	 3109041 B/op	   13710 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      25	   9314958 ns/op	  22.29 MB/s	37409655 B/op	  131836 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    1862	    115299 ns/op	  12.58 MB/s	  370583 B/op	    2067 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     223	   1067041 ns/op	  11.65 MB/s	 3589040 B/op	   15973 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11905096 ns/op	  10.54 MB/s	42190117 B/op	  153895 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2295	    100781 ns/op	  23.63 MB/s	  342559 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     286	    834785 ns/op	  24.85 MB/s	 3100257 B/op	   13710 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      26	   9270372 ns/op	  22.40 MB/s	37409694 B/op	  131836 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    1860	    115214 ns/op	  12.59 MB/s	  370664 B/op	    2067 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     226	   1053007 ns/op	  11.81 MB/s	 3557138 B/op	   15971 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11810441 ns/op	  10.63 MB/s	43059370 B/op	  153904 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2371	    100335 ns/op	  23.73 MB/s	  342825 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     291	    827220 ns/op	  25.07 MB/s	 3122974 B/op	   13712 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      25	   9265017 ns/op	  22.41 MB/s	37409680 B/op	  131836 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    1862	    116479 ns/op	  12.45 MB/s	  370697 B/op	    2067 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     226	   1064017 ns/op	  11.68 MB/s	 3560549 B/op	   15971 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11827156 ns/op	  10.61 MB/s	42624785 B/op	  153900 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2289	    100841 ns/op	  23.61 MB/s	  343062 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     291	    836485 ns/op	  24.80 MB/s	 3112388 B/op	   13710 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      26	   9382675 ns/op	  22.13 MB/s	37409676 B/op	  131836 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    1897	    115400 ns/op	  12.57 MB/s	  370548 B/op	    2067 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     224	   1064386 ns/op	  11.68 MB/s	 3540390 B/op	   15969 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11980697 ns/op	  10.48 MB/s	42624606 B/op	  153899 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2274	    101293 ns/op	  23.51 MB/s	  342765 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     286	    829435 ns/op	  25.01 MB/s	 3112346 B/op	   13711 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      25	   9386893 ns/op	  22.12 MB/s	37409674 B/op	  131836 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkParse/hillstone/rules=10-4         	    1860	    115528 ns/op	  12.55 MB/s	  370718 B/op	    2067 allocs/op
+BenchmarkParse/hillstone/rules=100-4        	     223	   1067766 ns/op	  11.64 MB/s	 3554557 B/op	   15970 allocs/op
+BenchmarkParse/hillstone/rules=1000-4       	      19	  11922316 ns/op	  10.53 MB/s	42841997 B/op	  153901 allocs/op
+BenchmarkParse/huawei/rules=10-4            	    2300	    100708 ns/op	  23.64 MB/s	  342751 B/op	    1793 allocs/op
+BenchmarkParse/huawei/rules=100-4           	     289	    831562 ns/op	  24.94 MB/s	 3109193 B/op	   13710 allocs/op
+BenchmarkParse/huawei/rules=1000-4          	      25	   9398673 ns/op	  22.09 MB/s	37409713 B/op	  131836 allocs/op
+PASS

@@ -27,10 +27,8 @@ func pair(value string) (string, string, bool) {
 	return parts[0], parts[1], true
 }
 func (p *parser) ranges(name string) ([]flow.AddressRange, bool) {
-	for _, a := range p.data.Addresses {
-		if string(a.ID) == name {
-			return a.Ranges, len(a.Unsupported) == 0 && a.FQDN == ""
-		}
+	if a, ok := p.builder.Address(fm.ID(name)); ok {
+		return a.Ranges, len(a.Unsupported) == 0 && a.FQDN == ""
 	}
 	r, err := iprange(name)
 	if err != nil {
@@ -106,10 +104,8 @@ func (p *parser) natService(words []string, object bool) (fm.ServiceTerm, fm.Ser
 		return fm.ServiceTerm{}, fm.ServiceTerm{}, 0, false
 	}
 	get := func(name string) (fm.ServiceTerm, bool) {
-		for _, s := range p.data.Services {
-			if string(s.ID) == name && len(s.Unsupported) == 0 && len(s.Terms) == 1 {
-				return s.Terms[0], true
-			}
+		if s, ok := p.builder.Service(fm.ID(name)); ok && len(s.Unsupported) == 0 && len(s.Terms) == 1 {
+			return s.Terms[0], true
 		}
 		return fm.ServiceTerm{}, false
 	}
@@ -130,8 +126,8 @@ func portMapping(a, b flow.Interval) ([]fm.PortMapping, bool) {
 	}
 	return []fm.PortMapping{{Original: a, Translated: b, Mode: fm.Offset}}, true
 }
-func (p *parser) nat(_ context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) nat(_ context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	d := fm.Data{}
 	for _, line := range p.lines {
 		w := line.Words

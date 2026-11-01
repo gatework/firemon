@@ -1,0 +1,60 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/operations
+cpu: Apple M5
+BenchmarkIntentLifecycle/policy/Plan    	     620	    172269 ns/op	  192284 B/op	    1195 allocs/op
+BenchmarkIntentLifecycle/policy/Plan    	     976	    123275 ns/op	  192284 B/op	    1195 allocs/op
+BenchmarkIntentLifecycle/policy/Plan    	     969	    123848 ns/op	  192284 B/op	    1195 allocs/op
+BenchmarkIntentLifecycle/policy/Plan    	     973	    123197 ns/op	  192284 B/op	    1195 allocs/op
+BenchmarkIntentLifecycle/policy/Plan    	     957	    124206 ns/op	  192284 B/op	    1195 allocs/op
+BenchmarkIntentLifecycle/policy/Plan    	     964	    124289 ns/op	  192284 B/op	    1195 allocs/op
+BenchmarkIntentLifecycle/policy/Encode  	   49743	      2424 ns/op	    2176 B/op	       8 allocs/op
+BenchmarkIntentLifecycle/policy/Encode  	   50040	      2441 ns/op	    2176 B/op	       8 allocs/op
+BenchmarkIntentLifecycle/policy/Encode  	   50001	      2421 ns/op	    2176 B/op	       8 allocs/op
+BenchmarkIntentLifecycle/policy/Encode  	   49969	      2444 ns/op	    2176 B/op	       8 allocs/op
+BenchmarkIntentLifecycle/policy/Encode  	   49993	      2418 ns/op	    2176 B/op	       8 allocs/op
+BenchmarkIntentLifecycle/policy/Encode  	   50104	      2409 ns/op	    2176 B/op	       8 allocs/op
+BenchmarkIntentLifecycle/policy/Restore 	     508	    232601 ns/op	  292862 B/op	    2868 allocs/op
+BenchmarkIntentLifecycle/policy/Restore 	     523	    230769 ns/op	  292850 B/op	    2868 allocs/op
+BenchmarkIntentLifecycle/policy/Restore 	     522	    230110 ns/op	  292850 B/op	    2868 allocs/op
+BenchmarkIntentLifecycle/policy/Restore 	     520	    230727 ns/op	  292860 B/op	    2868 allocs/op
+BenchmarkIntentLifecycle/policy/Restore 	     522	    230264 ns/op	  292850 B/op	    2868 allocs/op
+BenchmarkIntentLifecycle/policy/Restore 	     518	    230691 ns/op	  292850 B/op	    2868 allocs/op
+BenchmarkIntentLifecycle/finite/Plan    	     172	    688890 ns/op	  652476 B/op	    3997 allocs/op
+BenchmarkIntentLifecycle/finite/Plan    	     174	    688475 ns/op	  652522 B/op	    3997 allocs/op
+BenchmarkIntentLifecycle/finite/Plan    	     175	    683930 ns/op	  652521 B/op	    3997 allocs/op
+BenchmarkIntentLifecycle/finite/Plan    	     174	    689661 ns/op	  652520 B/op	    3997 allocs/op
+BenchmarkIntentLifecycle/finite/Plan    	     174	    688014 ns/op	  652522 B/op	    3997 allocs/op
+BenchmarkIntentLifecycle/finite/Plan    	     172	    690430 ns/op	  652521 B/op	    3997 allocs/op
+BenchmarkIntentLifecycle/finite/Encode  	   24536	      4907 ns/op	    3872 B/op	      10 allocs/op
+BenchmarkIntentLifecycle/finite/Encode  	   24523	      4918 ns/op	    3872 B/op	      10 allocs/op
+BenchmarkIntentLifecycle/finite/Encode  	   24514	      4917 ns/op	    3872 B/op	      10 allocs/op
+BenchmarkIntentLifecycle/finite/Encode  	   24547	      4904 ns/op	    3872 B/op	      10 allocs/op
+BenchmarkIntentLifecycle/finite/Encode  	   24517	      4900 ns/op	    3872 B/op	      10 allocs/op
+BenchmarkIntentLifecycle/finite/Encode  	   24501	      4912 ns/op	    3872 B/op	      10 allocs/op
+BenchmarkIntentLifecycle/finite/Restore 	     147	    811740 ns/op	  761962 B/op	    5690 allocs/op
+BenchmarkIntentLifecycle/finite/Restore 	     148	    806999 ns/op	  761962 B/op	    5690 allocs/op
+BenchmarkIntentLifecycle/finite/Restore 	     148	    806625 ns/op	  761922 B/op	    5689 allocs/op
+BenchmarkIntentLifecycle/finite/Restore 	     148	    806226 ns/op	  761922 B/op	    5689 allocs/op
+BenchmarkIntentLifecycle/finite/Restore 	     148	    800943 ns/op	  761922 B/op	    5689 allocs/op
+BenchmarkIntentLifecycle/finite/Restore 	     150	    802100 ns/op	  761923 B/op	    5689 allocs/op
+PASS
+ok  	github.com/gatework/firemon/operations	4.773s
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      30	   3755265 ns/op	 3895467 B/op	   60987 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      37	   3471459 ns/op	 3894802 B/op	   60978 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      31	   3495579 ns/op	 3894835 B/op	   60978 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      38	   3482591 ns/op	 3894822 B/op	   60978 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      38	   3464654 ns/op	 3894801 B/op	   60978 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      38	   3491706 ns/op	 3894801 B/op	   60978 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8 	       3	  42661014 ns/op	58640216 B/op	  450991 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8 	       3	  42401208 ns/op	58639040 B/op	  450976 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8 	       3	  43793528 ns/op	58639672 B/op	  450984 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8 	       3	  41791903 ns/op	58639264 B/op	  450978 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8 	       3	  43022000 ns/op	58639448 B/op	  450982 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8 	       3	  42294528 ns/op	58639570 B/op	  450980 allocs/op
+PASS
+ok  	github.com/gatework/firemon/benchmarks	2.197s

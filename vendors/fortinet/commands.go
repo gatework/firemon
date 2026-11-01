@@ -115,12 +115,32 @@ func natOwner(fw *fm.Firewall, id fm.ID) bool {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	batch, err := render.Prepare(ctx, "fortinet", before, after, changes)
+	return renderCommands(ctx, before, after, changes)
+}
+
+func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
+	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
+		return nil, err
+	}
+	n, err := nativeCommands(ctx, before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	timed, err := render.ScheduleCommands(before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	n.Commands = append(timed, n.Commands...)
+	return renderCommands(ctx, before, after, changes.Rules, n)
+}
+
+func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
+	batch, err := render.Prepare(ctx, "fortinet", before, after, changes, native...)
 	if err != nil {
 		return nil, err
 	}
 	changes = batch.Changes()
-	if len(changes) == 0 {
+	if len(changes) == 0 && len(native) == 0 {
 		return nil, nil
 	}
 	var commands []string
@@ -165,6 +185,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		block("firewall service custom", name, fields)
 	}
+	if len(native) == 1 {
+		commands = append(commands, native[0].Commands...)
+	}
 	used := make(map[fm.ID]bool)
 	first := fm.ID("")
 	for rule := range before.OrderedRules() {
@@ -200,7 +223,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if natOwner(before, c.Rule) || natOwner(after, c.Rule) {
+		if natOwner(before, c.Rule) || natOwner(after, c.Rule) && len(native) == 0 {
 			return nil, ErrRender
 		}
 		if c.Kind == plan.RemoveRule {
@@ -217,7 +240,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		r := rule.Record()
 		m := r.Match
-		if r.Scope != before.Metadata().Context || r.RuleSet != "security" || r.Builtin || r.Disabled || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || len(m.Users) > 0 || len(m.Applications) > 0 || m.Schedule != "" || m.ZoneRelation != fm.AnyZoneRelation || m.AnySource || m.AnyDestination {
+		if r.Scope != before.Metadata().Context || r.RuleSet != "security" || r.Builtin || r.Disabled || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || len(m.Users) > 0 || len(m.Applications) > 0 || m.Schedule != "" && len(native) == 0 || m.ZoneRelation != fm.AnyZoneRelation || m.AnySource || m.AnyDestination {
 			return nil, ErrRender
 		}
 		var source, destination, service []string
@@ -227,6 +250,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}{{m.Sources, &source}, {m.Destinations, &destination}} {
 			for _, ref := range pair.refs {
 				name, err := addressName(after, ref)
+				if len(native) == 1 && native[0].Addresses[ref.ID] {
+					name, err = quoted(after.Address(ref.ID).Name())
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -295,13 +321,23 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			if err != nil {
 				return nil, err
 			}
-			fields = append(fields, "set name "+name, "set action accept", "set schedule \"always\"", "set logtraffic disable")
+			schedule, err := render.ScheduleReference(after, m.Schedule, native...)
+			if err != nil {
+				return nil, err
+			}
+			if schedule == "" {
+				schedule = "\"always\""
+			}
+			fields = append(fields, "set name "+name, "set action accept", "set schedule "+schedule, "set logtraffic disable")
 		case plan.AppendMembers:
 			if before.Rule(c.Rule) == nil || !nativePolicyID(c.Rule) {
 				return nil, ErrRender
 			}
 		default:
 			return nil, ErrRender
+		}
+		if len(native) == 1 {
+			fields = append(fields, native[0].Policy[c.Rule]...)
 		}
 		block("firewall policy", string(id), fields)
 	}

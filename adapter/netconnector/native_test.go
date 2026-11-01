@@ -8,10 +8,13 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"text/scanner"
 	"time"
+	"unicode"
 
 	fm "github.com/gatework/firemon"
 	adapter "github.com/gatework/firemon/adapter/netconnector"
@@ -96,13 +99,28 @@ func nativeAfter(t *testing.T, vendor, raw string, commands []string) string {
 // address/service/rule/interface forms. Unsupported forms fail the test setup.
 func nativePANXML(t *testing.T, raw string) string {
 	t.Helper()
-	cursor, err := config.NewCursor(context.Background(), config.Source{Text: raw, Complete: true}, config.Limits{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	statements, err := config.Statements(context.Background(), cursor)
-	if err != nil {
-		t.Fatal(err)
+	// The simulated device must not depend on the parser's construction API.
+	// These fixtures contain one native command per line and Go-quoted names.
+	var statements [][]string
+	for _, line := range strings.Split(raw, "\n") {
+		var input scanner.Scanner
+		input.Init(strings.NewReader(line))
+		input.Mode = scanner.ScanIdents | scanner.ScanStrings
+		input.IsIdentRune = func(r rune, _ int) bool { return !unicode.IsSpace(r) && r != '"' }
+		input.Error = func(_ *scanner.Scanner, message string) { t.Fatal(message) }
+		var words []string
+		for token := input.Scan(); token != scanner.EOF; token = input.Scan() {
+			word := input.TokenText()
+			if token == scanner.String {
+				var err error
+				word, err = strconv.Unquote(word)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			words = append(words, word)
+		}
+		statements = append(statements, words)
 	}
 	type node struct {
 		name, attribute, text string
@@ -119,10 +137,9 @@ func nativePANXML(t *testing.T, raw string) string {
 		parent.children = append(parent.children, n)
 		return n
 	}
-	for _, st := range statements {
-		w := st.Words
+	for _, w := range statements {
 		if len(w) < 4 || w[0] != "set" {
-			t.Fatal(st)
+			t.Fatal(w)
 		}
 		n := root
 		var path []string

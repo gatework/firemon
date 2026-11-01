@@ -24,8 +24,18 @@ func (b batch) DeclaresService(id fm.ID) bool { return b.services[id] }
 
 // Prepare returns an owned change order. Most native emitters support creation
 // before surviving explicit rules; ASA can select an exact ACL line instead.
-func Prepare(ctx context.Context, vendor string, before, after *fm.Firewall, changes []plan.Change) (batch, error) {
-	if err := plan.ValidateChanges(ctx, before, after, changes); err != nil {
+func Prepare(ctx context.Context, vendor string, before, after *fm.Firewall, changes []plan.Change, native ...Native) (batch, error) {
+	if len(native) > 1 {
+		return batch{}, plan.ErrInvalid
+	}
+	var err error
+	if len(native) == 1 {
+		err = plan.ValidateNativeChanges(ctx, before, after, native[0].Changes)
+		changes = native[0].Changes.Rules
+	} else {
+		err = plan.ValidateChanges(ctx, before, after, changes)
+	}
+	if err != nil {
 		return batch{}, err
 	}
 	if before.Metadata().Vendor != vendor || vendor == "fortinet" && before.Metadata().Context == "" {
@@ -102,6 +112,32 @@ func Prepare(ctx context.Context, vendor string, before, after *fm.Firewall, cha
 		return cmp.Compare(a.Rule, b.Rule)
 	})
 	prepared.changes = result
+	if len(native) == 1 {
+		for _, a := range native[0].Changes.Additions.Addresses {
+			if a.Inline && !native[0].Addresses[a.ID] {
+				return batch{}, plan.ErrRender
+			}
+			if !a.Inline && !native[0].Addresses[a.ID] {
+				prepared.addresses[a.ID] = true
+			}
+		}
+		for _, s := range native[0].Changes.Additions.Services {
+			if s.Inline && !native[0].Services[s.ID] {
+				return batch{}, plan.ErrRender
+			}
+			if !s.Inline && !native[0].Services[s.ID] {
+				prepared.services[s.ID] = true
+			}
+		}
+	}
+	if len(native) == 1 {
+		for id := range native[0].Addresses {
+			delete(prepared.addresses, id)
+		}
+		for id := range native[0].Services {
+			delete(prepared.services, id)
+		}
+	}
 	if err := prepared.validateNames(ctx, before, after); err != nil {
 		return batch{}, err
 	}

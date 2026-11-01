@@ -49,6 +49,7 @@ func (e Engine) PreserveNAT(ctx context.Context, before, after *fm.Firewall, fro
 	}
 	b.Addresses = slices.DeleteFunc(b.Addresses, func(r fm.AddressRecord) bool { return !addresses[r.ID] })
 	b.Services = slices.DeleteFunc(b.Services, func(r fm.ServiceRecord) bool { return !services[r.ID] })
+	b.Schedules = slices.DeleteFunc(b.Schedules, func(r fm.ScheduleRecord) bool { return before.Schedule(r.ID) == nil })
 	x, err := fm.Seal(a)
 	if err != nil {
 		return err

@@ -162,7 +162,9 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					if len(out.Paths) >= limits.MaxRegions {
 						return PacketResult{}, ErrBudget
 					}
-					out.Paths = append(out.Paths, PacketPath{Original: part.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: part, Policy: result})
+					native := request
+					native.Traffic = part.Original
+					out.Paths = append(out.Paths, PacketPath{Real: policyView, NativeRequests: []Request{native}, Original: part.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: part, Policy: result})
 				}
 			}
 			if !evaluated.Unmatched.Empty() {

@@ -93,7 +93,7 @@ func (p Planner) tryCandidate(
 	}
 	result := &Plan{
 		before: before, after: draft.after, changes: draft.changes, cost: draft.cost,
-		proof: proof, commands: commands, target: request, engine: p.Engine,
+		proof: proof, commands: commands, intent: accessIntent{target: request}, engine: p.Engine,
 	}
 	if err := result.seal(); err != nil {
 		return nil, err

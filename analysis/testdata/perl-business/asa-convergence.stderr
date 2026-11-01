@@ -1,0 +1,2 @@
+Use of uninitialized value in string eq at /source/lib/Firewall/Config/Ruleopti.pm line 36, <STDIN> line 20.
+Use of uninitialized value in string eq at /source/lib/Firewall/Config/Ruleopti.pm line 36, <STDIN> line 20.

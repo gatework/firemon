@@ -1,0 +1,18 @@
+{
+   "cases" : [
+      {
+         "case" : "source_pool",
+         "commands" : [
+            "object network obj-203.0.113.30",
+            "host 203.0.113.30 ",
+            "object network obj-192.0.2.10",
+            "nat (inside,outside) dynamic obj-203.0.113.30"
+         ],
+         "direction" : "natSrc",
+         "public" : "203.0.113.30/32",
+         "real" : "192.0.2.10/32",
+         "returned" : 4
+      }
+   ],
+   "vendor" : "asa"
+}

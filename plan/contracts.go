@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/policy"
@@ -45,17 +44,16 @@ type Proof struct {
 }
 
 type Plan struct {
+	intent        planIntent
+	nativeChanges NativeChanges
+	natProof      *policy.NATProof
 	before, after *fm.Firewall
 	changes       []Change
 	commands      []string
 	cost          Cost
 	proof         Proof
 	digest        string
-	target        policy.Request
 	engine        policy.Engine
-	preservation  *policy.Equivalence
-	transfers     []RuleIntent
-	transferFrom  time.Time
 }
 
 type Renderer interface {

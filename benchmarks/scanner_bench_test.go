@@ -25,7 +25,7 @@ func BenchmarkScan(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(tc.text)))
 			for b.Loop() {
-				c, err := config.NewCursor(context.Background(), source, config.Limits{})
+				c, err := config.NewContent(context.Background(), source, config.Limits{})
 				if err != nil {
 					b.Fatal(err)
 				}

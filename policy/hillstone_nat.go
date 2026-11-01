@@ -11,76 +11,11 @@ import (
 // BNAT taking priority in each direction. The two selections are joined only on
 // their original traffic intersection, so distinct request pairs remain distinct.
 func (e Engine) hillstoneNAT(ctx context.Context, fw *fm.Firewall, q Request, budget *int) (NATResult, error) {
-	entries := fw.NATSequence()
 	limits := e.Limits.WithDefaults()
-	if len(entries) > limits.MaxVisits {
-		return NATResult{}, ErrBudget
+	source, destination, err := e.hillstoneSteps(ctx, fw, q)
+	if err != nil {
+		return NATResult{}, err
 	}
-	var source, destination, fixedSource, fixedDestination []NATStep
-	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return NATResult{}, err
-		}
-		if entry.Scope != q.Scope {
-			continue
-		}
-		step := NATStep{Kind: entry.Kind, ID: entry.ID}
-		switch entry.Kind {
-		case fm.StaticNATObject:
-			r := fw.StaticNAT(entry.ID).Record()
-			if r.Disabled {
-				continue
-			}
-			if r.Bidirectional {
-				if len(r.Destination) > 0 || len(r.Source) == 0 {
-					return NATResult{}, ErrNAT
-				}
-				fixedSource = append(fixedSource, step)
-				step.Reverse = true
-				fixedDestination = append(fixedDestination, step)
-			} else if len(r.Source) > 0 && len(r.Destination) == 0 {
-				source = append(source, step)
-			} else if len(r.Destination) > 0 && len(r.Source) == 0 {
-				destination = append(destination, step)
-			} else {
-				return NATResult{}, ErrNAT
-			}
-		case fm.DynamicNATObject:
-			r := fw.DynamicNAT(entry.ID).Record()
-			if r.Disabled {
-				continue
-			}
-			// Section preserves no-NAT's native chain; its modes alone cannot
-			// distinguish a source exemption from a destination exemption.
-			switch r.Order.Section {
-			case "dnat":
-				destination = append(destination, step)
-			case "snat":
-				source = append(source, step)
-			case "":
-				if r.SourceMode != fm.NoTranslation && r.DestinationMode != fm.NoTranslation {
-					return NATResult{}, ErrNAT
-				}
-				if r.DestinationMode != fm.NoTranslation {
-					destination = append(destination, step)
-				} else {
-					source = append(source, step)
-				}
-			default:
-				return NATResult{}, ErrNAT
-			}
-		default:
-			return NATResult{}, ErrNAT
-		}
-	}
-	// Older StoneOS releases differ in which destination address SNAT matches.
-	// Only the documented 5.5R8 delayed-rewrite pipeline is currently established
-	// for a mixed regular chain. Unconditional BNAT inverses do not depend on it.
-	if (len(source) > 0 && len(destination)+len(fixedDestination) > 0 || len(destination) > 0 && len(fixedSource) > 0) && !stoneOS55R8(fw.Metadata().Software) {
-		return NATResult{}, ErrNAT
-	}
-	source = append(fixedSource, source...)
-	destination = append(fixedDestination, destination...)
 	dnat, err := e.natChain(ctx, fw, q, destination, budget)
 	if err != nil {
 		return NATResult{}, err
@@ -139,6 +74,80 @@ func (e Engine) hillstoneNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 		}
 	}
 	return out, nil
+}
+
+func (e Engine) hillstoneSteps(ctx context.Context, fw *fm.Firewall, q Request) ([]NATStep, []NATStep, error) {
+	limits := e.Limits.WithDefaults()
+	entries := fw.NATSequence()
+	if len(entries) > limits.MaxVisits {
+		return nil, nil, ErrBudget
+	}
+	var source, destination, fixedSource, fixedDestination []NATStep
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		if entry.Scope != q.Scope {
+			continue
+		}
+		step := NATStep{Kind: entry.Kind, ID: entry.ID}
+		switch entry.Kind {
+		case fm.StaticNATObject:
+			r := fw.StaticNAT(entry.ID).Record()
+			if r.Disabled {
+				continue
+			}
+			if r.Bidirectional {
+				if len(r.Destination) > 0 || len(r.Source) == 0 {
+					return nil, nil, ErrNAT
+				}
+				fixedSource = append(fixedSource, step)
+				step.Reverse = true
+				fixedDestination = append(fixedDestination, step)
+			} else if len(r.Source) > 0 && len(r.Destination) == 0 {
+				source = append(source, step)
+			} else if len(r.Destination) > 0 && len(r.Source) == 0 {
+				destination = append(destination, step)
+			} else {
+				return nil, nil, ErrNAT
+			}
+		case fm.DynamicNATObject:
+			r := fw.DynamicNAT(entry.ID).Record()
+			if r.Disabled {
+				continue
+			}
+			// Section preserves no-NAT's native chain; its modes alone cannot
+			// distinguish a source exemption from a destination exemption.
+			switch r.Order.Section {
+			case "dnat":
+				destination = append(destination, step)
+			case "snat":
+				source = append(source, step)
+			case "":
+				if r.SourceMode != fm.NoTranslation && r.DestinationMode != fm.NoTranslation {
+					return nil, nil, ErrNAT
+				}
+				if r.DestinationMode != fm.NoTranslation {
+					destination = append(destination, step)
+				} else {
+					source = append(source, step)
+				}
+			default:
+				return nil, nil, ErrNAT
+			}
+		default:
+			return nil, nil, ErrNAT
+		}
+	}
+	// Older StoneOS releases differ in which destination address SNAT matches.
+	// Only the documented 5.5R8 delayed-rewrite pipeline is currently established
+	// for a mixed regular chain. Unconditional BNAT inverses do not depend on it.
+	if (len(source) > 0 && len(destination)+len(fixedDestination) > 0 || len(destination) > 0 && len(fixedSource) > 0) && !stoneOS55R8(fw.Metadata().Software) {
+		return nil, nil, ErrNAT
+	}
+	source = append(fixedSource, source...)
+	destination = append(fixedDestination, destination...)
+	return source, destination, nil
 }
 
 func stoneOS55R8(version string) bool {

@@ -10,8 +10,8 @@ import (
 
 func policyLimit() error { return policy.ErrBudget }
 
-func (p *parser) policies(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) policies(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var rules catalog[fm.RuleRecord]
 	d := fm.Data{}
@@ -147,6 +147,5 @@ func (p *parser) policies(ctx context.Context, s *config.Session) error {
 	if err := s.Commit(tx); err != nil {
 		return err
 	}
-	p.data = s.Data()
 	return nil
 }

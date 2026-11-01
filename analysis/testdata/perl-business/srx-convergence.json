@@ -1,0 +1,12 @@
+{
+   "candidates" : [
+      {
+         "kind" : "contain",
+         "rules" : [
+            "inside<|>inside<|>allow",
+            "inside<|>inside<|>duplicate"
+         ]
+      }
+   ],
+   "vendor" : "srx"
+}

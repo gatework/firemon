@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-31",
+  "go": "go1.27.1",
+  "host": "darwin/arm64 Apple M5",
+  "GOMAXPROCS": 1,
+  "repeats": 6,
+  "benchtime": "100ms",
+  "baseline": "frozen pre-business working tree including parser rewrite at HEAD 19d1fb999feb63a2f5cf7c2450dec1e7e63da01a",
+  "comparison_boundary": "identical common benchmark file; baseline source copy only, original baseline immutable",
+  "benchstat": "golang.org/x/perf v0.0.0-20261009192801-be2c69fb417e",
+  "common_source_sha256": "e936f2710c4defa3fa742a2310239c0f2d4fe94f4fc2e45015f357d1c818ba74",
+  "before_binary_sha256": "41b6baba785f82b5767a902727dbc8a7ff6c5f63dea53ee903a91c58a0bca0dd",
+  "after_binary_sha256": "cc2b17477d887995e4acc9eda929619131c52b890f175ce3b649baee6abbfb83",
+  "addition_source_sha256": "b523abe78b366dbfa69e5b9e75981baf86268501d932d42baa811b528236cea3",
+  "addition_binary_sha256": "1cc107c3113797dce77ae78436f698edcdb32c2a1e4b40fd1ab29a023cdec809"
+}

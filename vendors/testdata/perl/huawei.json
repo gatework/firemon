@@ -1,0 +1,41 @@
+{
+   "addresses" : {
+      "hosts" : [
+         "192.0.2.10-192.0.2.10"
+      ],
+      "leaf" : [
+         "192.0.2.10-192.0.2.10"
+      ]
+   },
+   "interfaces" : {
+      "GigabitEthernet0/0/1" : "inside:192.0.2.1/24"
+   },
+   "rules" : [
+      {
+         "action" : "permit",
+         "destinations" : [
+            "192.0.2.10-192.0.2.10"
+         ],
+         "services" : [
+            "tcp:80-80",
+            "tcp:443-443"
+         ],
+         "sources" : [
+            "192.0.2.10-192.0.2.10"
+         ]
+      }
+   ],
+   "services" : {
+      "apps" : [
+         "tcp:80-80",
+         "tcp:443-443"
+      ],
+      "web" : [
+         "tcp:80-80",
+         "tcp:443-443"
+      ]
+   },
+   "zones" : [
+      "inside"
+   ]
+}

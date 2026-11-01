@@ -54,12 +54,12 @@ func (p *parser) operand(words []string, d *fm.Data) (fm.AddressRef, int, bool) 
 		return fm.AddressRef{}, 0, false
 	}
 	id := fm.ID("$literal:" + r.First.String() + "-" + r.Last.String())
-	if p.literalIDs == nil || p.literalDraft != d || len(d.Addresses) < p.literalDraftCount || len(p.data.Addresses) != p.literalCommitted {
-		p.literalIDs = make(map[fm.ID]bool, len(p.data.Addresses)+len(d.Addresses))
-		for _, a := range p.data.Addresses {
+	if p.literalIDs == nil || p.literalDraft != d || len(d.Addresses) < p.literalDraftCount || p.builder.AddressCount() != p.literalCommitted {
+		p.literalIDs = make(map[fm.ID]bool, p.builder.AddressCount()+len(d.Addresses))
+		for _, a := range p.builder.Addresses() {
 			p.literalIDs[a.ID] = true
 		}
-		p.literalCommitted = len(p.data.Addresses)
+		p.literalCommitted = p.builder.AddressCount()
 		p.literalDraft = d
 		p.literalDraftCount = 0
 	}
@@ -81,14 +81,15 @@ func (p *parser) serviceTerms(ctx context.Context, id fm.ID, group bool) ([]fm.S
 	}
 	return (policy.Engine{}).ResolveServices(ctx, p.graph, []fm.ServiceRef{{Kind: kind, ID: id}}, false)
 }
-func (p *parser) acls(ctx context.Context, s *config.Session) error {
+func (p *parser) acls(ctx context.Context, s *config.Builder) error {
 	var err error
-	p.graph, err = fm.Seal(p.data)
+	p.graph, err = p.builder.Seal()
 	if err != nil {
 		return err
 	}
-	tx := s.Cursor().Begin()
+	tx := s.Begin()
 	d := fm.Data{}
+	bindings := p.builder.RuleBindings()
 	position := 0
 	identities := make(map[fm.ID]bool)
 	full := flow.Interval{Low: 0, High: 65535}
@@ -107,7 +108,7 @@ func (p *parser) acls(ctx context.Context, s *config.Session) error {
 		if len(w) < 7 || w[2] != "extended" {
 			continue
 		}
-		id := declarationID("acl:", w)
+		id := ACLDeclarationID(w)
 		for identities[id] {
 			id += "-duplicate"
 		}
@@ -216,7 +217,7 @@ func (p *parser) acls(ctx context.Context, s *config.Session) error {
 		if direct != nil {
 			r.Match.Services = []fm.ServiceRef{*direct}
 		} else {
-			serviceID := inlineService(&d, p.data, service.Terms)
+			serviceID := inlineService(&d, p.builder, service.Terms)
 			r.Match.Services = []fm.ServiceRef{{Kind: fm.ServiceObject, ID: serviceID}}
 		}
 		for i := 0; i < len(rest); i++ {
@@ -237,7 +238,7 @@ func (p *parser) acls(ctx context.Context, s *config.Session) error {
 			}
 		}
 		in, out := false, false
-		for _, binding := range p.data.RuleBindings {
+		for _, binding := range bindings {
 			if binding.RuleSet != r.RuleSet {
 				continue
 			}
@@ -264,6 +265,5 @@ func (p *parser) acls(ctx context.Context, s *config.Session) error {
 	if err := s.Commit(tx); err != nil {
 		return err
 	}
-	p.data = s.Data()
 	return nil
 }

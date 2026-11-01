@@ -1,0 +1,65 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkBusinessCandidates/sparse/rules=1000         	      66	   1693926 ns/op	 3722313 B/op	   10034 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=1000         	      57	   1781857 ns/op	 3722249 B/op	   10033 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=1000         	      74	   1589754 ns/op	 3722308 B/op	   10034 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=1000         	      67	   1757462 ns/op	 3722251 B/op	   10034 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=1000         	      78	   1653660 ns/op	 3722290 B/op	   10034 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=1000         	      76	   1668465 ns/op	 3722288 B/op	   10034 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=1000    	       4	  32149781 ns/op	50143128 B/op	  294506 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=1000    	       4	  31597250 ns/op	50137634 B/op	  294433 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=1000    	       4	  32226427 ns/op	50137532 B/op	  294432 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=1000    	       4	  31119479 ns/op	50137702 B/op	  294434 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=1000    	       4	  31474927 ns/op	50137634 B/op	  294433 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=1000    	       4	  31364760 ns/op	50137532 B/op	  294432 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=10000        	       6	  19702292 ns/op	42914064 B/op	  100102 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=10000        	       6	  18976729 ns/op	42914038 B/op	  100101 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=10000        	       6	  17742201 ns/op	42914036 B/op	  100101 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=10000        	       6	  17985486 ns/op	42914036 B/op	  100101 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=10000        	       6	  20241646 ns/op	42914061 B/op	  100102 allocs/op
+BenchmarkBusinessCandidates/sparse/rules=10000        	       6	  18656146 ns/op	42914041 B/op	  100101 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=10000   	       1	 335289542 ns/op	502069464 B/op	 2932304 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=10000   	       1	 320505417 ns/op	502069328 B/op	 2932302 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=10000   	       1	 331134667 ns/op	543773952 B/op	 2932349 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=10000   	       1	 337244958 ns/op	543773952 B/op	 2932349 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=10000   	       1	 331811667 ns/op	502070648 B/op	 2932312 allocs/op
+BenchmarkBusinessCandidates/dense-probe/rules=10000   	       1	 345369083 ns/op	502069464 B/op	 2932304 allocs/op
+BenchmarkBusinessSharedGroups/rules=1000/members=16   	      13	   8615994 ns/op	24775272 B/op	   58167 allocs/op
+BenchmarkBusinessSharedGroups/rules=1000/members=16   	      13	   8899340 ns/op	24775272 B/op	   58167 allocs/op
+BenchmarkBusinessSharedGroups/rules=1000/members=16   	      12	   8648979 ns/op	24775272 B/op	   58167 allocs/op
+BenchmarkBusinessSharedGroups/rules=1000/members=16   	      13	   8823397 ns/op	24775272 B/op	   58167 allocs/op
+BenchmarkBusinessSharedGroups/rules=1000/members=16   	      12	   8697090 ns/op	24775272 B/op	   58167 allocs/op
+BenchmarkBusinessSharedGroups/rules=1000/members=16   	      12	   8797760 ns/op	24775272 B/op	   58167 allocs/op
+BenchmarkBusinessSharedGroups/rules=10000/members=16  	       2	  94175334 ns/op	243230568 B/op	  581076 allocs/op
+BenchmarkBusinessSharedGroups/rules=10000/members=16  	       1	 103948625 ns/op	243230568 B/op	  581076 allocs/op
+BenchmarkBusinessSharedGroups/rules=10000/members=16  	       1	 116594666 ns/op	243230568 B/op	  581076 allocs/op
+BenchmarkBusinessSharedGroups/rules=10000/members=16  	       2	  94065833 ns/op	243230568 B/op	  581076 allocs/op
+BenchmarkBusinessSharedGroups/rules=10000/members=16  	       2	  92993562 ns/op	243230568 B/op	  581076 allocs/op
+BenchmarkBusinessSharedGroups/rules=10000/members=16  	       1	 104284583 ns/op	243230568 B/op	  581076 allocs/op
+BenchmarkOptimize/adjacent/requests=10                	   15099	      7845 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10                	   15699	      7618 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10                	   15696	      7602 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10                	   15768	      7697 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10                	   15782	      7612 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10                	   15841	      7589 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=100               	     309	    385925 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100               	     313	    385869 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100               	     312	    386254 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100               	     310	    384941 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100               	     313	    385293 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100               	     314	    384300 ns/op	  936602 B/op	     737 allocs/op
+BenchmarkOptimize/paired/requests=10                  	    7684	     15528 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10                  	    8152	     15442 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10                  	    7976	     15471 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10                  	    7893	     15384 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10                  	    8010	     15469 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10                  	    7899	     15456 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=100                 	     100	   1171437 ns/op	 2403662 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100                 	     100	   1166194 ns/op	 2403662 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100                 	     100	   1167470 ns/op	 2403662 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100                 	     100	   1164038 ns/op	 2403662 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100                 	     100	   1162228 ns/op	 2403662 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100                 	     100	   1161145 ns/op	 2403662 B/op	   15495 allocs/op
+PASS

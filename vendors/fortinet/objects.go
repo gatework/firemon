@@ -47,8 +47,8 @@ func (p *parser) serviceRef(name string) fm.ServiceRef {
 	}
 	return fm.ServiceRef{Kind: fm.ServiceObject, ID: fm.ID(name)}
 }
-func (p *parser) objects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) objects(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	any4, _ := flow.PrefixRange(netip.MustParsePrefix("0.0.0.0/0"))
 	anyService := serviceTerm(0)
@@ -83,8 +83,8 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 			f.invalid("address type")
 		}
 		if assoc := f.one("associated-interface", ""); assoc != "" && assoc != "any" {
-			if _, ok := p.interfaces[fm.ID(assoc)]; !ok {
-				if _, ok := p.zones[fm.ID(assoc)]; !ok {
+			if _, ok := p.builder.Interface(fm.ID(assoc)); !ok {
+				if _, ok := p.builder.Zone(fm.ID(assoc)); !ok {
 					f.invalid("associated-interface")
 				}
 			}

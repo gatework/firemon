@@ -182,7 +182,7 @@ func TestConvergenceRejectsCrossPairsAndInterveningDeny(t *testing.T) {
 	}
 }
 
-func TestConvergenceChargesIncompatiblePairsBeforeFiltering(t *testing.T) {
+func TestConvergenceBoundsGroupingWithoutSpendingIncompatiblePairBudget(t *testing.T) {
 	d := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.2", "198.51.100.1"}, {"192.0.2.3", "198.51.100.1"}}).Export()
 	for i := range d.Rules {
 		d.Rules[i].Description = string(rune('a' + i))
@@ -191,12 +191,28 @@ func TestConvergenceChargesIncompatiblePairsBeforeFiltering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := analysis.Converger{MaxComparisons: 2}
+	c := analysis.Converger{MaxComparisons: 2, Planner: plan.Planner{Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 2}}}}
 	if rows, err := c.Candidates(context.Background(), fw, time.Time{}); !errors.Is(err, policy.ErrBudget) || rows != nil {
-		t.Fatalf("incompatible pairs escaped budget: %v %v", rows, err)
+		t.Fatalf("grouping escaped visit budget: %v %v", rows, err)
 	}
-	c.MaxComparisons = 3
+	c.Planner.Engine.Limits.MaxVisits = 100
 	if rows, err := c.Candidates(context.Background(), fw, time.Time{}); err != nil || len(rows) != 0 {
 		t.Fatalf("exact pair budget: %v %v", rows, err)
+	}
+}
+
+func TestConvergenceGroupsBeforeSpendingPairBudget(t *testing.T) {
+	fw := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}, {"192.0.2.1", "198.51.100.1"}, {"192.0.2.1", "198.51.100.1"}, {"192.0.2.1", "198.51.100.1"}})
+	d := fw.Export()
+	d.Rules[1].Description = "separate"
+	d.Rules[3].Description = "another"
+	fw, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := analysis.Converger{Planner: plan.Planner{Renderer: hillstone.Renderer{}}, MaxComparisons: 1}
+	rows, err := c.Candidates(context.Background(), fw, time.Time{})
+	if err != nil || len(rows) != 1 || !slices.Equal(rows[0].Rules, []fm.ID{"1", "3"}) || rows[0].Plan == nil {
+		t.Fatal(rows, err)
 	}
 }

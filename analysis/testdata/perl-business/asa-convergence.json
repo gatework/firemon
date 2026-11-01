@@ -1,0 +1,12 @@
+{
+   "candidates" : [
+      {
+         "kind" : "contain",
+         "rules" : [
+            "inbound<|>1",
+            "inbound<|>2"
+         ]
+      }
+   ],
+   "vendor" : "asa"
+}

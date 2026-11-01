@@ -1,0 +1,34 @@
+{
+   "cases" : [
+      {
+         "case" : "source_pool",
+         "commands" : [
+            "config firewall ippool",
+            "edit \"Pool-203.0.113.30/32\"",
+            "set endip 203.0.113.30",
+            "set startip 203.0.113.30",
+            "next",
+            "end"
+         ],
+         "direction" : "natSrc",
+         "public" : "203.0.113.30/32",
+         "real" : "192.0.2.10/32",
+         "returned" : [
+            "set nat enable",
+            "set ippool enable",
+            "set poolname \"Pool-203.0.113.30/32\""
+         ]
+      },
+      {
+         "case" : "source_interface",
+         "commands" : [],
+         "direction" : "natSrc",
+         "public" : null,
+         "real" : "192.0.2.10/32",
+         "returned" : [
+            "set nat enable"
+         ]
+      }
+   ],
+   "vendor" : "fortinet"
+}

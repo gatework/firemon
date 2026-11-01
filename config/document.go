@@ -20,7 +20,7 @@ type Statement struct {
 
 // Statements lexes quotes and escapes across physical lines without claiming semantic evidence.
 // A native vendor scanner decides which statements are blocks or members.
-func Statements(ctx context.Context, c *Cursor) ([]Statement, error) {
+func Statements(ctx context.Context, c *Content) ([]Statement, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func Statements(ctx context.Context, c *Cursor) ([]Statement, error) {
 		}
 		if quote == 0 && !escaped {
 			flush()
-			out = append(out, Statement{Span: fm.Span{First: first, Last: line.Number}, Words: words, Raw: strings.Clone(c.source.Text[rawStart:rawEnd])})
+			out = append(out, Statement{Span: fm.Span{First: first, Last: line.Number}, Words: words, Raw: c.source.Text[rawStart:rawEnd]})
 			words = nil
 			rawStart = rawEnd
 			first = line.Number + 1
@@ -130,7 +130,7 @@ type Document struct {
 }
 
 // Blocks is a native-classifier-driven structural pass. Unknown native blocks remain scoped.
-func Blocks(ctx context.Context, c *Cursor, classify Classifier) (Document, error) {
+func Blocks(ctx context.Context, c *Content, classify Classifier) (Document, error) {
 	if err := ctx.Err(); err != nil {
 		return Document{}, err
 	}

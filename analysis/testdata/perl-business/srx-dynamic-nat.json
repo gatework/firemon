@@ -1,0 +1,46 @@
+{
+   "cases" : [
+      {
+         "case" : "source_pool",
+         "commands" : [
+            "set security nat source pool srcnat_pool_35233 address 203.0.113.30/32 to 203.0.113.30/32",
+            "set security nat source rule-set inside_outside from zone inside",
+            "set security nat source rule-set inside_outside to zone outside",
+            "set security nat source rule-set inside_outside rule rule_73173 match source-address 192.0.2.10/32",
+            "set security nat source rule-set inside_outside rule rule_73173 then source-nat pool srcnat_pool_35233"
+         ],
+         "direction" : "natSrc",
+         "public" : "203.0.113.30/32",
+         "real" : "192.0.2.10/32",
+         "returned" : 5
+      },
+      {
+         "case" : "source_interface",
+         "commands" : [
+            "set security nat source rule-set inside_outside from zone inside",
+            "set security nat source rule-set inside_outside to zone outside",
+            "set security nat source rule-set inside_outside rule rule_22491 match source-address 192.0.2.10/32",
+            "set security nat source rule-set inside_outside rule rule_22491 then source-nat interface"
+         ],
+         "direction" : "natSrc",
+         "public" : null,
+         "real" : "192.0.2.10/32",
+         "returned" : 4
+      },
+      {
+         "case" : "destination",
+         "commands" : [
+            "set security nat destination pool dstnat_pool_37764 address 192.0.2.10/32",
+            "set security nat destination rule-set inside_outside from zone inside",
+            "set security nat destination rule-set inside_outside to zone outside",
+            "set security nat destination rule-set inside_outside rule rule_66619 match destination-address 203.0.113.10/32",
+            "set security nat destination rule-set inside_outside rule rule_66619 then destination-nat pool dstnat_pool_37764"
+         ],
+         "direction" : "natDst",
+         "public" : "203.0.113.10/32",
+         "real" : "192.0.2.10/32",
+         "returned" : 5
+      }
+   ],
+   "vendor" : "srx"
+}

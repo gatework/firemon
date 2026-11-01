@@ -2,10 +2,6 @@ package plan
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
@@ -69,31 +65,4 @@ func (p Planner) proveWithBaseline(ctx context.Context, before, after *fm.Firewa
 		return Proof{}, err
 	}
 	return Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), TargetAllowed: true, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}, nil
-}
-
-func (p *Plan) seal() error {
-	type transfer struct {
-		Intent  RuleIntent
-		Traffic []flow.TrafficRegion
-	}
-	targets := make([]transfer, 0, len(p.transfers))
-	for _, intent := range p.transfers {
-		targets = append(targets, transfer{intent, intent.Request.Traffic.Regions()})
-	}
-	b, err := json.Marshal(struct {
-		Proof        Proof
-		Changes      []Change
-		Commands     []string
-		Target       policy.Request
-		Traffic      []flow.TrafficRegion
-		Preservation *policy.Equivalence
-		Transfers    []transfer
-		TransferFrom time.Time
-	}{p.proof, p.changes, p.commands, p.target, p.target.Traffic.Regions(), p.preservation, targets, p.transferFrom})
-	if err != nil {
-		return err
-	}
-	sum := sha256.Sum256(b)
-	p.digest = hex.EncodeToString(sum[:])
-	return nil
 }

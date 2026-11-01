@@ -42,12 +42,27 @@ func ports(r flow.Interval) string {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	batch, err := render.Prepare(ctx, "asa", before, after, changes)
+	return renderCommands(ctx, before, after, changes)
+}
+
+func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
+	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
+		return nil, err
+	}
+	n, err := nativeCommands(ctx, before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	return renderCommands(ctx, before, after, changes.Rules, n)
+}
+
+func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
+	batch, err := render.Prepare(ctx, "asa", before, after, changes, native...)
 	if err != nil {
 		return nil, err
 	}
 	changes = batch.Changes()
-	if len(changes) == 0 {
+	if len(changes) == 0 && len(native) == 0 {
 		return nil, nil
 	}
 	commands := []string{"configure terminal"}
@@ -94,6 +109,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			return nil, ErrRender
 		}
 		commands = append(commands, "object service "+name, "service "+proto+" source "+ports(t.SourcePort)+" destination "+ports(t.DestinationPort), "exit")
+	}
+	if len(native) == 1 {
+		commands = append(commands, native[0].Commands...)
 	}
 	ordered := after.Rules()
 	slices.SortStableFunc(ordered, func(a, b *fm.Rule) int {

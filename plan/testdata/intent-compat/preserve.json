@@ -1,0 +1,73 @@
+{
+  "Before": "b20d5959e5178a48be60ab5c41e619ded34623221f912e9f721d704d6fb7fb6b",
+  "After": "17b5cfe34a858039c5fb5539081c95b0e1a67a805bced88be370ed51a160f077",
+  "Report": {
+    "version": 1,
+    "generation": 0,
+    "inputs": null,
+    "devices": [
+      {
+        "sources": null,
+        "device": "fw",
+        "revision": "",
+        "semantic_digest": "",
+        "inputs": null,
+        "plan": {
+          "digest": "ce3e17f1623505d3ea6dcdf1902f6cf7c552200a83f590ad92aedce972e10c5f",
+          "targets": [],
+          "input_requests": [],
+          "proof": {
+            "BaseDigest": "b20d5959e5178a48be60ab5c41e619ded34623221f912e9f721d704d6fb7fb6b",
+            "ResultDigest": "17b5cfe34a858039c5fb5539081c95b0e1a67a805bced88be370ed51a160f077",
+            "TargetAllowed": false,
+            "OutsidePreserved": true,
+            "NATUnchanged": true,
+            "TargetSatisfied": false
+          },
+          "cost": {
+            "NewRules": 0,
+            "AppendedMembers": 0,
+            "NewObjects": 0,
+            "ModifiedRules": 1,
+            "Moves": 0,
+            "Position": 0,
+            "ID": ""
+          },
+          "changes": [
+            {
+              "Kind": 3,
+              "Rule": "10",
+              "Sources": null,
+              "Destinations": null,
+              "Services": null
+            }
+          ],
+          "commands": [
+            "reviewable native commands"
+          ]
+        }
+      }
+    ],
+    "issues": null
+  },
+  "Options": {
+    "MaxCandidates": 0,
+    "Limits": {
+      "MaxRegions": 0,
+      "MaxVisits": 0,
+      "MaxCombinations": 0
+    }
+  },
+  "Preserved": true,
+  "Preservation": {
+    "BaseDigest": "b20d5959e5178a48be60ab5c41e619ded34623221f912e9f721d704d6fb7fb6b",
+    "ResultDigest": "17b5cfe34a858039c5fb5539081c95b0e1a67a805bced88be370ed51a160f077",
+    "From": "2026-11-01T00:00:00Z",
+    "Contexts": 1
+  },
+  "Readback": {
+    "PlanDigest": "ce3e17f1623505d3ea6dcdf1902f6cf7c552200a83f590ad92aedce972e10c5f",
+    "ObservedDigest": "17b5cfe34a858039c5fb5539081c95b0e1a67a805bced88be370ed51a160f077",
+    "SourceDigest": ""
+  }
+}

@@ -136,8 +136,8 @@ func (p *parser) matchLine(d *fm.Data, m *fm.Match, w []string, seen map[string]
 	*refs = append(*refs, p.literalAddress(d, r))
 	return true
 }
-func (p *parser) policies(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) policies(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	blocks, root, err := p.ruleBlocks("security-policy")

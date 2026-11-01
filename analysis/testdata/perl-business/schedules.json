@@ -1,0 +1,84 @@
+[
+   {
+      "commands" : [
+         "schedule \"2026-11-01\"",
+         "absolute start 11/01/2026 09:00 end 11/01/2026 10:00",
+         "exit"
+      ],
+      "end_hour" : 10,
+      "name" : "2026-11-01",
+      "vendor" : "hillstone"
+   },
+   {
+      "commands" : [
+         "schedule \"2026-11-01\"",
+         "absolute start 11/01/2026 09:00 end 11/01/2026 11:00",
+         "exit"
+      ],
+      "end_hour" : 11,
+      "name" : "2026-11-01",
+      "vendor" : "hillstone"
+   },
+   {
+      "commands" : [
+         "config firewall schedule onetime",
+         "edit \"2026-11-01\"",
+         "set start 09:00 2026/11/01",
+         "set end 10:00 2026/11/01",
+         "next",
+         "end"
+      ],
+      "end_hour" : 10,
+      "name" : "2026-11-01",
+      "vendor" : "fortinet"
+   },
+   {
+      "commands" : [
+         "config firewall schedule onetime",
+         "edit \"2026-11-01\"",
+         "set start 09:00 2026/11/01",
+         "set end 11:00 2026/11/01",
+         "next",
+         "end"
+      ],
+      "end_hour" : 11,
+      "name" : "2026-11-01",
+      "vendor" : "fortinet"
+   },
+   {
+      "commands" : [
+         "time-range sch_2026-11-01",
+         "absolute-range 09:00:00 2026/11/01 end 10:00:00 2026/11/01",
+         "quit"
+      ],
+      "end_hour" : 10,
+      "name" : "sch_2026-11-01",
+      "vendor" : "huawei"
+   },
+   {
+      "commands" : [
+         "time-range sch_2026-11-01",
+         "absolute-range 09:00:00 2026/11/01 end 11:00:00 2026/11/01",
+         "quit"
+      ],
+      "end_hour" : 11,
+      "name" : "sch_2026-11-01",
+      "vendor" : "huawei"
+   },
+   {
+      "commands" : [
+         "set scheduler \"2026-11-01\" once start 11/01/2026 09:00 stop 11/01/2026 10:00"
+      ],
+      "end_hour" : 10,
+      "name" : "2026-11-01",
+      "vendor" : "netscreen"
+   },
+   {
+      "commands" : [
+         "set scheduler \"2026-11-01\" once start 11/01/2026 09:00 stop 11/01/2026 11:00"
+      ],
+      "end_hour" : 11,
+      "name" : "2026-11-01",
+      "vendor" : "netscreen"
+   }
+]

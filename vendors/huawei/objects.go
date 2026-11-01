@@ -222,8 +222,8 @@ func (p *parser) literalService(d *fm.Data, terms []fm.ServiceTerm) fm.ServiceRe
 	p.services[name] = ref
 	return ref
 }
-func (p *parser) objects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) objects(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	addresses, err := p.grouped("address", setHeader)
@@ -354,15 +354,34 @@ func (p *parser) objects(ctx context.Context, s *config.Session) error {
 			d.ServiceGroups = append(d.ServiceGroups, a)
 		}
 	}
-	// Local clocks and recurring windows require a captured time-zone contract.
-	// Retain native schedules as unresolved objects, never as unrestricted time.
 	for _, b := range p.blocks {
-		if b.Kind == "schedule" && len(b.Header.Words) == 2 {
-			o := object(b.Header.Words[1])
-			o.Unsupported = []string{"native schedule time zone/window semantics"}
-			d.Schedules = append(d.Schedules, fm.ScheduleRecord{Object: o})
+		if b.Kind != "schedule" || len(b.Header.Words) != 2 {
+			continue
 		}
+		r := fm.ScheduleRecord{Object: object(b.Header.Words[1])}
+		claim(tx, &r.Object, b.Header, true)
+		for _, line := range b.Members {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			w := line.Words
+			ok := false
+			if len(w) == 6 && w[0] == "absolute-range" && w[3] == "to" {
+				window, zone, err := s.ScheduleWindow("15:04:05 2006/01/02", w[1]+" "+w[2], w[4]+" "+w[5])
+				if err == nil {
+					r.Windows = append(r.Windows, window)
+					r.Timezone = zone
+					ok = true
+				}
+			}
+			claim(tx, &r.Object, line, ok)
+		}
+		if len(r.Windows) == 0 {
+			r.Unsupported = append(r.Unsupported, "native schedule clock or window not established")
+		}
+		d.Schedules = append(d.Schedules, r)
 	}
+
 	return p.commit(s, tx, d)
 }
 

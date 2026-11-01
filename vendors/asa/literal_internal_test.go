@@ -1,13 +1,17 @@
 package asa
 
 import (
+	"context"
+	"github.com/gatework/firemon/config"
 	"testing"
 
 	fm "github.com/gatework/firemon"
 )
 
 func TestLiteralIdentityIncludesCommittedAndCurrentDraft(t *testing.T) {
-	p := &parser{}
+	content, _ := config.NewContent(context.Background(), config.Source{}, config.Limits{})
+	builder, _ := config.NewBuilder(content, fm.Metadata{})
+	p := &parser{builder: builder}
 	d := fm.Data{}
 	first, _, ok := p.operand([]string{"host", "192.0.2.1"}, &d)
 	if !ok {
@@ -17,7 +21,11 @@ func TestLiteralIdentityIncludesCommittedAndCurrentDraft(t *testing.T) {
 	if !ok || first != again || len(d.Addresses) != 1 {
 		t.Fatal("draft literal duplicated")
 	}
-	p.data = d
+	tx := builder.Begin()
+	tx.Emit(d)
+	if err := builder.Commit(tx); err != nil {
+		t.Fatal(err)
+	}
 	next := fm.Data{}
 	again, _, ok = p.operand([]string{"host", "192.0.2.1"}, &next)
 	if !ok || first != again || len(next.Addresses) != 0 {

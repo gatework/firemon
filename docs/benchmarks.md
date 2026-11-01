@@ -1,5 +1,11 @@
 # Benchmark matrix
 
+The [2026-10-31 business measurements](business-verification.md#measurements-and-limits)
+cover sparse/dense convergence, shared groups, request optimization and the new
+joint batch APIs at 1,000/10,000 rules. They retain repeated raw samples, allocation
+costs and explicit workload limits. The earlier measurements below remain
+historical evidence for their recorded source versions.
+
 The 2026-10-29 measurements use synthetic complete native captures and the public Go APIs. They cover 75 cases, each measured six times serially on Go 1.27.1, darwin/arm64, Apple M5, 16 GiB RAM, with `GOMAXPROCS=1`. The module's minimum Go version remains 1.26. Setup is outside `b.Loop`; each timed operation checks its result. No device, database, transport or concurrent throughput is measured.
 
 Run from the repository root:

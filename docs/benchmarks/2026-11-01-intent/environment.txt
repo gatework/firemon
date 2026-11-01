@@ -1,0 +1,7 @@
+go version go1.27.1 darwin/arm64
+Darwin arm64
+GOMAXPROCS=1 GOWORK=off GOPROXY=off
+-count=6 -benchtime=100ms -benchmem
+Serial baseline then final; no concurrent test/benchmark jobs.
+Baseline: /private/tmp/firemon-intent-20261101-9g5ni6pg/baseline
+Measurement baseline adds identical benchmark and fixture helper only.

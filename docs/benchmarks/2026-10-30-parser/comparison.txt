@@ -1,0 +1,44 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                             │ /tmp/firemon-parser-20261030/before.txt │ /tmp/firemon-parser-20261030/after.txt │
+                             │                 sec/op                  │     sec/op       vs base               │
+Parse/hillstone/rules=10-4                                 115.6µ ± 1%       114.0µ ± 2%  -1.37% (p=0.005 n=10)
+Parse/hillstone/rules=100-4                                1.058m ± 1%       1.053m ± 1%       ~ (p=0.063 n=10)
+Parse/hillstone/rules=1000-4                               11.86m ± 1%       11.69m ± 1%  -1.37% (p=0.000 n=10)
+Parse/huawei/rules=10-4                                   100.74µ ± 1%       99.65µ ± 1%       ~ (p=0.063 n=10)
+Parse/huawei/rules=100-4                                   835.6µ ± 1%       832.1µ ± 1%       ~ (p=0.353 n=10)
+Parse/huawei/rules=1000-4                                  9.318m ± 1%       9.381m ± 1%       ~ (p=0.190 n=10)
+geomean                                                    1.022m            1.015m       -0.67%
+
+                             │ /tmp/firemon-parser-20261030/before.txt │ /tmp/firemon-parser-20261030/after.txt │
+                             │                   B/s                   │       B/s        vs base               │
+Parse/hillstone/rules=10-4                                11.96Mi ± 1%      12.13Mi ± 2%  +1.39% (p=0.005 n=10)
+Parse/hillstone/rules=100-4                               11.21Mi ± 1%      11.26Mi ± 1%       ~ (p=0.077 n=10)
+Parse/hillstone/rules=1000-4                              10.09Mi ± 1%      10.24Mi ± 1%  +1.42% (p=0.000 n=10)
+Parse/huawei/rules=10-4                                   22.54Mi ± 1%      22.79Mi ± 1%       ~ (p=0.060 n=10)
+Parse/huawei/rules=100-4                                  23.67Mi ± 1%      23.78Mi ± 1%       ~ (p=0.342 n=10)
+Parse/huawei/rules=1000-4                                 21.25Mi ± 1%      21.10Mi ± 1%       ~ (p=0.183 n=10)
+geomean                                                   15.76Mi           15.87Mi       +0.69%
+
+                             │ /tmp/firemon-parser-20261030/before.txt │ /tmp/firemon-parser-20261030/after.txt │
+                             │                  B/op                   │      B/op        vs base               │
+Parse/hillstone/rules=10-4                                361.9Ki ± 0%      343.7Ki ± 0%  -5.02% (p=0.000 n=10)
+Parse/hillstone/rules=100-4                               3.382Mi ± 0%      3.279Mi ± 1%  -3.05% (p=0.000 n=10)
+Parse/hillstone/rules=1000-4                              40.86Mi ± 1%      39.99Mi ± 1%  -2.13% (p=0.000 n=10)
+Parse/huawei/rules=10-4                                   334.7Ki ± 0%      334.8Ki ± 0%       ~ (p=0.353 n=10)
+Parse/huawei/rules=100-4                                  2.967Mi ± 0%      2.974Mi ± 0%       ~ (p=0.280 n=10)
+Parse/huawei/rules=1000-4                                 35.68Mi ± 0%      35.68Mi ± 0%       ~ (p=0.127 n=10)
+geomean                                                   3.451Mi           3.393Mi       -1.67%
+
+                             │ /tmp/firemon-parser-20261030/before.txt │ /tmp/firemon-parser-20261030/after.txt │
+                             │                allocs/op                │   allocs/op    vs base                 │
+Parse/hillstone/rules=10-4                                 2.067k ± 0%     1.991k ± 0%  -3.68% (p=0.000 n=10)
+Parse/hillstone/rules=100-4                                15.97k ± 0%     15.36k ± 0%  -3.82% (p=0.000 n=10)
+Parse/hillstone/rules=1000-4                               153.9k ± 0%     147.9k ± 0%  -3.90% (p=0.000 n=10)
+Parse/huawei/rules=10-4                                    1.793k ± 0%     1.793k ± 0%       ~ (p=1.000 n=10) ¹
+Parse/huawei/rules=100-4                                   13.71k ± 0%     13.71k ± 0%       ~ (p=0.304 n=10)
+Parse/huawei/rules=1000-4                                  131.8k ± 0%     131.8k ± 0%       ~ (p=1.000 n=10) ¹
+geomean                                                    15.95k          15.64k       -1.92%
+¹ all samples are equal

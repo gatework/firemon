@@ -76,40 +76,102 @@ type RiskAnalyzer struct{ Engine policy.Engine }
 // Declared mode evaluates potential matches; effective mode uses first-match
 // ownership at q.At. Disabled/shadowed rules have no effective exposure.
 func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Request, definition RiskDefinition) ([]RiskFinding, error) {
+	rows, err := a.AnalyzeBatch(ctx, fw, []policy.Request{q}, []RiskDefinition{definition})
+	if err != nil {
+		return nil, err
+	}
+	return rows[0].Findings, nil
+}
+
+type RiskContextFindings struct {
+	Context    int           `json:"context"`
+	Definition int           `json:"definition"`
+	Findings   []RiskFinding `json:"findings"`
+}
+
+type preparedRiskDefinition struct {
+	definition RiskDefinition
+	expression preparedRiskExpression
+	actions    []fm.Action
+}
+
+// AnalyzeBatch prepares each definition once, then evaluates in context-major,
+// definition-minor order. Preparation capacity and evaluation visits/nodes are
+// cumulative across this call; delegated engine queries retain their own limits.
+// Any failure discards partial findings.
+func (a RiskAnalyzer) AnalyzeBatch(ctx context.Context, fw *fm.Firewall, contexts []policy.Request, definitions []RiskDefinition) ([]RiskContextFindings, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if fw == nil || q.Traffic.Empty() || strings.TrimSpace(definition.ID) == "" || strings.TrimSpace(definition.Version) == "" || (definition.Mode != Declared && definition.Mode != Effective) {
+	if fw == nil || len(contexts) == 0 || len(definitions) == 0 {
 		return nil, ErrInvalid
 	}
 	limits := a.Engine.Limits.WithDefaults()
-	limit, comparisons := limits.MaxRegions, limits.MaxCombinations
+	if len(contexts) > limits.MaxCombinations/len(definitions) {
+		return nil, policy.ErrBudget
+	}
+	for _, q := range contexts {
+		if q.Traffic.Empty() {
+			return nil, ErrInvalid
+		}
+		if q.Traffic.RegionCount() > limits.MaxRegions {
+			return nil, flow.ErrBudget
+		}
+	}
+	preparation := riskPreparation{limit: limits.MaxRegions, nodes: limits.MaxCombinations, regions: limits.MaxRegions}
+	prepared := make([]preparedRiskDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		if strings.TrimSpace(definition.ID) == "" || strings.TrimSpace(definition.Version) == "" || (definition.Mode != Declared && definition.Mode != Effective) {
+			return nil, ErrInvalid
+		}
+		p := preparedRiskDefinition{definition: definition, actions: slices.Clone(definition.Actions)}
+		if definition.Expression == nil {
+			if definition.Traffic.Empty() || definition.Relation < Intersects || definition.Relation > NotEqual {
+				return nil, ErrInvalid
+			}
+			if definition.Traffic.RegionCount() > preparation.regions {
+				return nil, flow.ErrBudget
+			}
+			preparation.regions -= definition.Traffic.RegionCount()
+		} else {
+			if !definition.Traffic.Empty() || definition.Relation != 0 {
+				return nil, ErrInvalid
+			}
+			var err error
+			p.expression, err = preparation.compile(ctx, *definition.Expression, 0)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(p.actions) == 0 {
+			p.actions = []fm.Action{fm.Permit}
+		}
+		for _, action := range p.actions {
+			if !action.Valid() {
+				return nil, ErrInvalid
+			}
+		}
+		prepared = append(prepared, p)
+	}
 	budget := visitBudget(limits.MaxVisits)
-	var prepared preparedRiskExpression
-	if definition.Expression == nil {
-		if definition.Traffic.Empty() || definition.Relation < Intersects || definition.Relation > NotEqual {
-			return nil, ErrInvalid
-		}
-	} else {
-		if !definition.Traffic.Empty() || definition.Relation != 0 {
-			return nil, ErrInvalid
-		}
-		preparation := riskPreparation{limit: limit, nodes: comparisons, regions: limit}
-		var err error
-		prepared, err = preparation.compile(ctx, *definition.Expression, 0)
-		if err != nil {
-			return nil, err
+	comparisons := limits.MaxCombinations
+	retained := limits.MaxRegions
+	var out []RiskContextFindings
+	for ci, q := range contexts {
+		for di, p := range prepared {
+			rows, err := a.analyzePrepared(ctx, fw, q, p, &budget, &comparisons, &retained)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, RiskContextFindings{Context: ci, Definition: di, Findings: rows})
 		}
 	}
-	actions := slices.Clone(definition.Actions)
-	if len(actions) == 0 {
-		actions = []fm.Action{fm.Permit}
-	}
-	for _, action := range actions {
-		if !action.Valid() {
-			return nil, ErrInvalid
-		}
-	}
+	return out, nil
+}
+
+func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q policy.Request, p preparedRiskDefinition, budget *visitBudget, comparisons, retained *int) ([]RiskFinding, error) {
+	definition, prepared, actions := p.definition, p.expression, p.actions
+	limit := a.Engine.Limits.WithDefaults().MaxRegions
 	if q.RuleSet == "" {
 		q.RuleSet = "security"
 	}
@@ -173,6 +235,10 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 			}
 		}
 		if known {
+			if actual.RegionCount() > *retained {
+				return nil, flow.ErrBudget
+			}
+			*retained -= actual.RegionCount()
 			rows[i].Traffic = actual
 		}
 		if known && actual.Empty() {
@@ -180,8 +246,8 @@ func (a RiskAnalyzer) Analyze(ctx context.Context, fw *fm.Firewall, q policy.Req
 			continue
 		}
 		if definition.Expression != nil {
-			value, remaining, err := a.assessPrepared(ctx, fw, r, q, definition.Mode, actual, prepared, limit, comparisons)
-			comparisons = remaining
+			value, remaining, err := a.assessPrepared(ctx, fw, r, q, definition.Mode, actual, prepared, limit, *comparisons)
+			*comparisons = remaining
 			if err != nil {
 				return nil, err
 			}

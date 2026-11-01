@@ -1,0 +1,265 @@
+{
+  "date": "2026-10-31",
+  "source_hashes_verified": 31,
+  "runs": [
+    {
+      "name": "hillstone-search",
+      "exit": 0,
+      "stdout_sha256": "640854142ebf90aeb98ead336024a23f1165aed54f37a59071fd6a8dff45d33c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "hillstone-convergence",
+      "exit": 0,
+      "stdout_sha256": "97a3e3d6afc93f8eb871906057cb7335275b20c52f0194f732658f9ae49a407a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "hillstone-inspection",
+      "exit": 0,
+      "stdout_sha256": "82281941b80bce0f47603e7670aed4516b5a564ce517429368a6b7a5317159a6",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "fortinet-search",
+      "exit": 0,
+      "stdout_sha256": "6eca7fad7b2e4b6c22caae01ea4ca5fa45d0d166f79df79293755ac73678b5ba",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "fortinet-convergence",
+      "exit": 0,
+      "stdout_sha256": "00e66692686bcede4a1b53fd023cfa63f06d7ec2195d56b07df7068a52e1eb36",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "fortinet-inspection",
+      "exit": 0,
+      "stdout_sha256": "b124ca7883ded92f886c14bfbe1029cad80d0bfb5d2fb719deadd6c9ef7022b2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "huawei-search",
+      "exit": 0,
+      "stdout_sha256": "edfce26626789e9d4974f2b0500d7c5aefb8818ba88ebe0a2950b160222e17a0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "huawei-convergence",
+      "exit": 0,
+      "stdout_sha256": "4d16259a599cdad620c1bf0502554361e5d2279e22bcacd788e7ea49bdc9d855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "huawei-inspection",
+      "exit": 0,
+      "stdout_sha256": "45726c410bd51778d18f88669d458c2eb69512e36aa0f011365c80b91fa46ef2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "srx-search",
+      "exit": 0,
+      "stdout_sha256": "236155c476fb8248daf8c33c8e96174e18d3ec04a9163b50467638009eb9ed99",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "srx-convergence",
+      "exit": 0,
+      "stdout_sha256": "412a5aad8d11b095946d13c93a0542fdc6dd7f7d8809c078564cb0e74cef0721",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "srx-inspection",
+      "exit": 0,
+      "stdout_sha256": "d06b26b811f1c77f78491042ea8f841348bb97348ae645360dc4d5fef42930cb",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "netscreen-search",
+      "exit": 0,
+      "stdout_sha256": "8b67b4f8c4495d39208a209730673c35ebcbc2c150be7a97d4725fb938079ac9",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "netscreen-convergence",
+      "exit": 0,
+      "stdout_sha256": "2d1b33732e12cfc1e9e5aede701721e36a14b960597c633e2085f5228578485d",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "netscreen-inspection",
+      "exit": 0,
+      "stdout_sha256": "4e359a8f39ad0d9e3e15e86a7b34d316e504e6cd209534c960095ddaf3c5c8f6",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "asa-search",
+      "exit": 0,
+      "stdout_sha256": "225c01bafe2a147d30d1a75b7a70c20e5d0f79c7ce9d84c554f4817493872618",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "asa-convergence",
+      "exit": 0,
+      "stdout_sha256": "8ea9208bdecf82f29166013606d322e2f8e362fbc0c484d5696b8f7bb08526f6",
+      "stderr_sha256": "3c84c5aadb108bef88b997dd67fd10f444248277440ea27802c417da7a835c59",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "asa-inspection",
+      "exit": 0,
+      "stdout_sha256": "358468abc9bb43e8832606892f513869dde3f1494ff4dd209f03a0d998cbf618",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "optimizer",
+      "exit": 0,
+      "stdout_sha256": "10fed381238be753eafdb253f31b7ef80074b87b8bc80b0a9b983a76672c3cd5",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "schedules",
+      "exit": 0,
+      "stdout_sha256": "ca2a1c1446ad31bb1d654b79d44dcd5a4633e17a917792e105bd5890303b780f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "schedule-boundaries",
+      "exit": 0,
+      "stdout_sha256": "a5a4d06759772ac4ffee4cde6a0316ee4a6bd00f22188ad362669d7831b59dd9",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "static-nat",
+      "exit": 0,
+      "stdout_sha256": "2f61dc86b8450afe664309e1830a1c20c13db701e4173805848d1327c6b4382c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "huawei-nat",
+      "exit": 0,
+      "stdout_sha256": "7ecf2dfb10c1597964844dbd7cf38a00217f035d97222102ac9a4ef18e4222c1",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "generated identifiers only"
+    },
+    {
+      "name": "audit",
+      "exit": 0,
+      "stdout_sha256": "52cc28f6fa59f94ed9011aea07c4270dcfef1f119de41251b06a5d192dc27610",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "srx-aliases",
+      "exit": 0,
+      "stdout_sha256": "fba3cd78973d0c640cc61f5697209c47be9affe048ca628b6579a71d09e83646",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "asa-usage",
+      "exit": 0,
+      "stdout_sha256": "0510a31e5790738b18d261f0c8e57de5ded9d644bcc265ef465458a70784342f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "srx-usage",
+      "exit": 0,
+      "stdout_sha256": "d5a266f0cf6e4e89798996eae3ec42617b7898fc8b5f3b7e062c7ca1b0dc6981",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "netscreen-usage",
+      "exit": 0,
+      "stdout_sha256": "c291a63a04d3084ffbd85affa613dc6f335680c93eba87a05b98200ff3113cd4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "hillstone-dynamic-nat",
+      "exit": 0,
+      "stdout_sha256": "da2d2a52703342a8ca568a067ec839914b99667dbd544cf6b632a7ad69a05e99",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "srx-dynamic-nat",
+      "exit": 0,
+      "stdout_sha256": "89a5b3d92e29bdc2f7787002c948d80cc044110442c7ab5b9abbe218e6afc8c4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "generated identifiers only"
+    },
+    {
+      "name": "fortinet-dynamic-nat",
+      "exit": 0,
+      "stdout_sha256": "151af3a481f32452383569a7bc5a2a55e10e73ee432573540dbd381de9c8938d",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "netscreen-dynamic-nat",
+      "exit": 0,
+      "stdout_sha256": "bd6dfe6d9c094abab946f83bc8bc584226bdfe7b94b0802dec6e1773fd97bd0a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "generated identifiers only"
+    },
+    {
+      "name": "asa-dynamic-nat",
+      "exit": 0,
+      "stdout_sha256": "f168b25c264c12d581d06823ea866271d315ea6a2dca2136f5abee40735e42f2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "fortinet-wide-pool",
+      "exit": 0,
+      "stdout_sha256": "7fdd87eff43ab3496b30bf6045219c5d3d6d5d43bfdf68d769c5955bf583caf7",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "asa-counter-zero",
+      "exit": 0,
+      "stdout_sha256": "0a81916727883d1ea5bf26619e5759384e690e98f2033f0775d6e3fa84b55c48",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "srx-no-timestamp",
+      "exit": 0,
+      "stdout_sha256": "d5a266f0cf6e4e89798996eae3ec42617b7898fc8b5f3b7e062c7ca1b0dc6981",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    },
+    {
+      "name": "netscreen-missing-ports",
+      "exit": 0,
+      "stdout_sha256": "2e336c4889ba0d4ede18581cc0e88e127e7feff3f4e2592e50232e25212f5305",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "comparison": "same JSON values"
+    }
+  ]
+}

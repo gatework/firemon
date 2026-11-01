@@ -1,0 +1,11 @@
+{
+   "rules" : {
+      "inbound<|>1" : {
+         "destinations" : [],
+         "hit" : 0,
+         "services" : [],
+         "sources" : []
+      }
+   },
+   "vendor" : "asa"
+}

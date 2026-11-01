@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 )
 
@@ -18,7 +19,7 @@ func declarationID(prefix string, words []string) fm.ID {
 	return fm.ID(prefix + hex.EncodeToString(h[:]))
 }
 
-func inlineService(d *fm.Data, prior fm.Data, terms []fm.ServiceTerm) fm.ID {
+func inlineService(d *fm.Data, prior *config.Builder, terms []fm.ServiceTerm) fm.ID {
 	words := make([]string, 0, len(terms)*10)
 	for _, t := range terms {
 		for _, r := range []flow.Interval{t.Protocol, t.SourcePort, t.DestinationPort, t.ICMPType, t.ICMPCode} {
@@ -26,13 +27,18 @@ func inlineService(d *fm.Data, prior fm.Data, terms []fm.ServiceTerm) fm.ID {
 		}
 	}
 	id := declarationID("$service:", words)
-	for _, rows := range [][]fm.ServiceRecord{prior.Services, d.Services} {
-		for _, row := range rows {
-			if row.ID == id {
-				return id
-			}
+	if prior.HasService(id) {
+		return id
+	}
+	for _, row := range d.Services {
+		if row.ID == id {
+			return id
 		}
 	}
 	d.Services = append(d.Services, fm.ServiceRecord{Object: fm.Object{ID: id}, Terms: terms})
 	return id
 }
+
+// ACLDeclarationID binds the complete tokenized native ACL declaration. Line
+// numbers, hit counters and expanded operational rows are not declaration identity.
+func ACLDeclarationID(words []string) fm.ID { return declarationID("acl:", words) }

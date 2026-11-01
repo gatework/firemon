@@ -1,0 +1,6 @@
+=== RUN   TestDefaultSparseBudgetProbe
+    default_probe_test.go:7: rules=1000 rows=0 error=policy evaluation budget exceeded
+    default_probe_test.go:7: rules=10000 rows=0 error=policy evaluation budget exceeded
+--- PASS: TestDefaultSparseBudgetProbe (0.15s)
+PASS
+ok  	github.com/gatework/firemon/benchmarks	0.919s

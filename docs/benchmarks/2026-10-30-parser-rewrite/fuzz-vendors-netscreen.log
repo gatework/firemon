@@ -1,0 +1,8 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/147 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 147/147 completed, now fuzzing with 4 workers
+fuzz: elapsed: 3s, execs: 46235 (15409/sec), new interesting: 12 (total: 159)
+fuzz: elapsed: 6s, execs: 46235 (0/sec), new interesting: 12 (total: 159)
+fuzz: elapsed: 9s, execs: 46235 (0/sec), new interesting: 12 (total: 159)
+fuzz: elapsed: 11s, execs: 46235 (0/sec), new interesting: 12 (total: 159)
+PASS
+ok  	github.com/gatework/firemon/vendors/netscreen	14.774s

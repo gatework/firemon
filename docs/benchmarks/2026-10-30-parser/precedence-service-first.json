@@ -1,0 +1,16 @@
+{
+   "addresses" : {},
+   "interfaces" : {},
+   "services" : {
+      "apps" : [
+         "tcp:443-443"
+      ],
+      "dns" : [
+         "udp:53-53"
+      ],
+      "shared" : [
+         "udp:53-53"
+      ]
+   },
+   "zones" : []
+}

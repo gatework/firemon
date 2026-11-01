@@ -23,6 +23,11 @@ Fortinet, Netscreen and ASA are enabled.
 
 ## Domain responsibilities and Perl references
 
+The subsequent [configuration parser audit](parser-design.md) traces the actual
+Perl Content and Parser implementations, records native vendor differences, and
+implements the Content/Builder rewrite across all seven vendors, retaining the
+preceding Hillstone object-reopening and source-evidence corrections.
+
 The Perl tree is a read-only business reference, not a Go dependency. The useful
 contracts are typed object identity, native scope, staged interpretation, exact
 address/service sets, candidate cost and evidence-bound policy operations.
@@ -68,7 +73,7 @@ aliases. Update consumers together with the optional adapter:
 | Public fields on `Collector`, `Designer`, `deploy.Engine` | `operations.NewCollector(CollectorOptions)`, `NewDesigner(DesignerOptions)`, `deploy.New(Options)`, each returning a pointer and error |
 | `runtime.Collector.Collect`, component replacement | `runtime.Collect`, `Design`, `Apply`, `Recover`; dependencies are private |
 | Collection through `deploy.Factory.Open` | `operations.ReadOnlyFactory.OpenReadOnly` returning `device.Reader` |
-| `session := config.NewSession(cursor, metadata)` | `session, err := config.NewSession(cursor, metadata)`; access `session.Cursor()` |
+| `session := config.NewSession(cursor, metadata)` | `builder, err := config.NewBuilder(content, metadata)`; access `builder.Content()` |
 | `policy.Routes(..., limit)` | `engine.ResolveRoutes(ctx, fw, vrf, addresses)` with `Engine.Limits` |
 | `RuleOrder.Chain [4]string` | `policy.RuleChain{PolicyChain, FromZone, ToZone}` |
 | `Reclaimer` evidence/time fields | `ReclamationRequest` passed to `Analyze`, `AnalyzeMembers` and `Plan` |
@@ -183,18 +188,23 @@ analyses retain their distinct evidence and deletion-authority semantics.
 
 ## Cancellable scanner migration
 
-`config.NewCursor(ctx, source, limits)` and
-`config.NewFragmentCursor(ctx, source, spans, limits)` replace the signatures
-without context. Pass the caller's context; `NewSession` is unchanged. Empty or
-malformed input still observes an already canceled context first. Scanning checks
-cancellation during bounded byte chunks and before returning success. XML also
-checks between decoder calls; standard-library token decoding is not interruptible
-inside an individual call. Structural scans return no partial document on error.
+`config.NewContent(ctx, source, limits)` and
+`config.NewFragmentContent(ctx, source, spans, limits)` own native source evidence.
+`NewBuilder(content, metadata)` replaces Session; `Builder.Begin` replaces
+`Cursor.Begin`, and `Builder.Commit` validates records and evidence together.
+`Builder.Phase(ctx, name, callback)` replaces Stage dependency declarations;
+native entry points now express phase order directly. `Builder.Seal` replaces
+`Seal(session.Data())`, avoiding a second whole-graph copy. `XMLDocument.Content`
+replaces its Cursor field; XML node navigation and the XML function are unchanged.
+These low-level APIs deliberately have no compatibility aliases. Parser, Source,
+Limits, native Parse/ParseVDOM and snapshot format 9 retain their contracts.
 
-Nil cursors, classifiers and `ParseFunc` callbacks, and invalid stage declarations
-use `config.ErrInvalid`. Malformed source retains `ErrSource`; invalid claims and
-closed transactions retain `ErrClaim` and `ErrClosed`. These changes preserve exact
-source spans, declaration order, staged interpretation and atomic rollback.
+Empty or malformed input observes an already canceled context first. Scanning
+checks cancellation during bounded byte chunks and before success. XML checks
+between decoder calls; standard-library token decoding is not interruptible
+inside an individual call. Structural errors return no partial document.
+Invalid inputs retain ErrInvalid; malformed source, invalid claims and closed
+transactions retain ErrSource, ErrClaim and ErrClosed respectively.
 
 For bounded materialization, `Firewall.RecordCount()` counts top-level domain and
 evidence records, `flow.AddressSet.RangeCount()` counts normalized address intervals and

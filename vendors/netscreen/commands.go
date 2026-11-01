@@ -113,12 +113,32 @@ func ownsNAT(fw *fm.Firewall, id fm.ID) bool {
 // Render produces configuration commands only. Persisting configuration belongs
 // to the deployment session's independently verified save operation.
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	batch, err := render.Prepare(ctx, "netscreen", before, after, changes)
+	return renderCommands(ctx, before, after, changes)
+}
+
+func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
+	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
+		return nil, err
+	}
+	n, err := nativeCommands(ctx, before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	timed, err := render.ScheduleCommands(before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	n.Commands = append(timed, n.Commands...)
+	return renderCommands(ctx, before, after, changes.Rules, n)
+}
+
+func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
+	batch, err := render.Prepare(ctx, "netscreen", before, after, changes, native...)
 	if err != nil {
 		return nil, err
 	}
 	changes = batch.Changes()
-	if len(changes) == 0 {
+	if len(changes) == 0 && len(native) == 0 {
 		return nil, nil
 	}
 	var commands []string
@@ -174,6 +194,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			commands = append(commands, fmt.Sprintf("set service %s %s %d src-port %s dst-port %s", name, verb, term.Protocol.Low, portText(term.SourcePort), portText(term.DestinationPort)))
 		}
 	}
+	if len(native) == 1 {
+		commands = append(commands, native[0].Commands...)
+	}
 	used := make(map[fm.ID]bool)
 	for _, r := range before.Rules() {
 		used[r.ID()] = true
@@ -224,7 +247,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if ownsNAT(before, c.Rule) || ownsNAT(after, c.Rule) {
+		if ownsNAT(before, c.Rule) || ownsNAT(after, c.Rule) && len(native) == 0 {
 			return nil, ErrRender
 		}
 		if c.Kind == plan.RemoveRule {
@@ -242,7 +265,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		r := rule.Record()
 		m := r.Match
-		if r.Scope != "" || r.RuleSet != "security" || r.Builtin || r.Disabled || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || len(m.Applications) > 0 || len(m.Users) > 0 || m.Schedule != "" || m.ZoneRelation != fm.AnyZoneRelation || m.AnyFromZone || m.AnyToZone || len(m.FromZones) != 1 || len(m.ToZones) != 1 || r.Description != "" {
+		if r.Scope != "" || r.RuleSet != "security" || r.Builtin || r.Disabled || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || len(m.Applications) > 0 || len(m.Users) > 0 || m.Schedule != "" && len(native) == 0 || m.ZoneRelation != fm.AnyZoneRelation || m.AnyFromZone || m.AnyToZone || len(m.FromZones) != 1 || len(m.ToZones) != 1 || r.Description != "" {
 			return nil, ErrRender
 		}
 		id := c.Rule
@@ -294,7 +317,15 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			if e1 != nil || e2 != nil || action == "" {
 				return nil, ErrRender
 			}
+			if len(native) == 1 && len(native[0].Policy[c.Rule]) > 0 {
+				action = strings.Join(native[0].Policy[c.Rule], " ") + " " + action
+			}
 			line := fmt.Sprintf("set policy id %s top from %s to %s %s %s %s %s", id, from, to, sources[0], destinations[0], services[0], action)
+			if name, err := render.ScheduleReference(after, m.Schedule, native...); err != nil {
+				return nil, err
+			} else if name != "" {
+				line += " schedule " + name
+			}
 			if r.LogEnd == fm.Known {
 				line += " log"
 			} else if r.LogEnd != fm.Irrelevant {

@@ -1,0 +1,42 @@
+--- FAIL: TestReopenedNetworkObjectsBindBeforeRoutes (0.00s)
+    network_test.go:9: stage nat: invalid firewall graph: duplicate ID "inside"
+--- FAIL: TestReopenedAddressDefinitionsRetainOneIdentity (0.00s)
+    --- FAIL: TestReopenedAddressDefinitionsRetainOneIdentity/literal_members (0.00s)
+        objects_test.go:27: stage nat: invalid firewall graph: duplicate ID "a"
+    --- FAIL: TestReopenedAddressDefinitionsRetainOneIdentity/mixed_group_members (0.00s)
+        objects_test.go:45: address members: got [192.0.2.20-192.0.2.20], want [192.0.2.10-192.0.2.10 192.0.2.20-192.0.2.20]
+    --- FAIL: TestReopenedAddressDefinitionsRetainOneIdentity/later_empty_group (0.00s)
+        objects_test.go:29: [{missing-address a 1 {0 0 0 0}}]
+    --- FAIL: TestReopenedAddressDefinitionsRetainOneIdentity/forward_group (0.00s)
+        objects_test.go:29: [{missing-address b a {0 0 0 0}}]
+--- FAIL: TestReopenedServiceAndGroupRetainMembers (0.00s)
+    objects_test.go:52: stage nat: invalid firewall graph: duplicate ID "web"
+--- FAIL: TestNamedServiceTakesPrecedenceOverSameNameGroup (0.00s)
+    --- FAIL: TestNamedServiceTakesPrecedenceOverSameNameGroup/service_first (0.00s)
+        objects_test.go:85: same-name group shadowed the declared service
+--- FAIL: TestReopenedObjectRetainsUnsupportedSource (0.00s)
+    objects_test.go:93: stage nat: invalid firewall graph: duplicate ID "a"
+--- FAIL: TestReopenedDeclarationsPreserveFirstSeenOrder (0.00s)
+    objects_test.go:118: stage nat: invalid firewall graph: duplicate ID "b"
+--- FAIL: TestIncompleteReopenedObjectRetainsDiagnostic (0.00s)
+    objects_test.go:137: stage nat: invalid firewall graph: duplicate ID "a"
+--- FAIL: TestReopenedObjectsMatchPerlReference (0.00s)
+    perl_reference_test.go:38: stage nat: invalid firewall graph: duplicate ID "inside"
+--- FAIL: TestUnsupportedBlockHeadersRemainPending (0.00s)
+    --- FAIL: TestUnsupportedBlockHeadersRemainPending/address_suffix (0.00s)
+        structure_test.go:26: unsupported header was accepted as complete
+    --- FAIL: TestUnsupportedBlockHeadersRemainPending/global_policy_suffix (0.00s)
+        structure_test.go:26: unsupported header was accepted as complete
+    --- FAIL: TestUnsupportedBlockHeadersRemainPending/rule_suffix (0.00s)
+        structure_test.go:26: unsupported header was accepted as complete
+    --- FAIL: TestUnsupportedBlockHeadersRemainPending/policy_zone_suffix (0.00s)
+        structure_test.go:26: unsupported header was accepted as complete
+    --- FAIL: TestUnsupportedBlockHeadersRemainPending/router_suffix (0.00s)
+        structure_test.go:26: unsupported header was accepted as complete
+    --- FAIL: TestUnsupportedBlockHeadersRemainPending/schedule_suffix (0.00s)
+        structure_test.go:26: unsupported header was accepted as complete
+    --- FAIL: TestUnsupportedBlockHeadersRemainPending/nested_invalid_policy (0.00s)
+        structure_test.go:26: unsupported header was accepted as complete
+FAIL
+FAIL	github.com/gatework/firemon/vendors/hillstone	0.445s
+FAIL

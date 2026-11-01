@@ -22,8 +22,8 @@ type serviceGroup struct {
 	members []string
 }
 
-func (p *parser) objects(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) objects(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	var addresses catalog[fm.AddressRecord]
 	var groups catalog[addressGroup]

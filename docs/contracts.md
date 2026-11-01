@@ -70,12 +70,20 @@ is shared by the CLI and embedded operations.
 
 ## Parser and evaluation ownership
 
-`config.NewSession` rejects a nil cursor and returns `(*Session, error)`. The
-session retains that cursor privately and exposes it with `Cursor()`. A commit
-accepts only a transaction from that cursor; a rejected foreign transaction stays
-usable by its owner. Closed commits return `config.ErrClosed`; invalid ownership
-returns `config.ErrClaim`. Invalid session input returns `config.ErrInvalid`.
-Stages retain dependency order and atomic draft/evidence rollback.
+`config.NewBuilder(content, metadata)` owns one typed, ordered record catalog and
+one source ledger. Content permits one builder owner. Transactions come from
+`Builder.Begin`; a foreign transaction is rejected without closing its owner.
+`Emit` inserts new IDs and `Replace` explicitly replaces existing IDs without
+reordering. All identities and source claims validate before mutation. Closed
+commits return `ErrClosed`, invalid ownership returns `ErrClaim`, and invalid
+builder input returns `ErrInvalid`. Explicit `Phase` calls restore records,
+identity indexes, evidence, cursor position and cached graph on failure or
+cancellation. Phase transactions cannot escape into a later phase.
+
+Accepted input and public record reads are isolated copies. `Seal` caches an
+immutable graph until a record/evidence commit; loading snapshots still uses
+concrete DTOs without reparsing. Builders are local to a synchronous Parse call;
+only sealed graphs are shared across goroutines.
 
 `policy.RuleChain` names the native chain and its zone pair; it replaces an opaque
 array only in evaluation state. `Request.SameContext` normalizes omitted security
@@ -262,13 +270,13 @@ per-rule dimension projections do not refund node visits. Service comparisons
 retain protocol/port/ICMP pairing. No state or caller-owned input is cached across
 calls, so an analyzer can be reused concurrently with immutable inputs.
 
-Cursor constructors take the caller context. UTF-8 validation, line/fragment
+Content constructors take the caller context. UTF-8 validation, line/fragment
 indexing and statement scanning check cancellation in bounded byte chunks;
 XML checks between decoder calls and byte-span scans. Cancellation precedes
-entry validation, and errors return no partial cursor/document. Stages validate
-all names and dependencies before running any callback; failed or canceled stages
-restore their data, source claims and cursor position. `NewSession` remains a
-synchronous constructor with the same signature.
+entry validation, and errors return no partial content/document. Native entry
+points list explicit `Builder.Phase` calls in dependency order. Failed or canceled
+phases restore their records, indexes, source claims and reader position.
+`NewBuilder` is a synchronous ownership constructor.
 
 Candidate construction shares the planner's counter through object-catalog,
 visibility and collision scans. `Firewall.RecordCount()` counts top-level domain
@@ -359,3 +367,39 @@ prioritize cancellation and region/visit budget errors over representation
 refusal. Unknown renderer errors and invalid dependencies stop enumeration with
 no partial rows or plan. Empty native commands are an expected representation
 refusal. Existing attempt limits and deterministic candidate order are unchanged.
+
+
+## Business batch, finite intent and durable selection
+
+`Planner.PlanBatch` retains every original ordered input and effective options,
+classifies independent local refusals, and proves one coherent final graph for
+accepted/covered targets. Unknown dependency errors or exhausted computation
+budgets invalidate the device plan; local expected refusal never leaves orphan
+changes. Native policy, declared NAT effects and finite lifetime for one input
+are atomic. Full outside-target policy/NAT preservation and typed independent
+readback remain mandatory. Native additions never silently edit existing NAT.
+
+`BatchDesigner` loads one inventory manifest and cached immutable revisions.
+Topology distinguishes protection from ingress, and business coordinate view
+from native policy context. Static inverse proposals require ordered forward
+verification; ambiguous/unknown regions remain issues. Reports own their nested
+containers and retain original input/outcome/source indexes.
+
+ScheduleClock is a trusted integration attestation, bound to the independently
+captured source/identity/time. Absolute windows become exact half-open UTC
+intervals without host timezone defaults or DST rounding. Finite plans prove
+before, throughout and after the lifetime. Admission is modeled; termination of
+existing sessions is not. Native log tuples remain paired positive observations;
+unused counters additionally require a verified continuous epoch and exact
+revision/window binding. Missing evidence cannot authorize reclamation.
+
+BatchExecutor persists only explicitly selected plans plus the whole review,
+using fsync and stable operation identities. Restore re-plans original inputs
+against the retained original snapshot and compares its digest; it never imports
+reported commands/proof or redesigns against latest. Existing deploy.Engine
+alone owns writes, exact per-device authorization and no-write recovery. Successful
+peers survive independent failure, uncertainty or cancellation. A checksum is not
+authorization; the host independently retains expected selection digests and
+approves each device operation. See [business API](business-lifecycle.md),
+[reconstruction](batch-execution.md), [native creation](native-nat-creation.md),
+[temporary policy](temporary-policies.md) and [usage](native-usage.md).

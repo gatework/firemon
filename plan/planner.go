@@ -12,9 +12,11 @@ import (
 )
 
 type Planner struct {
-	Renderer Renderer
+	Renderer       Renderer
+	NativeRenderer NativeRenderer
 	// MaxCandidates bounds full proof/render attempts in increasing Cost order.
-	// Nonpositive values default to 128. Scanning still uses Engine.Limits.
+	// Nonpositive values default to 128. PlanBatch shares this limit across all
+	// inputs. Scanning still uses Engine.Limits.
 	MaxCandidates int
 	Engine        policy.Engine
 }
@@ -68,7 +70,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 			return nil, err
 		}
 		result := &Plan{before: fw, after: fw, proof: Proof{BaseDigest: fw.SemanticDigest(), ResultDigest: fw.SemanticDigest(), TargetAllowed: true, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}}
-		result.target, result.engine = q, p.Engine
+		result.intent, result.engine = accessIntent{target: q}, p.Engine
 		if err := result.seal(); err != nil {
 			return nil, err
 		}

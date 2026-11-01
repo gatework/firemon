@@ -32,6 +32,12 @@ func execute(ctx context.Context, args []string, out io.Writer) error {
 		return errors.New("usage: firemon import|inspect|query|nat|plan [flags]")
 	}
 	switch args[0] {
+	case "usage-report", "reclamation-report", "reclamation-plan", "migration-report", "migration-plan", "convergence-plan":
+		return lifecycleCommand(ctx, args[0], args[1:], out)
+	case "inspect-address", "risk-report", "convergence-report", "compare-revisions":
+		return analysisCommand(ctx, args[0], args[1:], out)
+	case "request-query", "request-plan":
+		return requestCommand(ctx, args[0], args[1:], out)
 	case "import":
 		return importConfig(ctx, args[1:], out)
 	case "inspect", "query", "nat", "plan":

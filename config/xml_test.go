@@ -22,7 +22,7 @@ func TestXMLScannerRetainsNativeHierarchyAndUnclaimedByteEvidence(t *testing.T) 
 	if raw[n.Span.StartByte:n.Span.EndByte] != "<ip-netmask>192.0.2.1/32</ip-netmask>" || n.Text != "192.0.2.1/32" || n.Span.First != 2 {
 		t.Fatal("wrong byte/line evidence", n)
 	}
-	for _, e := range d.Cursor.Evidence() {
+	for _, e := range d.Content.Evidence() {
 		if e.State != 0 {
 			t.Fatal("structure claimed semantic evidence")
 		}

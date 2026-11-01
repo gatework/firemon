@@ -1,0 +1,106 @@
+[
+   {
+      "checks" : [
+         {
+            "active" : 0,
+            "at_epoch" : 1793523599
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793523600
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793527199
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793527200
+         },
+         {
+            "active" : 0,
+            "at_epoch" : 1793527201
+         }
+      ],
+      "process_timezone" : "UTC",
+      "vendor" : "hillstone"
+   },
+   {
+      "checks" : [
+         {
+            "active" : 0,
+            "at_epoch" : 1793523599
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793523600
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793527199
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793527200
+         },
+         {
+            "active" : 0,
+            "at_epoch" : 1793527201
+         }
+      ],
+      "process_timezone" : "UTC",
+      "vendor" : "fortinet"
+   },
+   {
+      "checks" : [
+         {
+            "active" : 0,
+            "at_epoch" : 1793523599
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793523600
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793527199
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793527200
+         },
+         {
+            "active" : 0,
+            "at_epoch" : 1793527201
+         }
+      ],
+      "process_timezone" : "UTC",
+      "vendor" : "huawei"
+   },
+   {
+      "checks" : [
+         {
+            "active" : 0,
+            "at_epoch" : 1793523599
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793523600
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793527199
+         },
+         {
+            "active" : 1,
+            "at_epoch" : 1793527200
+         },
+         {
+            "active" : 0,
+            "at_epoch" : 1793527201
+         }
+      ],
+      "process_timezone" : "UTC",
+      "vendor" : "netscreen"
+   }
+]

@@ -91,7 +91,8 @@ func (p *parser) nativeAddress(d *fm.Data, name string, r flow.AddressRange, spa
 	ref := fm.AddressRef{Kind: fm.AddressObject, ID: id}
 	if old, ok := p.addresses[id]; ok {
 		matches := false
-		for _, a := range append(slices.Clone(p.data.Addresses), d.Addresses...) {
+		accepted, _ := p.builder.Address(id)
+		for _, a := range append([]fm.AddressRecord{accepted}, d.Addresses...) {
 			if a.ID == id && old.Kind == fm.AddressObject && len(a.Ranges) == 1 && a.Ranges[0] == r && len(a.Unsupported) == 0 {
 				matches = true
 			}
@@ -106,11 +107,11 @@ func (p *parser) nativeAddress(d *fm.Data, name string, r flow.AddressRange, spa
 	return ref
 }
 
-func (p *parser) interfaceNAT(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) interfaceNAT(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	d := fm.Data{}
-	fw, err := fm.Seal(p.data)
+	fw, err := p.builder.Seal()
 	if err != nil {
 		return err
 	}
@@ -281,25 +282,24 @@ func (p *parser) interfaceNAT(ctx context.Context, s *config.Session) error {
 	return p.commit(s, tx, d)
 }
 
-func (p *parser) embeddedNAT(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) embeddedNAT(ctx context.Context, s *config.Builder) error {
+	tx := s.Begin()
 	defer tx.Rollback()
 	d := fm.Data{}
-	fw, err := fm.Seal(p.data)
+	fw, err := p.builder.Seal()
 	if err != nil {
 		return err
 	}
-	for _, name := range p.rules.names {
+	for _, r := range p.builder.Rules() {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		r := p.rules.entries[name]
 		fields, ok := p.policyNAT[r.ID]
 		if !ok {
 			continue
 		}
-		id := nativeID("policy", name)
-		n := fm.DynamicNATRecord{Object: object(id, name, r.Scope), Rule: r.ID, Match: r.Match, Order: fm.NATOrder{Stage: 1, Position: len(d.DynamicNATs), Section: "policy"}, SourceMode: fm.NoTranslation, DestinationMode: fm.NoTranslation, Disabled: r.Disabled}
+		id := nativeID("policy", string(r.ID))
+		n := fm.DynamicNATRecord{Object: object(id, string(r.ID), r.Scope), Rule: r.ID, Match: r.Match, Order: fm.NATOrder{Stage: 1, Position: len(d.DynamicNATs), Section: "policy"}, SourceMode: fm.NoTranslation, DestinationMode: fm.NoTranslation, Disabled: r.Disabled}
 		n.Spans = slices.Clone(r.Spans)
 		n.Unsupported = slices.Clone(r.Unsupported)
 		if fields.destination != "" {

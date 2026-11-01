@@ -34,12 +34,32 @@ func nativeName(o fm.Object) string {
 	return string(o.ID)
 }
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	batch, err := render.Prepare(ctx, "hillstone", before, after, changes)
+	return renderCommands(ctx, before, after, changes)
+}
+
+func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
+	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
+		return nil, err
+	}
+	n, err := nativeCommands(ctx, before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	timed, err := render.ScheduleCommands(before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	n.Commands = append(timed, n.Commands...)
+	return renderCommands(ctx, before, after, changes.Rules, n)
+}
+
+func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
+	batch, err := render.Prepare(ctx, "hillstone", before, after, changes, native...)
 	if err != nil {
 		return nil, err
 	}
 	changes = batch.Changes()
-	if len(changes) == 0 {
+	if len(changes) == 0 && len(native) == 0 {
 		return nil, nil
 	}
 	commands := []string{"configure"}
@@ -100,6 +120,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		commands = append(commands, "exit")
 	}
+	if len(native) == 1 {
+		commands = append(commands, native[0].Commands...)
+	}
 	// Native rule top prepends: render newly created rules in reverse desired order.
 	for i := len(changes) - 1; i >= 0; i-- {
 		change := changes[i]
@@ -133,7 +156,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 			commands = append(commands, "rule id "+string(change.Rule))
 		case plan.CreateRule:
 			action := map[fm.Action]string{fm.Permit: "permit", fm.Deny: "deny"}[r.Action]
-			if action == "" || r.Match.Schedule != "" || r.Match.ZoneRelation != fm.AnyZoneRelation {
+			if action == "" || r.Match.Schedule != "" && len(native) == 0 || r.Match.ZoneRelation != fm.AnyZoneRelation {
 				return nil, ErrRender
 			}
 			for _, status := range []fm.Status{r.Log, r.LogStart, r.LogEnd} {
@@ -154,6 +177,11 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 				}
 			}
 			commands = append(commands, "rule top", "action "+action)
+			if name, err := render.ScheduleReference(after, r.Match.Schedule, native...); err != nil {
+				return nil, err
+			} else if name != "" {
+				commands = append(commands, "schedule "+name)
+			}
 			for _, side := range []struct {
 				word string
 				any  bool

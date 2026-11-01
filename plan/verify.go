@@ -23,6 +23,7 @@ var ErrReadback = errors.New("readback does not establish the approved configura
 type Readback struct {
 	PlanDigest, ObservedDigest, SourceDigest string
 	ruleIDs                                  map[fm.ID]fm.ID
+	createdIDs                               map[NativeIdentity]fm.ID
 }
 
 func (r Readback) RuleIDs() map[fm.ID]fm.ID { return maps.Clone(r.ruleIDs) }
@@ -35,7 +36,7 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 	if err := ctx.Err(); err != nil {
 		return Readback{}, err
 	}
-	if p == nil || p.before == nil || p.after == nil || observed == nil {
+	if p == nil || p.before == nil || p.after == nil || p.intent == nil || observed == nil {
 		return Readback{}, ErrInvalid
 	}
 	if !observed.Complete() {
@@ -46,6 +47,15 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 		return Readback{}, err
 	}
 	expected, actual := p.after.Export(), observed.Export()
+	var typedIDs map[NativeIdentity]fm.ID
+	_, hasNative := p.intent.(nativeIntent)
+	if hasNative {
+		var err error
+		typedIDs, err = p.remapNative(&actual)
+		if err != nil {
+			return Readback{}, err
+		}
+	}
 	if err := visits.take(ctx, len(p.changes)); err != nil {
 		return Readback{}, err
 	}
@@ -105,6 +115,18 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 	if len(available) > 0 {
 		return Readback{}, fmt.Errorf("%w: unexpected native rules", ErrReadback)
 	}
+	if hasNative {
+		reverse := make(map[fm.ID]fm.ID, len(ids))
+		for planned, observed := range ids {
+			typedIDs[NativeIdentity{NativeRule, planned}] = observed
+			reverse[observed] = planned
+		}
+		for i := range actual.DynamicNATs {
+			if planned := reverse[actual.DynamicNATs[i].Rule]; planned != "" {
+				actual.DynamicNATs[i].Rule = planned
+			}
+		}
+	}
 	before, err := normalized(p.before.Export())
 	if err != nil {
 		return Readback{}, err
@@ -120,17 +142,11 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 	if want.SemanticDigest() != got.SemanticDigest() {
 		return Readback{}, ErrReadback
 	}
-	if p.preservation != nil {
-		_, err = p.engine.Equivalent(ctx, before, got, p.preservation.From)
-	} else if len(p.transfers) > 0 {
-		_, err = (Planner{Engine: p.engine}).proveTransfers(ctx, before, got, p.changes, p.transferFrom, &visits)
-	} else {
-		_, err = (Planner{Engine: p.engine}).proveWithBaseline(ctx, before, got, p.target, nil, &visits)
-	}
+	err = p.intent.verify(ctx, p, before, got, &visits)
 	if err != nil {
 		return Readback{}, fmt.Errorf("%w: traffic proof: %w", ErrReadback, err)
 	}
-	return Readback{PlanDigest: p.digest, ObservedDigest: observed.SemanticDigest(), SourceDigest: observed.Metadata().SourceDigest, ruleIDs: ids}, nil
+	return Readback{PlanDigest: p.digest, ObservedDigest: observed.SemanticDigest(), SourceDigest: observed.Metadata().SourceDigest, ruleIDs: ids, createdIDs: typedIDs}, nil
 }
 
 // VerifyBaseline checks a fresh capture before any write, allowing only

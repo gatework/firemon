@@ -117,6 +117,17 @@ type PacketRequest struct {
 	VRF string
 }
 type PacketPath struct {
+	// Real is established original source / post-DNAT destination and ports,
+	// before source NAT. Empty means this native path has no established real view.
+	// It is independent of both engine query coordinates and final NAT output.
+	Real flow.Traffic
+	// NativeRequests retain the exact policy queries selected by this native
+	// pipeline. Multiple chains and builtin-only decisions are not one target.
+	NativeRequests []Request
+	// DesignUnsupported explains paths whose policy effects cannot yet be
+	// represented by an access plan. Query evidence remains usable.
+	DesignUnsupported string
+
 	Original         flow.Traffic
 	FromZone, ToZone fm.ID
 	NAT              NATRelation
@@ -179,6 +190,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 			request := q.Request
 			request.Traffic = original
 			request.ToZone = route.Zone.ID()
+			request.EgressInterface = route.Interface.ID()
 			nat, err := e.QueryNAT(ctx, fw, request)
 			if err != nil {
 				return PacketResult{}, err
@@ -218,6 +230,7 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					}
 					request.Traffic = portion
 					request.ToZone = path.Zone.ID()
+					request.EgressInterface = path.Interface.ID()
 					evaluated, err := e.Query(ctx, fw, request)
 					if err != nil {
 						return PacketResult{}, err
@@ -228,7 +241,31 @@ func (e Engine) paloaltoPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					if len(result.Paths) >= limits.MaxRegions {
 						return PacketResult{}, ErrBudget
 					}
-					result.Paths = append(result.Paths, PacketPath{Original: portion, FromZone: request.FromZone, ToZone: request.ToZone, NAT: relation, Policy: evaluated})
+					selected := relation
+					selected.Original = portion
+					n := natTransform{known: true}
+					if len(relation.Steps) == 1 {
+						n, err = transform(fw, relation.Steps[0])
+						if err != nil {
+							return PacketResult{}, err
+						}
+					}
+					var exact, possible bool
+					selected.Translated, exact, possible, err = n.apply(portion, limits.MaxRegions)
+					if err != nil {
+						return PacketResult{}, err
+					}
+					selected.Exact = relation.Exact && exact
+					selected.PossibleAllocation = relation.PossibleAllocation || possible
+					realTransform := n
+					realTransform.source = nil
+					realTransform.sourcePorts = nil
+					realTransform.dynamic = nil
+					real, _, _, err := realTransform.apply(portion, limits.MaxRegions)
+					if err != nil {
+						return PacketResult{}, err
+					}
+					result.Paths = append(result.Paths, PacketPath{Real: real, Original: portion, FromZone: request.FromZone, ToZone: request.ToZone, NAT: selected, Policy: evaluated, NativeRequests: []Request{request}})
 				}
 			}
 		}

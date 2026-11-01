@@ -18,8 +18,9 @@ type poolDefinition struct {
 	mode   fm.TranslationMode
 }
 
-func (p *parser) nat(ctx context.Context, s *config.Session) error {
-	tx := s.Cursor().Begin()
+func (p *parser) nat(ctx context.Context, s *config.Builder) error {
+	interfaces := s.Interfaces()
+	tx := s.Begin()
 	defer tx.Rollback()
 	var d fm.Data
 	pools := make(map[fm.ID]poolDefinition)
@@ -189,7 +190,7 @@ func (p *parser) nat(ctx context.Context, s *config.Session) error {
 		}
 		if r.SourceMode == fm.InterfaceIP {
 			if r.Interface == "" {
-				for _, i := range p.data.Interfaces {
+				for _, i := range interfaces {
 					if !r.Match.AnyToZone && slices.Contains(r.Match.ToZones, i.Zone) && !i.Disabled {
 						if r.Interface != "" {
 							r.Interface = ""
@@ -218,15 +219,9 @@ func (p *parser) transportServices(m fm.Match, d fm.Data) bool {
 	if m.AnyService || len(m.Services) == 0 {
 		return false
 	}
-	services := make(map[fm.ID]fm.ServiceRecord)
-	groups := make(map[fm.ID]fm.ServiceGroupRecord)
-	for _, records := range [][]fm.ServiceRecord{p.data.Services, d.Services} {
-		for _, s := range records {
-			services[s.ID] = s
-		}
-	}
-	for _, g := range p.data.ServiceGroups {
-		groups[g.ID] = g
+	services := make(map[fm.ID]fm.ServiceRecord, len(d.Services))
+	for _, service := range d.Services {
+		services[service.ID] = service
 	}
 	active := make(map[fm.ID]bool)
 	budget := 4096
@@ -238,6 +233,9 @@ func (p *parser) transportServices(m fm.Match, d fm.Data) bool {
 		budget--
 		if ref.Kind == fm.ServiceObject {
 			s, ok := services[ref.ID]
+			if !ok {
+				s, ok = p.builder.Service(ref.ID)
+			}
 			if !ok || len(s.Unsupported) > 0 || len(s.Terms) == 0 {
 				return false
 			}
@@ -251,7 +249,7 @@ func (p *parser) transportServices(m fm.Match, d fm.Data) bool {
 		if ref.Kind != fm.ServiceGroupObject || active[ref.ID] {
 			return false
 		}
-		g, ok := groups[ref.ID]
+		g, ok := p.builder.ServiceGroup(ref.ID)
 		if !ok || len(g.Unsupported) > 0 || len(g.Members) == 0 {
 			return false
 		}
@@ -433,13 +431,10 @@ func (p *parser) server(w []string, d *fm.Data) (*fm.StaticNATRecord, *fm.Dynami
 			return nil, nil, false
 		}
 		iface = fm.ID(name)
-		found := false
-		for _, i := range p.data.Interfaces {
-			if i.ID == iface && len(i.Addresses) == 1 && !i.Disabled && len(i.Unsupported) == 0 {
-				public = append([]string{i.Addresses[0].Addr().String()}, public[count:]...)
-				found = true
-				break
-			}
+		i, found := p.builder.Interface(iface)
+		found = found && len(i.Addresses) == 1 && !i.Disabled && len(i.Unsupported) == 0
+		if found {
+			public = append([]string{i.Addresses[0].Addr().String()}, public[count:]...)
 		}
 		if !found {
 			return nil, nil, false

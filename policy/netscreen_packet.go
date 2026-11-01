@@ -178,7 +178,25 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 				if len(out.Paths) >= limits.MaxRegions {
 					return PacketResult{}, ErrBudget
 				}
-				out.Paths = append(out.Paths, PacketPath{Original: n.Original, FromZone: request.FromZone, ToZone: request.ToZone, NAT: n, Policy: evaluated})
+				real := n.Original
+				realSteps := n.Steps
+				if len(realSteps) == 0 {
+					realSteps = piece.relation.Steps
+				}
+				for _, step := range realSteps {
+					realTransform, err := transform(fw, step)
+					if err != nil {
+						return PacketResult{}, err
+					}
+					realTransform.source = nil
+					realTransform.sourcePorts = nil
+					realTransform.dynamic = nil
+					real, _, _, err = realTransform.apply(real, limits.MaxRegions)
+					if err != nil {
+						return PacketResult{}, err
+					}
+				}
+				out.Paths = append(out.Paths, PacketPath{Real: real, Original: n.Original, FromZone: request.FromZone, ToZone: request.ToZone, NAT: n, Policy: evaluated, NativeRequests: []Request{request}})
 			}
 		}
 	}

@@ -1,0 +1,29 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkBusinessPlanBatch/rules=1000/requests=1         	      32	   3474633 ns/op	 3819213 B/op	   60556 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=1         	      33	   3534590 ns/op	 3818562 B/op	   60547 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=1         	      34	   3518457 ns/op	 3818559 B/op	   60547 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=1         	      33	   3554072 ns/op	 3818553 B/op	   60547 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=1         	      38	   3482919 ns/op	 3818605 B/op	   60548 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=1         	      37	   3502101 ns/op	 3818605 B/op	   60548 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      37	   3587848 ns/op	 3895049 B/op	   60977 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      33	   3512510 ns/op	 3895079 B/op	   60977 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      37	   3537973 ns/op	 3895053 B/op	   60977 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      36	   3580358 ns/op	 3895024 B/op	   60977 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      38	   3557348 ns/op	 3895048 B/op	   60977 allocs/op
+BenchmarkBusinessPlanBatch/rules=1000/requests=8         	      34	   3523168 ns/op	 3895069 B/op	   60977 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=1        	       3	  37238458 ns/op	37227200 B/op	  600550 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=1        	       3	  35851320 ns/op	37227154 B/op	  600550 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=1        	       3	  37244222 ns/op	37227200 B/op	  600550 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=1        	       3	  37634806 ns/op	37227200 B/op	  600550 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=1        	       3	  35319139 ns/op	37227149 B/op	  600550 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=1        	       3	  34407236 ns/op	37227104 B/op	  600549 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=8        	       3	  36360097 ns/op	37305562 B/op	  600980 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=8        	       3	  36309306 ns/op	37305562 B/op	  600980 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=8        	       3	  36510055 ns/op	37305517 B/op	  600979 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=8        	       3	  33445403 ns/op	37305472 B/op	  600979 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=8        	       3	  36318097 ns/op	37305517 B/op	  600979 allocs/op
+BenchmarkBusinessPlanBatch/rules=10000/requests=8        	       3	  36642500 ns/op	37305517 B/op	  600979 allocs/op
+PASS

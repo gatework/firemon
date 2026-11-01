@@ -1,0 +1,508 @@
+{
+  "Before": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+  "After": "875b87600a2db22297c7b9e5c1bd60a591e3d2951bbc6553ba548cc03711b8ab",
+  "Report": {
+    "version": 1,
+    "generation": 0,
+    "inputs": null,
+    "devices": [
+      {
+        "sources": null,
+        "device": "fw",
+        "revision": "",
+        "semantic_digest": "",
+        "inputs": null,
+        "plan": {
+          "native_options": {
+            "MaxCandidates": 17,
+            "Limits": {
+              "MaxRegions": 4096,
+              "MaxVisits": 100000,
+              "MaxCombinations": 4096
+            }
+          },
+          "native_changes": {
+            "Rules": [
+              {
+                "Kind": 2,
+                "Rule": "fm-new-d57435eec884b367",
+                "Sources": [
+                  {
+                    "Kind": 1,
+                    "ID": "fm-a-beccb4c170919044"
+                  }
+                ],
+                "Destinations": [
+                  {
+                    "Kind": 1,
+                    "ID": "dst"
+                  }
+                ],
+                "Services": [
+                  {
+                    "Kind": 3,
+                    "ID": "https"
+                  }
+                ]
+              }
+            ],
+            "Additions": {
+              "rules": [
+                {
+                  "ID": "fm-new-d57435eec884b367",
+                  "Name": "fm-new-d57435eec884b367",
+                  "Scope": "",
+                  "Inline": false,
+                  "Spans": null,
+                  "Unsupported": null,
+                  "Match": {
+                    "Sources": [
+                      {
+                        "Kind": 1,
+                        "ID": "fm-a-beccb4c170919044"
+                      }
+                    ],
+                    "Destinations": [
+                      {
+                        "Kind": 1,
+                        "ID": "dst"
+                      }
+                    ],
+                    "Services": [
+                      {
+                        "Kind": 3,
+                        "ID": "https"
+                      }
+                    ],
+                    "FromZones": null,
+                    "ToZones": null,
+                    "AnySource": false,
+                    "AnyDestination": false,
+                    "AnyService": false,
+                    "AnyFromZone": true,
+                    "AnyToZone": true,
+                    "Schedule": "",
+                    "Applications": null,
+                    "Users": null,
+                    "Unsupported": null,
+                    "ZoneRelation": 0
+                  },
+                  "Action": 1,
+                  "Position": 0,
+                  "RuleSet": "security",
+                  "Disabled": false,
+                  "Log": 2,
+                  "LogStart": 2,
+                  "LogEnd": 2,
+                  "MatchVIP": 0,
+                  "Builtin": false,
+                  "Description": ""
+                }
+              ],
+              "addresses": [
+                {
+                  "ID": "fm-a-beccb4c170919044",
+                  "Name": "fm-a-beccb4c170919044",
+                  "Scope": "",
+                  "Inline": false,
+                  "Spans": null,
+                  "Unsupported": null,
+                  "Ranges": [
+                    {
+                      "First": "192.0.2.2",
+                      "Last": "192.0.2.2"
+                    }
+                  ],
+                  "FQDN": "",
+                  "VIP": {
+                    "Kind": 0,
+                    "ID": ""
+                  }
+                }
+              ],
+              "static_nats": [
+                {
+                  "ID": "fixed",
+                  "Name": "fixed",
+                  "Scope": "",
+                  "Inline": false,
+                  "Spans": null,
+                  "Unsupported": null,
+                  "SourceVIP": {
+                    "Kind": 0,
+                    "ID": ""
+                  },
+                  "Match": {
+                    "Sources": null,
+                    "Destinations": [
+                      {
+                        "Kind": 1,
+                        "ID": "dst"
+                      }
+                    ],
+                    "Services": [
+                      {
+                        "Kind": 3,
+                        "ID": "https"
+                      }
+                    ],
+                    "FromZones": null,
+                    "ToZones": null,
+                    "AnySource": true,
+                    "AnyDestination": false,
+                    "AnyService": false,
+                    "AnyFromZone": true,
+                    "AnyToZone": true,
+                    "Schedule": "",
+                    "Applications": null,
+                    "Users": null,
+                    "Unsupported": null,
+                    "ZoneRelation": 0
+                  },
+                  "Order": {
+                    "Stage": 0,
+                    "Position": 0,
+                    "Section": ""
+                  },
+                  "Source": [
+                    {
+                      "Original": {
+                        "First": "192.0.2.2",
+                        "Last": "192.0.2.2"
+                      },
+                      "Translated": {
+                        "First": "203.0.113.2",
+                        "Last": "203.0.113.2"
+                      },
+                      "Mode": 2
+                    }
+                  ],
+                  "Destination": null,
+                  "SourcePorts": null,
+                  "DestinationPorts": null,
+                  "Interface": "",
+                  "Bidirectional": false,
+                  "Disabled": false
+                }
+              ]
+            }
+          },
+          "nat_proof": {
+            "BaseDigest": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+            "ResultDigest": "875b87600a2db22297c7b9e5c1bd60a591e3d2951bbc6553ba548cc03711b8ab",
+            "IntentSatisfied": true,
+            "OutsidePreserved": true,
+            "Contexts": 2
+          },
+          "native_inputs": [
+            {
+              "policy": {
+                "traffic": [
+                  {
+                    "Source": {
+                      "First": "192.0.2.2",
+                      "Last": "192.0.2.2"
+                    },
+                    "Destination": {
+                      "First": "198.51.100.1",
+                      "Last": "198.51.100.1"
+                    },
+                    "Protocol": {
+                      "Low": 6,
+                      "High": 6
+                    },
+                    "SourcePort": {
+                      "Low": 0,
+                      "High": 65535
+                    },
+                    "DestinationPort": {
+                      "Low": 443,
+                      "High": 443
+                    },
+                    "ICMPType": {
+                      "Low": 0,
+                      "High": 255
+                    },
+                    "ICMPCode": {
+                      "Low": 0,
+                      "High": 255
+                    }
+                  }
+                ],
+                "from_zone": "",
+                "to_zone": "",
+                "at": "0001-01-01T00:00:00Z"
+              },
+              "effects": {
+                "additions": {
+                  "static_nats": [
+                    {
+                      "ID": "fixed",
+                      "Name": "fixed",
+                      "Scope": "",
+                      "Inline": false,
+                      "Spans": null,
+                      "Unsupported": null,
+                      "SourceVIP": {
+                        "Kind": 0,
+                        "ID": ""
+                      },
+                      "Match": {
+                        "Sources": null,
+                        "Destinations": [
+                          {
+                            "Kind": 1,
+                            "ID": "dst"
+                          }
+                        ],
+                        "Services": [
+                          {
+                            "Kind": 3,
+                            "ID": "https"
+                          }
+                        ],
+                        "FromZones": null,
+                        "ToZones": null,
+                        "AnySource": true,
+                        "AnyDestination": false,
+                        "AnyService": false,
+                        "AnyFromZone": true,
+                        "AnyToZone": true,
+                        "Schedule": "",
+                        "Applications": null,
+                        "Users": null,
+                        "Unsupported": null,
+                        "ZoneRelation": 0
+                      },
+                      "Order": {
+                        "Stage": 0,
+                        "Position": 0,
+                        "Section": ""
+                      },
+                      "Source": [
+                        {
+                          "Original": {
+                            "First": "192.0.2.2",
+                            "Last": "192.0.2.2"
+                          },
+                          "Translated": {
+                            "First": "203.0.113.2",
+                            "Last": "203.0.113.2"
+                          },
+                          "Mode": 2
+                        }
+                      ],
+                      "Destination": null,
+                      "SourcePorts": null,
+                      "DestinationPorts": null,
+                      "Interface": "",
+                      "Bidirectional": false,
+                      "Disabled": false
+                    }
+                  ]
+                },
+                "nat": [
+                  {
+                    "request": {
+                      "traffic": [
+                        {
+                          "Source": {
+                            "First": "192.0.2.2",
+                            "Last": "192.0.2.2"
+                          },
+                          "Destination": {
+                            "First": "198.51.100.1",
+                            "Last": "198.51.100.1"
+                          },
+                          "Protocol": {
+                            "Low": 6,
+                            "High": 6
+                          },
+                          "SourcePort": {
+                            "Low": 0,
+                            "High": 65535
+                          },
+                          "DestinationPort": {
+                            "Low": 443,
+                            "High": 443
+                          },
+                          "ICMPType": {
+                            "Low": 0,
+                            "High": 255
+                          },
+                          "ICMPCode": {
+                            "Low": 0,
+                            "High": 255
+                          }
+                        }
+                      ],
+                      "from_zone": "",
+                      "to_zone": "",
+                      "at": "0001-01-01T00:00:00Z"
+                    },
+                    "steps": [
+                      {
+                        "Kind": 5,
+                        "ID": "fixed",
+                        "Reverse": false
+                      }
+                    ]
+                  }
+                ]
+              },
+              "sources": [
+                "ticket-42",
+                "row-1"
+              ]
+            }
+          ],
+          "digest": "014fcc8c7df4aa5e4f6436350e9ae19e40d724369939924564ab64cb0961b8df",
+          "targets": [
+            {
+              "traffic": [
+                {
+                  "Source": {
+                    "First": "192.0.2.2",
+                    "Last": "192.0.2.2"
+                  },
+                  "Destination": {
+                    "First": "198.51.100.1",
+                    "Last": "198.51.100.1"
+                  },
+                  "Protocol": {
+                    "Low": 6,
+                    "High": 6
+                  },
+                  "SourcePort": {
+                    "Low": 0,
+                    "High": 65535
+                  },
+                  "DestinationPort": {
+                    "Low": 443,
+                    "High": 443
+                  },
+                  "ICMPType": {
+                    "Low": 0,
+                    "High": 255
+                  },
+                  "ICMPCode": {
+                    "Low": 0,
+                    "High": 255
+                  }
+                }
+              ],
+              "ruleset": "security",
+              "from_zone": "",
+              "to_zone": "",
+              "at": "0001-01-01T00:00:00Z"
+            }
+          ],
+          "input_requests": [
+            {
+              "traffic": [
+                {
+                  "Source": {
+                    "First": "192.0.2.2",
+                    "Last": "192.0.2.2"
+                  },
+                  "Destination": {
+                    "First": "198.51.100.1",
+                    "Last": "198.51.100.1"
+                  },
+                  "Protocol": {
+                    "Low": 6,
+                    "High": 6
+                  },
+                  "SourcePort": {
+                    "Low": 0,
+                    "High": 65535
+                  },
+                  "DestinationPort": {
+                    "Low": 443,
+                    "High": 443
+                  },
+                  "ICMPType": {
+                    "Low": 0,
+                    "High": 255
+                  },
+                  "ICMPCode": {
+                    "Low": 0,
+                    "High": 255
+                  }
+                }
+              ],
+              "from_zone": "",
+              "to_zone": "",
+              "at": "0001-01-01T00:00:00Z"
+            }
+          ],
+          "proof": {
+            "BaseDigest": "43a044e9762eeb8c7af1edea80024ae1fccbf692adce47aa10d9c21137ac5bac",
+            "ResultDigest": "875b87600a2db22297c7b9e5c1bd60a591e3d2951bbc6553ba548cc03711b8ab",
+            "TargetAllowed": true,
+            "OutsidePreserved": true,
+            "NATUnchanged": false,
+            "TargetSatisfied": true
+          },
+          "cost": {
+            "NewRules": 1,
+            "AppendedMembers": 0,
+            "NewObjects": 2,
+            "ModifiedRules": 0,
+            "Moves": 0,
+            "Position": 0,
+            "ID": ""
+          },
+          "changes": [
+            {
+              "Kind": 2,
+              "Rule": "fm-new-d57435eec884b367",
+              "Sources": [
+                {
+                  "Kind": 1,
+                  "ID": "fm-a-beccb4c170919044"
+                }
+              ],
+              "Destinations": [
+                {
+                  "Kind": 1,
+                  "ID": "dst"
+                }
+              ],
+              "Services": [
+                {
+                  "Kind": 3,
+                  "ID": "https"
+                }
+              ]
+            }
+          ],
+          "commands": [
+            "synthetic complete typed change"
+          ]
+        }
+      }
+    ],
+    "issues": null
+  },
+  "Options": {
+    "MaxCandidates": 0,
+    "Limits": {
+      "MaxRegions": 0,
+      "MaxVisits": 0,
+      "MaxCombinations": 0
+    }
+  },
+  "Preserved": false,
+  "Preservation": {
+    "BaseDigest": "",
+    "ResultDigest": "",
+    "From": "0001-01-01T00:00:00Z",
+    "Contexts": 0
+  },
+  "Readback": {
+    "PlanDigest": "014fcc8c7df4aa5e4f6436350e9ae19e40d724369939924564ab64cb0961b8df",
+    "ObservedDigest": "875b87600a2db22297c7b9e5c1bd60a591e3d2951bbc6553ba548cc03711b8ab",
+    "SourceDigest": ""
+  }
+}

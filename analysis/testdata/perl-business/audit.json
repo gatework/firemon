@@ -1,0 +1,22 @@
+[
+   {
+      "hit" : true,
+      "name" : "and-equal"
+   },
+   {
+      "hit" : false,
+      "name" : "and-disjoint-cross"
+   },
+   {
+      "hit" : true,
+      "name" : "or-disjoint-cross"
+   },
+   {
+      "hit" : true,
+      "name" : "or-contained"
+   },
+   {
+      "hit" : false,
+      "name" : "equal-not-equal"
+   }
+]

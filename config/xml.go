@@ -24,7 +24,7 @@ type XMLNode struct {
 }
 type XMLDocument struct {
 	Root        *XMLNode
-	Cursor      *Cursor
+	Content     *Content
 	Decorations []int // whitespace outside the root, comments and declaration
 }
 
@@ -141,10 +141,10 @@ func XML(ctx context.Context, source Source, limits Limits) (XMLDocument, error)
 	if document.Root == nil || len(stack) != 0 {
 		return XMLDocument{}, ErrSource
 	}
-	cursor, err := NewFragmentCursor(ctx, source, spans, limits)
+	cursor, err := NewFragmentContent(ctx, source, spans, limits)
 	if err != nil {
 		return XMLDocument{}, err
 	}
-	document.Cursor = cursor
+	document.Content = cursor
 	return document, nil
 }

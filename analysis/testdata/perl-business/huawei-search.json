@@ -1,0 +1,25 @@
+{
+   "cases" : [
+      {
+         "name" : "covered",
+         "rule" : "allow",
+         "type" : "ignore"
+      },
+      {
+         "name" : "append-source",
+         "rule" : "allow",
+         "type" : "modify"
+      },
+      {
+         "name" : "create-two-axes",
+         "rule" : null,
+         "type" : "new"
+      },
+      {
+         "name" : "append-service",
+         "rule" : "allow",
+         "type" : "modify"
+      }
+   ],
+   "vendor" : "huawei"
+}

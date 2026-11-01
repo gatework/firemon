@@ -1,0 +1,30 @@
+ok  	github.com/gatework/firemon	1.444s
+ok  	github.com/gatework/firemon/analysis	3.336s
+ok  	github.com/gatework/firemon/benchmarks	1.554s
+ok  	github.com/gatework/firemon/cmd/firemon	2.186s
+ok  	github.com/gatework/firemon/config	4.557s
+ok  	github.com/gatework/firemon/deploy	8.348s
+?   	github.com/gatework/firemon/device	[no test files]
+?   	github.com/gatework/firemon/docs/benchmarks/2026-10-30-parser	[no test files]
+ok  	github.com/gatework/firemon/flow	4.118s
+ok  	github.com/gatework/firemon/internal/capture	3.639s
+?   	github.com/gatework/firemon/internal/dependency	[no test files]
+ok  	github.com/gatework/firemon/internal/durablefile	3.844s
+ok  	github.com/gatework/firemon/internal/nativename	4.897s
+ok  	github.com/gatework/firemon/internal/servicecoverage	4.451s
+ok  	github.com/gatework/firemon/inventory	4.368s
+ok  	github.com/gatework/firemon/operations	6.208s
+ok  	github.com/gatework/firemon/plan	9.461s
+ok  	github.com/gatework/firemon/policy	4.560s
+ok  	github.com/gatework/firemon/projection	4.727s
+ok  	github.com/gatework/firemon/snapshot	6.142s
+ok  	github.com/gatework/firemon/vendors	4.756s
+ok  	github.com/gatework/firemon/vendors/asa	4.741s
+ok  	github.com/gatework/firemon/vendors/fortinet	4.750s
+ok  	github.com/gatework/firemon/vendors/hillstone	4.600s
+ok  	github.com/gatework/firemon/vendors/huawei	2.754s
+?   	github.com/gatework/firemon/vendors/internal/draft	[no test files]
+?   	github.com/gatework/firemon/vendors/internal/render	[no test files]
+ok  	github.com/gatework/firemon/vendors/netscreen	3.057s
+ok  	github.com/gatework/firemon/vendors/paloalto	3.519s
+ok  	github.com/gatework/firemon/vendors/srx	3.738s

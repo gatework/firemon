@@ -1,0 +1,25 @@
+{
+   "cases" : [
+      {
+         "name" : "covered",
+         "rule" : "inbound<|>1",
+         "type" : "ignore"
+      },
+      {
+         "name" : "append-source",
+         "rule" : "inbound<|>1",
+         "type" : "modify"
+      },
+      {
+         "name" : "create-two-axes",
+         "rule" : null,
+         "type" : "new"
+      },
+      {
+         "name" : "append-service",
+         "rule" : "inbound<|>1",
+         "type" : "modify"
+      }
+   ],
+   "vendor" : "asa"
+}

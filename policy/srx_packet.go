@@ -70,7 +70,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				continue
 			}
 			request := q.Request
-			request.Traffic, request.ToZone = actual, route.Zone.ID()
+			request.Traffic, request.ToZone, request.EgressInterface = actual, route.Zone.ID(), route.Interface.ID()
 			evaluated, err := e.Query(ctx, fw, request)
 			if err != nil {
 				return PacketResult{}, err
@@ -102,7 +102,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				if len(out.Paths) >= limits.MaxRegions {
 					return PacketResult{}, ErrBudget
 				}
-				out.Paths = append(out.Paths, PacketPath{Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: denied})
+				out.Paths = append(out.Paths, PacketPath{Real: request.Traffic, Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: denied, NativeRequests: []Request{request}})
 			}
 			if evaluated.Allowed.Empty() {
 				continue
@@ -137,7 +137,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				if len(out.Paths) >= limits.MaxRegions {
 					return PacketResult{}, ErrBudget
 				}
-				out.Paths = append(out.Paths, PacketPath{Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: allowed})
+				out.Paths = append(out.Paths, PacketPath{Real: request.Traffic, Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: allowed, NativeRequests: []Request{request}})
 			}
 		}
 	}

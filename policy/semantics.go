@@ -42,6 +42,7 @@ func semantics(vendor string) nativeSemantics {
 		s.activeNAT, s.policyBoundNAT, s.linearPolicy = Engine.fortinetActiveVIPs, true, false
 	case "hillstone":
 		s.queryNAT, s.staticTransform, s.dynamicTransform = Engine.hillstoneNAT, stoneStaticTransform, stoneDynamicTransform
+		s.queryPacket = Engine.hillstonePacket
 	case "huawei":
 		s.queryNAT, s.queryPacket, s.reverseStatic = Engine.huaweiNAT, Engine.huaweiPacket, reverseStatic
 		s.dynamicTransform = huaweiTransform
