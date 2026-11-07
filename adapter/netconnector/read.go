@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -145,36 +146,56 @@ func (s *Session) runningCommand() string {
 	return commands[len(commands)-1]
 }
 
-// captureEvidence binds output to the requested configuration command. The
-// pinned connector exposes only Raw for failed attempts; these bytes are kept
-// as incomplete evidence, without guessing encoding or terminal rendering.
+// captureEvidence binds output to the requested configuration command. Failed
+// decoding retains raw bytes as incomplete evidence, without losing the cause.
 func captureEvidence(result connector.Result, command string, limit int64) (string, error) {
-	text, prompt := "", ""
-	found := false
-	steps := result.Steps()
-	for i := len(steps) - 1; i >= 0; i-- {
-		if steps[i].Command().Text == command {
-			text, prompt, found = steps[i].Output(), steps[i].Prompt(), true
-			if configuration, complete := result.Config(); complete {
-				text = configuration
-			}
+	var response connector.Response
+	found, completed := false, false
+	for _, step := range slices.Backward(result.Steps()) {
+		if step.Command().Text == command {
+			response, found, completed = step.Response(), true, true
 			break
 		}
 	}
 	if !found {
-		attempts := result.Attempts()
-		for i := len(attempts) - 1; i >= 0; i-- {
-			if attempts[i].Command().Text == command {
-				text, prompt = attempts[i].Raw(), attempts[i].Prompt()
+		for _, attempt := range slices.Backward(result.Attempts()) {
+			if attempt.Command().Text == command {
+				response, found = attempt.Response(), true
 				break
 			}
 		}
 	}
-	var err error
+	if !found {
+		return "", nil
+	}
+	text, textErr := response.Output()
+	prompt, promptErr := response.Prompt()
+	if textErr != nil {
+		text = response.Raw()
+	} else if completed {
+		if configuration, complete := result.Config(); complete {
+			text = configuration
+		}
+	}
+	if promptErr != nil {
+		prompt = response.RawPrompt()
+	}
+	err := errors.Join(textErr, promptErr)
 	if int64(len(text)) > limit {
-		text, err = text[:max(0, limit)], ErrLimit
+		text, err = text[:max(0, limit)], errors.Join(err, ErrLimit)
 	}
 	return configBody(text, command, prompt), err
+}
+
+// responseBody requires verified text for native preflight and saved-view checks.
+// Unlike captureEvidence, these checks never interpret raw fallback bytes.
+func responseBody(step connector.StepResult) (string, error) {
+	text, textErr := step.Response().Output()
+	prompt, promptErr := step.Response().Prompt()
+	if err := errors.Join(textErr, promptErr); err != nil {
+		return "", err
+	}
+	return configBody(text, step.Command().Text, prompt), nil
 }
 
 // configBody removes only the command echo and terminal prompt. In particular,

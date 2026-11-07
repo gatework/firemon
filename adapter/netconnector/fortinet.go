@@ -33,8 +33,12 @@ func (s *Session) fortinetContext(ctx context.Context, op *connector.Operation, 
 	if err != nil {
 		return err
 	}
+	body, err := responseBody(step)
+	if err != nil {
+		return err
+	}
 	found := false
-	for _, line := range strings.Split(configBody(step.Output(), step.Command().Text, step.Prompt()), "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) > 1 && fields[0] == "name="+s.metadata.Context && strings.HasPrefix(fields[1], "index=") {
 			found = true
@@ -63,8 +67,12 @@ func fortinetStatus(ctx context.Context, op *connector.Operation, b *responseBud
 	if err != nil {
 		return "", false, err
 	}
+	body, err := responseBody(step)
+	if err != nil {
+		return "", false, err
+	}
 	current, mode := "", ""
-	for _, line := range strings.Split(configBody(step.Output(), step.Command().Text, step.Prompt()), "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		key, value, ok := strings.Cut(line, ":")
 		if !ok {
 			continue
@@ -83,15 +91,19 @@ func fortinetStatus(ctx context.Context, op *connector.Operation, b *responseBud
 }
 
 func fortinetGlobal(ctx context.Context, op *connector.Operation, b *responseBudget) error {
-	if strings.Contains(op.CurrentPrompt(), "(global)") {
+	prompt, err := op.Prompt()
+	if err != nil {
+		return err
+	}
+	if strings.Contains(prompt, "(global)") {
 		return nil
 	}
-	if strings.Contains(op.CurrentPrompt(), "(") {
+	if strings.Contains(prompt, "(") {
 		if _, err := b.command(ctx, op, "end"); err != nil {
 			return err
 		}
 	}
-	_, err := b.command(ctx, op, "config global")
+	_, err = b.command(ctx, op, "config global")
 	return err
 }
 
@@ -116,8 +128,12 @@ func (s *Session) fortinetAutomatic(ctx context.Context, op *connector.Operation
 	if err != nil {
 		return err
 	}
+	prompt, err := step.Response().Prompt()
+	if err != nil {
+		return err
+	}
 	mode, count := "", 0
-	for _, line := range strings.Split(configBody(text, step.Command().Text, step.Prompt()), "\n") {
+	for line := range strings.SplitSeq(configBody(text, step.Command().Text, prompt), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) >= 2 && fields[0] == "set" && fields[1] == "cfg-save" {
 			if len(fields) != 3 {

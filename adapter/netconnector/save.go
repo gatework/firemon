@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"regexp"
@@ -27,7 +28,7 @@ type responseBudget struct {
 
 func (b *responseBudget) record(result connector.Result) error {
 	for _, attempt := range result.Attempts() {
-		raw := attempt.Raw()
+		raw := attempt.Response().Raw()
 		b.remaining -= int64(len(raw))
 		fmt.Fprintf(b.digest, "%d:", len(raw))
 		_, _ = b.digest.Write([]byte(raw))
@@ -63,7 +64,7 @@ var panProgress = regexp.MustCompile(`(?m)^[ \t]*Commit job[ \t]+([1-9][0-9]{0,9
 // persistenceText checks the response history so a later carriage return or
 // terminal rendering cannot erase an earlier device rejection.
 func persistenceText(step connector.StepResult) (string, error) {
-	text := color.ReplaceAllString(step.Raw(), "")
+	text := color.ReplaceAllString(step.Response().Raw(), "")
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	for _, r := range text {
@@ -128,7 +129,7 @@ func (s *Session) Save(ctx context.Context, receive deploy.ReceiptFunc) (out dep
 				return err
 			}
 			complete := 0
-			for _, line := range strings.Split(text, "\n") {
+			for line := range strings.SplitSeq(text, "\n") {
 				if strings.TrimSpace(line) == "commit complete" {
 					complete++
 				}
@@ -154,8 +155,12 @@ func (s *Session) Save(ctx context.Context, receive deploy.ReceiptFunc) (out dep
 			if err != nil {
 				return err
 			}
-			body := configBody(current.Output(), current.Command().Text, current.Prompt())
-			if body == "" || body != configBody(saved.Output(), saved.Command().Text, saved.Prompt()) {
+			body, currentErr := responseBody(current)
+			savedBody, savedErr := responseBody(saved)
+			if currentErr != nil || savedErr != nil {
+				return errors.Join(ErrPersistence, currentErr, savedErr)
+			}
+			if body == "" || body != savedBody {
 				return ErrPersistence
 			}
 		case "fortinet":
@@ -242,7 +247,7 @@ func panJob(text, job string) (bool, error) {
 		return false, ErrPersistence
 	}
 	matched, finished := 0, false
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		f := strings.Fields(line)
 		if len(f) == 0 {
 			continue

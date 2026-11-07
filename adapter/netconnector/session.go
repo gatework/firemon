@@ -1,4 +1,4 @@
-// Package netconnector adapts a privately supplied device connection to firemon.
+// Package netconnector adapts an explicitly supplied device connection to firemon.
 package netconnector
 
 import (
@@ -135,7 +135,7 @@ func (s *Session) run(ctx context.Context, fn func(context.Context, *connector.O
 		s.active, s.cancel = false, nil
 		s.mu.Unlock()
 	}()
-	err = s.device.WithOperation(ctx, func(op *connector.Operation) error { return fn(ctx, op) })
+	err = s.device.WithOperation(ctx, fn)
 	returned = true
 	return err
 }
@@ -196,7 +196,7 @@ func (s *Session) Execute(ctx context.Context, commands []string, receive deploy
 					callbackErr = ErrInvalid
 					return callbackErr
 				}
-				r := deploy.Receipt{Phase: "apply", Index: accepted, Written: true, Confirmed: true, ResponseDigest: responseDigest(step.Raw())}
+				r := deploy.Receipt{Phase: "apply", Index: accepted, Written: true, Confirmed: true, ResponseDigest: responseDigest(step.Response().Raw())}
 				accepted++
 				callbackErr = receive(ctx, r)
 				return callbackErr
@@ -207,7 +207,7 @@ func (s *Session) Execute(ctx context.Context, commands []string, receive deploy
 			for _, attempt := range result.Attempts() {
 				c := attempt.Command()
 				if c.Source == "firemon-apply" && c.Line == accepted+1 && attempt.Written() > 0 {
-					callbackErr = receive(ctx, deploy.Receipt{Phase: "apply", Index: accepted, Written: true, ResponseDigest: responseDigest(attempt.Raw())})
+					callbackErr = receive(ctx, deploy.Receipt{Phase: "apply", Index: accepted, Written: true, ResponseDigest: responseDigest(attempt.Response().Raw())})
 					break
 				}
 			}

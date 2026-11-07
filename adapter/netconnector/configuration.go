@@ -3,6 +3,7 @@ package netconnector
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"regexp"
 	"strings"
 
@@ -47,7 +48,11 @@ func (s *Session) BeginConfiguration(ctx context.Context, token string) error {
 			if err != nil {
 				return err
 			}
-			if !ownPANLock(locks, op.CurrentPrompt(), token) {
+			prompt, err := op.Prompt()
+			if err != nil {
+				return errors.Join(ErrConfigurationLock, err)
+			}
+			if !ownPANLock(locks, prompt, token) {
 				return ErrConfigurationLock
 			}
 			if err := cleanCandidate(ctx, op, &b, "show config diff"); err != nil {
@@ -68,7 +73,11 @@ func (s *Session) BeginConfiguration(ctx context.Context, token string) error {
 				return err
 			}
 			text, err := persistenceText(step)
-			if err != nil || !strings.Contains(text, "Entering configuration mode") || !strings.HasSuffix(strings.TrimSpace(step.Prompt()), "#") {
+			prompt, promptErr := step.Response().Prompt()
+			if err != nil || promptErr != nil {
+				return errors.Join(ErrConfigurationLock, err, promptErr)
+			}
+			if !strings.Contains(text, "Entering configuration mode") || !strings.HasSuffix(strings.TrimSpace(prompt), "#") {
 				return ErrConfigurationLock
 			}
 			s.srxExclusive = true
@@ -105,8 +114,14 @@ func (s *Session) EndConfiguration(ctx context.Context, token string) error {
 			if err != nil {
 				return err
 			}
-			if len(locks) != 0 && !ownPANLock(locks, op.CurrentPrompt(), token) {
-				return ErrConfigurationLock
+			if len(locks) != 0 {
+				prompt, err := op.Prompt()
+				if err != nil {
+					return errors.Join(ErrConfigurationLock, err)
+				}
+				if !ownPANLock(locks, prompt, token) {
+					return ErrConfigurationLock
+				}
 			}
 			if err := cleanCandidate(ctx, op, &b, "show config diff"); err != nil {
 				return err
@@ -150,7 +165,11 @@ func cleanCandidate(ctx context.Context, op *connector.Operation, b *responseBud
 	if err != nil {
 		return err
 	}
-	body := configBody(text, command, step.Prompt())
+	prompt, err := step.Response().Prompt()
+	if err != nil {
+		return err
+	}
+	body := configBody(text, command, prompt)
 	body = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(body), "[edit]"))
 	if body != "" {
 		return ErrCandidate
@@ -168,7 +187,11 @@ func (s *Session) verifyPANLock(ctx context.Context, op *connector.Operation, b 
 	if err != nil {
 		return err
 	}
-	if !ownPANLock(locks, op.CurrentPrompt(), s.configurationToken) {
+	prompt, err := op.Prompt()
+	if err != nil {
+		return errors.Join(ErrConfigurationLock, err)
+	}
+	if !ownPANLock(locks, prompt, s.configurationToken) {
 		return ErrConfigurationLock
 	}
 	return nil
@@ -188,7 +211,10 @@ func (s *Session) panLocks(ctx context.Context, op *connector.Operation, b *resp
 	if err != nil {
 		return nil, err
 	}
-	text := configBody(step.Output(), step.Command().Text, step.Prompt())
+	text, err := responseBody(step)
+	if err != nil {
+		return nil, errors.Join(ErrConfigurationLock, err)
+	}
 	locks, parseErr := parsePANLocks(ctx, text, int(s.options.MaxOutputBytes))
 	if parseErr != nil {
 		return nil, parseErr

@@ -249,3 +249,38 @@ func TestReadRetainsOnlyMatchingConfigurationCommandEvidence(t *testing.T) {
 		})
 	}
 }
+
+func TestReadPreservesResponseDecodingEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name, payload, want string
+		rejected            bool
+	}{
+		{"unknown-encoding", "hostname captured\n! description 中文\xff", "hostname captured\n! description 中文\xff", false},
+		{"decoded-rejection", "hostname captured\n! description \xd6\xd0\xce\xc4\nERROR: capture denied", "hostname captured\n! description 中文\nERROR: capture denied", true},
+	} {
+		for _, view := range []device.View{device.Running, device.Saved} {
+			t.Run(tc.name+"/"+string(view), func(t *testing.T) {
+				command := "show running-config"
+				if view == device.Saved {
+					command = "show startup-config"
+				}
+				factory, opens, reads := interruptedFactory(t, readFault{vendor: "asa", command: command, payload: tc.payload, mode: "rejected"})
+				session, err := factory.Open(t.Context(), "fw")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer session.Close()
+				capture, err := session.Read(t.Context(), view)
+				if err == nil || capture.Source.Complete || capture.Source.Text != tc.want {
+					t.Fatalf("failed decoding or rejection lost evidence: capture=%+v err=%v want=%q", capture, err, tc.want)
+				}
+				if tc.rejected && !errors.Is(err, connector.ErrDevice) {
+					t.Fatal("native rejection cause lost", err)
+				}
+				if _, err := session.Read(t.Context(), view); !errors.Is(err, adapter.ErrRetired) || opens.Load() != 1 || reads.Load() != 1 {
+					t.Fatal("failed capture was retried", err, opens.Load(), reads.Load())
+				}
+			})
+		}
+	}
+}

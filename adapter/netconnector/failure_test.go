@@ -21,11 +21,17 @@ import (
 
 func controlled(t *testing.T, vendor string, serve func(net.Conn)) *adapter.Session {
 	t.Helper()
-	profile := connector.Profile{Name: vendor, LoginPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandPrompt: regexp.MustCompile(`(?m)^fw#\s*$`)}
+	s, _ := controlledDevice(t, vendor, serve)
+	return s
+}
+
+func controlledDevice(t *testing.T, vendor string, serve func(net.Conn)) (*adapter.Session, *connector.Device) {
+	t.Helper()
+	profile := connector.Profile{Name: vendor, LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`)}
 	prompt := "fw#"
 	if vendor == "paloalto" {
 		prompt = "audit@fw>"
-		profile.LoginPrompt = regexp.MustCompile(`(?m)^(?:audit@fw>|fw#)\s*$`)
+		profile.LoginPrompt = textPattern(`(?m)^(?:audit@fw>|fw#)\s*$`)
 		profile.CommandPrompt = profile.LoginPrompt
 	}
 	var peers sync.WaitGroup
@@ -67,7 +73,7 @@ func controlled(t *testing.T, vendor string, serve func(net.Conn)) *adapter.Sess
 			t.Fatal(err)
 		}
 	}
-	return s
+	return s, d
 }
 
 func TestPartialWriteRetainsUncertainReceiptAndCannotReplay(t *testing.T) {
@@ -83,7 +89,7 @@ func TestPartialWriteRetainsUncertainReceiptAndCannotReplay(t *testing.T) {
 }
 
 func TestDeviceRejectionWithPromptIsNotAConfirmedCommand(t *testing.T) {
-	profile := connector.Profile{Name: "asa", LoginPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandErrors: []*regexp.Regexp{regexp.MustCompile(`(?m)^ERROR:`)}}
+	profile := connector.Profile{Name: "asa", LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`), CommandErrors: []*regexp.Regexp{regexp.MustCompile(`(?m)^ERROR:`)}}
 	s := sessionWith(t, "asa", profile, []exchange{{"bad command", "ERROR: denied"}}, adapter.Options{})
 	var receipts []deploy.Receipt
 	out, err := s.Execute(context.Background(), []string{"bad command", "next"}, func(_ context.Context, r deploy.Receipt) error { receipts = append(receipts, r); return nil })
@@ -102,6 +108,40 @@ func TestCallbackReentryIsBusyAndCloseInterruptsWithoutDeadlock(t *testing.T) {
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+}
+
+func TestConnectorCloseCancelsSaveReceiptContext(t *testing.T) {
+	s, d := controlledDevice(t, "asa", func(peer net.Conn) {
+		scanner := bufio.NewScanner(peer)
+		if !scanner.Scan() || scanner.Text() != "write memory" {
+			t.Errorf("save command = %q, err = %v", scanner.Text(), scanner.Err())
+			return
+		}
+		_, _ = io.WriteString(peer, "write memory\r\nBuilding configuration...\r\n[OK]\r\nfw#")
+		if scanner.Scan() {
+			t.Errorf("command after close: %q", scanner.Text())
+		}
+	})
+	receipts := 0
+	out, err := s.Save(t.Context(), func(ctx context.Context, receipt deploy.Receipt) error {
+		receipts++
+		if !receipt.Confirmed || !receipt.Durable {
+			t.Error("save confirmation lost", receipt)
+		}
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			t.Error("connector close did not cancel receipt context", ctx.Err())
+		}
+		return ctx.Err()
+	})
+	if !errors.Is(err, context.Canceled) || !out.Durable || receipts != 1 {
+		t.Fatal(out, err, receipts)
+	}
+	if _, err := s.Save(t.Context(), func(context.Context, deploy.Receipt) error { return nil }); !errors.Is(err, adapter.ErrRetired) {
+		t.Fatal("save after connector close was retried", err)
 	}
 }
 
@@ -221,7 +261,7 @@ func TestCommitPollAndOutputBudgetsStopTheConversation(t *testing.T) {
 		{"poll-count", 2, 0}, {"cumulative-output", 3, 2048},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			profile := connector.Profile{Name: "paloalto", LoginPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandPrompt: regexp.MustCompile(`(?m)^fw#\s*$`)}
+			profile := connector.Profile{Name: "paloalto", LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`)}
 			pending := "2026/01/01 00:00:00 00:00:00 42 Commit ACT PEND 00:00:01"
 			if tc.bytes > 0 {
 				pending += "\n" + strings.Repeat("synthetic detail ", 80)

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +15,7 @@ import (
 	adapter "github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/firemon/device"
+	expect "github.com/gatework/go-expect"
 	"github.com/gatework/go-net-connector/connector"
 )
 
@@ -40,7 +40,7 @@ func panLockCheck() []exchange {
 
 func session(t *testing.T, vendor string, dialogue []exchange) *adapter.Session {
 	t.Helper()
-	profile := connector.Profile{Name: vendor, LoginPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandTimeout: time.Second}
+	profile := connector.Profile{Name: vendor, LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`), CommandTimeout: time.Second}
 	return sessionWith(t, vendor, profile, dialogue, adapter.Options{PollInterval: time.Millisecond, MaxPolls: 3})
 }
 
@@ -50,7 +50,7 @@ func sessionWith(t *testing.T, vendor string, profile connector.Profile, dialogu
 	beginPAN := vendor == "paloalto" && len(dialogue) > 0 && dialogue[0].command == "configure"
 	if vendor == "paloalto" {
 		prompt = "audit@fw>"
-		profile.LoginPrompt = regexp.MustCompile(`(?m)^audit@fw[>#]\s*$`)
+		profile.LoginPrompt = textPattern(`(?m)^audit@fw[>#]\s*$`)
 		profile.CommandPrompt = profile.LoginPrompt
 		if beginPAN {
 			options.ExclusivePANAdmin = true
@@ -109,7 +109,7 @@ func TestReadKeepsRunningAndSavedViewsDistinct(t *testing.T) {
 		{"paloalto", "set cli pager off", "show config saved running-config.xml", `<config version="11.1"><shared/></config>`},
 	} {
 		t.Run(tc.vendor, func(t *testing.T) {
-			profile := connector.Profile{Name: tc.vendor, LoginPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), CommandPrompt: regexp.MustCompile(`(?m)^fw#\s*$`), ConfigCommands: []string{"show current"}}
+			profile := connector.Profile{Name: tc.vendor, LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`), ConfigCommands: []string{"show current"}}
 			s := sessionWith(t, tc.vendor, profile, []exchange{{"show current", "hostname current"}, {tc.pager, ""}, {tc.saved, tc.text}}, adapter.Options{})
 			running, err := s.Read(context.Background(), device.Running)
 			if err != nil || !running.Source.Complete || running.Source.Text != "hostname current" || running.Metadata.Device != "fw" || running.Metadata.CapturedAt.IsZero() {
@@ -289,4 +289,12 @@ func TestFortinetMissingVDOMDoesNotIssueEdit(t *testing.T) {
 	if capture, err := s.Read(context.Background(), device.Running); !errors.Is(err, adapter.ErrCapture) || capture.Source.Complete {
 		t.Fatal(capture, err)
 	}
+}
+
+func textPattern(expression string) expect.Pattern {
+	pattern, err := expect.Compile(expression)
+	if err != nil {
+		panic(err)
+	}
+	return pattern
 }
