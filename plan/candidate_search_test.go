@@ -148,3 +148,31 @@ func TestCanceledCandidateCannotReturnPlan(t *testing.T) {
 		t.Fatalf("canceled candidate returned: %v, %v", result, err)
 	}
 }
+
+func TestBatchDiscoveryRetainsRefusalAfterAttemptBudgetIsSpent(t *testing.T) {
+	d := baseline(t).Export()
+	d.Rules[0].Scope = "z"
+	fw, err := fm.Seal(d)
+	if err != nil || !fw.Complete() {
+		t.Fatal("fixture", err)
+	}
+	first, second := request(t, "192.0.2.2/32"), request(t, "192.0.2.2/32")
+	first.Scope, second.Scope = "a", "z"
+	box := second.Traffic.Regions()[0]
+	box.Destination = addressRange("198.51.100.2/32")
+	second.Traffic, err = flow.NewTraffic(32, box)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The first context spends the only attempt. The second still discovers
+	// that appending would widen cross pairs before its create fallback is
+	// refused by the shared budget. That discovery remains useful evidence.
+	got, err := (plan.Planner{Renderer: renderer{}, MaxCandidates: 1}).PlanBatch(t.Context(), fw, []policy.Request{first, second})
+	if !errors.Is(err, policy.ErrBudget) || got.Plan != nil || got.Inputs[0].Disposition != plan.BatchAccepted {
+		t.Fatal("shared attempt budget changed", got, err)
+	}
+	attempts := got.Inputs[1].Attempts
+	if len(attempts) != 1 || attempts[0].Stage != plan.PreservationRejection || attempts[0].Rule != "10" {
+		t.Fatal("exhausted attempt budget hid discovery evidence", attempts)
+	}
+}

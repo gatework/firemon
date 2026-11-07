@@ -82,6 +82,14 @@ func TestImpossibleAppendDoesNotExhaustPlanCombinationBudget(t *testing.T) {
 	if p.Cost().NewRules != 1 || !p.Proof().OutsidePreserved {
 		t.Fatal("exact new rule required", p.Cost(), p.Proof())
 	}
+	batch, err := (plan.Planner{Renderer: renderer{}, MaxCandidates: 1}).PlanBatch(t.Context(), baseline(t), []policy.Request{q})
+	if err != nil || batch.Plan == nil || batch.Plan.Cost().NewRules != 1 || !batch.Plan.Proof().OutsidePreserved {
+		t.Fatal("impossible append consumed the batch combination", batch, err)
+	}
+	attempts := batch.Inputs[0].Attempts
+	if len(attempts) != 1 || attempts[0].Stage != plan.PreservationRejection || attempts[0].Rule != "10" {
+		t.Fatal("missing append prefilter refusal", attempts)
+	}
 }
 
 func TestAppendKeepsCrossPairsAlreadyShadowedByEarlierRules(t *testing.T) {
