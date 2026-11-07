@@ -191,10 +191,7 @@ func (p Planner) PlanBatch(ctx context.Context, before *fm.Firewall, requests []
 	if err != nil {
 		return out, err
 	}
-	state := batchState{planner: p, before: before, after: before, visits: &visits, baseline: make(map[string]policy.Result), maxAttempts: p.MaxCandidates}
-	if state.maxAttempts <= 0 {
-		state.maxAttempts = 128
-	}
+	state := batchState{planner: p, before: before, after: before, visits: &visits, baseline: make(map[string]policy.Result), attempts: newCandidateAttempts(p.MaxCandidates)}
 	accept := func(g batchGroup) (bool, error) {
 		ids := append(slices.Clone(accepted), g.inputs...)
 		all, err := groupBatch(ctx, out.Inputs, ids, limits.MaxRegions, &visits)
@@ -269,7 +266,7 @@ func (p Planner) PlanBatch(ctx context.Context, before *fm.Firewall, requests []
 	if err := p.preflightReadback(ctx, before, state.after); err != nil {
 		return out, err
 	}
-	result := &Plan{before: before, after: state.after, changes: cloneChanges(state.changes), commands: slices.Clone(state.commands), cost: state.cost, proof: proof, engine: p.Engine, intent: batchIntent{targets: targets, inputs: slices.Clone(requests), options: BatchOptions{MaxCandidates: state.maxAttempts, Limits: limits}}}
+	result := &Plan{before: before, after: state.after, changes: cloneChanges(state.changes), commands: slices.Clone(state.commands), cost: state.cost, proof: proof, engine: p.Engine, intent: batchIntent{targets: targets, inputs: slices.Clone(requests), options: BatchOptions{MaxCandidates: state.attempts.limit, Limits: limits}}}
 	if err := result.seal(); err != nil {
 		return out, err
 	}

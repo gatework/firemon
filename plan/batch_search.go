@@ -2,6 +2,7 @@ package plan
 
 import (
 	"context"
+	"iter"
 	"slices"
 
 	fm "github.com/gatework/firemon"
@@ -10,14 +11,14 @@ import (
 )
 
 type batchState struct {
-	planner               Planner
-	before, after         *fm.Firewall
-	visits                *visitBudget
-	baseline              map[string]policy.Result
-	changes               []Change
-	commands              []string
-	cost                  Cost
-	attempts, maxAttempts int
+	planner       Planner
+	before, after *fm.Firewall
+	visits        *visitBudget
+	baseline      map[string]policy.Result
+	changes       []Change
+	commands      []string
+	cost          Cost
+	attempts      candidateAttempts
 }
 
 func (s *batchState) add(ctx context.Context, q policy.Request, targets []policy.Request) (bool, []BatchAttempt, error) {
@@ -64,103 +65,93 @@ func (s *batchState) add(ctx context.Context, q policy.Request, targets []policy
 	if !prior.Complete {
 		return false, []BatchAttempt{{Stage: PreservationRejection, Reason: "context has unknown policy evidence"}}, nil
 	}
-	selection := candidateSelection{limit: s.maxAttempts}
-	var attempts []BatchAttempt
-	record := func(stage RejectionStage, id fm.ID, reason string) {
-		if len(attempts) < 16 {
-			attempts = append(attempts, BatchAttempt{stage, id, reason})
+	search := candidateSearch{planner: p, before: s.after, request: q, gap: gap, prior: &prior, visits: s.visits, attempts: &s.attempts}
+	adapter := batchSearchAdapter{state: s, targets: targets}
+	accepted, err := search.run(ctx, &adapter)
+	return accepted, adapter.refusals, err
+}
+
+type batchSearchAdapter struct {
+	state    *batchState
+	targets  []policy.Request
+	refusals []BatchAttempt
+}
+
+func (a *batchSearchAdapter) rules(ctx context.Context) iter.Seq2[*fm.Rule, error] {
+	return func(yield func(*fm.Rule, error) bool) {
+		for _, rule := range a.state.after.Rules() {
+			if err := a.state.visits.take(ctx, 1); err != nil {
+				yield(nil, err)
+				return
+			}
+			if !yield(rule, nil) {
+				return
+			}
 		}
 	}
-	for _, rule := range s.after.Rules() {
-		if err := s.visits.take(ctx, 1); err != nil {
-			return false, attempts, err
-		}
-		r := rule.Record()
-		if r.Disabled || r.Builtin || r.Action != fm.Permit || r.Scope != q.Scope || r.RuleSet != q.RuleSet || r.Log == fm.Unknown || !sameZones(r.Match, q) {
-			continue
-		}
-		next, changes, cost, err := p.appendCandidate(ctx, s.after, r, gap, s.visits)
-		if err != nil {
-			if err == ErrUnsafe {
-				record(DeclarationRejection, r.ID, "append declaration is unknown")
-				continue
-			}
-			return false, attempts, err
-		}
-		if len(changes) == 0 {
-			continue
-		}
-		possible, err := p.Engine.AppendCanPreserve(ctx, s.after, next, r.ID, q, prior)
-		if err != nil {
-			return false, attempts, err
-		}
-		if !possible {
-			record(PreservationRejection, r.ID, "append changes traffic outside target")
-			continue
-		}
-		selection.consider(candidate{next, changes, cost})
+}
+
+func (a *batchSearchAdapter) record(stage RejectionStage, id fm.ID, reason string) {
+	if len(a.refusals) < 16 {
+		a.refusals = append(a.refusals, BatchAttempt{stage, id, reason})
 	}
-	try := func(c candidate) (bool, error) {
-		if s.attempts >= s.maxAttempts {
-			return false, policy.ErrBudget
+}
+
+func (a *batchSearchAdapter) decline(_ context.Context, stage RejectionStage, id fm.ID, err error) error {
+	if stage == DeclarationRejection {
+		if err != ErrUnsafe {
+			return err
 		}
-		s.attempts++
-		changes := mergeBatchChanges(s.changes, c.changes, c.after)
-		if err := p.preflightReadback(ctx, s.before, c.after); err != nil {
-			return false, err
-		}
-		if _, err := p.proveBatch(ctx, s.before, c.after, targets, s.baseline, s.visits); err != nil {
-			if err == ErrUnsafe || err == policy.ErrNotEquivalent {
-				record(PreservationRejection, fm.ID(c.cost.ID), "joint target, outside ownership or NAT proof failed")
-				return false, nil
-			}
-			return false, err
-		}
-		if err := s.visits.takeGraphs(ctx, s.before, c.after); err != nil {
-			return false, err
-		}
-		if err := ValidateChanges(ctx, s.before, c.after, changes); err != nil {
-			return false, err
-		}
-		commands, err := p.renderChanges(ctx, s.before, c.after, changes)
-		if err != nil {
-			if representationRejected(err) {
-				record(RepresentationRejection, fm.ID(c.cost.ID), "native renderer refused candidate")
-				return false, nil
-			}
-			return false, err
-		}
-		if len(commands) == 0 {
-			record(RepresentationRejection, fm.ID(c.cost.ID), "native renderer produced no commands")
+		a.record(stage, id, "append declaration is unknown")
+	} else {
+		a.record(stage, id, "append changes traffic outside target")
+	}
+	return nil
+}
+
+func (a *batchSearchAdapter) attempt(ctx context.Context, c candidate) (bool, error) {
+	s := a.state
+	p := s.planner
+	changes := mergeBatchChanges(s.changes, c.changes, c.after)
+	if err := p.preflightReadback(ctx, s.before, c.after); err != nil {
+		return false, err
+	}
+	if _, err := p.proveBatch(ctx, s.before, c.after, a.targets, s.baseline, s.visits); err != nil {
+		if err == ErrUnsafe || err == policy.ErrNotEquivalent {
+			a.record(PreservationRejection, fm.ID(c.cost.ID), "joint target, outside ownership or NAT proof failed")
 			return false, nil
 		}
-		s.after, s.changes, s.commands = c.after, changes, commands
-		s.cost.NewRules += c.cost.NewRules
-		s.cost.NewObjects += c.cost.NewObjects
-		s.cost.AppendedMembers, s.cost.ModifiedRules = 0, 0
-		for _, change := range changes {
-			if change.Kind == AppendMembers {
-				s.cost.ModifiedRules++
-				s.cost.AppendedMembers += len(change.Sources) + len(change.Destinations) + len(change.Services)
-			}
-		}
-		return true, nil
+		return false, err
 	}
-	for _, c := range selection.ordered() {
-		ok, err := try(c)
-		if err != nil || ok {
-			return ok, attempts, err
-		}
+	if err := s.visits.takeGraphs(ctx, s.before, c.after); err != nil {
+		return false, err
 	}
-	if s.attempts >= s.maxAttempts {
-		return false, attempts, policy.ErrBudget
+	if err := ValidateChanges(ctx, s.before, c.after, changes); err != nil {
+		return false, err
 	}
-	next, changes, cost, err := createCandidate(ctx, s.after, q, gap, s.visits)
+	commands, err := p.renderChanges(ctx, s.before, c.after, changes)
 	if err != nil {
-		return false, attempts, err
+		if representationRejected(err) {
+			a.record(RepresentationRejection, fm.ID(c.cost.ID), "native renderer refused candidate")
+			return false, nil
+		}
+		return false, err
 	}
-	ok, err := try(candidate{next, changes, cost})
-	return ok, attempts, err
+	if len(commands) == 0 {
+		a.record(RepresentationRejection, fm.ID(c.cost.ID), "native renderer produced no commands")
+		return false, nil
+	}
+	s.after, s.changes, s.commands = c.after, changes, commands
+	s.cost.NewRules += c.cost.NewRules
+	s.cost.NewObjects += c.cost.NewObjects
+	s.cost.AppendedMembers, s.cost.ModifiedRules = 0, 0
+	for _, change := range changes {
+		if change.Kind == AppendMembers {
+			s.cost.ModifiedRules++
+			s.cost.AppendedMembers += len(change.Sources) + len(change.Destinations) + len(change.Services)
+		}
+	}
+	return true, nil
 }
 
 func mergeBatchChanges(prior, added []Change, after *fm.Firewall) []Change {

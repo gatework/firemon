@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
@@ -33,10 +34,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 	}
 	limits := p.Engine.Limits.WithDefaults()
 	visits := visitBudget(limits.MaxVisits)
-	maxCandidates := p.MaxCandidates
-	if maxCandidates <= 0 {
-		maxCandidates = 128
-	}
+	attempts := newCandidateAttempts(p.MaxCandidates)
 	q := requests[0]
 	if q.RuleSet == "" {
 		q.RuleSet = "security"
@@ -104,57 +102,49 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 	if !prior.Complete {
 		return nil, ErrUnsafe
 	}
-	candidates := candidateSelection{limit: maxCandidates}
-	if err := visits.take(ctx, fw.RuleCount()); err != nil {
-		return nil, err
-	}
-	for _, rule := range fw.Rules() {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		r := rule.Record()
-		if r.Disabled || r.Builtin || r.Action != fm.Permit || r.Scope != q.Scope || r.RuleSet != q.RuleSet || r.Log == fm.Unknown || !sameZones(r.Match, q) {
-			continue
-		}
-		next, changes, cost, err := p.appendCandidate(ctx, fw, r, gap, &visits)
-		if err != nil {
-			if errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget) || ctx.Err() != nil {
-				return nil, err
-			}
-			continue
-		}
-		if len(changes) == 0 {
-			continue
-		}
-		possible, err := p.Engine.AppendCanPreserve(ctx, fw, next, r.ID, q, prior)
-		if err != nil {
-			return nil, err
-		}
-		if !possible {
-			continue
-		}
-		candidates.consider(candidate{after: next, changes: changes, cost: cost})
-	}
-	attempts := 0
-	for _, draft := range candidates.ordered() {
-		attempts++
-		result, err := p.tryCandidate(ctx, fw, draft, q, &prior, &visits)
-		if err != nil || result != nil {
-			return result, err
-		}
-	}
-	// Every append has fewer new rules than creation. Construct the fallback
-	// only after those attempts fail; an unused fallback must not spend budget.
-	if attempts >= maxCandidates {
-		return nil, policy.ErrBudget
-	}
-	next, changes, cost, err := createCandidate(ctx, fw, q, gap, &visits)
-	if err != nil {
-		return nil, err
-	}
-	result, err := p.tryCandidate(ctx, fw, candidate{after: next, changes: changes, cost: cost}, q, &prior, &visits)
-	if err != nil || result != nil {
-		return result, err
+	search := candidateSearch{planner: p, before: fw, request: q, gap: gap, prior: &prior, visits: &visits, attempts: &attempts}
+	adapter := accessSearchAdapter{search: &search}
+	accepted, err := search.run(ctx, &adapter)
+	if err != nil || accepted {
+		return adapter.result, err
 	}
 	return nil, ErrUnsafe
+}
+
+type accessSearchAdapter struct {
+	search *candidateSearch
+	result *Plan
+}
+
+func (a *accessSearchAdapter) rules(ctx context.Context) iter.Seq2[*fm.Rule, error] {
+	return func(yield func(*fm.Rule, error) bool) {
+		s := a.search
+		if err := s.visits.take(ctx, s.before.RuleCount()); err != nil {
+			yield(nil, err)
+			return
+		}
+		for _, rule := range s.before.Rules() {
+			if err := ctx.Err(); err != nil {
+				yield(nil, err)
+				return
+			}
+			if !yield(rule, nil) {
+				return
+			}
+		}
+	}
+}
+
+func (*accessSearchAdapter) decline(ctx context.Context, stage RejectionStage, _ fm.ID, err error) error {
+	if stage == DeclarationRejection && (errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget) || ctx.Err() != nil) {
+		return err
+	}
+	return nil
+}
+
+func (a *accessSearchAdapter) attempt(ctx context.Context, draft candidate) (bool, error) {
+	s := a.search
+	result, err := s.planner.tryCandidate(ctx, s.before, draft, s.request, s.prior, s.visits)
+	a.result = result
+	return result != nil, err
 }
