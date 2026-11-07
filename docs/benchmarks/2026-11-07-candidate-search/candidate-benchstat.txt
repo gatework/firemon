@@ -1,0 +1,46 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                                                   │ ../evidence/candidate-before.txt │  ../evidence/candidate-after.txt  │
+                                                   │              sec/op              │   sec/op     vs base              │
+BusinessPlanBatchAddition/rules=1000/requests=1-10                        27.72m ± 2%   27.27m ± 2%       ~ (p=0.132 n=6)
+BusinessPlanBatchAddition/rules=1000/requests=8-10                        36.00m ± 1%   36.14m ± 2%       ~ (p=1.000 n=6)
+geomean                                                                   31.59m        31.39m       -0.63%
+
+                                                   │ ../evidence/candidate-before.txt │  ../evidence/candidate-after.txt   │
+                                                   │               B/op               │     B/op      vs base              │
+BusinessPlanBatchAddition/rules=1000/requests=1-10                       55.94Mi ± 3%   54.72Mi ± 4%       ~ (p=0.485 n=6)
+BusinessPlanBatchAddition/rules=1000/requests=8-10                       63.16Mi ± 4%   62.50Mi ± 4%       ~ (p=0.818 n=6)
+geomean                                                                  59.44Mi        58.48Mi       -1.62%
+
+                                                   │ ../evidence/candidate-before.txt │  ../evidence/candidate-after.txt  │
+                                                   │            allocs/op             │  allocs/op   vs base              │
+BusinessPlanBatchAddition/rules=1000/requests=1-10                        344.3k ± 0%   344.3k ± 0%       ~ (p=0.589 n=6)
+BusinessPlanBatchAddition/rules=1000/requests=8-10                        451.1k ± 0%   451.1k ± 0%       ~ (p=0.916 n=6)
+geomean                                                                   394.1k        394.1k       +0.00%
+
+pkg: github.com/gatework/firemon/plan
+                                       │ ../evidence/candidate-before.txt │  ../evidence/candidate-after.txt  │
+                                       │              sec/op              │   sec/op     vs base              │
+PlanCandidates/rules=10/attempts=1-10                         307.7µ ± 6%   323.1µ ± 9%       ~ (p=0.394 n=6)
+PlanCandidates/rules=10/attempts=8-10                         307.2µ ± 1%   309.6µ ± 2%       ~ (p=0.132 n=6)
+PlanCandidates/rules=100/attempts=1-10                        18.01m ± 0%   17.96m ± 1%       ~ (p=0.240 n=6)
+PlanCandidates/rules=100/attempts=8-10                        21.65m ± 3%   21.78m ± 1%       ~ (p=0.132 n=6)
+geomean                                                       2.464m        2.501m       +1.51%
+
+                                       │ ../evidence/candidate-before.txt │  ../evidence/candidate-after.txt   │
+                                       │               B/op               │     B/op      vs base              │
+PlanCandidates/rules=10/attempts=1-10                        502.3Ki ± 0%   502.8Ki ± 0%  +0.11% (p=0.002 n=6)
+PlanCandidates/rules=10/attempts=8-10                        504.6Ki ± 0%   505.3Ki ± 0%  +0.13% (p=0.002 n=6)
+PlanCandidates/rules=100/attempts=1-10                       30.87Mi ± 0%   30.81Mi ± 1%       ~ (p=0.818 n=6)
+PlanCandidates/rules=100/attempts=8-10                       32.33Mi ± 1%   32.37Mi ± 1%       ~ (p=0.699 n=6)
+geomean                                                      3.941Mi        3.943Mi       +0.05%
+
+                                       │ ../evidence/candidate-before.txt │  ../evidence/candidate-after.txt  │
+                                       │            allocs/op             │  allocs/op   vs base              │
+PlanCandidates/rules=10/attempts=1-10                         3.341k ± 0%   3.350k ± 0%  +0.27% (p=0.002 n=6)
+PlanCandidates/rules=10/attempts=8-10                         3.351k ± 0%   3.360k ± 0%  +0.27% (p=0.002 n=6)
+PlanCandidates/rules=100/attempts=1-10                        150.3k ± 0%   150.3k ± 0%       ~ (p=0.459 n=6)
+PlanCandidates/rules=100/attempts=8-10                        150.5k ± 0%   150.5k ± 0%       ~ (p=0.394 n=6)
+geomean                                                       22.43k        22.46k       +0.14%

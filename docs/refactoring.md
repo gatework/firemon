@@ -1,5 +1,47 @@
 # Domain refactoring and API migration
 
+## Candidate search ownership
+
+`Planner.Plan` and `Planner.PlanBatch` share a private candidate-search module.
+It owns rule eligibility, append construction, outside-target preflight, cost
+ordering, attempt limits and lazy creation. Two internal adapters retain the
+entry points' different rule-scan accounting, declaration refusals, proof and
+reporting contracts. Batch attempts remain shared across groups and singleton
+retries; rejected drafts do not reserve names or modify accepted changes.
+
+Public methods, `MaxCandidates`, snapshot format 9, approval digests and
+reconstruction encodings are unchanged. Existing proofs still run independently
+for candidates and readback. The module does not merge access and batch intent
+or cache a baseline across different immutable graphs.
+
+The business reference remains Perl `Firewall/Policy/Searcher.pm`,
+`selectAModifyPolicy`, and its caller in `searchPolicy`: member additions affect
+candidate cost. Go retains deterministic cost ordering, exact paired traffic,
+first-match ownership and outside-target/NAT proofs rather than adopting Perl
+hash iteration or independent source/destination/service sets.
+
+## Connector v0.2.0
+
+The optional adapter now uses published go-net-connector v0.2.0 and go-expect
+v0.4.0. Its Firemon factory/session methods remain unchanged. Hosts that directly
+customize the returned `connector.Profile` must use `expect.Pattern` for prompts
+and pagers; authentication and command-error expressions remain
+`[]*regexp.Regexp`. Built-in profiles come from
+`vendors.NewBuiltinRegistry().Lookup(key)` and `Platform.Profile()`.
+
+Operation callbacks receive the operation's context. Step and attempt text is
+read through `Response()` with explicit decoding errors; `op.Prompt()` also
+returns an error. Raw responses continue to determine response digests, byte
+limits and persistence failure history. Failed configuration reads retain
+matching bounded evidence even if decoding fails. PAN/SRX configuration
+isolation, Fortinet VDOM selection and no-replay recovery remain unchanged.
+
+The adapter stays a separate module and uses a published core version without a
+local `replace`. CI distinguishes that versioned consumer from a temporary
+workspace pairing it with the checked-out core. See
+[integration verification](integration-verification.md) for the versions and
+evidence; older private-dependency delivery records describe their own dates.
+
 ## Computation limits migration
 
 `policy.Limits` now uses `MaxRegions`, `MaxVisits`, and `MaxCombinations` in

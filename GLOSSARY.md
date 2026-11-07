@@ -5,6 +5,17 @@ snapshot. These terms distinguish requested behavior, approval and recovery.
 
 ## Language
 
+**Candidate change**:
+A proposed modification against a baseline revision, awaiting safety and native
+representation checks. It does not yet establish a proven plan or authorization.
+_Avoid_: approved change, executable candidate
+
+**Candidate attempt**:
+Evaluation of a candidate change through complete safety and native
+representation checks. Discovering or ruling out an append before these checks
+is not a candidate attempt.
+_Avoid_: rule visit, discovery count
+
 **Planning intent**:
 The requested behavior and its proof obligation: access, policy batch, native
 batch, preservation or transfer. Original inputs include refused requests;

@@ -1,11 +1,13 @@
 # Implementation status
 
-The local [business lifecycle implementation](business-lifecycle.md) now covers all nine tasks in the [accepted plan](plans/2026-10-30-business-lifecycle.md). [Verification](business-verification.md) records current local checks, measurements and review; historical remote/CI records below do not verify this uncommitted work.
-
-The local [2026-10-30 parser rewrite](parser-design.md) replaces the shared
-construction layer and migrates all seven native parsers. Its local checks and
-migration limits are recorded in [rewrite verification](parser-rewrite-verification.md).
-The remote delivery records below predate this uncommitted work.
+The current [candidate-search and connector integration](integration-verification.md)
+records the reconciliation, dependency versions and separate core/adapter checks.
+The [business lifecycle implementation](business-lifecycle.md) and
+[seven-vendor parser rewrite](parser-design.md) were committed in `e1bafcd`;
+their original [business](business-verification.md) and
+[parser](parser-rewrite-verification.md) records retain the checks performed at
+those checkpoints. Historical remote and CI records below apply only to their
+named commits.
 
 The approved implementation, domain refactoring and contract/ownership plans have passed their local checks and independent reviews. The [requirement audit](verification.md) records the evidence and implementation decisions. The capabilities below define the delivered scope; broader native grammar and firmware parity remain unproven. No real device, SQL database or release validation has been performed.
 

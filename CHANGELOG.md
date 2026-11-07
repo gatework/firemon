@@ -2,6 +2,13 @@
 
 ## Unreleased — Go implementation
 
+- Share candidate discovery, cost ordering and bounded attempts between access
+  and policy-batch planning while preserving their proof, refusal and digest
+  contracts. Migrate the optional adapter to go-net-connector v0.2.0 and
+  go-expect v0.4.0, retaining failed capture evidence and configuration isolation.
+  CI covers the core, the versioned adapter and the current-core pairing on Go
+  1.26.0 and 1.27.x. See [integration verification](docs/integration-verification.md).
+
 - Add Perl-grounded business request batches with independent input dispositions, frozen topology/revisions, exact whole-device policy/NAT proofs, 20 native NAT creation forms, four-vendor finite schedules with verified capture clocks, native usage evidence and offline lifecycle reports/plans. Persist explicitly selected device plans for exact reconstruction and no-write recovery through the existing deployment engine. See [business contracts and verification](docs/business-lifecycle.md).
 
 - Rewrite seven-vendor parser construction around Content, one typed ordered Builder and explicit phases. Validate identities before claiming source, support atomic replacement/rollback, remove duplicate accepted graph copies, and cache immutable intermediate graphs. Preserve native semantics, business Parse APIs and snapshot format 9; low-level Cursor/Session/Stage APIs are replaced. See [migration and evidence](docs/parser-design.md).

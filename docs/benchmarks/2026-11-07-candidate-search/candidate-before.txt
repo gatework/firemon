@@ -1,0 +1,48 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/plan
+cpu: Apple M5
+BenchmarkPlanCandidates/rules=10/attempts=1-10         	     728	    325879 ns/op	  513760 B/op	    3341 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=1-10         	     768	    313580 ns/op	  514239 B/op	    3341 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=1-10         	     790	    306775 ns/op	  514452 B/op	    3341 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=1-10         	     784	    308169 ns/op	  514227 B/op	    3341 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=1-10         	     777	    304889 ns/op	  514455 B/op	    3341 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=1-10         	     794	    307139 ns/op	  514473 B/op	    3341 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8-10         	     775	    310884 ns/op	  516831 B/op	    3351 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8-10         	     789	    306768 ns/op	  516718 B/op	    3351 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8-10         	     782	    306395 ns/op	  516456 B/op	    3351 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8-10         	     786	    306832 ns/op	  516342 B/op	    3351 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8-10         	     782	    307578 ns/op	  516740 B/op	    3351 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8-10         	     774	    309189 ns/op	  516906 B/op	    3351 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1-10        	      12	  17947878 ns/op	32356587 B/op	  150278 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1-10        	      13	  18009141 ns/op	32383686 B/op	  150282 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1-10        	      12	  17964771 ns/op	32391628 B/op	  150282 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1-10        	      12	  18015135 ns/op	32285284 B/op	  150269 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1-10        	      12	  18101306 ns/op	32249879 B/op	  150264 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1-10        	      13	  18030926 ns/op	32465689 B/op	  150292 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8-10        	      10	  22210021 ns/op	33595166 B/op	  150469 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8-10        	      10	  21636708 ns/op	33786135 B/op	  150491 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8-10        	      10	  21670512 ns/op	34084088 B/op	  150531 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8-10        	      10	  21670279 ns/op	34147225 B/op	  150534 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8-10        	      10	  21519688 ns/op	33977921 B/op	  150516 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8-10        	      10	  21355250 ns/op	33828076 B/op	  150492 allocs/op
+PASS
+ok  	github.com/gatework/firemon/plan	6.050s
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=1-10         	       8	  27938386 ns/op	59954385 B/op	  344322 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=1-10         	       8	  27203662 ns/op	57371753 B/op	  344266 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=1-10         	       8	  28070078 ns/op	58919578 B/op	  344275 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=1-10         	       8	  27847849 ns/op	58404006 B/op	  344273 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=1-10         	       8	  27588255 ns/op	59952263 B/op	  344287 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=1-10         	       8	  27349406 ns/op	56856083 B/op	  344264 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8-10         	       6	  35855910 ns/op	64160760 B/op	  451081 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8-10         	       6	  36451042 ns/op	66914222 B/op	  451110 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8-10         	       6	  36044681 ns/op	66914126 B/op	  451110 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8-10         	       6	  35963847 ns/op	63472586 B/op	  451075 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8-10         	       6	  36532549 ns/op	68290368 B/op	  451123 allocs/op
+BenchmarkBusinessPlanBatchAddition/rules=1000/requests=8-10         	       6	  35734403 ns/op	65537642 B/op	  451095 allocs/op
+PASS
+ok  	github.com/gatework/firemon/benchmarks	3.244s

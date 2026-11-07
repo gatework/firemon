@@ -1,8 +1,8 @@
 # Optional device connector adapter
 
-This separate module implements `operations.ReadOnlyFactory`, `device.Reader`, `deploy.Factory` and `deploy.Session` contracts for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA using the pinned private `github.com/gatework/go-net-connector` dependency. The root module remains independent of the connector. No private dependency source or local `replace` directive is included.
+This separate module implements `operations.ReadOnlyFactory`, `device.Reader`, `deploy.Factory` and `deploy.Session` contracts for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA using published `github.com/gatework/go-net-connector v0.2.0` and `github.com/gatework/go-expect v0.4.0`. The root module remains independent of the connector. No dependency source or local `replace` directive is included.
 
-The published core pin is `v0.0.0-20261029043441-ed34cf431f3a`. See the [API migration guide](../../docs/refactoring.md) for the domain refactor and [delivery status](../../docs/status.md) for its standalone versioned-consumer verification.
+The exact published core version is recorded in [go.mod](go.mod). See the [migration guide](../../docs/refactoring.md#connector-v020) for the connector migration and [integration verification](../../docs/integration-verification.md) for standalone versioned-consumer and current-core evidence.
 
 The host supplies identity, credentials and transport options through `Factory.Resolve`. `Factory.Open` creates a fresh device for each initial connection, independent readback and recovery. `Profile(vendor)` exposes the supported native profile; SRX, Huawei, Hillstone, Fortinet and PAN reuse the pinned connector profiles with narrowly scoped adapter adjustments. ASA and ScreenOS profiles are provided here. `New` transfers ownership of an already constructed device on success; its caller must set bounded transport limits and a validated profile.
 
@@ -30,7 +30,7 @@ After exact-plan host authorization, the engine durably journals a random owners
 
 Cancellation, an uncertain acquisition, an early baseline failure or process death can leave the token and a PAN device lock pending. `Close` interrupts I/O and closes transport; it does not claim administrative cleanup. `Engine.Recover` opens a fresh session and calls ownership-checked `EndConfiguration` before any recovery read or publication. A foreign lock, dirty PAN candidate or failed release remains uncertain for explicit reconciliation. No reset, discard, replay, forced unlock or automatic reconnect is attempted. SRX exclusive ownership is session scoped; recovery opens a new session and verifies committed state independently.
 
-Failed reads retain bounded evidence from the matching configuration command before returning the error. Completed responses use the connector's decoded output; the pinned connector exposes only `Attempt.Raw()` for failed commands, so interrupted or rejected responses retain those bytes as incomplete evidence. They never establish complete semantics. Pager setup, VDOM selection, save-mode checks and PAN candidate-diff responses are not configuration payloads. A later PAN diff failure retains the already received `show` configuration. Collector publishes this incomplete evidence and a repeat of the same publication ID returns it without reconnecting.
+Failed reads retain bounded evidence from the matching configuration command before returning the error. Responses use the connector's decoded output when available; decoding failures retain raw bytes as incomplete evidence together with the decoding and operation errors. They never establish complete semantics. Pager setup, VDOM selection, save-mode checks and PAN candidate-diff responses are not configuration payloads. A later PAN diff failure retains the already received `show` configuration. Collector publishes this incomplete evidence and a repeat of the same publication ID returns it without reconnecting.
 
 `Execute` persists each command receipt before sending the next command. Receipt errors, rejected commands, cancellation, connection loss and unconfirmed persistence retire the session. PAN polling accepts native queued rows with missing dequeue time or queue position, then active and completed states; job identity, type, error text, bounds and completion remain strict. Reads, execution preparation and polling have output and time bounds. An observer cannot reenter a busy session.
 
@@ -45,16 +45,17 @@ Native references used for these choices:
 
 Tests use synthetic `net.Pipe` conversations with the actual connector profiles, native firemon parsers and renderers, the deployment engine, durable journals and snapshot storage. Each of the seven vendors covers successful application and independent recovery after a lost save response, proving writes are not replayed. Additional tests cover PAN lock ownership, queued jobs, cancellation, resource limits and malformed output, SRX dirty candidates, Fortinet missing VDOMs and unproved persistence modes. No real device, database or network credential was used. Firmware interoperability and externally forced administrator changes remain unverified.
 
-With authenticated Git access to the private connector repository:
+Both connector dependencies are public. Check this module independently of any local workspace:
 
 ```sh
 cd adapter/netconnector
-GOWORK=off GOPRIVATE=github.com/gatework/go-net-connector go test -count=1 -race ./...
-GOWORK=off GOPRIVATE=github.com/gatework/go-net-connector go vet ./...
-GOWORK=off GOPRIVATE=github.com/gatework/go-net-connector go mod verify
+GOWORK=off go test -count=1 -race ./...
+GOWORK=off go vet ./...
+GOWORK=off go build ./...
+GOWORK=off go mod verify
 ```
 
-The public root CI does not have access to the private connector and does not test this nested module. Further native semantic limits are in [the semantics notes](../../docs/native-semantics.md).
+Public CI runs these checks on Go 1.26.0 and 1.27.x. Separate jobs use a temporary workspace to pair this adapter with the checked-out core; those jobs establish current-source compatibility and do not replace the versioned-consumer checks. No workspace file is committed. Further native semantic limits are in [the semantics notes](../../docs/native-semantics.md).
 
 ## Read-only collection contract
 
