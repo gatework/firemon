@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-var ErrScheduleTime = errors.New("schedule clock or native time is not established")
+var ErrScheduleTime = errors.New("firemon: schedule clock or native time is not established")
 
 // ScheduleClock is trusted, capture-bound evidence supplied by the integration
 // which observed the device clock and verified native schedule endpoint semantics.
@@ -24,7 +24,10 @@ type ScheduleClock struct {
 }
 
 func (c ScheduleClock) location() (*time.Location, error) {
-	if c.Reference == "" || len(c.Reference) > 1024 || c.EndBoundary != "exclusive" && c.EndBoundary != "inclusive" || c.TickSeconds != 1 && c.TickSeconds != 60 || c.Calendar > CalendarCivil {
+	hasReference := c.Reference != "" && len(c.Reference) <= 1024
+	hasBoundary := c.EndBoundary == "exclusive" || c.EndBoundary == "inclusive"
+	hasTick := c.TickSeconds == 1 || c.TickSeconds == 60
+	if !hasReference || !hasBoundary || !hasTick || c.Calendar > CalendarCivil {
 		return nil, ErrScheduleTime
 	}
 	return scheduleLocation(c.Timezone)
@@ -33,7 +36,18 @@ func (c ScheduleClock) location() (*time.Location, error) {
 // Validate checks identity against metadata of the independently captured source.
 // Calling this method does not turn an untrusted assertion into verified evidence.
 func (c ScheduleClock) Validate(m Metadata) error {
-	if c.CapturedAt.IsZero() || !c.CapturedAt.Equal(m.CapturedAt) || c.Device == "" || c.Vendor == "" || c.Software == "" || len(c.SourceDigest) != 64 || c.Device != m.Device || c.Vendor != m.Vendor || c.Software != m.Software || c.Context != m.Context || c.SourceDigest != m.SourceDigest {
+	isIdentified := !c.CapturedAt.IsZero() &&
+		c.Device != "" &&
+		c.Vendor != "" &&
+		c.Software != "" &&
+		len(c.SourceDigest) == 64
+	isSameCapture := c.CapturedAt.Equal(m.CapturedAt) &&
+		c.Device == m.Device &&
+		c.Vendor == m.Vendor &&
+		c.Software == m.Software &&
+		c.Context == m.Context &&
+		c.SourceDigest == m.SourceDigest
+	if !isIdentified || !isSameCapture {
 		return ErrScheduleTime
 	}
 	for _, v := range c.SourceDigest {
@@ -72,8 +86,7 @@ func civilTime(layout, value string, loc *time.Location) (time.Time, error) {
 	count := 0
 	for offset := range offsets {
 		candidate := wall.Add(-time.Duration(offset) * time.Second)
-		local := candidate.In(loc)
-		if local.Year() == wall.Year() && local.Month() == wall.Month() && local.Day() == wall.Day() && local.Hour() == wall.Hour() && local.Minute() == wall.Minute() && local.Second() == wall.Second() && local.Nanosecond() == wall.Nanosecond() {
+		if sameWallTime(candidate.In(loc), wall) {
 			result = candidate
 			count++
 		}
@@ -82,6 +95,18 @@ func civilTime(layout, value string, loc *time.Location) (time.Time, error) {
 		return time.Time{}, ErrScheduleTime
 	}
 	return result.UTC(), nil
+}
+
+// sameWallTime reports whether a and b show the same civil date and clock,
+// regardless of their locations.
+func sameWallTime(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	ah, amin, as := a.Clock()
+	bh, bmin, bs := b.Clock()
+	isSameDate := ay == by && am == bm && ad == bd
+	isSameClock := ah == bh && amin == bmin && as == bs && a.Nanosecond() == b.Nanosecond()
+	return isSameDate && isSameClock
 }
 
 // ParseWindow converts independently captured native civil times without rounding.
@@ -94,16 +119,17 @@ func (c ScheduleClock) ParseWindow(layout, start, end string) (TimeWindow, error
 	if err != nil {
 		return TimeWindow{}, err
 	}
-	if a.IsZero() || b.IsZero() || !a.Before(b) {
+	w := TimeWindow{Start: a, End: b}
+	if !w.valid() {
 		return TimeWindow{}, ErrScheduleTime
 	}
-	return TimeWindow{Start: a, End: b}, nil
+	return w, nil
 }
 
 // NativeWindow returns exact civil endpoints at the supported native precision.
 // The inverse parse must recover precisely the supplied half-open UTC window.
 func (c ScheduleClock) NativeWindow(w TimeWindow, precision time.Duration) (time.Time, time.Time, error) {
-	if w.Start.IsZero() || w.End.IsZero() || !w.Start.Before(w.End) {
+	if !w.valid() {
 		return time.Time{}, time.Time{}, ErrScheduleTime
 	}
 	a, err := c.NativeBound(w.Start, false, precision)
@@ -151,7 +177,9 @@ func (c ScheduleClock) NativeBound(at time.Time, end bool, precision time.Durati
 		native = native.Add(-time.Duration(c.TickSeconds) * time.Second)
 	}
 	native = native.In(loc)
-	if native.Year() < 1970 || native.Year() > 2099 || native.Nanosecond() != 0 || precision == time.Minute && native.Second() != 0 {
+	isNativeYear := native.Year() >= 1970 && native.Year() <= 2099
+	isWholeUnit := native.Nanosecond() == 0 && (precision != time.Minute || native.Second() == 0)
+	if !isNativeYear || !isWholeUnit {
 		return time.Time{}, ErrScheduleTime
 	}
 	const layout = "2006-01-02 15:04:05"
@@ -186,7 +214,10 @@ func wallClock(value string, end bool) (time.Duration, error) {
 	if values[0] > 23 && !(end && values[0] == 24 && values[1] == 0 && values[2] == 0) {
 		return 0, ErrScheduleTime
 	}
-	return time.Duration(values[0])*time.Hour + time.Duration(values[1])*time.Minute + time.Duration(values[2])*time.Second, nil
+	clock := time.Duration(values[0])*time.Hour +
+		time.Duration(values[1])*time.Minute +
+		time.Duration(values[2])*time.Second
+	return clock, nil
 }
 
 func (c ScheduleClock) weeklyClocks(start, end string) (time.Duration, time.Duration, error) {
@@ -233,7 +264,7 @@ func (c ScheduleClock) ParseWeekly(days []time.Weekday, start, end string) ([]We
 	}
 	var windows []WeeklyWindow
 	for _, day := range days {
-		if day < time.Sunday || day > time.Saturday {
+		if !validWeekday(day) {
 			return nil, ErrScheduleTime
 		}
 		windows = append(windows, splitWeeklySpan(day, a, b)...)
@@ -245,7 +276,7 @@ func (c ScheduleClock) ParseWeekly(days []time.Weekday, start, end string) ([]We
 // another, moving forward across the week boundary when necessary. Equal-day
 // spans must end later that day; use ParseWeekly for daily overnight intervals.
 func (c ScheduleClock) ParseWeeklySpan(startDay, endDay time.Weekday, start, end string) ([]WeeklyWindow, error) {
-	if startDay < time.Sunday || startDay > time.Saturday || endDay < time.Sunday || endDay > time.Saturday {
+	if !validWeekday(startDay) || !validWeekday(endDay) {
 		return nil, ErrScheduleTime
 	}
 	a, b, err := c.weeklyClocks(start, end)
@@ -265,7 +296,11 @@ func (c ScheduleClock) ParseWeeklySpan(startDay, endDay time.Weekday, start, end
 // NativeWeekly returns native daily offsets without rounding. An exclusive
 // end of 24 hours must be representable by the selected vendor's grammar.
 func (c ScheduleClock) NativeWeekly(w WeeklyWindow, precision time.Duration) (time.Duration, time.Duration, error) {
-	if _, err := c.location(); err != nil || c.Calendar != CalendarCivil || precision != time.Minute && precision != time.Second || w.Day < time.Sunday || w.Day > time.Saturday || w.Start < 0 || w.Start >= w.End || w.End > civilDay {
+	if _, err := c.location(); err != nil || c.Calendar != CalendarCivil {
+		return 0, 0, ErrScheduleTime
+	}
+	isSupportedPrecision := precision == time.Minute || precision == time.Second
+	if !isSupportedPrecision || !w.valid() {
 		return 0, 0, ErrScheduleTime
 	}
 	end := w.End

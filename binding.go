@@ -21,7 +21,11 @@ func (f *Firewall) bindVIPReferences() {
 			}
 		}
 		if a.vipStaticNAT == nil && a.vipDynamicNAT == nil {
-			f.issue(r.ID, "invalid-vip-reference", "VIP destination NAT is missing, has the wrong kind, or is outside the native scope")
+			f.issue(
+				r.ID,
+				"invalid-vip-reference",
+				"VIP destination NAT is missing, has the wrong kind, or is outside the native scope",
+			)
 		}
 	}
 	for _, n := range f.StaticNATs() {
@@ -30,17 +34,23 @@ func (f *Firewall) bindVIPReferences() {
 			continue
 		}
 		if r.SourceVIP.Kind == AddressObject {
-			if a := f.addresses[r.SourceVIP.ID]; a != nil && a.record.Scope == r.Scope && (a.vipStaticNAT != nil || a.vipDynamicNAT != nil) {
+			a := f.addresses[r.SourceVIP.ID]
+			isResolvedVIP := a != nil && (a.vipStaticNAT != nil || a.vipDynamicNAT != nil)
+			if isResolvedVIP && a.record.Scope == r.Scope {
 				n.sourceVIP = a
 			}
 		}
 		if n.sourceVIP == nil {
-			f.issue(r.ID, "invalid-source-vip-reference", "source mapping VIP address is missing, has the wrong kind, is unresolved, or is outside the native scope")
+			f.issue(
+				r.ID,
+				"invalid-source-vip-reference",
+				"source mapping VIP address is missing, has the wrong kind, is unresolved, or is outside the native scope",
+			)
 		}
 	}
 }
 
-func (f *Firewall) bindRoute(r *Route) error {
+func (f *Firewall) bindRoute(r *Route, interfaces []*Interface) error {
 	if !r.record.Destination.IsValid() {
 		return fmt.Errorf("%w: invalid route prefix", ErrGraph)
 	}
@@ -52,30 +62,8 @@ func (f *Firewall) bindRoute(r *Route) error {
 			f.issue(r.record.ID, "missing-interface", "route interface missing or outside VRF")
 		}
 	} else if r.record.NextHop.IsValid() {
-		best := -1
-		var matches []*Interface
-		for _, i := range f.Interfaces() {
-			if i.record.Scope != r.record.Scope || i.record.Disabled {
-				continue
-			}
-			local := -1
-			for _, p := range i.record.Addresses {
-				if p.Contains(r.record.NextHop) && p.Bits() > local {
-					local = p.Bits()
-				}
-			}
-			if local < 0 {
-				continue
-			}
-			if local > best {
-				best = local
-				matches = []*Interface{i}
-			} else if local == best {
-				matches = append(matches, i)
-			}
-		}
-		if len(matches) == 1 {
-			r.iface = matches[0]
+		if i := uniqueNextHopInterface(r.record, interfaces); i != nil {
+			r.iface = i
 		} else {
 			f.issue(r.record.ID, "unresolved-route", "next hop has no unique longest-prefix interface")
 		}
@@ -86,6 +74,36 @@ func (f *Firewall) bindRoute(r *Route) error {
 		r.iface.routes = append(r.iface.routes, r)
 	}
 	return nil
+}
+
+// uniqueNextHopInterface returns the one enabled interface in the route's scope
+// whose longest connected prefix contains the next hop, or nil when no
+// interface or more than one interface has that longest prefix.
+func uniqueNextHopInterface(route RouteRecord, interfaces []*Interface) *Interface {
+	best, ties := -1, 0
+	var match *Interface
+	for _, i := range interfaces {
+		if i.record.Scope != route.Scope || i.record.Disabled {
+			continue
+		}
+		local := -1
+		for _, p := range i.record.Addresses {
+			if p.Contains(route.NextHop) && p.Bits() > local {
+				local = p.Bits()
+			}
+		}
+		switch {
+		case local < 0:
+		case local > best:
+			best, ties, match = local, 1, i
+		case local == best:
+			ties++
+		}
+	}
+	if ties != 1 {
+		return nil
+	}
+	return match
 }
 
 func (f *Firewall) addressRefs(owner ID, refs []AddressRef) (as []*Address, gs []*AddressGroup) {
@@ -139,43 +157,60 @@ func (f *Firewall) bindGroups() {
 	for _, g := range f.ServiceGroups() {
 		g.services, g.groups = f.serviceRefs(g.record.ID, g.record.Members)
 	}
+	reportGroupCycles(
+		f,
+		f.AddressGroups(),
+		func(g *AddressGroup) []*AddressGroup { return g.groups },
+		"cyclic address group",
+	)
+	reportGroupCycles(
+		f,
+		f.ServiceGroups(),
+		func(g *ServiceGroup) []*ServiceGroup { return g.groups },
+		"cyclic service group",
+	)
+}
+
+// reportGroupCycles reports each group reached again while its own members are
+// being visited. Groups are visited depth-first in declaration order. The walk
+// keeps its path on an explicit stack, so nesting depth costs heap, not
+// goroutine stack, and a deeply nested declaration cannot exhaust the stack.
+func reportGroupCycles[G interface{ ID() ID }](f *Firewall, groups []G, children func(G) []G, message string) {
+	const (
+		visiting = iota + 1
+		visited
+	)
+	type frame struct {
+		group G
+		next  int
+	}
 	states := make(map[ID]uint8)
-	var visit func(*AddressGroup)
-	visit = func(g *AddressGroup) {
-		if states[g.record.ID] == 1 {
-			f.issue(g.record.ID, "group-cycle", "cyclic address group")
-			return
+	var path []frame
+	for _, root := range groups {
+		if states[root.ID()] != 0 {
+			continue
 		}
-		if states[g.record.ID] == 2 {
-			return
+		states[root.ID()] = visiting
+		path = append(path, frame{group: root})
+		for len(path) > 0 {
+			top := &path[len(path)-1]
+			members := children(top.group)
+			if top.next == len(members) {
+				states[top.group.ID()] = visited
+				path = path[:len(path)-1]
+				continue
+			}
+			child := members[top.next]
+			top.next++
+			switch states[child.ID()] {
+			case visiting:
+				f.issue(child.ID(), "group-cycle", message)
+			case visited:
+			default:
+				states[child.ID()] = visiting
+				path = append(path, frame{group: child})
+			}
 		}
-		states[g.record.ID] = 1
-		for _, child := range g.groups {
-			visit(child)
-		}
-		states[g.record.ID] = 2
-	}
-	for _, g := range f.AddressGroups() {
-		visit(g)
-	}
-	states = make(map[ID]uint8)
-	var serviceVisit func(*ServiceGroup)
-	serviceVisit = func(g *ServiceGroup) {
-		if states[g.record.ID] == 1 {
-			f.issue(g.record.ID, "group-cycle", "cyclic service group")
-			return
-		}
-		if states[g.record.ID] == 2 {
-			return
-		}
-		states[g.record.ID] = 1
-		for _, child := range g.groups {
-			serviceVisit(child)
-		}
-		states[g.record.ID] = 2
-	}
-	for _, g := range f.ServiceGroups() {
-		serviceVisit(g)
 	}
 }
 

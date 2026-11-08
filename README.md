@@ -19,7 +19,7 @@ This branch converts the original Ruby gem skeleton to Go while retaining Git hi
 Use the versioned core module from a Go application:
 
 ```sh
-go get github.com/gatework/firemon@v0.2.0
+go get github.com/gatework/firemon@v0.2.1
 ```
 
 The connector adapter is a separate module with its own version tags; see its

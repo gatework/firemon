@@ -1,21 +1,23 @@
 package firemon
 
 import (
+	"encoding/binary"
 	"fmt"
-	"math/big"
+	"math/bits"
 	"net/netip"
-	"slices"
 
 	"github.com/gatework/firemon/flow"
 )
 
 func (f *Firewall) validateMatch(owner ID, m Match) {
-	if m.ZoneRelation != AnyZoneRelation && m.ZoneRelation != SameZone && m.ZoneRelation != DifferentZones {
+	if !m.ZoneRelation.known() {
 		f.issue(owner, "unsupported-match", "unknown zone relation")
 	}
-	for _, id := range append(slices.Clone(m.FromZones), m.ToZones...) {
-		if f.zones[id] == nil {
-			f.issue(owner, "missing-zone", string(id))
+	for _, zones := range [][]ID{m.FromZones, m.ToZones} {
+		for _, id := range zones {
+			if f.zones[id] == nil {
+				f.issue(owner, "missing-zone", string(id))
+			}
 		}
 	}
 	for _, reason := range m.Unsupported {
@@ -29,23 +31,67 @@ func (f *Firewall) validateMatch(owner ID, m Match) {
 	}
 }
 
+func (z ZoneRelation) known() bool {
+	switch z {
+	case AnyZoneRelation, SameZone, DifferentZones:
+		return true
+	default:
+		return false
+	}
+}
+
 func validateService(t ServiceTerm) error {
-	for i, r := range []flow.Interval{t.Protocol, t.SourcePort, t.DestinationPort, t.ICMPType, t.ICMPCode} {
-		max := uint16(65535)
-		if i == 0 || i > 2 {
-			max = 255
-		}
-		if r.Low > r.High || r.High > max {
+	const octet, port = 255, 65535
+	bounded := []struct {
+		interval flow.Interval
+		limit    uint16
+	}{
+		{t.Protocol, octet},
+		{t.SourcePort, port},
+		{t.DestinationPort, port},
+		{t.ICMPType, octet},
+		{t.ICMPCode, octet},
+	}
+	for _, b := range bounded {
+		if b.interval.Low > b.interval.High || b.interval.High > b.limit {
 			return fmt.Errorf("%w: invalid service interval", ErrGraph)
 		}
 	}
 	return nil
 }
 
-func distance(r flow.AddressRange) *big.Int {
-	first, last := r.First.As16(), r.Last.As16()
-	return new(big.Int).Sub(new(big.Int).SetBytes(last[:]), new(big.Int).SetBytes(first[:]))
+// addressNumber is an address's unsigned 128-bit value; IPv4 uses its
+// IPv4-mapped IPv6 form, so both families share one number space.
+type addressNumber struct{ hi, lo uint64 }
+
+func numberOf(a netip.Addr) addressNumber {
+	b := a.As16()
+	return addressNumber{hi: binary.BigEndian.Uint64(b[:8]), lo: binary.BigEndian.Uint64(b[8:])}
 }
+
+// minus returns x-y. Callers guarantee y <= x.
+func (x addressNumber) minus(y addressNumber) addressNumber {
+	lo, borrow := bits.Sub64(x.lo, y.lo, 0)
+	hi, _ := bits.Sub64(x.hi, y.hi, borrow)
+	return addressNumber{hi: hi, lo: lo}
+}
+
+// mappedAddress is an exact 129-bit translated value. A target plus offset may
+// exceed the address space before mapping sizes are validated, so the carry
+// keeps such values distinct instead of wrapping onto a real address.
+type mappedAddress struct {
+	carry uint64
+	addressNumber
+}
+
+func (x addressNumber) plus(y addressNumber) mappedAddress {
+	lo, carry := bits.Add64(x.lo, y.lo, 0)
+	hi, carry := bits.Add64(x.hi, y.hi, carry)
+	return mappedAddress{carry: carry, addressNumber: addressNumber{hi: hi, lo: lo}}
+}
+
+// distance is Last-First of a valid range.
+func distance(r flow.AddressRange) addressNumber { return numberOf(r.Last).minus(numberOf(r.First)) }
 
 func (f *Firewall) validateMappings(owner ID, mappings []Mapping) error {
 	for i, a := range mappings {
@@ -58,15 +104,16 @@ func (f *Firewall) validateMappings(owner ID, mappings []Mapping) error {
 				continue
 			}
 			for _, endpoint := range []netip.Addr{overlap.First, overlap.Last} {
-				if mappedNumber(a, endpoint).Cmp(mappedNumber(b, endpoint)) != 0 {
+				if mappedNumber(a, endpoint) != mappedNumber(b, endpoint) {
 					return fmt.Errorf("%w: conflicting static mappings", ErrGraph)
 				}
 			}
 		}
 	}
 	for _, m := range mappings {
-		if !m.Original.Valid() || !m.Translated.Valid() || m.Original.First.BitLen() != m.Translated.First.BitLen() {
-			return fmt.Errorf("%w: invalid NAT address interval", ErrGraph)
+		isSameFamily := m.Original.First.BitLen() == m.Translated.First.BitLen()
+		if !m.Original.Valid() || !m.Translated.Valid() || !isSameFamily {
+			return fmt.Errorf("%w: invalid nat address interval", ErrGraph)
 		}
 		switch m.Mode {
 		case UnknownMapping:
@@ -76,7 +123,7 @@ func (f *Firewall) validateMappings(owner ID, mappings []Mapping) error {
 				return fmt.Errorf("%w: identity relation changes addresses", ErrGraph)
 			}
 		case Offset:
-			if distance(m.Original).Cmp(distance(m.Translated)) != 0 {
+			if distance(m.Original) != distance(m.Translated) {
 				return fmt.Errorf("%w: unequal offset mapping sizes", ErrGraph)
 			}
 		case Constant:
@@ -84,7 +131,7 @@ func (f *Firewall) validateMappings(owner ID, mappings []Mapping) error {
 				return fmt.Errorf("%w: constant relation requires single target", ErrGraph)
 			}
 		default:
-			return fmt.Errorf("%w: invalid NAT mapping mode", ErrGraph)
+			return fmt.Errorf("%w: invalid nat mapping mode", ErrGraph)
 		}
 	}
 	return nil
@@ -93,7 +140,7 @@ func (f *Firewall) validateMappings(owner ID, mappings []Mapping) error {
 func (f *Firewall) validatePorts(owner ID, mappings []PortMapping) error {
 	for _, m := range mappings {
 		if m.Original.Low > m.Original.High || m.Translated.Low > m.Translated.High {
-			return fmt.Errorf("%w: invalid NAT port interval", ErrGraph)
+			return fmt.Errorf("%w: invalid nat port interval", ErrGraph)
 		}
 		switch m.Mode {
 		case UnknownMapping:
@@ -117,11 +164,11 @@ func (f *Firewall) validatePorts(owner ID, mappings []PortMapping) error {
 	return nil
 }
 
-func mappedNumber(m Mapping, addr netip.Addr) *big.Int {
-	first, target, input := m.Original.First.As16(), m.Translated.First.As16(), addr.As16()
-	n := new(big.Int).SetBytes(target[:])
+// mappedNumber translates addr, which lies within m.Original.
+func mappedNumber(m Mapping, addr netip.Addr) mappedAddress {
+	target := numberOf(m.Translated.First)
 	if m.Mode == Constant {
-		return n
+		return mappedAddress{addressNumber: target}
 	}
-	return n.Add(n, new(big.Int).Sub(new(big.Int).SetBytes(input[:]), new(big.Int).SetBytes(first[:])))
+	return target.plus(numberOf(addr).minus(numberOf(m.Original.First)))
 }

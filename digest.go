@@ -1,102 +1,110 @@
 package firemon
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"slices"
-	"strings"
+	"sort"
 	"time"
 )
 
+// semanticDigest hashes the canonical declaration. It copies only record
+// slices: canonicalization replaces record fields, reorders and trims records,
+// and normalizes schedule windows, while every other nested value is read-only.
 func semanticDigest(d Data) (string, error) {
-	d = d.Clone()
+	d = d.recordCopy()
 	trimUnreferencedInline(&d)
 	d.Raw = ""
 	d.Evidence = nil
 	d.Diagnostics = nil
 	d.Metadata.CapturedAt = time.Time{}
 	d.Metadata.SourceDigest = ""
-	for i := range d.Zones {
-		d.Zones[i].Spans = nil
-	}
-	slices.SortFunc(d.Zones, func(a, b ZoneRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.Interfaces {
-		d.Interfaces[i].Spans = nil
-	}
-	slices.SortFunc(d.Interfaces, func(a, b InterfaceRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.Routes {
-		d.Routes[i].Spans = nil
-	}
-	slices.SortFunc(d.Routes, func(a, b RouteRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.Addresses {
-		d.Addresses[i].Spans = nil
-	}
-	slices.SortFunc(d.Addresses, func(a, b AddressRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.AddressGroups {
-		d.AddressGroups[i].Spans = nil
-	}
-	slices.SortFunc(d.AddressGroups, func(a, b AddressGroupRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.Services {
-		d.Services[i].Spans = nil
-	}
-	slices.SortFunc(d.Services, func(a, b ServiceRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.ServiceGroups {
-		d.ServiceGroups[i].Spans = nil
-	}
-	slices.SortFunc(d.ServiceGroups, func(a, b ServiceGroupRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
+	canonicalRecords(d.Zones)
+	canonicalRecords(d.Interfaces)
+	canonicalRecords(d.Routes)
+	canonicalRecords(d.Addresses)
+	canonicalRecords(d.AddressGroups)
+	canonicalRecords(d.Services)
+	canonicalRecords(d.ServiceGroups)
 	for i := range d.Schedules {
-		d.Schedules[i].Spans = nil
-		windows := d.Schedules[i].Windows
-		for j := range windows {
-			windows[j].Start, windows[j].End = windows[j].Start.UTC(), windows[j].End.UTC()
-		}
-		slices.SortFunc(windows, func(a, b TimeWindow) int {
-			if c := a.Start.Compare(b.Start); c != 0 {
-				return c
-			}
-			return a.End.Compare(b.End)
-		})
-		merged := windows[:0]
-		for _, window := range windows {
-			if n := len(merged); n != 0 && !window.Start.After(merged[n-1].End) {
-				if window.End.After(merged[n-1].End) {
-					merged[n-1].End = window.End
-				}
-			} else {
-				merged = append(merged, window)
-			}
-		}
-		d.Schedules[i].Windows = merged
+		d.Schedules[i].Windows = normalizeWindows(slices.Clone(d.Schedules[i].Windows))
 	}
-	slices.SortFunc(d.Schedules, func(a, b ScheduleRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.Rules {
-		d.Rules[i].Spans = nil
-	}
-	slices.SortFunc(d.Rules, func(a, b RuleRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.RuleBindings {
-		d.RuleBindings[i].Spans = nil
-	}
-	slices.SortFunc(d.RuleBindings, func(a, b RuleBindingRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.StaticNATs {
-		d.StaticNATs[i].Spans = nil
-	}
-	slices.SortFunc(d.StaticNATs, func(a, b StaticNATRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.DynamicNATs {
-		d.DynamicNATs[i].Spans = nil
-	}
-	slices.SortFunc(d.DynamicNATs, func(a, b DynamicNATRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	for i := range d.NATPools {
-		d.NATPools[i].Spans = nil
-	}
-	slices.SortFunc(d.NATPools, func(a, b NATPoolRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
-	b, err := json.Marshal(d)
-	if err != nil {
+	canonicalRecords(d.Schedules)
+	canonicalRecords(d.Rules)
+	canonicalRecords(d.RuleBindings)
+	canonicalRecords(d.StaticNATs)
+	canonicalRecords(d.DynamicNATs)
+	canonicalRecords(d.NATPools)
+	// Streaming with the v1 defaults hashes exactly the bytes of json.Marshal.
+	h := sha256.New()
+	if err := jsonv2.MarshalWrite(h, d, json.DefaultOptionsV1()); err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:]), nil
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
+
+// recordCopy copies each top-level catalog slice and shares all nested values,
+// including evidence and diagnostics, which digesting discards.
+func (d Data) recordCopy() Data {
+	d.Zones = slices.Clone(d.Zones)
+	d.Interfaces = slices.Clone(d.Interfaces)
+	d.Routes = slices.Clone(d.Routes)
+	d.Addresses = slices.Clone(d.Addresses)
+	d.AddressGroups = slices.Clone(d.AddressGroups)
+	d.Services = slices.Clone(d.Services)
+	d.ServiceGroups = slices.Clone(d.ServiceGroups)
+	d.Schedules = slices.Clone(d.Schedules)
+	d.Rules = slices.Clone(d.Rules)
+	d.RuleBindings = slices.Clone(d.RuleBindings)
+	d.StaticNATs = slices.Clone(d.StaticNATs)
+	d.DynamicNATs = slices.Clone(d.DynamicNATs)
+	d.NATPools = slices.Clone(d.NATPools)
+	return d
+}
+
+// normalizeWindows converts absolute windows to UTC and merges overlapping or
+// adjacent windows. The caller owns the slice.
+func normalizeWindows(windows []TimeWindow) []TimeWindow {
+	for i := range windows {
+		windows[i].Start, windows[i].End = windows[i].Start.UTC(), windows[i].End.UTC()
+	}
+	slices.SortFunc(windows, func(a, b TimeWindow) int {
+		return cmp.Or(a.Start.Compare(b.Start), a.End.Compare(b.End))
+	})
+	merged := windows[:0]
+	for _, window := range windows {
+		if n := len(merged); n != 0 && !window.Start.After(merged[n-1].End) {
+			if window.End.After(merged[n-1].End) {
+				merged[n-1].End = window.End
+			}
+		} else {
+			merged = append(merged, window)
+		}
+	}
+	return merged
+}
+
+// canonicalRecords drops source positions and orders records by identity.
+// Seal has already proven identities unique, so the order is total.
+func canonicalRecords[R any, P catalogRecord[R]](records []R) {
+	for i := range records {
+		P(&records[i]).object().Spans = nil
+	}
+	sort.Sort(byObjectID[R, P](records))
+}
+
+// byObjectID compares records in place. A comparator taking records by value
+// would copy, and through the generic dictionary heap-allocate, each operand.
+type byObjectID[R any, P catalogRecord[R]] []R
+
+func (s byObjectID[R, P]) Len() int { return len(s) }
+func (s byObjectID[R, P]) Less(i, j int) bool {
+	return P(&s[i]).object().ID < P(&s[j]).object().ID
+}
+func (s byObjectID[R, P]) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // Inline values belong to their references. Keeping an orphan in an in-memory
 // draft must not make deletion of its last policy fail independent readback.
@@ -134,6 +142,10 @@ func trimUnreferencedInline(d *Data) {
 	for _, n := range d.DynamicNATs {
 		match(n.Match)
 	}
-	d.Addresses = slices.DeleteFunc(d.Addresses, func(a AddressRecord) bool { return a.Inline && !addresses[a.ID] && len(a.Unsupported) == 0 })
-	d.Services = slices.DeleteFunc(d.Services, func(s ServiceRecord) bool { return s.Inline && !services[s.ID] && len(s.Unsupported) == 0 })
+	// An inline value with unsupported syntax keeps its evidence in the digest.
+	isOrphan := func(o Object, referenced map[ID]bool) bool {
+		return o.Inline && !referenced[o.ID] && len(o.Unsupported) == 0
+	}
+	d.Addresses = slices.DeleteFunc(d.Addresses, func(a AddressRecord) bool { return isOrphan(a.Object, addresses) })
+	d.Services = slices.DeleteFunc(d.Services, func(s ServiceRecord) bool { return isOrphan(s.Object, services) })
 }

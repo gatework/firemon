@@ -1,5 +1,18 @@
 # Changelog
 
+## Go v0.2.1 - 2026-11-08
+
+- Reduce graph sealing allocations by sharing catalog construction helpers,
+  allocating catalog objects together and streaming the semantic digest.
+  Preserve declaration order, diagnostics and digest bytes.
+- Replace recursive group-cycle checks with an explicit traversal stack so
+  deeply nested address and service groups remain bounded by heap capacity.
+- Validate static NAT offsets with exact 128-bit address arithmetic and an
+  overflow carry, including overlapping mappings near the IPv6 boundary.
+- Retain the v0.2.0 public APIs, source/evidence parser, exact traffic proofs,
+  snapshot semantic format 10, reconstruction format 2 and approval format 4.
+  Add cross-vendor checks that complete policy results contain no unknown traffic.
+
 ## Go v0.2.0 - 2026-11-08
 
 Requires Go 1.27 or newer. Public API changes are intentional during development;

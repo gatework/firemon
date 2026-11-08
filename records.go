@@ -109,6 +109,16 @@ type Object struct {
 	Unsupported []string
 }
 
+// object exposes the embedded identity of any catalog record through its
+// pointer, so generic graph helpers need no per-catalog accessors.
+func (o *Object) object() *Object { return o }
+
+// catalogRecord is satisfied by a pointer to any record embedding Object.
+type catalogRecord[R any] interface {
+	*R
+	object() *Object
+}
+
 func (o Object) clone() Object {
 	o.Spans = slices.Clone(o.Spans)
 	o.Unsupported = slices.Clone(o.Unsupported)

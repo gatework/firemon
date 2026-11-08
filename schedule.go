@@ -1,6 +1,7 @@
 package firemon
 
 import (
+	"cmp"
 	"iter"
 	"slices"
 	"strings"
@@ -61,16 +62,17 @@ func (r ScheduleRecord) Validate() error {
 
 func (r ScheduleRecord) validateShape() error {
 	for _, w := range r.Windows {
-		if w.Start.IsZero() || w.End.IsZero() || !w.Start.Before(w.End) {
+		if !w.valid() {
 			return ErrScheduleTime
 		}
 	}
 	for _, p := range r.Weekly {
-		if len(p.Windows) == 0 || !p.Start.IsZero() && !p.End.IsZero() && !p.Start.Before(p.End) {
+		isBounded := !p.Start.IsZero() && !p.End.IsZero()
+		if len(p.Windows) == 0 || isBounded && !p.Start.Before(p.End) {
 			return ErrScheduleTime
 		}
 		for _, w := range p.Windows {
-			if w.Day < time.Sunday || w.Day > time.Saturday || w.Start < 0 || w.Start >= w.End || w.End > civilDay {
+			if !w.valid() {
 				return ErrScheduleTime
 			}
 		}
@@ -78,8 +80,39 @@ func (r ScheduleRecord) validateShape() error {
 	return nil
 }
 
+// valid reports a non-empty half-open interval between established instants.
+func (w TimeWindow) valid() bool {
+	return !w.Start.IsZero() && !w.End.IsZero() && w.Start.Before(w.End)
+}
+
+// valid reports a non-empty half-open interval within one named weekday.
+func (w WeeklyWindow) valid() bool {
+	return validWeekday(w.Day) && w.Start >= 0 && w.Start < w.End && w.End <= civilDay
+}
+
+func validWeekday(d time.Weekday) bool { return d >= time.Sunday && d <= time.Saturday }
+
+// within reports whether at lies inside the period's optional UTC bounds.
+func (p WeeklyPeriod) within(at time.Time) bool {
+	isAfterStart := p.Start.IsZero() || !at.Before(p.Start)
+	isBeforeEnd := p.End.IsZero() || at.Before(p.End)
+	return isAfterStart && isBeforeEnd
+}
+
+// timeOfDay is the elapsed wall-clock duration since local midnight.
+func timeOfDay(local time.Time) time.Duration {
+	hour, minute, second := local.Clock()
+	return time.Duration(hour)*time.Hour +
+		time.Duration(minute)*time.Minute +
+		time.Duration(second)*time.Second +
+		time.Duration(local.Nanosecond())
+}
+
 func scheduleLocation(name string) (*time.Location, error) {
-	if name == "" || name == "Local" || len(name) > 128 || strings.HasPrefix(name, "/") || strings.Contains(name, "..") {
+	// The host's Local zone and filesystem paths would let the host, rather
+	// than the captured device evidence, define the schedule's civil time.
+	isHostDefined := name == "Local" || strings.HasPrefix(name, "/") || strings.Contains(name, "..")
+	if name == "" || len(name) > 128 || isHostDefined {
 		return nil, ErrScheduleTime
 	}
 	loc, err := time.LoadLocation(name)
@@ -93,16 +126,7 @@ func scheduleLocation(name string) (*time.Location, error) {
 // The caller owns the slice. It never joins across a midnight boundary.
 func normalizeWeekly(windows []WeeklyWindow) []WeeklyWindow {
 	slices.SortFunc(windows, func(a, b WeeklyWindow) int {
-		if a.Day != b.Day {
-			return int(a.Day - b.Day)
-		}
-		if a.Start < b.Start {
-			return -1
-		}
-		if a.Start > b.Start {
-			return 1
-		}
-		return 0
+		return cmp.Or(cmp.Compare(a.Day, b.Day), cmp.Compare(a.Start, b.Start))
 	})
 	result := windows[:0]
 	for _, w := range windows {
@@ -153,9 +177,9 @@ func (s *Schedule) ActiveAt(at time.Time) (active, known bool) {
 	}
 	if s.HasRecurrence() {
 		local := at.In(s.location)
-		clock := time.Duration(local.Hour())*time.Hour + time.Duration(local.Minute())*time.Minute + time.Duration(local.Second())*time.Second + time.Duration(local.Nanosecond())
+		clock := timeOfDay(local)
 		for _, period := range s.record.Weekly {
-			if !period.Start.IsZero() && at.Before(period.Start) || !period.End.IsZero() && !at.Before(period.End) {
+			if !period.within(at) {
 				continue
 			}
 			for _, window := range period.Windows {
@@ -189,5 +213,5 @@ func (s *Schedule) ExpiredAt(at time.Time) (expired, known bool) {
 }
 
 func (s *Schedule) knownAt(at time.Time) bool {
-	return s != nil && !at.IsZero() && s.known
+	return s != nil && !at.IsZero() && s.isKnown
 }
