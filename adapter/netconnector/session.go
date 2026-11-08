@@ -136,6 +136,11 @@ func (s *Session) run(ctx context.Context, fn func(context.Context, *connector.O
 		s.mu.Unlock()
 	}()
 	err = s.device.WithOperation(ctx, fn)
+	// Close can interrupt transport I/O before it observes cancellation. Keep
+	// both causes before deferred cleanup cancels the operation context.
+	if cause := ctx.Err(); err != nil && cause != nil && !errors.Is(err, cause) {
+		err = errors.Join(err, cause)
+	}
 	returned = true
 	return err
 }

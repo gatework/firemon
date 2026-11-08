@@ -224,17 +224,36 @@ func TestASAPersistenceRejectsFailureBeforeTerminalRepaint(t *testing.T) {
 }
 
 func TestInputValidationPrecedesWritesAndReceiptFailureRetires(t *testing.T) {
-	s := session(t, "asa", []exchange{{"one", "accepted"}})
-	if _, err := s.Execute(context.Background(), []string{"one\ntwo"}, func(context.Context, deploy.Receipt) error { return nil }); !errors.Is(err, adapter.ErrInvalid) {
-		t.Fatal(err)
-	}
-	failure := errors.New("journal unavailable")
-	out, err := s.Execute(context.Background(), []string{"one"}, func(context.Context, deploy.Receipt) error { return failure })
-	if !out.Complete || !errors.Is(err, failure) {
-		t.Fatal(out, err)
-	}
-	if _, err := s.Execute(context.Background(), []string{"one"}, func(context.Context, deploy.Receipt) error { return nil }); !errors.Is(err, adapter.ErrRetired) {
-		t.Fatal(err)
+	for _, stop := range []string{"none", "cancel", "close"} {
+		t.Run(stop, func(t *testing.T) {
+			s := session(t, "asa", []exchange{{"one", "accepted"}})
+			if _, err := s.Execute(t.Context(), []string{"one\ntwo"}, func(context.Context, deploy.Receipt) error { return nil }); !errors.Is(err, adapter.ErrInvalid) {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			failure := errors.New("journal unavailable")
+			out, err := s.Execute(ctx, []string{"one"}, func(context.Context, deploy.Receipt) error {
+				switch stop {
+				case "cancel":
+					cancel()
+				case "close":
+					if err := s.Close(); err != nil {
+						t.Error(err)
+					}
+				}
+				return failure
+			})
+			if !out.Complete || !errors.Is(err, failure) {
+				t.Fatal(out, err)
+			}
+			if errors.Is(err, context.Canceled) != (stop != "none") {
+				t.Fatalf("cancellation evidence after %s: %v", stop, err)
+			}
+			if _, err := s.Execute(t.Context(), []string{"one"}, func(context.Context, deploy.Receipt) error { return nil }); !errors.Is(err, adapter.ErrRetired) {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 

@@ -12,6 +12,8 @@ tagged `adapter/netconnector/v0.1.0`. Requires Go 1.27 or newer.
   for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA.
 - Preserve incomplete capture evidence and independently recover uncertain
   operations without replaying writes or taking over foreign configuration locks.
+- Preserve cancellation evidence alongside transport or receipt failures when
+  an operation is canceled or its session is closed.
 - Verify adapter behavior with synthetic native captures and simulated connector
   sessions, both against the versioned core and the current checked-out core.
 
