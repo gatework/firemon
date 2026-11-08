@@ -279,7 +279,8 @@ func (p *parser) interfaceNAT(ctx context.Context, s *config.Builder) error {
 			tx.Parse(row.Lines()...)
 		}
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }
 
 func (p *parser) embeddedNAT(ctx context.Context, s *config.Builder) error {
@@ -370,7 +371,8 @@ func (p *parser) embeddedNAT(ctx context.Context, s *config.Builder) error {
 		}
 		d.DynamicNATs = append(d.DynamicNATs, n)
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }
 
 func mappedName(value string) string {

@@ -34,7 +34,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	}
 	limits := p.Engine.Limits.WithDefaults()
 	visits := visitBudget(limits.MaxVisits)
-	if err := visits.take(ctx, before.RecordCount()); err != nil {
+	if err := visits.take(ctx, before.DeclarationSize()); err != nil {
 		return nil, err
 	}
 	d := before.Export()
@@ -86,7 +86,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 				return nil, err
 			}
 			r := fm.RuleRecord{Object: fm.Object{ID: id, Name: string(id), Scope: q.Scope}, RuleSet: q.RuleSet, Position: len(rules), Match: m, Action: intent.Action, Log: intent.Log, LogStart: intent.LogStart, LogEnd: intent.LogEnd}
-			id, err = catalog.names.rule(ctx, id, r)
+			id, err = catalog.alloc.rule(ctx, id, r)
 			if err != nil {
 				return nil, err
 			}
@@ -213,17 +213,17 @@ func (p Planner) proveTransfers(ctx context.Context, before, after *fm.Firewall,
 				return Proof{}, err
 			}
 		}
-		if err := preserveOutsideTargetOwnership(ctx, prior, next, target, limits.MaxRegions, visits); err != nil {
+		if err := preserveOutside(ctx, prior, next, target, limits.MaxRegions, visits); err != nil {
 			return Proof{}, err
 		}
 	}
 	return Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), TargetAllowed: allPermit, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}, nil
 }
 
-// preserveOutsideTargetOwnership retains each rule's effective traffic outside
+// preserveOutside retains each rule's effective traffic outside
 // the target. This is stricter than equality of allowed/denied outcomes: logging
 // and native rule ownership must not move to a different rule.
-func preserveOutsideTargetOwnership(ctx context.Context, baselineResult, candidateResult policy.Result, target flow.Traffic, limit int, visits *visitBudget) error {
+func preserveOutside(ctx context.Context, baselineResult, candidateResult policy.Result, target flow.Traffic, limit int, visits *visitBudget) error {
 	if err := visits.take(ctx, len(candidateResult.Decisions)+len(baselineResult.Decisions)); err != nil {
 		return err
 	}

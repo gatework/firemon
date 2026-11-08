@@ -32,12 +32,12 @@ func (r Readback) CreatedIDs() map[NativeIdentity]fm.ID { return maps.Clone(r.cr
 // Native names and scopes identify newly allocated typed objects. Full contents
 // and relative order are still compared after reference remapping; ambiguity is
 // rejected rather than choosing the first matching name.
-func mapNativeRecords[T any](kind NativeKind, expected []T, actual []T, object func(*T) *fm.Object, ids map[NativeIdentity]fm.ID, keys ...func(T) string) error {
-	keyOf := func(r T) string { return nativeNameKey(*object(&r)) }
+func mapNativeRecords[T any](kind NativeKind, expected []T, actual []T, object func(*T) *fm.Object, ids map[NativeIdentity]fm.ID, keys ...func(T) objectKey) error {
+	keyOf := func(r T) objectKey { return objectKeyOf(*object(&r)) }
 	if len(keys) > 0 {
 		keyOf = keys[0]
 	}
-	index := make(map[string][]int, len(actual))
+	index := make(map[objectKey][]int, len(actual))
 	for j := range actual {
 		key := keyOf(actual[j])
 		index[key] = append(index[key], j)
@@ -70,8 +70,8 @@ func (p *Plan) remapNative(actual *fm.Data) (map[NativeIdentity]fm.ID, error) {
 	if err := mapNativeRecords(NativePool, a.NATPools, actual.NATPools, func(r *fm.NATPoolRecord) *fm.Object { return &r.Object }, ids); err != nil {
 		return nil, err
 	}
-	if err := mapNativeRecords(NativeStaticNAT, a.StaticNATs, actual.StaticNATs, func(r *fm.StaticNATRecord) *fm.Object { return &r.Object }, ids, func(r fm.StaticNATRecord) string {
-		return nativeNATKey(p.after.Metadata().Vendor, r.Object, r.Order, r.SourceVIP != (fm.AddressRef{}))
+	if err := mapNativeRecords(NativeStaticNAT, a.StaticNATs, actual.StaticNATs, func(r *fm.StaticNATRecord) *fm.Object { return &r.Object }, ids, func(r fm.StaticNATRecord) objectKey {
+		return natKey(p.after.Metadata().Vendor, r.Object, r.Order, r.SourceVIP != (fm.AddressRef{}))
 	}); err != nil {
 		return nil, err
 	}
@@ -81,8 +81,8 @@ func (p *Plan) remapNative(actual *fm.Data) (map[NativeIdentity]fm.ID, error) {
 		// Its native name cannot be matched before that rule is established.
 		dynamic = slices.DeleteFunc(slices.Clone(dynamic), func(r fm.DynamicNATRecord) bool { return r.Rule != "" })
 	}
-	if err := mapNativeRecords(NativeDynamicNAT, dynamic, actual.DynamicNATs, func(r *fm.DynamicNATRecord) *fm.Object { return &r.Object }, ids, func(r fm.DynamicNATRecord) string {
-		return nativeNATKey(p.after.Metadata().Vendor, r.Object, r.Order, false)
+	if err := mapNativeRecords(NativeDynamicNAT, dynamic, actual.DynamicNATs, func(r *fm.DynamicNATRecord) *fm.Object { return &r.Object }, ids, func(r fm.DynamicNATRecord) objectKey {
+		return natKey(p.after.Metadata().Vendor, r.Object, r.Order, false)
 	}); err != nil {
 		return nil, err
 	}

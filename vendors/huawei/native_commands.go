@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.NativeBuilder) error {
+func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.Builder) error {
 	if !strings.HasPrefix(before.Metadata().Software, "V500R005") {
 		return ErrRender
 	}

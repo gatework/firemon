@@ -38,9 +38,11 @@ func TestScanningEntryContracts(t *testing.T) {
 	}{
 		{"empty-statements-canceled", func() error { _, err := config.Statements(ctx, empty); return err }, context.Canceled},
 		{"nil-statements", func() error { _, err := config.Statements(context.Background(), nil); return err }, config.ErrInvalid},
+		{"uninitialized-statements", func() error { _, err := config.Statements(t.Context(), &config.Content{}); return err }, config.ErrInvalid},
 		{"canceled-nil-statements", func() error { _, err := config.Statements(ctx, nil); return err }, context.Canceled},
 		{"nil-classifier", func() error { _, err := config.Blocks(context.Background(), empty, nil); return err }, config.ErrInvalid},
-		{"nil-block-cursor", func() error { _, err := config.Blocks(context.Background(), nil, classify); return err }, config.ErrInvalid},
+		{"nil-block-content", func() error { _, err := config.Blocks(context.Background(), nil, classify); return err }, config.ErrInvalid},
+		{"uninitialized-block-content", func() error { _, err := config.Blocks(t.Context(), &config.Content{}, classify); return err }, config.ErrInvalid},
 		{"canceled-nil-blocks", func() error { _, err := config.Blocks(ctx, nil, nil); return err }, context.Canceled},
 		{"nil-parser", func() error {
 			var p config.ParseFunc
@@ -117,20 +119,22 @@ func TestContentConstructionHonorsCancellationAndSourceErrors(t *testing.T) {
 	for _, raw := range []string{"", "\xff", strings.Repeat("界", 1<<16)} {
 		c, err := config.NewContent(canceled, config.Source{Text: raw}, config.Limits{MaxBytes: 1})
 		if c != nil || !errors.Is(err, context.Canceled) {
-			t.Fatalf("cursor precedence: %v, %v", c, err)
+			t.Fatalf("content precedence: %v, %v", c, err)
 		}
-		c, err = config.NewFragmentContent(canceled, config.Source{Text: raw}, []fm.Span{{First: 9}}, config.Limits{MaxBytes: 1})
-		if c != nil || !errors.Is(err, context.Canceled) {
-			t.Fatalf("fragment precedence: %v, %v", c, err)
+		d, err := config.XML(canceled, config.Source{Text: raw}, config.Limits{MaxBytes: 1})
+		if d.Content != nil || d.Root != nil || !errors.Is(err, context.Canceled) {
+			t.Fatalf("XML precedence: %v", err)
 		}
 	}
 	raw := strings.Repeat("界", 1<<16)
-	for _, fragment := range []bool{false, true} {
+	for _, xml := range []bool{false, true} {
 		ctx := &scanCancellation{Context: context.Background(), remaining: 8}
 		var c *config.Content
 		var err error
-		if fragment {
-			c, err = config.NewFragmentContent(ctx, config.Source{Text: raw}, []fm.Span{{First: 1, Last: 1, EndByte: len(raw)}}, config.Limits{})
+		if xml {
+			var d config.XMLDocument
+			d, err = config.XML(ctx, config.Source{Text: raw}, config.Limits{})
+			c = d.Content
 		} else {
 			c, err = config.NewContent(ctx, config.Source{Text: raw}, config.Limits{})
 		}
@@ -153,30 +157,18 @@ func TestContentConstructionHonorsCancellationAndSourceErrors(t *testing.T) {
 	}
 }
 
-func TestFragmentScannerPreservesSplitUTF8AndPhysicalSpans(t *testing.T) {
-	raw := "界\r\nlast"
-	spans := []fm.Span{{First: 1, Last: 1, StartByte: 0, EndByte: 1}, {First: 1, Last: 1, StartByte: 1, EndByte: 5}, {First: 2, Last: 2, StartByte: 5, EndByte: len(raw)}}
-	c, err := config.NewFragmentContent(context.Background(), config.Source{Text: raw}, spans, config.Limits{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i, e := range c.Evidence() {
-		if e.Span != spans[i] || e.State != fm.Pending {
-			t.Fatalf("evidence changed: %+v", e)
-		}
-	}
-}
-
 func TestContentCancelsAfterUTF8Validation(t *testing.T) {
 	raw := strings.Repeat("x", 4096*8)
-	// Eight validation chunks plus entry/exit checks complete before cancellation;
-	// the next checks occur inside the physical-line and fragment byte scans.
-	for _, fragment := range []bool{false, true} {
+	// Cancellation remains observable after validation, while the shared source
+	// index and evidence are being constructed.
+	for _, xml := range []bool{false, true} {
 		ctx := &scanCancellation{Context: context.Background(), remaining: 14}
 		var c *config.Content
 		var err error
-		if fragment {
-			c, err = config.NewFragmentContent(ctx, config.Source{Text: raw}, []fm.Span{{First: 1, Last: 1, EndByte: len(raw)}}, config.Limits{})
+		if xml {
+			var d config.XMLDocument
+			d, err = config.XML(ctx, config.Source{Text: raw}, config.Limits{})
+			c = d.Content
 		} else {
 			c, err = config.NewContent(ctx, config.Source{Text: raw}, config.Limits{})
 		}

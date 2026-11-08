@@ -80,7 +80,7 @@ func TestRequestDocumentAcceptsExplicitRealWireEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := operations.DecodeBatchRequest(bytes.NewReader(data))
+	request, err := operations.DecodeBatchRequest(t.Context(), bytes.NewReader(data))
 	if err != nil {
 		t.Fatal("real candidates rejected by JSON boundary", err)
 	}

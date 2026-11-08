@@ -4,9 +4,11 @@ Go firewall configuration and policy automation. The approved [specification](do
 
 The [domain refactoring and API migration guide](docs/refactoring.md) records the module audit, Perl responsibility mapping, shared contracts and development conventions.
 
+The [Go cleanup audit](docs/2026-11-07-go-cleanup.md) records the v0.2.0 API changes module by module, including shorter analysis APIs and canonical vendor inputs. The [core algorithm report](docs/2026-11-07-core-algorithms.md) documents query and risk improvements, local measurements and remaining capability limits.
+
 The [2026-11-07 implementation report](docs/2026-11-07-domain-improvements.md) describes typed weekly schedules, exact request coalescing, scoped object reuse, atomic policy/NAT migration and the removal of development compatibility APIs. [Schedule capabilities](vendors/SCHEDULES.md), [migration capabilities](vendors/MIGRATION.md) and [measured performance](docs/2026-11-07-domain-benchmarks.md) state the verified boundaries.
 
-The [parser design](docs/parser-design.md) maps Perl's content, multi-pass parsing and object catalogs into Go's Content/Builder implementation across all seven vendors. [Rewrite verification](docs/parser-rewrite-verification.md) records actual Perl comparisons, preserved graph/snapshot behavior and local performance checks.
+The [parser design](docs/parser-design.md) maps Perl's content, multi-pass parsing and object catalogs into Go's Content/Builder implementation across all seven vendors. The [shared foundation report](docs/2026-11-07-parser-foundation.md) documents the published `gatework/parser` and `gatework/set` dependencies and Hillstone component ownership. [Rewrite verification](docs/parser-rewrite-verification.md) records actual Perl comparisons, preserved graph/snapshot behavior and local performance checks.
 
 The [business lifecycle](docs/business-lifecycle.md) adds frozen-inventory request batches, partial per-input planning, explicit NAT and finite schedule intent, native usage analysis, and durable selected-device execution/recovery. [Actual Perl evidence](docs/business-oracle.md) and [local verification](docs/business-verification.md) state the supported behavior and limits.
 
@@ -17,7 +19,7 @@ This branch converts the original Ruby gem skeleton to Go while retaining Git hi
 Use the versioned core module from a Go application:
 
 ```sh
-go get github.com/gatework/firemon@v0.1.0
+go get github.com/gatework/firemon@v0.2.0
 ```
 
 The connector adapter is a separate module with its own version tags; see its
@@ -32,6 +34,26 @@ The approved vendor scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscr
 
 Offline example (synthetic or sanitized configuration):
 
+Use `parse` to inspect a configuration or replay a collector backup directory
+without publishing snapshots:
+
+```sh
+go run ./cmd/firemon parse --file ./lab.cfg --vendor hillstone --complete
+go run ./cmd/firemon parse --dir ./backups --vendor hillstone --vendor paloalto
+go run ./cmd/firemon parse --dir ./backups --vendor hillstone --services ./services.json
+```
+
+Directory parsing reads collector `summary.json` schema 2, verifies each selected
+file's size and SHA-256, and reports anonymous sample IDs, object counts and
+diagnostic codes/spans. Relocated exports require a matching `plan.json` entry.
+A failed capture or file produces a nonzero exit after the remaining samples are
+processed. Capture success alone does not establish completeness. `--services`
+accepts an explicitly supplied Hillstone catalog in algosec-rb's normalized JSON
+format; device declarations take precedence. See the [corpus verification and
+remaining capabilities](docs/2026-11-07-parser-corpus.md).
+
+To publish a synthetic or sanitized offline capture:
+
 ```sh
 go run ./cmd/firemon import --store ./snapshots --device lab --vendor hillstone \
   --file ./lab.cfg --complete --publication import-1
@@ -42,6 +64,25 @@ go run ./cmd/firemon query --store ./snapshots --device lab \
 ```
 
 `--complete` asserts the capture was fully received; unsupported syntax can still make the parsed graph incomplete. Incomplete offline imports are archived without replacing current. Use `inspect --revision <revision>` to inspect an archived graph. Updates require `--expected <current-revision>` and a new publication ID. A known capture time can be supplied as `--captured-at <RFC3339>`.
+
+For business queries, provide source and destination addresses and optionally a
+service. Device, zone, object and static NAT associations are discovered locally:
+
+```sh
+go run ./cmd/firemon request-query --store ./snapshots \
+  --src '192.0.2.10,192.0.2.11' --dst 198.51.100.20 --service 443
+```
+
+A bare port means TCP; UDP uses `udp/53`. Omitted services query all services.
+Use `--at RFC3339` or `--start RFC3339 --end RFC3339` for time evaluation, or
+`--file requests.json` for independently validated rows. The reusable
+`operations.Searcher` caches immutable graphs and address indexes, reads the
+current manifest for each batch, and reevaluates time and policy decisions.
+Results distinguish declarations, first-match traffic, NAT views and conditional
+paths. `request-plan` requires established topology for inferred ingress, explicit
+service intent, and `--clocks clocks.json` for finite changes. See the
+[business request contract](docs/business-lifecycle.md) and
+[implementation and verification report](docs/2026-11-07-search.md).
 
 `query` evaluates the supplied policy address/zone context. `policy.Engine.QueryPacket` also models PAN original-address/post-DNAT-zone, ASA real-address ACL paths, SRX post-DNAT policy followed by permitted source translation, ScreenOS original-address/service policy with MIP/VIP destination-zone resolution, FortiOS VIP routing followed by policy-owned source translation, Huawei translated-destination/service policy followed by permitted source translation, and the narrow StoneOS 5.5R8 packet model documented below. `nat` preserves separate static/dynamic objects, native order and inverse/pipeline steps; uncertain versions or mapping semantics return explicit unknown/error. For SRX, ScreenOS, FortiOS and Huawei, its `--to-zone` is the destination security zone after resolving DNAT. `plan` renders supported changes for all seven implemented vendors for review.
 

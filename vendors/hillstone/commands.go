@@ -28,12 +28,6 @@ func quoted(name string) (string, error) {
 	}
 	return strconv.Quote(name), nil
 }
-func nativeName(o fm.Object) string {
-	if o.Name != "" {
-		return o.Name
-	}
-	return string(o.ID)
-}
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
 	batch, err := render.Prepare(ctx, "hillstone", before, after, changes)
 	if err != nil {
@@ -43,16 +37,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 }
 
 func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	builder, err := render.NewNativeBuilder(ctx, "hillstone", before, after, changes)
+	builder, err := render.NewBuilder(ctx, "hillstone", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-
-	timed, err := render.ScheduleCommands(before, after, changes)
-	if err != nil {
-		return nil, err
-	}
-	builder.AppendCommands(timed...)
 
 	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
 		return nil, err
@@ -78,7 +66,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		if before.Address(r.ID) != nil || !batch.DeclaresAddress(r.ID) {
 			continue
 		}
-		name, err := quoted(nativeName(r.Object))
+		name, err := quoted(r.Object.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +91,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		if before.Service(r.ID) != nil || !batch.DeclaresService(r.ID) {
 			continue
 		}
-		name, err := quoted(nativeName(r.Object))
+		name, err := quoted(r.Object.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +116,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		commands = append(commands, "exit")
 	}
 	if batch.Native() {
-		commands = append(commands, batch.NativeCommands()...)
+		commands = append(commands, batch.Commands()...)
 	}
 	// Native rule top prepends: render newly created rules in reverse desired order.
 	for _, change := range slices.Backward(changes) {
@@ -183,7 +171,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 				}
 			}
 			commands = append(commands, "rule top", "action "+action)
-			if name, err := batch.ScheduleReference(after, r.Match.Schedule); err != nil {
+			if name, err := batch.ScheduleName(after, r.Match.Schedule); err != nil {
 				return nil, err
 			} else if name != "" {
 				commands = append(commands, "schedule "+name)
@@ -217,7 +205,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 					if z == nil {
 						return nil, ErrRender
 					}
-					name, err := quoted(nativeName(z.Record().Object))
+					name, err := quoted(z.Record().Object.Name)
 					if err != nil {
 						return nil, err
 					}
@@ -249,7 +237,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 				default:
 					return nil, ErrRender
 				}
-				name, err := quoted(nativeName(o))
+				name, err := quoted(o.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -274,7 +262,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			default:
 				return nil, ErrRender
 			}
-			name, err := quoted(nativeName(o))
+			name, err := quoted(o.Name)
 			if err != nil {
 				return nil, err
 			}

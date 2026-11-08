@@ -11,9 +11,9 @@ import (
 	"github.com/gatework/firemon/plan"
 )
 
-// SupportsSchedule is the single version gate used by registry capabilities and
-// native rendering. It establishes syntax support, never clock evidence.
-func SupportsSchedule(vendor, software string) bool {
+// supportsSchedule gates native schedule emission by software version.
+// It establishes syntax support, never clock evidence.
+func supportsSchedule(vendor, software string) bool {
 	switch vendor {
 	case "hillstone":
 		v := strings.TrimPrefix(software, "StoneOS ")
@@ -34,10 +34,10 @@ func SupportsSchedule(vendor, software string) bool {
 	return false
 }
 
-// ScheduleCommands emits only schedules whose complete meaning has a native
+// newSchedules emits only schedules whose complete meaning has a native
 // representation. Capture-bound clock, endpoint and calendar evidence is checked
 // independently from the vendor grammar and release gate.
-func ScheduleCommands(before, after *fm.Firewall, c plan.NativeChanges) ([]string, error) {
+func newSchedules(before *fm.Firewall, c plan.NativeChanges) ([]string, error) {
 	if len(c.Additions.Schedules) == 0 {
 		return nil, nil
 	}
@@ -60,7 +60,7 @@ func ScheduleCommands(before, after *fm.Firewall, c plan.NativeChanges) ([]strin
 
 func scheduleCommands(m fm.Metadata, clock fm.ScheduleClock, r fm.ScheduleRecord) ([]string, error) {
 	name, e := Token(r.Name)
-	if e != nil || len(name) > 31 || r.ID != fm.ID(name) || r.Scope != "" || !PlainObject(r.Object) || r.Validate() != nil || r.Timezone != clock.Timezone || !SupportsSchedule(m.Vendor, m.Software) {
+	if e != nil || len(name) > 31 || r.ID != fm.ID(name) || r.Scope != "" || !PlainObject(r.Object) || r.Validate() != nil || r.Timezone != clock.Timezone || !supportsSchedule(m.Vendor, m.Software) {
 		return nil, plan.ErrRender
 	}
 	precision := time.Minute
@@ -326,7 +326,7 @@ func weeklyContains(have, want []fm.WeeklyWindow) bool {
 	return true
 }
 
-func (b Batch) ScheduleReference(after *fm.Firewall, id fm.ID) (string, error) {
+func (b Batch) ScheduleName(after *fm.Firewall, id fm.ID) (string, error) {
 	if id == "" {
 		return "", nil
 	}

@@ -91,3 +91,48 @@ func TestEquivalenceBudgetsNATOwnersOnceAcrossContexts(t *testing.T) {
 		}
 	}
 }
+
+func TestPreservationBudgetsNestedDeclarationsBeforeCopying(t *testing.T) {
+	ranges := make([]flow.AddressRange, 2048)
+	for i := range ranges {
+		ranges[i] = rangeOf("192.0.2.1/32")
+	}
+	d := fm.Data{
+		Metadata:  fm.Metadata{Device: "fw", Vendor: "hillstone"},
+		Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "unused"}, Ranges: ranges}},
+		StaticNATs: []fm.StaticNATRecord{{
+			Object: fm.Object{ID: "fixed"}, Match: anyMatch(),
+			Source: []fm.Mapping{{Original: rangeOf("192.0.2.0/24"), Translated: rangeOf("203.0.113.0/24"), Mode: fm.Offset}},
+		}},
+	}
+	fw, err := fm.Seal(d)
+	if err != nil || !fw.Complete() {
+		t.Fatalf("fixture: %v", err)
+	}
+	engine := policy.Engine{Limits: policy.Limits{MaxVisits: 32}}
+	intent := policy.NATIntent{
+		Request: policy.Request{Traffic: traffic(t, "192.0.2.1/32", "198.51.100.1/32")},
+		Steps:   []policy.NATStep{{Kind: fm.StaticNATObject, ID: "fixed"}},
+	}
+	for _, entry := range []string{"equivalence", "nat preservation", "nat effects"} {
+		t.Run(entry, func(t *testing.T) {
+			var start, end runtime.MemStats
+			runtime.ReadMemStats(&start)
+			switch entry {
+			case "equivalence":
+				_, err = engine.Equivalent(t.Context(), fw, fw, time.Time{})
+			case "nat preservation":
+				err = engine.PreserveNAT(t.Context(), fw, fw, time.Time{})
+			case "nat effects":
+				_, err = engine.ProveNATEffects(t.Context(), fw, fw, []policy.NATIntent{intent})
+			}
+			runtime.ReadMemStats(&end)
+			if !errors.Is(err, policy.ErrBudget) {
+				t.Errorf("nested declarations escaped budget: %v", err)
+			}
+			if allocated := end.TotalAlloc - start.TotalAlloc; allocated > 64<<10 {
+				t.Errorf("nested declarations copied before rejection: %d bytes", allocated)
+			}
+		})
+	}
+}

@@ -165,6 +165,20 @@ func (s Traffic) Intersection(t Traffic, limit int) (Traffic, error) {
 	}
 	return Traffic{out}, nil
 }
+
+// Clip intersects traffic with one region without constructing a normalized
+// traffic set for the region. The region is validated even when s is empty;
+// limit bounds the result and failures return no partial traffic.
+func (s Traffic) Clip(region TrafficRegion, limit int) (Traffic, error) {
+	if limit < 1 {
+		return Traffic{}, ErrBudget
+	}
+	if !region.Valid() {
+		return Traffic{}, ErrRegion
+	}
+	return s.Intersection(Traffic{regions: []TrafficRegion{region}}, limit)
+}
+
 func (s Traffic) Difference(t Traffic, limit int) (Traffic, error) {
 	if limit < 1 || len(s.regions) > limit {
 		return Traffic{}, ErrBudget

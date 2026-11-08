@@ -18,26 +18,33 @@ import (
 // targetBatch owns discovery, planning and final evidence for one frozen manifest.
 // Only finish projects entries into a public report; planning never indexes it.
 type targetBatch struct {
-	designer   BatchDesigner
-	manifest   snapshot.Manifest
-	topology   *inventory.Topology
-	design     bool
-	inputs     []targetInput
-	devices    []DevicePlan
-	issues     []Issue
-	graphs     map[string]*fm.Firewall
-	loadErrors map[string]error
-	work       map[string][]*targetEntry
-	visits     int
-	emitted    int
-	budgetErr  error
-	issueBytes int
+	clocks        map[string]fm.ScheduleClock
+	store         BatchStore
+	engine        policy.Engine
+	renderer      plan.NativeRenderer
+	maxCandidates int
+	manifest      snapshot.Manifest
+	topology      *inventory.Topology
+	inputs        []targetInput
+	devices       []DevicePlan
+	issues        []Issue
+	graphs        map[string]*fm.Firewall
+	indexes       map[string]*inventory.Index
+	loadErrors    map[string]error
+	work          map[string][]*targetEntry
+	visits        int
+	emitted       int
+	budgetErr     error
+	evidenceBytes int
+	inputRegions  int
 }
 
 type targetInput struct {
-	index   int
-	request AccessRequest
-	entries []*targetEntry
+	index      int
+	request    AccessRequest
+	normalized *NormalizedInput
+	inputErr   *InputError
+	entries    []*targetEntry
 }
 
 // Origin uses discovery order, including entries that never reach a planner.
@@ -50,6 +57,7 @@ type targetEntry struct {
 	origin      targetOrigin
 	outcome     TargetOutcome
 	trafficView string
+	packet      *policy.PacketPath
 	planning    *targetPlanning
 	proof       *targetPacketProof
 }
@@ -72,10 +80,13 @@ type targetView struct {
 }
 
 type targetProposal struct {
-	traffic  flow.Traffic
-	target   AccessTarget
-	sources  []string
-	expected *targetView
+	scopeSet    bool
+	conditional bool
+	window      *fm.TimeWindow
+	traffic     flow.Traffic
+	target      AccessTarget
+	sources     []string
+	expected    *targetView
 }
 
 func (r *targetBatch) resolve(ctx context.Context, i int, a AccessRequest) error {
@@ -91,7 +102,34 @@ func (r *targetBatch) resolve(ctx context.Context, i int, a AccessRequest) error
 		v := *a.VRF
 		a.VRF = &v
 	}
-	r.inputs = append(r.inputs, targetInput{index: i, request: a})
+	if a.Window != nil {
+		w := *a.Window
+		a.Window = &w
+	}
+	original := a
+	a, normalized, normalizeErr := normalizeInput(ctx, a, r.engine.Limits.WithDefaults().MaxRegions)
+	r.inputs = append(r.inputs, targetInput{index: i, request: a, normalized: normalized})
+	if normalizeErr != nil {
+		if fatalBatch(normalizeErr) {
+			return normalizeErr
+		}
+		var inputErr *InputError
+		if !errors.As(normalizeErr, &inputErr) {
+			inputErr = &InputError{Field: "input", Reason: normalizeErr.Error()}
+		}
+		r.inputs[i].request, r.inputs[i].inputErr = original, inputErr
+		r.issue(i, "", "input", "invalid_input", flow.Traffic{}, "", nil, inputErr.Error())
+		return nil
+	}
+	if a.Window != nil && (a.Window.Start.IsZero() || a.Window.End.IsZero() || !a.Window.Start.Before(a.Window.End) || !a.At.IsZero()) {
+		r.inputs[i].inputErr = &InputError{Field: "window", Reason: "use a finite increasing window or an evaluation time"}
+		r.issue(i, "", "input", "invalid_window", a.Traffic, "", nil, r.inputs[i].inputErr.Error())
+		return nil
+	}
+	r.inputRegions += a.Traffic.RegionCount()
+	if r.inputRegions > r.engine.Limits.WithDefaults().MaxRegions {
+		return policy.ErrBudget
+	}
 	inputView := string(a.View)
 	if inputView == "" {
 		inputView = string(inventory.Original)
@@ -115,9 +153,8 @@ func (r *targetBatch) resolve(ctx context.Context, i int, a AccessRequest) error
 			}
 		}
 	} else {
-		if r.topology == nil {
-			r.issue(i, "", "location", "topology_missing", a.Traffic, inputView, nil, "")
-			return nil
+		if r.topology == nil || normalized != nil {
+			return r.discover(ctx, i, a)
 		}
 		if err := r.locate(ctx, i, a, *r.topology); err != nil {
 			return err
@@ -139,7 +176,7 @@ func (r *targetBatch) finish(runErr error) BatchReport {
 		Devices: r.devices, Issues: r.issues,
 	}
 	for _, input := range r.inputs {
-		row := RequestOutcome{Index: input.index, Request: input.request}
+		row := RequestOutcome{Index: input.index, Request: input.request, Normalized: input.normalized, Error: input.inputErr}
 		for _, entry := range input.entries {
 			row.Outcomes = append(row.Outcomes, entry.outcome)
 		}
@@ -149,9 +186,13 @@ func (r *targetBatch) finish(runErr error) BatchReport {
 }
 
 func (r *targetBatch) record(input int, outcome TargetOutcome, view string) (*targetEntry, error) {
+	if err := r.retainRefs(outcome.Sources); err != nil {
+		return nil, err
+	}
 	if err := r.emit(max(1, outcome.Wire.RegionCount())); err != nil {
 		return nil, err
 	}
+	outcome.TrafficView = view
 	row := &r.inputs[input]
 	entry := &targetEntry{
 		origin:  targetOrigin{input: input, outcome: len(row.entries)},
@@ -161,8 +202,34 @@ func (r *targetBatch) record(input int, outcome TargetOutcome, view string) (*ta
 	return entry, nil
 }
 
+// Bound retained reference slices as well as traffic regions. Shared strings
+// still cost slice entries and serialized output for every reported outcome.
+func (r *targetBatch) retainRefs(refs []string) error {
+	if len(refs) > r.visits {
+		r.budgetErr = policy.ErrBudget
+		return r.budgetErr
+	}
+	r.visits -= len(refs)
+	for _, ref := range refs {
+		size := 6*len(ref) + 3
+		if size > MaxRequestBytes-r.evidenceBytes {
+			r.budgetErr = policy.ErrBudget
+			return r.budgetErr
+		}
+		r.evidenceBytes += size
+	}
+	return nil
+}
+
 func (r *targetBatch) queue(entry *targetEntry, input targetPlanning, proof *targetPacketProof) {
 	entry.planning, entry.proof = &input, proof
+	h := r.manifest.Devices[entry.outcome.Device]
+	if fw := r.graphs[h.Revision]; !h.Complete || fw == nil || !fw.Complete() {
+		entry.outcome.Conditional = true
+	}
+	if entry.outcome.Conditional {
+		return
+	}
 	device := entry.outcome.Device
 	r.work[device] = append(r.work[device], entry)
 }
@@ -189,11 +256,11 @@ func (r *targetBatch) issue(input int, device, stage, code string, t flow.Traffi
 	for _, ref := range refs {
 		size += 6*len(ref) + 3
 	}
-	if r.issueBytes+size > MaxRequestBytes {
+	if r.evidenceBytes+size > MaxRequestBytes {
 		r.budgetErr = policy.ErrBudget
 		return
 	}
-	r.issueBytes += size
+	r.evidenceBytes += size
 
 	r.issues = append(r.issues, Issue{Input: input, TrafficView: view, Device: device, Stage: stage, Code: code, Traffic: t, Sources: refs, Message: message})
 }
@@ -208,8 +275,6 @@ func (r *targetBatch) load(ctx context.Context, input int, t flow.Traffic, view 
 		code = "snapshot_missing"
 	case r.manifest.Reservations[target.Device].Token != "":
 		code = "snapshot_reserved"
-	case !h.Complete:
-		code = "snapshot_incomplete"
 	case target.Revision != "" && target.Revision != h.Revision:
 		code = "stale_topology"
 	}
@@ -223,7 +288,7 @@ func (r *targetBatch) load(ctx context.Context, input int, t flow.Traffic, view 
 	fw, seen := r.graphs[h.Revision]
 	loadErr := r.loadErrors[h.Revision]
 	if !seen && loadErr == nil {
-		fw, loadErr = r.designer.options.Store.Load(ctx, h.Revision)
+		fw, loadErr = r.store.Load(ctx, h.Revision)
 		if loadErr == nil && fw == nil {
 			loadErr = snapshot.ErrFormat
 		}
@@ -240,16 +305,19 @@ func (r *targetBatch) load(ctx context.Context, input int, t flow.Traffic, view 
 		r.issue(input, target.Device, "snapshot", "snapshot_load", t, view, sources, loadErr.Error())
 		return nil, nil
 	}
-	if fw.Metadata().Device != target.Device || !fw.Complete() || h.Revision == "" || fw.SemanticDigest() != h.SemanticDigest || fw.Metadata().SourceDigest != h.SourceDigest {
+	if fw.Metadata().Device != target.Device || h.Revision == "" || fw.SemanticDigest() != h.SemanticDigest || fw.Metadata().SourceDigest != h.SourceDigest {
 		r.issue(input, target.Device, "snapshot", "snapshot_mismatch", t, view, sources, "")
 		return nil, nil
+	}
+	if !h.Complete || !fw.Complete() {
+		r.issue(input, target.Device, "snapshot", "snapshot_incomplete", t, view, sources, "")
 	}
 	return fw, nil
 }
 func fatalBatch(err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, policy.ErrBudget) || errors.Is(err, flow.ErrBudget)
 }
-func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetProposal) (entries []*targetEntry, err error) {
+func (r *targetBatch) evaluateAt(ctx context.Context, input int, proposal targetProposal) (entries []*targetEntry, err error) {
 	traffic, target, sources, expected := proposal.traffic, proposal.target, proposal.sources, proposal.expected
 	trafficView := "policy"
 	if target.Packet {
@@ -259,9 +327,10 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 	if err != nil || fw == nil {
 		return entries, err
 	}
+	proposal.conditional = proposal.conditional || !fw.Complete() || !r.manifest.Devices[target.Device].Complete
 	q := target.Request
 	q.Traffic = traffic
-	if q.Scope == "" {
+	if q.Scope == "" && !proposal.scopeSet {
 		q.Scope = fw.Metadata().Context
 	}
 	if q.RuleSet == "" {
@@ -275,10 +344,6 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 		return entries, nil
 	}
 	if r.inputs[input].request.Native != nil {
-		if !r.design {
-			r.issue(input, target.Device, "nat", "native_intent_requires_design", traffic, trafficView, sources, "")
-			return entries, nil
-		}
 		entry, err := r.nativeTarget(input, traffic, target, q, sources)
 		if entry != nil {
 			entries = append(entries, entry)
@@ -286,7 +351,7 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 		return entries, err
 	}
 	if target.Packet {
-		result, err := r.designer.options.Engine.QueryPacket(ctx, fw, policy.PacketRequest{Request: q, VRF: target.VRF})
+		result, err := r.engine.QueryPacket(ctx, fw, policy.PacketRequest{Request: q, VRF: target.VRF})
 		if err != nil {
 			if fatalBatch(err) {
 				return entries, err
@@ -302,12 +367,12 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 			if err := r.charge(ctx); err != nil {
 				return entries, err
 			}
-			accounted, err = accounted.Union(p.Original, r.designer.options.Engine.Limits.WithDefaults().MaxRegions)
+			accounted, err = accounted.Union(p.Original, r.engine.Limits.WithDefaults().MaxRegions)
 			if err != nil {
 				return entries, err
 			}
 			if expected != nil {
-				limit := r.designer.options.Engine.Limits.WithDefaults().MaxRegions
+				limit := r.engine.Limits.WithDefaults().MaxRegions
 				same, err := p.Original.Equal(p.NAT.Original, limit)
 				if err != nil {
 					return entries, err
@@ -322,16 +387,17 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 					continue
 				}
 			}
-			outcome := TargetOutcome{Device: target.Device, Revision: r.manifest.Devices[target.Device].Revision, Wire: p.Original, Real: p.Real, NativeRequests: slices.Clone(p.NativeRequests), Sources: slices.Clone(sources), Policy: p.Policy, NAT: p.NAT, Disposition: plan.BatchPending}
-			if p.Policy.Complete && p.Policy.Denied.Empty() && p.Policy.Unmatched.Empty() && p.Policy.Unknown.Empty() && !p.Policy.Allowed.Empty() {
+			outcome := TargetOutcome{At: q.At, Window: proposal.window, Conditional: proposal.conditional, Device: target.Device, Revision: r.manifest.Devices[target.Device].Revision, Wire: p.Original, Real: p.Real, NativeRequests: slices.Clone(p.NativeRequests), Sources: slices.Clone(sources), Policy: p.Policy, NAT: p.NAT, Disposition: plan.BatchPending}
+			if !proposal.conditional && p.Policy.Complete && p.Policy.Denied.Empty() && p.Policy.Unmatched.Empty() && p.Policy.Unknown.Empty() && !p.Policy.Allowed.Empty() {
 				outcome.Disposition = plan.BatchCovered
 			}
 			entry, err := r.record(input, outcome, trafficView)
 			if err != nil {
 				return entries, err
 			}
+			entry.packet = &p
 			entries = append(entries, entry)
-			uncertain, err := p.Original.Intersection(result.Unknown, r.designer.options.Engine.Limits.WithDefaults().MaxRegions)
+			uncertain, err := p.Original.Intersection(result.Unknown, r.engine.Limits.WithDefaults().MaxRegions)
 			if err != nil {
 				return entries, err
 			}
@@ -343,7 +409,7 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 				r.issue(input, target.Device, "query", "unknown_policy", p.Original, trafficView, sources, "")
 				continue
 			}
-			if r.design && p.DesignUnsupported != "" {
+			if p.DesignUnsupported != "" {
 				if outcome.Disposition != plan.BatchCovered {
 					r.issue(input, target.Device, "design", "unsupported_native_composition", p.Original, trafficView, sources, p.DesignUnsupported)
 				}
@@ -355,7 +421,7 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 				}
 				continue
 			}
-			if r.design {
+			{
 				packet := policy.PacketRequest{Request: q, VRF: target.VRF}
 				packet.Traffic = p.Original
 				proof := &targetPacketProof{packet: packet}
@@ -366,11 +432,11 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 				r.queue(entry, targetPlanning{request: p.NativeRequests[0]}, proof)
 			}
 		}
-		accounted, err = accounted.Union(result.Unknown, r.designer.options.Engine.Limits.WithDefaults().MaxRegions)
+		accounted, err = accounted.Union(result.Unknown, r.engine.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return entries, err
 		}
-		missing, err := traffic.Difference(accounted, r.designer.options.Engine.Limits.WithDefaults().MaxRegions)
+		missing, err := traffic.Difference(accounted, r.engine.Limits.WithDefaults().MaxRegions)
 		if err != nil {
 			return entries, err
 		}
@@ -379,7 +445,7 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 		}
 		return entries, nil
 	}
-	result, err := r.designer.options.Engine.Query(ctx, fw, q)
+	result, err := r.engine.Query(ctx, fw, q)
 	if err != nil {
 		if fatalBatch(err) {
 			return entries, err
@@ -387,8 +453,8 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 		r.issue(input, target.Device, "query", "query_failed", traffic, trafficView, sources, err.Error())
 		return entries, nil
 	}
-	o := TargetOutcome{Device: target.Device, Revision: r.manifest.Devices[target.Device].Revision, Wire: traffic, NativeRequests: []policy.Request{q}, Sources: slices.Clone(sources), Policy: result, Disposition: plan.BatchPending}
-	if result.Complete && result.Denied.Empty() && result.Unmatched.Empty() && result.Unknown.Empty() {
+	o := TargetOutcome{At: q.At, Window: proposal.window, Conditional: proposal.conditional, Device: target.Device, Revision: r.manifest.Devices[target.Device].Revision, Wire: traffic, NativeRequests: []policy.Request{q}, Sources: slices.Clone(sources), Policy: result, Disposition: plan.BatchPending}
+	if !proposal.conditional && result.Complete && result.Denied.Empty() && result.Unmatched.Empty() && result.Unknown.Empty() {
 		o.Disposition = plan.BatchCovered
 	}
 	entry, err := r.record(input, o, trafficView)
@@ -400,9 +466,7 @@ func (r *targetBatch) evaluate(ctx context.Context, input int, proposal targetPr
 		r.issue(input, target.Device, "query", "unknown_policy", traffic, trafficView, sources, "")
 		return entries, nil
 	}
-	if r.design {
-		r.queue(entry, targetPlanning{request: q}, nil)
-	}
+	r.queue(entry, targetPlanning{request: q}, nil)
 	return entries, nil
 }
 func (r *targetBatch) plan(ctx context.Context) error {
@@ -415,7 +479,10 @@ func (r *targetBatch) plan(ctx context.Context) error {
 		if err := r.charge(ctx); err != nil {
 			return err
 		}
-		work := r.work[device]
+		work := r.admit(r.work[device])
+		if len(work) == 0 {
+			continue
+		}
 		h := r.manifest.Devices[device]
 		fw := r.graphs[h.Revision]
 		renderer, err := vendors.Renderer(fw.Metadata().Vendor)
@@ -429,14 +496,14 @@ func (r *targetBatch) plan(ctx context.Context) error {
 		for i, w := range work {
 			requests[i] = w.planning.request
 		}
-		planner := plan.Planner{Renderer: renderer, Engine: r.designer.options.Engine, MaxCandidates: r.designer.options.MaxCandidates}
+		planner := plan.Planner{Renderer: renderer, Engine: r.engine, MaxCandidates: r.maxCandidates}
 		var result plan.BatchResult
 		hasNative := false
 		for _, w := range work {
 			hasNative = hasNative || w.planning.native != nil
 		}
 		if hasNative {
-			planner.NativeRenderer = r.designer.options.NativeRenderer
+			planner.NativeRenderer = r.renderer
 			if planner.NativeRenderer == nil {
 				planner.NativeRenderer, _ = renderer.(plan.NativeRenderer)
 			}
@@ -496,7 +563,7 @@ func (r *targetBatch) plan(ctx context.Context) error {
 }
 
 func (r *targetBatch) emit(count int) error {
-	if r.emitted+count > r.designer.options.Engine.Limits.WithDefaults().MaxRegions {
+	if r.emitted+count > r.engine.Limits.WithDefaults().MaxRegions {
 		r.budgetErr = policy.ErrBudget
 		return r.budgetErr
 	}

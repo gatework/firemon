@@ -53,6 +53,9 @@ func (e Engine) DiscoverStaticAliases(ctx context.Context, fw *fm.Firewall, q Pa
 	if fw == nil || q.FromZone == "" || (view != RealView && view != TranslatedView) {
 		return AliasResult{}, ErrInvalid
 	}
+	if err := e.Limits.checkRegions(q.Traffic.RegionCount()); err != nil {
+		return AliasResult{}, err
+	}
 	if !fw.Complete() {
 		return AliasResult{Unknown: q.Traffic}, nil
 	}
@@ -89,7 +92,11 @@ func (e Engine) DiscoverStaticAliases(ctx context.Context, fw *fm.Firewall, q Pa
 				forward.source = nil
 				forward.sourcePorts = nil
 			}
-			if len(forward.source) == 0 && len(forward.destination) == 0 {
+			forward, err = e.aliasGeometry(ctx, fw, forward, &budget)
+			if err != nil {
+				return AliasResult{}, err
+			}
+			if len(forward.source)+len(forward.destination)+len(forward.sourcePorts)+len(forward.destinationPorts) == 0 {
 				continue
 			}
 			inverses, err := staticInverses(ctx, forward, limits.MaxCombinations, &budget)
@@ -104,6 +111,20 @@ func (e Engine) DiscoverStaticAliases(ctx context.Context, fw *fm.Firewall, q Pa
 				business, err = restrictMappings(business, inverse.destination, false, limits.MaxRegions)
 				if err != nil {
 					return AliasResult{}, err
+				}
+				for _, axis := range []struct {
+					mappings []fm.PortMapping
+					source   bool
+				}{{inverse.sourcePorts, true}, {inverse.destinationPorts, false}} {
+					work := packetProofBudget{limits: limits, remaining: budget}
+					if err := work.mapping(ctx, business, len(axis.mappings)); err != nil {
+						return AliasResult{}, err
+					}
+					budget = work.remaining
+					business, err = restrictPortMappings(business, axis.mappings, axis.source, limits.MaxRegions)
+					if err != nil {
+						return AliasResult{}, err
+					}
 				}
 				if business.Empty() {
 					continue
@@ -328,6 +349,14 @@ func (e Engine) DiscoverStaticAliases(ctx context.Context, fw *fm.Firewall, q Pa
 // Each mapping is a separate inverse choice, even within one NAT object.
 // Combining inverse axes into one Traffic would hide multiple wire aliases.
 func staticInverses(ctx context.Context, n natTransform, limit int, budget *int) ([]natTransform, error) {
+	sourcePorts, sourceKnown, err := aliasPortInverse(ctx, n.sourcePorts, budget)
+	if err != nil {
+		return nil, err
+	}
+	destinationPorts, destinationKnown, err := aliasPortInverse(ctx, n.destinationPorts, budget)
+	if err != nil {
+		return nil, err
+	}
 	sources, destinations := n.source, n.destination
 	if len(sources) == 0 {
 		sources = []fm.Mapping{{}}
@@ -356,7 +385,62 @@ func staticInverses(ctx context.Context, n natTransform, limit int, budget *int)
 			}
 			src, s := reverse(source)
 			dst, d := reverse(destination)
-			out = append(out, natTransform{known: s && d && len(n.sourcePorts) == 0 && len(n.destinationPorts) == 0, source: src, destination: dst})
+			out = append(out, natTransform{known: s && d && sourceKnown && destinationKnown, source: src, destination: dst, sourcePorts: sourcePorts, destinationPorts: destinationPorts})
+		}
+	}
+	return out, nil
+}
+
+// Ports must identify one original service. A many-to-one or overlapping
+// inverse cannot establish a unique wire alias without an observed session.
+func aliasPortInverse(ctx context.Context, mappings []fm.PortMapping, budget *int) ([]fm.PortMapping, bool, error) {
+	count := len(mappings)
+	if count != 0 && count > *budget/count {
+		return nil, false, ErrBudget
+	}
+	if err := chargeVisits(ctx, budget, count, count*count); err != nil {
+		return nil, false, err
+	}
+	inverse, known := inversePorts(mappings)
+	for i, a := range inverse {
+		for _, b := range inverse[:i] {
+			if max(a.Original.Low, b.Original.Low) <= min(a.Original.High, b.Original.High) {
+				known = false
+			}
+		}
+	}
+	return inverse, known, nil
+}
+
+func restrictPortMappings(input flow.Traffic, mappings []fm.PortMapping, source bool, limit int) (flow.Traffic, error) {
+	if len(mappings) == 0 {
+		return input, nil
+	}
+	var out flow.Traffic
+	for _, box := range input.Regions() {
+		axis := box.DestinationPort
+		if source {
+			axis = box.SourcePort
+		}
+		for _, m := range mappings {
+			part := flow.Interval{Low: max(axis.Low, m.Original.Low), High: min(axis.High, m.Original.High)}
+			if part.Low > part.High {
+				continue
+			}
+			piece := box
+			if source {
+				piece.SourcePort = part
+			} else {
+				piece.DestinationPort = part
+			}
+			t, err := flow.NewTraffic(limit, piece)
+			if err != nil {
+				return flow.Traffic{}, err
+			}
+			out, err = out.Union(t, limit)
+			if err != nil {
+				return flow.Traffic{}, err
+			}
 		}
 	}
 	return out, nil

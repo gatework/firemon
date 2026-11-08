@@ -1,16 +1,15 @@
 package operations
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/internal/dependency"
+	"github.com/gatework/firemon/internal/jsonio"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/vendors"
 )
@@ -68,14 +67,12 @@ func validChecksum(s string) bool {
 	return true
 }
 func strictJSON(raw []byte, value any) error {
-	d := json.NewDecoder(bytes.NewReader(raw))
-	d.DisallowUnknownFields()
-	if err := d.Decode(value); err != nil {
-		return errors.Join(plan.ErrReconstruction, err)
-	}
-	var extra any
-	if d.Decode(&extra) != io.EOF {
+	err := jsonio.Decode(raw, value)
+	if err == jsonio.ErrTrailing {
 		return plan.ErrReconstruction
+	}
+	if err != nil {
+		return errors.Join(plan.ErrReconstruction, err)
 	}
 	return nil
 }
@@ -83,38 +80,16 @@ func readBounded(ctx context.Context, reader io.Reader, limit int) ([]byte, erro
 	if dependency.Nil(reader) {
 		return nil, ErrInvalid
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	raw, err := io.ReadAll(io.LimitReader(reader, int64(limit)+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(raw) > limit {
+	raw, err := jsonio.Read(ctx, reader, limit)
+	if err == jsonio.ErrLimit {
 		return nil, plan.ErrReconstruction
 	}
-	return raw, ctx.Err()
-}
-
-type boundedBuffer struct {
-	bytes.Buffer
-	limit int
-	ctx   context.Context
-}
-
-func (b *boundedBuffer) Write(p []byte) (int, error) {
-	if err := b.ctx.Err(); err != nil {
-		return 0, err
-	}
-	if len(p) > b.limit-b.Len() {
-		return 0, plan.ErrReconstruction
-	}
-	return b.Buffer.Write(p)
+	return raw, err
 }
 func boundedJSON(ctx context.Context, value any, limit int) ([]byte, error) {
-	b := boundedBuffer{limit: limit, ctx: ctx}
-	if err := json.NewEncoder(&b).Encode(value); err != nil {
-		return nil, err
+	raw, err := jsonio.Encode(ctx, value, limit)
+	if err == jsonio.ErrLimit {
+		return nil, plan.ErrReconstruction
 	}
-	return b.Bytes(), ctx.Err()
+	return raw, err
 }

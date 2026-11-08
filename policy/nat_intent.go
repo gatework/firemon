@@ -42,7 +42,7 @@ func (e Engine) ProveNATEffects(ctx context.Context, before, after *fm.Firewall,
 	}
 	limits := e.Limits.WithDefaults()
 	remaining := limits.MaxVisits
-	if err := chargeVisits(ctx, &remaining, before.RecordCount(), after.RecordCount(), len(intents)); err != nil {
+	if err := chargeVisits(ctx, &remaining, before.DeclarationSize(), after.DeclarationSize(), len(intents)); err != nil {
 		return NATProof{}, err
 	}
 	// Bound all caller-owned work before catalog export or per-step transforms.

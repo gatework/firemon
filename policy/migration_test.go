@@ -176,7 +176,7 @@ func TestPacketEquivalencePreflightsNestedWorkRegionsAndCancellation(t *testing.
 	}
 }
 
-func TestPacketEquivalenceRejectsReverseNATAndAmbiguousPolicyProjection(t *testing.T) {
+func TestPacketEquivalenceRetainsReverseLimitAndOriginalPANPartitions(t *testing.T) {
 	q := migrationRequest(t)
 	data := migrationData("hillstone")
 	data.StaticNATs[0].Bidirectional = true
@@ -203,15 +203,14 @@ func TestPacketEquivalenceRejectsReverseNATAndAmbiguousPolicyProjection(t *testi
 	q = migrationRequest(t)
 	q.Traffic = traffic(t, "192.0.2.0/31", "198.51.100.10/31")
 	fw = migrationGraph(t, data)
-	if _, err := (policy.Engine{}).EquivalentPacketEffects(t.Context(), fw, fw, q, q); !errors.Is(err, policy.ErrNotEquivalent) {
-		t.Fatal("equal projected set supplied no strict policy preimage", err)
+	if proof, err := (policy.Engine{}).EquivalentPacketEffects(t.Context(), fw, fw, q, q); err != nil || proof.Partitions != 2 {
+		t.Fatal("PAN original policy partitions were lost across DNAT", proof, err)
 	}
-	// A homogeneous policy effect is provable for every original input even
-	// when the native policy view differs from the wire destination view.
+	// Equal destination unions cannot hide which input owns each log effect.
 	data.Rules[1].LogStart = fm.Irrelevant
-	fw = migrationGraph(t, data)
-	if _, err := (policy.Engine{}).EquivalentPacketEffects(t.Context(), fw, fw, q, q); err != nil {
-		t.Fatal("homogeneous native policy effect lost its wire domain", err)
+	data.Rules[0].LogStart = fm.Known
+	if _, err := (policy.Engine{}).EquivalentPacketEffects(t.Context(), fw, migrationGraph(t, data), q, q); !errors.Is(err, policy.ErrNotEquivalent) {
+		t.Fatal("swapped logging ownership passed the packet proof", err)
 	}
 }
 

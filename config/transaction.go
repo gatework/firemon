@@ -13,7 +13,6 @@ import (
 type Transaction struct {
 	owner               *Builder
 	phase               *phaseFrame
-	checkpoint          Checkpoint
 	claims              []fm.Evidence
 	draft               fm.Data
 	replacements        fm.Data
@@ -26,7 +25,7 @@ func (b *Builder) Begin() *Transaction {
 	if b == nil || b.content == nil {
 		return &Transaction{}
 	}
-	return &Transaction{owner: b, phase: b.phase, checkpoint: b.content.Checkpoint()}
+	return &Transaction{owner: b, phase: b.phase}
 }
 func (t *Transaction) Parse(lines ...int) {
 	if t == nil || t.closed || t.err != nil {
@@ -72,9 +71,6 @@ func (t *Transaction) accept(d fm.Data) bool {
 func (t *Transaction) Rollback() {
 	if t == nil || t.closed {
 		return
-	}
-	if t.owner != nil && t.phase == t.owner.phase {
-		_ = t.owner.content.Restore(t.checkpoint)
 	}
 	t.close()
 }

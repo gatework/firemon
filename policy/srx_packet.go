@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"slices"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
@@ -102,7 +103,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				if len(out.Paths) >= limits.MaxRegions {
 					return PacketResult{}, ErrBudget
 				}
-				out.Paths = append(out.Paths, PacketPath{Real: request.Traffic, Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: denied, NativeRequests: []Request{request}})
+				out.Paths = append(out.Paths, PacketPath{Real: request.Traffic, Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: denied, PolicyNAT: slices.Clone(part.Steps), NativeRequests: []Request{request}})
 			}
 			if evaluated.Allowed.Empty() {
 				continue
@@ -137,7 +138,7 @@ func (e Engine) srxPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 				if len(out.Paths) >= limits.MaxRegions {
 					return PacketResult{}, ErrBudget
 				}
-				out.Paths = append(out.Paths, PacketPath{Real: request.Traffic, Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: allowed, NativeRequests: []Request{request}})
+				out.Paths = append(out.Paths, PacketPath{Real: request.Traffic, Original: rel.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: rel, Policy: allowed, PolicyNAT: slices.Clone(part.Steps), NativeRequests: []Request{request}})
 			}
 		}
 	}

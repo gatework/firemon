@@ -19,9 +19,24 @@ without precompiled CLI binaries.
 
 The host supplies identity, credentials and transport options through `Factory.Resolve`. `Factory.Open` creates a fresh device for each initial connection, independent readback and recovery. `Profile(vendor)` exposes the supported native profile; SRX, Huawei, Hillstone, Fortinet and PAN reuse the pinned connector profiles with narrowly scoped adapter adjustments. ASA and ScreenOS profiles are provided here. `New` transfers ownership of an already constructed device on success; its caller must set bounded transport limits and a validated profile.
 
+On the development branch after v0.1.0, `Profile` and `Metadata.Vendor` accept
+only `paloalto`, `srx`, `huawei`, `hillstone`, `fortinet`, `netscreen` and `asa`.
+The adapter maps `paloalto` to the connector's `palo_alto` profile and `srx` to
+`juniper` internally. `New` accepts a device profile with its canonical name or
+the corresponding connector name, including customized canonical profiles;
+it never rewrites metadata. Vendor aliases are rejected before dialing.
+
 `Metadata.Context` identifies the selected native configuration domain and is retained through capture, parsing, planning and journal recovery. Fortinet requires an explicit VDOM, including `root`. All other profiles require an empty `Metadata.Context` and operate in their default native domain. Nonempty labels are rejected by `New` before dialing or capture because this adapter does not select ASA contexts, PAN vsys or Junos logical systems. A connected identity or domain mismatch never becomes a successful readback.
 
 All vendors use `BeginConfiguration`, `Read`, `Execute`, `Save`, `EndConfiguration` and `Close`. `deploy.Session` requires the configuration lifecycle, with explicit handling for immediate-running devices as well as candidate devices. A read-only collector can call `Read` without beginning a configuration transaction. Native differences stay inside this adapter.
+
+Persistence checks separate the verified prompt and command echo from response
+history. The connector's verified UTF-8/GBK/GB18030 encoding is decoded without
+terminal repainting, so a carriage return cannot erase an earlier rejection.
+Fortinet automatic-save evidence requires one complete `config system global`
+block with exactly one `set cfg-save automatic`. Other setting values are data;
+ordinary hostnames or titles containing `error` or `failed` do not imply failure.
+Malformed, ambiguous or unsupported evidence never produces a durable receipt.
 
 | Vendor | Running and saved capture | Persistence and configuration isolation |
 | --- | --- | --- |

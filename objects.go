@@ -126,7 +126,17 @@ type Rule struct {
 	match  MatchObjects
 }
 
-func (o *Rule) Record() RuleRecord                 { return o.record.clone() }
+func (o *Rule) Record() RuleRecord { return o.record.clone() }
+
+// DeclarationSize counts the rule and its nested declaration values without
+// copying them, for consumers that must bound owned Record views before reading.
+func (o *Rule) DeclarationSize() int {
+	var count declarationCounter
+	count.object(o.record.Object)
+	count.match(o.record.Match)
+	return int(count)
+}
+
 func (o *Rule) Match() MatchObjects                { return o.match }
 func (o *Rule) Sources() []*Address                { return o.match.Sources() }
 func (o *Rule) Destinations() []*Address           { return o.match.Destinations() }

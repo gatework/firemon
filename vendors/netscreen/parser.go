@@ -78,11 +78,3 @@ func (native Parser) Parse(ctx context.Context, source config.Source, metadata f
 	}
 	return s.Seal()
 }
-
-func (p *parser) commit(s *config.Builder, tx *config.Transaction, d fm.Data) error {
-	tx.Emit(d)
-	if err := s.Commit(tx); err != nil {
-		return err
-	}
-	return nil
-}

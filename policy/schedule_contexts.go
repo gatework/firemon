@@ -174,8 +174,8 @@ func (p *schedulePartition) interval(start, end time.Time, phases []time.Duratio
 			return nil, err
 		}
 		local := at.In(p.location)
-		_, next := local.ZoneBounds()
-		if !next.IsZero() && !next.After(at) {
+		next, err := calendarZoneEnd(local)
+		if err != nil {
 			return nil, ErrNotEquivalent
 		}
 		if !end.IsZero() && (next.IsZero() || end.Before(next)) {

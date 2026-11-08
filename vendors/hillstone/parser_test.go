@@ -72,7 +72,7 @@ func TestUnknownNativeBlockAndQuotedTextCannotCreateFirewallObjects(t *testing.T
 }
 func TestUnknownRuleMemberCannotBecomeUnrestrictedPermit(t *testing.T) {
 	fw := parse(t, "policy-global\nrule id 1\nsrc-addr any\ndst-addr any\nservice any\napplication custom\naction permit\nexit\nexit\n")
-	if fw.Complete() || len(fw.Rule("1").Record().Match.Unsupported) == 0 {
+	if fw.Complete() || len(fw.Rule("1").Record().Match.Applications) == 0 {
 		t.Fatal("unsupported selector lost")
 	}
 }

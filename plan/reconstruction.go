@@ -1,11 +1,9 @@
 package plan
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"time"
@@ -13,6 +11,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/internal/dependency"
+	"github.com/gatework/firemon/internal/jsonio"
 	"github.com/gatework/firemon/policy"
 )
 
@@ -123,7 +122,10 @@ func EncodeReconstruction(ctx context.Context, writer io.Writer, revisions Snaps
 	if err := d.validate(); err != nil {
 		return "", err
 	}
-	raw, err := encodeReconstructionJSON(ctx, d, MaxReconstructionBytes)
+	raw, err := jsonio.Encode(ctx, d, MaxReconstructionBytes)
+	if err == jsonio.ErrLimit {
+		return "", ErrReconstruction
+	}
 	if err != nil {
 		return "", err
 	}
@@ -146,7 +148,13 @@ func DecodeReconstruction(ctx context.Context, reader io.Reader, expected string
 	if !validReconstructionChecksum(expected) {
 		return nil, ErrReconstruction
 	}
-	raw, err := readReconstruction(ctx, reader, MaxReconstructionBytes)
+	if dependency.Nil(reader) {
+		return nil, ErrInvalid
+	}
+	raw, err := jsonio.Read(ctx, reader, MaxReconstructionBytes)
+	if err == jsonio.ErrLimit {
+		return nil, ErrReconstruction
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -154,8 +162,11 @@ func DecodeReconstruction(ctx context.Context, reader io.Reader, expected string
 		return nil, ErrReconstruction
 	}
 	var d reconstructionDocument
-	if err := decodeReconstructionJSON(raw, &d); err != nil {
-		return nil, err
+	if err := jsonio.Decode(raw, &d); err != nil {
+		if err == jsonio.ErrTrailing {
+			return nil, ErrReconstruction
+		}
+		return nil, errors.Join(ErrReconstruction, err)
 	}
 	if err := d.validate(); err != nil {
 		return nil, err
@@ -416,55 +427,4 @@ func validReconstructionChecksum(s string) bool {
 		}
 	}
 	return true
-}
-func decodeReconstructionJSON(raw []byte, value any) error {
-	d := json.NewDecoder(bytes.NewReader(raw))
-	d.DisallowUnknownFields()
-	if err := d.Decode(value); err != nil {
-		return errors.Join(ErrReconstruction, err)
-	}
-	var extra any
-	if d.Decode(&extra) != io.EOF {
-		return ErrReconstruction
-	}
-	return nil
-}
-func readReconstruction(ctx context.Context, reader io.Reader, limit int) ([]byte, error) {
-	if dependency.Nil(reader) {
-		return nil, ErrInvalid
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	raw, err := io.ReadAll(io.LimitReader(reader, int64(limit)+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(raw) > limit {
-		return nil, ErrReconstruction
-	}
-	return raw, ctx.Err()
-}
-
-type reconstructionBuffer struct {
-	bytes.Buffer
-	limit int
-	ctx   context.Context
-}
-
-func (b *reconstructionBuffer) Write(p []byte) (int, error) {
-	if err := b.ctx.Err(); err != nil {
-		return 0, err
-	}
-	if len(p) > b.limit-b.Len() {
-		return 0, ErrReconstruction
-	}
-	return b.Buffer.Write(p)
-}
-func encodeReconstructionJSON(ctx context.Context, value any, limit int) ([]byte, error) {
-	b := reconstructionBuffer{limit: limit, ctx: ctx}
-	if err := json.NewEncoder(&b).Encode(value); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), ctx.Err()
 }

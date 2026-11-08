@@ -211,5 +211,6 @@ func (p *parser) policies(ctx context.Context, s *config.Builder) error {
 	if defaultAction.Valid() {
 		d.Rules = append(d.Rules, fm.RuleRecord{Object: object("$default"), Match: anyMatch(), Action: defaultAction, Position: len(blocks), RuleSet: "security", Builtin: true, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant})
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }

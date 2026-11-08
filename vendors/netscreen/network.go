@@ -133,7 +133,8 @@ func (p *parser) network(ctx context.Context, s *config.Builder) error {
 		}
 		d.Interfaces = append(d.Interfaces, v)
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }
 
 func (p *parser) routes(ctx context.Context, s *config.Builder) error {
@@ -210,5 +211,6 @@ func (p *parser) routes(ctx context.Context, s *config.Builder) error {
 	for _, name := range routes.names {
 		d.Routes = append(d.Routes, *routes.entries[name])
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }

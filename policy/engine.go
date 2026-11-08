@@ -16,7 +16,9 @@ var ErrInvalid = errors.New("policy: invalid input")
 
 var ErrBudget = errors.New("policy evaluation budget exceeded")
 
-// Limits bounds each evaluation algorithm independently. Nonpositive values use defaults.
+// Limits bounds each evaluation algorithm independently. MaxRegions bounds both
+// input and retained traffic regions, or address intervals for route resolution.
+// Nonpositive values use defaults.
 type Limits struct{ MaxRegions, MaxVisits, MaxCombinations int }
 
 // WithDefaults returns effective limits without changing the receiver.
@@ -31,6 +33,13 @@ func (l Limits) WithDefaults() Limits {
 		l.MaxCombinations = 4096
 	}
 	return l
+}
+
+func (l Limits) checkRegions(count int) error {
+	if count > l.WithDefaults().MaxRegions {
+		return ErrBudget
+	}
+	return nil
 }
 
 type Engine struct{ Limits Limits }
@@ -63,6 +72,9 @@ func (e Engine) Query(ctx context.Context, fw *fm.Firewall, q Request) (Result, 
 	if fw == nil {
 		return Result{}, ErrInvalid
 	}
+	if err := e.Limits.checkRegions(q.Traffic.RegionCount()); err != nil {
+		return Result{}, err
+	}
 	// Unknown top-level syntax may introduce earlier policy. Do not retain
 	// certain denies, unmatched traffic or rule ownership from a partial graph.
 	for _, d := range fw.Diagnostics() {
@@ -84,6 +96,7 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 		q.RuleSet = "security"
 	}
 	visitedRules := 0
+	copies := limits.MaxVisits
 	for rule := range fw.OrderedRules() {
 		if err := ctx.Err(); err != nil {
 			return Result{}, err
@@ -96,10 +109,15 @@ func (e Engine) queryRules(ctx context.Context, fw *fm.Firewall, q Request, sele
 		}
 		visitedRules++
 		// Eligibility precedes declaration matching; order is native rule order.
-		ruleRecord := rule.Record()
-		if ruleRecord.Disabled || ruleRecord.Scope != q.Scope || ruleRecord.RuleSet != q.RuleSet {
+		if rule.Disabled() || rule.Chain() != q.Chain() {
 			continue
 		}
+		// Visit and copy budgets are independent: skipped rules still count as
+		// visits, while only owned declarations consume nested-copy capacity.
+		if err := chargeVisits(ctx, &copies, rule.DeclarationSize()); err != nil {
+			return Result{}, err
+		}
+		ruleRecord := rule.Record()
 		if selectRule != nil {
 			var include bool
 			ruleRecord, include = selectRule(ruleRecord)
@@ -154,12 +172,16 @@ func schedule(fw *fm.Firewall, id fm.ID, at time.Time) (bool, bool) {
 	}
 	return s.ActiveAt(at)
 }
-func allAddresses() flow.AddressSet {
+
+// AddressSet is immutable; wildcard and unresolved matches can share the same
+// universe instead of rebuilding its IPv4/IPv6 indexes for every rule.
+var allAddresses = func() flow.AddressSet {
 	a, _ := flow.PrefixRange(netip.MustParsePrefix("0.0.0.0/0"))
 	b, _ := flow.PrefixRange(netip.MustParsePrefix("::/0"))
 	s, _ := flow.NewAddressSet(a, b)
 	return s
-}
+}()
+
 func zoneMatch(zones []fm.ID, any bool, q fm.ID) (bool, bool) {
 	if any {
 		return true, true
@@ -176,23 +198,30 @@ func (e Engine) Match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Reques
 }
 
 func (e Engine) match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Request, input flow.Traffic, cache *resolutionCache) (flow.Traffic, bool, error) {
+	budget := &resolutionBudget{ctx: ctx, limit: e.Limits.WithDefaults().MaxCombinations, cache: cache}
+	return e.matchTraffic(ctx, fw, m, q, input, budget)
+}
+
+func (e Engine) matchTraffic(ctx context.Context, fw *fm.Firewall, m fm.Match, q Request, input flow.Traffic, budget *resolutionBudget) (flow.Traffic, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return flow.Traffic{}, false, err
 	}
 	if fw == nil {
 		return flow.Traffic{}, false, ErrInvalid
 	}
+	if err := e.Limits.checkRegions(input.RegionCount()); err != nil {
+		return flow.Traffic{}, false, err
+	}
 	if normalize := semantics(fw.Metadata().Vendor).normalizeRequest; normalize != nil {
 		q = normalize(q)
 	}
 	limits := e.Limits.WithDefaults()
-	budget := &resolutionBudget{ctx: ctx, limit: limits.MaxCombinations, cache: cache}
 	relationKnown := true
 	if m.ZoneRelation != fm.AnyZoneRelation {
 		from, to := fw.Zone(q.FromZone), fw.Zone(q.ToZone)
 		relationKnown = from != nil && to != nil
 		if relationKnown {
-			relationKnown = len(from.Record().Unsupported) == 0 && len(to.Record().Unsupported) == 0
+			relationKnown = !from.HasUnsupported() && !to.HasUnsupported()
 		}
 		if m.ZoneRelation != fm.SameZone && m.ZoneRelation != fm.DifferentZones {
 			relationKnown = false
@@ -218,17 +247,19 @@ func (e Engine) match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Reques
 	if err != nil {
 		return flow.Traffic{}, false, err
 	}
-	for _, id := range append(slices.Clone(m.FromZones), m.ToZones...) {
-		zone := fw.Zone(id)
-		if zone == nil || len(zone.Record().Unsupported) > 0 {
-			fromZoneKnown = false
+	for _, zones := range [][]fm.ID{m.FromZones, m.ToZones} {
+		for _, id := range zones {
+			zone := fw.Zone(id)
+			if zone == nil || zone.HasUnsupported() {
+				fromZoneKnown = false
+			}
 		}
 	}
 
 	matchKnown := relationKnown && fromZoneKnown && toZoneKnown && sourceKnown && destinationKnown && serviceKnown && len(m.Unsupported) == 0 && len(m.Applications) == 0 && len(m.Users) == 0
 	var matchedTraffic flow.Traffic
-	for _, src := range sourceAddresses.Ranges() {
-		for _, dst := range destinationAddresses.Ranges() {
+	for src := range sourceAddresses.All() {
+		for dst := range destinationAddresses.All() {
 			if src.First.BitLen() != dst.First.BitLen() {
 				continue
 			}
@@ -240,13 +271,12 @@ func (e Engine) match(ctx context.Context, fw *fm.Firewall, m fm.Match, q Reques
 					return flow.Traffic{}, false, err
 				}
 				region := flow.TrafficRegion{Source: src, Destination: dst, Protocol: service.Protocol, SourcePort: service.SourcePort, DestinationPort: service.DestinationPort, ICMPType: service.ICMPType, ICMPCode: service.ICMPCode}
-				candidate, err := flow.NewTraffic(limits.MaxRegions, region)
+				intersection, err := input.Clip(region, limits.MaxRegions)
 				if err != nil {
 					return flow.Traffic{}, false, err
 				}
-				intersection, err := input.Intersection(candidate, limits.MaxRegions)
-				if err != nil {
-					return flow.Traffic{}, false, err
+				if intersection.Empty() {
+					continue
 				}
 				matchedTraffic, err = matchedTraffic.Union(intersection, limits.MaxRegions)
 				if err != nil {

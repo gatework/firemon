@@ -20,7 +20,7 @@ func (p Planner) preflightReadback(ctx context.Context, before, after *fm.Firewa
 
 func (b *visitBudget) takeGraphs(ctx context.Context, graphs ...*fm.Firewall) error {
 	for _, graph := range graphs {
-		if err := b.take(ctx, graph.RecordCount()); err != nil {
+		if err := b.take(ctx, graph.DeclarationSize()); err != nil {
 			return err
 		}
 	}

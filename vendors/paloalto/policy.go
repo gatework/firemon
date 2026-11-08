@@ -31,7 +31,7 @@ func (p *parser) addressRef(name string, d *fm.Data) fm.AddressRef {
 				return fm.AddressRef{Kind: fm.AddressObject, ID: id}
 			}
 		}
-		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name}, Ranges: []flow.AddressRange{r}})
+		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Inline: true}, Ranges: []flow.AddressRange{r}})
 		return fm.AddressRef{Kind: fm.AddressObject, ID: id}
 	}
 	return fm.AddressRef{Kind: fm.AddressObject, ID: fm.ID(name)}
@@ -79,6 +79,10 @@ func (p *parser) matchField(m *fm.Match, field string, rest []string, d *fm.Data
 		}
 		return true
 	case "service":
+		if slices.Contains(rest, "application-default") {
+			m.Unsupported = append(m.Unsupported, "application-default requires application service definitions")
+			return false
+		}
 		for _, name := range rest {
 			if name == "any" {
 				m.AnyService = true
@@ -119,7 +123,7 @@ func (p *parser) rules(_ context.Context, s *config.Builder) error {
 		}
 		name, field, rest := w[3], w[4], values(w[5:])
 		builtin := w[1] == "default-security-rules"
-		nativeName := name
+		ruleName := name
 		if builtin {
 			if name != "intrazone-default" && name != "interzone-default" {
 				continue
@@ -130,7 +134,7 @@ func (p *parser) rules(_ context.Context, s *config.Builder) error {
 		if !exists {
 			r = fm.RuleRecord{Object: object(name, row), Position: len(order), RuleSet: "security"}
 			if builtin {
-				r = defaultRule(nativeName)
+				r = defaultRule(ruleName)
 				r.Spans = []fm.Span{row.source.Span}
 			}
 			order = append(order, name)
@@ -175,6 +179,12 @@ func (p *parser) rules(_ context.Context, s *config.Builder) error {
 				r.Match.Users = append(r.Match.Users, rest...)
 				ok = true
 			}
+		case "category", "source-hip", "destination-hip":
+			ok = slices.Equal(rest, []string{"any"})
+		case "negate-source", "negate-destination":
+			ok = slices.Equal(rest, []string{"no"})
+		case "uuid":
+			ok = len(rest) == 1
 		case "schedule":
 			if len(rest) == 1 {
 				r.Match.Schedule = fm.ID(rest[0])

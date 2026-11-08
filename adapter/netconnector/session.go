@@ -43,32 +43,35 @@ type Options struct {
 // Session owns its Device. Do not share that Device with other callers or copy
 // Session. Close is terminal and interrupts I/O without waiting for callbacks.
 type Session struct {
-	device             *connector.Device
-	metadata           fm.Metadata
-	options            Options
-	mu                 sync.Mutex
-	active, closed     bool
-	cancel             context.CancelFunc
-	configurationToken string
-	srxExclusive       bool
+	device         *connector.Device
+	meta           fm.Metadata
+	opts           Options
+	mu             sync.Mutex
+	active, closed bool
+	cancel         context.CancelFunc
+	token          string
+	srxExclusive   bool
 }
 
 var _ deploy.Session = (*Session)(nil)
 
 // New transfers ownership on success. The caller retains ownership on error.
 func New(device *connector.Device, metadata fm.Metadata, options Options) (*Session, error) {
-	if device == nil || strings.TrimSpace(metadata.Device) == "" || domainVendor(metadata.Vendor) == "" || domainVendor(device.ProfileName()) != domainVendor(metadata.Vendor) {
+	if device == nil || strings.TrimSpace(metadata.Device) == "" {
+		return nil, ErrInvalid
+	}
+	name := profileName(metadata.Vendor)
+	if name == "" || device.ProfileName() != metadata.Vendor && device.ProfileName() != name {
 		return nil, ErrInvalid
 	}
 	options, err := options.normalized()
 	if err != nil {
 		return nil, err
 	}
-	metadata.Vendor = domainVendor(metadata.Vendor)
 	if metadata.Vendor == "fortinet" && !vdomName.MatchString(metadata.Context) || metadata.Vendor != "fortinet" && metadata.Context != "" {
 		return nil, ErrInvalid
 	}
-	return &Session{device: device, metadata: metadata, options: options}, nil
+	return &Session{device: device, meta: metadata, opts: options}, nil
 }
 
 func (options Options) normalized() (Options, error) {
@@ -90,25 +93,6 @@ func (options Options) normalized() (Options, error) {
 	return options, nil
 }
 
-// domainVendor converts connector profile aliases to the seven domain vendor names.
-func domainVendor(name string) string {
-	switch name {
-	case "asa", "cisco_asa":
-		return "asa"
-	case "paloalto", "palo_alto":
-		return "paloalto"
-	case "hillstone":
-		return "hillstone"
-	case "srx", "juniper":
-		return "srx"
-	case "netscreen", "screenos":
-		return "netscreen"
-	case "fortinet", "huawei":
-		return name
-	}
-	return ""
-}
-
 func (s *Session) run(ctx context.Context, fn func(context.Context, *connector.Operation) error) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -122,7 +106,7 @@ func (s *Session) run(ctx context.Context, fn func(context.Context, *connector.O
 		s.mu.Unlock()
 		return ErrBusy
 	}
-	ctx, cancel := context.WithTimeout(ctx, s.options.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, s.opts.Timeout)
 	s.active, s.cancel = true, cancel
 	s.mu.Unlock()
 	returned := false
@@ -164,13 +148,13 @@ func (s *Session) Execute(ctx context.Context, commands []string, receive deploy
 		script.Commands[i] = connector.Command{Text: command, Source: "firemon-apply", Line: i + 1, Sensitive: true, OutputSensitive: true}
 	}
 	err = s.run(ctx, func(ctx context.Context, op *connector.Operation) error {
-		b := responseBudget{remaining: s.options.MaxOutputBytes, digest: sha256.New()}
-		if s.metadata.Vendor == "paloalto" {
+		b := responseBudget{remaining: s.opts.MaxOutputBytes, digest: sha256.New()}
+		if s.meta.Vendor == "paloalto" {
 			if err := s.verifyPANLock(ctx, op, &b); err != nil {
 				return err
 			}
 		}
-		if s.metadata.Vendor == "srx" {
+		if s.meta.Vendor == "srx" {
 			// Begin already entered exclusive mode. Preserve the lock through
 			// Save, replacing only the renderer's validated outer wrapper with
 			// native top commands. Both retain their indexed transport receipts.
@@ -184,7 +168,7 @@ func (s *Session) Execute(ctx context.Context, commands []string, receive deploy
 			}
 			script.Commands[0].Text, script.Commands[len(commands)-1].Text = "top", "top"
 		}
-		if s.metadata.Vendor == "fortinet" {
+		if s.meta.Vendor == "fortinet" {
 			if err := s.fortinetContext(ctx, op, &b); err != nil {
 				return err
 			}

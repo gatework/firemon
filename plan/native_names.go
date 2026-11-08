@@ -7,10 +7,25 @@ import (
 	"strings"
 )
 
-// nativeNATKey distinguishes native declaration namespaces, not arbitrary graph
+// objectKey separates named declarations from anonymous graph records.
+// An unnamed record is compared by ID; its ID is never used as a command name.
+type objectKey struct {
+	scope, name, section string
+	id                   fm.ID
+}
+
+func objectKeyOf(o fm.Object) objectKey {
+	key := objectKey{scope: o.Scope, name: o.Name}
+	if o.Name == "" {
+		key.id = o.ID
+	}
+	return key
+}
+
+// natKey distinguishes native declaration namespaces, not arbitrary graph
 // IDs. Source projections have no second native declaration and are validated
 // against their VIP parent before this key is used.
-func nativeNATKey(vendor string, o fm.Object, order fm.NATOrder, projection bool) string {
+func natKey(vendor string, o fm.Object, order fm.NATOrder, projection bool) objectKey {
 	namespace := ""
 	switch vendor {
 	case "fortinet":
@@ -31,7 +46,9 @@ func nativeNATKey(vendor string, o fm.Object, order fm.NATOrder, projection bool
 			namespace = order.Section
 		}
 	}
-	return namespace + "\x00" + nativeNameKey(o)
+	key := objectKeyOf(o)
+	key.section = namespace
+	return key
 }
 func validVIPProjections(vendor string, d fm.Data) error {
 	if vendor != "fortinet" {
@@ -80,7 +97,7 @@ func validVIPProjections(vendor string, d fm.Data) error {
 
 // Inline values may only accompany a newly declared native owner. Their exact
 // syntax/identity is additionally checked by the native emitter and readback.
-func validateNativeInlineOwnership(a NativeAdditions) error {
+func validateInlineOwners(a NativeAdditions) error {
 	addresses, services := map[fm.ID]bool{}, map[fm.ID]bool{}
 	match := func(m fm.Match) {
 		for _, refs := range [][]fm.AddressRef{m.Sources, m.Destinations} {

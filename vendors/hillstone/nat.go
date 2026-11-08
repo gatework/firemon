@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
@@ -11,35 +12,34 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-func (p *parser) resolve(ctx context.Context, name string) ([]flow.AddressRange, bool, error) {
+func (c *catalog) resolve(ctx context.Context, graph *fm.Firewall, name string) ([]flow.AddressRange, bool, error) {
 	if r, err := literal(name); err == nil {
 		return []flow.AddressRange{r}, true, nil
 	}
-	set, known, err := (policy.Engine{}).ResolveAddresses(ctx, p.graph, []fm.AddressRef{p.addressRef(name)}, false)
+	set, known, err := (policy.Engine{}).ResolveAddresses(ctx, graph, []fm.AddressRef{c.addressRef(name)}, false)
 	return set.Ranges(), known, err
 }
-func (p *parser) natAddress(name string, d *fm.Data) (fm.AddressRef, bool) {
-	if _, ok := p.addressKinds[fm.ID(name)]; ok {
-		return p.addressRef(name), true
+func (c *catalog) natAddress(name string, d *fm.Data) (fm.AddressRef, bool) {
+	if _, ok := c.addresses[fm.ID(name)]; ok {
+		return c.addressRef(name), true
 	}
 	r, err := literal(name)
 	if err != nil {
-		return p.addressRef(name), false
+		return c.addressRef(name), false
 	}
 	id := fm.ID("$literal:" + name)
-	if _, exists := p.addressKinds[id]; !exists {
+	if _, exists := c.addresses[id]; !exists {
 		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id, Name: name}, Ranges: []flow.AddressRange{r}})
-		p.addressKinds[id] = fm.AddressObject
+		c.addresses[id] = fm.AddressObject
 	}
 	return fm.AddressRef{Kind: fm.AddressObject, ID: id}, true
 }
 func (p *parser) nat(ctx context.Context, s *config.Builder) error {
-	var err error
-	p.graph, err = s.Seal()
+	graph, err := s.Seal()
 	if err != nil {
 		return err
 	}
-	for _, row := range p.lines {
+	for _, row := range p.doc.lines {
 		w := row.line.Words
 		if len(w) < 3 || !slices.Contains([]string{"bnatrule", "snatrule", "dnatrule"}, w[0]) || w[1] != "id" {
 			continue
@@ -65,18 +65,18 @@ func (p *parser) nat(ctx context.Context, s *config.Builder) error {
 			if !valid {
 				continue
 			}
-			mapped, ok, err := p.resolve(ctx, w[5])
+			mapped, ok, err := p.catalog.resolve(ctx, graph, w[5])
 			if err != nil {
 				return err
 			}
-			real, ok2, err := p.resolve(ctx, w[8])
+			real, ok2, err := p.catalog.resolve(ctx, graph, w[8])
 			if err != nil {
 				return err
 			}
 			if !ok || !ok2 || len(mapped) != 1 || len(real) != 1 {
 				continue
 			}
-			ref, _ := p.natAddress(w[8], &d)
+			ref, _ := p.catalog.natAddress(w[8], &d)
 			r := fm.StaticNATRecord{Object: o, Order: order, Source: []fm.Mapping{{Original: real[0], Translated: mapped[0], Mode: fm.Offset}}, Bidirectional: true, Disabled: slices.Contains(w[9:], "disable"), Match: fm.Match{Sources: []fm.AddressRef{ref}, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}}
 			d.StaticNATs = append(d.StaticNATs, r)
 		} else {
@@ -85,28 +85,28 @@ func (p *parser) nat(ctx context.Context, s *config.Builder) error {
 				continue
 			}
 			match := fm.Match{AnyFromZone: true, AnyToZone: true}
-			if fields["from"] == "any" {
+			if strings.EqualFold(fields["from"], "any") {
 				match.AnySource = true
 			} else {
-				ref, _ := p.natAddress(fields["from"], &d)
+				ref, _ := p.catalog.natAddress(fields["from"], &d)
 				match.Sources = []fm.AddressRef{ref}
 			}
-			if fields["to"] == "any" {
+			if strings.EqualFold(fields["to"], "any") {
 				match.AnyDestination = true
 			} else {
-				ref, _ := p.natAddress(fields["to"], &d)
+				ref, _ := p.catalog.natAddress(fields["to"], &d)
 				match.Destinations = []fm.AddressRef{ref}
 			}
-			if fields["service"] == "any" {
+			if strings.EqualFold(fields["service"], "any") {
 				match.AnyService = true
 			} else if fields["service"] != "" {
-				match.Services = []fm.ServiceRef{p.serviceRef(fields["service"])}
+				match.Services = []fm.ServiceRef{p.catalog.serviceRef(fields["service"])}
 			} else {
 				match.Unsupported = append(match.Unsupported, "NAT service default not established")
 			}
 			r := fm.DynamicNATRecord{Object: o, Order: order, Match: match, Interface: fm.ID(fields["eif"]), SourceMode: fm.NoTranslation, DestinationMode: fm.NoTranslation, Disabled: fields["disable"] == "true"}
 			target := fields["trans-to"]
-			ranges, known, err := p.resolve(ctx, target)
+			ranges, known, err := p.catalog.resolve(ctx, graph, target)
 			if err != nil {
 				return err
 			}
@@ -127,7 +127,7 @@ func (p *parser) nat(ctx context.Context, s *config.Builder) error {
 				}
 			} else {
 				r.DestinationMode = fm.UnknownTranslation
-				original, originalKnown, err := p.resolve(ctx, fields["to"])
+				original, originalKnown, err := p.catalog.resolve(ctx, graph, fields["to"])
 				if err != nil {
 					return err
 				}
@@ -140,7 +140,7 @@ func (p *parser) nat(ctx context.Context, s *config.Builder) error {
 			}
 			if fields["port"] != "" {
 				target, valid := port([]string{fields["port"]})
-				terms, known, err := p.serviceTerms(ctx, fields["service"])
+				terms, known, err := (policy.Engine{}).ResolveServices(ctx, graph, []fm.ServiceRef{p.catalog.serviceRef(fields["service"])}, false)
 				if err != nil {
 					return err
 				}
@@ -167,7 +167,7 @@ func (p *parser) nat(ctx context.Context, s *config.Builder) error {
 			}
 			if w[0] == "snatrule" && fields["mode"] == "static" {
 				fixed := fm.StaticNATRecord{Object: r.Object, Match: r.Match, Order: r.Order, Interface: r.Interface, Disabled: r.Disabled, SourcePorts: r.SourcePorts}
-				originals, sourceKnown, err := p.resolve(ctx, fields["from"])
+				originals, sourceKnown, err := p.catalog.resolve(ctx, graph, fields["from"])
 				if err != nil {
 					return err
 				}
@@ -225,8 +225,4 @@ func natFields(words []string) (map[string]string, bool) {
 		}
 	}
 	return fields, fields["from"] != "" && fields["to"] != "" && fields["trans-to"] != ""
-}
-
-func (p *parser) serviceTerms(ctx context.Context, name string) ([]fm.ServiceTerm, bool, error) {
-	return (policy.Engine{}).ResolveServices(ctx, p.graph, []fm.ServiceRef{p.serviceRef(name)}, false)
 }

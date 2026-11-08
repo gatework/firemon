@@ -1,0 +1,90 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkQuery/huawei/rules=1000-10         	     334	   1031790 ns/op	 1604777 B/op	   21033 allocs/op
+BenchmarkQuery/huawei/rules=1000-10         	     350	   1035427 ns/op	 1604757 B/op	   21033 allocs/op
+BenchmarkQuery/huawei/rules=1000-10         	     350	   1033886 ns/op	 1604758 B/op	   21033 allocs/op
+BenchmarkQuery/huawei/rules=1000-10         	     349	   1028047 ns/op	 1604764 B/op	   21033 allocs/op
+BenchmarkQuery/huawei/rules=1000-10         	     355	   1024105 ns/op	 1604761 B/op	   21033 allocs/op
+BenchmarkQuery/huawei/rules=1000-10         	     349	   1038434 ns/op	 1604762 B/op	   21033 allocs/op
+BenchmarkNAT/huawei/rules=1000-10           	     314	   1161123 ns/op	 1962366 B/op	   28040 allocs/op
+BenchmarkNAT/huawei/rules=1000-10           	     312	   1149496 ns/op	 1962369 B/op	   28040 allocs/op
+BenchmarkNAT/huawei/rules=1000-10           	     313	   1147097 ns/op	 1962363 B/op	   28040 allocs/op
+BenchmarkNAT/huawei/rules=1000-10           	     313	   1151478 ns/op	 1962367 B/op	   28040 allocs/op
+BenchmarkNAT/huawei/rules=1000-10           	     312	   1142471 ns/op	 1962366 B/op	   28040 allocs/op
+BenchmarkNAT/huawei/rules=1000-10           	     313	   1140282 ns/op	 1962365 B/op	   28040 allocs/op
+BenchmarkPacket/huawei/rules=1000-10        	     100	   3170560 ns/op	 5184028 B/op	   70246 allocs/op
+BenchmarkPacket/huawei/rules=1000-10        	     100	   3146579 ns/op	 5184020 B/op	   70246 allocs/op
+BenchmarkPacket/huawei/rules=1000-10        	     100	   3119328 ns/op	 5184022 B/op	   70246 allocs/op
+BenchmarkPacket/huawei/rules=1000-10        	     100	   3131146 ns/op	 5184028 B/op	   70246 allocs/op
+BenchmarkPacket/huawei/rules=1000-10        	     100	   3132916 ns/op	 5184026 B/op	   70246 allocs/op
+BenchmarkPacket/huawei/rules=1000-10        	     100	   3169169 ns/op	 5184076 B/op	   70246 allocs/op
+PASS
+ok  	github.com/gatework/firemon/benchmarks	6.620s
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkQuery/fortinet/rules=1000-10         	     319	   1101356 ns/op	 1971560 B/op	   27075 allocs/op
+BenchmarkQuery/fortinet/rules=1000-10         	     330	   1090015 ns/op	 1971542 B/op	   27075 allocs/op
+BenchmarkQuery/fortinet/rules=1000-10         	     326	   1097188 ns/op	 1971542 B/op	   27075 allocs/op
+BenchmarkQuery/fortinet/rules=1000-10         	     325	   1099254 ns/op	 1971546 B/op	   27075 allocs/op
+BenchmarkQuery/fortinet/rules=1000-10         	     326	   1098526 ns/op	 1971541 B/op	   27075 allocs/op
+BenchmarkQuery/fortinet/rules=1000-10         	     327	   1096928 ns/op	 1971543 B/op	   27075 allocs/op
+PASS
+ok  	github.com/gatework/firemon/benchmarks	2.396s
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkMatch-10    	    2822	    124804 ns/op	  286525 B/op	    2134 allocs/op
+BenchmarkMatch-10    	    2968	    120924 ns/op	  286521 B/op	    2134 allocs/op
+BenchmarkMatch-10    	    2948	    121502 ns/op	  286521 B/op	    2134 allocs/op
+BenchmarkMatch-10    	    2992	    121398 ns/op	  286521 B/op	    2134 allocs/op
+BenchmarkMatch-10    	    3018	    121704 ns/op	  286521 B/op	    2134 allocs/op
+BenchmarkMatch-10    	    2947	    121438 ns/op	  286521 B/op	    2134 allocs/op
+PASS
+ok  	github.com/gatework/firemon/benchmarks	2.639s
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=1-10         	    2349	    144637 ns/op	  312562 B/op	    3334 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=1-10         	    2659	    134887 ns/op	  312555 B/op	    3334 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=1-10         	    2671	    135439 ns/op	  312555 B/op	    3334 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=1-10         	    2640	    135615 ns/op	  312556 B/op	    3334 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=1-10         	    2630	    136156 ns/op	  312555 B/op	    3334 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=1-10         	    2641	    136001 ns/op	  312554 B/op	    3334 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=10-10        	     258	   1390962 ns/op	 3126447 B/op	   33326 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=10-10        	     258	   1391771 ns/op	 3126444 B/op	   33326 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=10-10        	     258	   1389010 ns/op	 3126447 B/op	   33326 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=10-10        	     255	   1400619 ns/op	 3126450 B/op	   33326 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=10-10        	     256	   1403079 ns/op	 3126452 B/op	   33326 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=10-10        	     258	   1399810 ns/op	 3126448 B/op	   33326 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=30-10        	      80	   4419524 ns/op	 9378091 B/op	   99967 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=30-10        	      81	   4419019 ns/op	 9378104 B/op	   99967 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=30-10        	      79	   4451924 ns/op	 9378134 B/op	   99967 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=30-10        	      80	   4430683 ns/op	 9378113 B/op	   99967 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=30-10        	      81	   4443122 ns/op	 9378107 B/op	   99967 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=1/definitions=30-10        	      80	   4446189 ns/op	 9378131 B/op	   99967 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=1-10         	     645	    553008 ns/op	 1243093 B/op	   13203 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=1-10         	     646	    553110 ns/op	 1243093 B/op	   13203 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=1-10         	     646	    552513 ns/op	 1243092 B/op	   13203 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=1-10         	     646	    553428 ns/op	 1243095 B/op	   13203 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=1-10         	     655	    552648 ns/op	 1243092 B/op	   13203 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=1-10         	     650	    551962 ns/op	 1243093 B/op	   13203 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=10-10        	      61	   5877584 ns/op	12433905 B/op	  131998 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=10-10        	      60	   5917822 ns/op	12433867 B/op	  131998 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=10-10        	      61	   5903087 ns/op	12433885 B/op	  131998 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=10-10        	      60	   5901777 ns/op	12433900 B/op	  131998 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=10-10        	      60	   5930935 ns/op	12433890 B/op	  131998 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=10-10        	      60	   5889873 ns/op	12433866 B/op	  131998 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=30-10        	      20	  17102719 ns/op	37296108 B/op	  395980 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=30-10        	      20	  17098552 ns/op	37296058 B/op	  395980 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=30-10        	      20	  17135804 ns/op	37296076 B/op	  395980 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=30-10        	      20	  17134233 ns/op	37296056 B/op	  395980 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=30-10        	      20	  16980531 ns/op	37296340 B/op	  395980 allocs/op
+BenchmarkRiskBatch/rules=100/contexts=4/definitions=30-10        	      20	  17070200 ns/op	37296036 B/op	  395979 allocs/op
+PASS
+ok  	github.com/gatework/firemon/benchmarks	13.216s

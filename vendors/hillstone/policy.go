@@ -12,9 +12,10 @@ import (
 func (p *parser) rules(_ context.Context, s *config.Builder) error {
 	position := 0
 	records := make(map[fm.ID]fm.RuleRecord)
+	d := fm.Data{}
 	var order []fm.ID
 	tx := s.Begin()
-	for _, n := range p.nodes {
+	for _, n := range p.doc.nodes {
 		if n.block.Kind != "rule" || !ruleHeader(n.block.Header.Words) {
 			continue
 		}
@@ -27,20 +28,23 @@ func (p *parser) rules(_ context.Context, s *config.Builder) error {
 		} else {
 			r.Spans = append(r.Spans, o.Spans...)
 		}
+		if len(n.block.Children) > 0 {
+			r.Match.Unsupported = append(r.Match.Unsupported, "nested rule condition")
+		}
 		tx.Parse(n.block.Header.Lines()...)
 		if n.block.Complete {
 			tx.Parse(n.block.End.Lines()...)
 		}
 		if !exists {
-			if n.from == "any" {
+			if strings.EqualFold(n.from, "any") {
 				r.Match.AnyFromZone = true
 			} else if n.from != "" {
 				r.Match.FromZones = []fm.ID{fm.ID(n.from)}
 				if r.Scope == "" {
-					r.Scope = p.zoneVRF[fm.ID(n.from)]
+					r.Scope = p.topology.zoneVRF[fm.ID(n.from)]
 				}
 			}
-			if n.to == "any" {
+			if strings.EqualFold(n.to, "any") {
 				r.Match.AnyToZone = true
 			} else if n.to != "" {
 				r.Match.ToZones = []fm.ID{fm.ID(n.to)}
@@ -48,53 +52,20 @@ func (p *parser) rules(_ context.Context, s *config.Builder) error {
 		}
 		for _, l := range n.block.Members {
 			w := l.Words
-			ok := ancillary(w)
+			ok := ancillary(w) || p.selector(&r, w, &d)
 			if len(w) == 2 {
 				switch w[0] {
-				case "src-zone":
-					if strings.EqualFold(w[1], "any") {
-						r.Match.AnyFromZone = true
-					} else {
-						r.Match.AnyFromZone = false
-						r.Match.FromZones = append(r.Match.FromZones, fm.ID(w[1]))
-						if r.Scope == "" {
-							r.Scope = p.zoneVRF[fm.ID(w[1])]
-						}
-					}
-					ok = true
-				case "dst-zone":
-					if strings.EqualFold(w[1], "any") {
-						r.Match.AnyToZone = true
-					} else {
-						r.Match.AnyToZone = false
-						r.Match.ToZones = append(r.Match.ToZones, fm.ID(w[1]))
-					}
-					ok = true
-				case "src-addr":
-					if w[1] == "any" {
-						r.Match.AnySource = true
-					} else {
-						r.Match.Sources = append(r.Match.Sources, p.addressRef(w[1]))
-					}
-					ok = true
-				case "dst-addr":
-					if w[1] == "any" {
-						r.Match.AnyDestination = true
-					} else {
-						r.Match.Destinations = append(r.Match.Destinations, p.addressRef(w[1]))
-					}
-					ok = true
-				case "service":
-					if w[1] == "any" {
-						r.Match.AnyService = true
-					} else {
-						r.Match.Services = append(r.Match.Services, p.serviceRef(w[1]))
-					}
-					ok = true
 				case "action":
 					actions := map[string]fm.Action{"permit": fm.Permit, "deny": fm.Deny, "reject": fm.Reject}
 					r.Action = actions[w[1]]
 					ok = r.Action != fm.UnknownAction
+				case "name":
+					r.Name, ok = w[1], true
+				case "application":
+					if !strings.EqualFold(w[1], "any") {
+						r.Match.Applications = append(r.Match.Applications, w[1])
+					}
+					ok = true
 				case "schedule":
 					r.Match.Schedule = fm.ID(w[1])
 					ok = true
@@ -137,6 +108,7 @@ func (p *parser) rules(_ context.Context, s *config.Builder) error {
 		}
 		rules = append(rules, r)
 	}
-	tx.Emit(fm.Data{Rules: rules})
+	d.Rules = rules
+	tx.Emit(d)
 	return s.Commit(tx)
 }

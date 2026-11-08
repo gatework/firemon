@@ -59,3 +59,31 @@ func TestTrafficProtocolZeroIsNotAny(t *testing.T) {
 		t.Fatalf("protocol zero became any: %v %v", got, err)
 	}
 }
+
+func TestTrafficClipBudgetAndValidation(t *testing.T) {
+	a, b := box("192.0.2.1", "198.51.100.1"), box("192.0.2.2", "198.51.100.2")
+	input, err := flow.NewTraffic(2, a, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wide := a
+	wide.Source.Last, wide.Destination.Last = b.Source.Last, b.Destination.Last
+	got, err := input.Clip(wide, 1)
+	if !errors.Is(err, flow.ErrBudget) || !got.Empty() {
+		t.Fatalf("partial clipping escaped budget: %v, %v", got, err)
+	}
+	got, err = input.Clip(b, 1)
+	if err != nil || got.RegionCount() != 1 || got.Regions()[0] != b {
+		t.Fatalf("one surviving tuple: %v, %v", got, err)
+	}
+	for _, invalid := range []flow.TrafficRegion{{}, {Source: a.Source, Destination: box("::1", "::2").Destination}} {
+		for _, traffic := range []flow.Traffic{{}, input} {
+			if got, err := traffic.Clip(invalid, 2); !errors.Is(err, flow.ErrRegion) || !got.Empty() {
+				t.Fatalf("invalid region accepted: %v, %v", got, err)
+			}
+		}
+	}
+	if got, err := input.Clip(a, 0); !errors.Is(err, flow.ErrBudget) || !got.Empty() {
+		t.Fatalf("zero budget accepted: %v, %v", got, err)
+	}
+}

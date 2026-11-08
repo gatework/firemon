@@ -28,7 +28,7 @@ type Parser struct{ Limits config.Limits }
 
 func (adapter Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor = "paloalto"
-	metadata.ParserVersion = "paloalto-go-5"
+	metadata.ParserVersion = "paloalto-go-6"
 	selected := metadata.Context
 	if selected == "" {
 		selected = "vsys1"

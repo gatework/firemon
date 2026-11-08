@@ -83,7 +83,7 @@ func TestTwoHalfSubnetsCoverWholeRequestWithoutSingleRuleContainment(t *testing.
 		m := anyMatch()
 		m.AnySource = false
 		m.Sources = []fm.AddressRef{{Kind: fm.AddressObject, ID: id}}
-		d.Rules = append(d.Rules, fm.RuleRecord{Object: fm.Object{ID: id}, Position: i, RuleSet: "security", Match: m, Action: fm.Permit})
+		d.Rules = append(d.Rules, fm.RuleRecord{Object: fm.Object{ID: id, Spans: make([]fm.Span, 16)}, Position: i, RuleSet: "security", Match: m, Action: fm.Permit})
 	}
 	fw, err := fm.Seal(d)
 	if err != nil {
@@ -98,12 +98,59 @@ func TestTwoHalfSubnetsCoverWholeRequestWithoutSingleRuleContainment(t *testing.
 	if err != nil || !contains || !res.Unmatched.Empty() || !res.Complete {
 		t.Fatal(res, err)
 	}
+	// Each visited declaration owns 18 values (rule, 16 spans, source).
+	// The second copy must fail atomically even though each fits on its own.
+	partial, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 32}}).Query(t.Context(), fw, policy.Request{Traffic: q})
+	if !errors.Is(err, policy.ErrBudget) || !partial.Allowed.Empty() || len(partial.Decisions) != 0 {
+		t.Fatalf("copy budget returned partial coverage: %v, %v", partial, err)
+	}
+	full, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 36}}).Query(t.Context(), fw, policy.Request{Traffic: q})
+	if err != nil || !full.Complete || len(full.Decisions) != 2 || !full.Unmatched.Empty() {
+		t.Fatalf("exact copy capacity rejected: %v, %v", full, err)
+	}
 }
 func TestRuleVisitBudgetReturnsErrorNotPartialCoverage(t *testing.T) {
 	fw := base(t, []fm.RuleRecord{{Object: fm.Object{ID: "1"}, Match: anyMatch(), Action: fm.Permit, RuleSet: "other"}, {Object: fm.Object{ID: "2"}, Match: anyMatch(), Action: fm.Permit, RuleSet: "security"}})
 	_, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 1}}).Query(context.Background(), fw, policy.Request{Traffic: traffic(t, "192.0.2.1/32", "198.51.100.1/32")})
 	if err == nil {
 		t.Fatal("budget ignored")
+	}
+}
+
+func TestQueryBoundsOwnedRuleCopiesAfterEligibility(t *testing.T) {
+	permit := fm.RuleRecord{Object: fm.Object{ID: "permit"}, Match: anyMatch(), Action: fm.Permit, RuleSet: "security"}
+	large := permit
+	large.ID, large.Position = "large", 1
+	large.Spans = make([]fm.Span, 64)
+	for i := range large.Spans {
+		large.Spans[i] = fm.Span{First: 1, Last: 1}
+	}
+	disabled, foreign, later := large, large, permit
+	disabled.Disabled = true
+	foreign.RuleSet = "other"
+	later.Position = 2
+	for _, tc := range []struct {
+		name  string
+		rules []fm.RuleRecord
+		fail  bool
+	}{
+		{"visited", []fm.RuleRecord{large}, true},
+		{"after-first-match", []fm.RuleRecord{permit, large}, false},
+		{"disabled", []fm.RuleRecord{disabled, later}, false},
+		{"other-chain", []fm.RuleRecord{foreign, later}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fw := base(t, tc.rules)
+			q := policy.Request{Traffic: traffic(t, "192.0.2.1/32", "198.51.100.1/32")}
+			result, err := (policy.Engine{Limits: policy.Limits{MaxVisits: 32}}).Query(t.Context(), fw, q)
+			if tc.fail {
+				if !errors.Is(err, policy.ErrBudget) || len(result.Decisions) != 0 || !result.Allowed.Empty() {
+					t.Fatalf("large declaration escaped copy budget: %v, %v", result, err)
+				}
+			} else if err != nil || result.Allowed.Empty() || !result.Complete {
+				t.Fatalf("unvisited declaration consumed copy budget: %v, %v", result, err)
+			}
+		})
 	}
 }
 

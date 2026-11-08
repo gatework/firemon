@@ -124,7 +124,7 @@ func TestActualPerlOptimizerExactTrafficAndProvenance(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := (analysis.RequestOptimizer{}).Optimize(t.Context(), requests)
+			got, err := (analysis.Optimizer{}).Optimize(t.Context(), requests)
 			if err != nil || len(got) != 1 || len(got[0].Inputs) != len(requests) {
 				t.Fatal(got, err)
 			}

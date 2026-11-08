@@ -4,6 +4,12 @@ This records the requirement audit, independent review and verification of the a
 
 ## Go 1.27 module update on 2026-11-07
 
+The subsequent [core algorithm report](2026-11-07-core-algorithms.md) records
+measured policy/NAT matching and batch risk improvements, cumulative copy budgets,
+and discovery/cache corrections. Its fresh root race/vet/build/static checks,
+traffic oracle fuzzing and current-core adapter checks apply to the local
+`refactor/idiomatic-go` worktree, not a published commit.
+
 The [current verification record](2026-11-07-go127-verification.md) covers the
 Go 1.27 migration, parser capacity, deployment finalization, snapshot bounds,
 NAT context identity, target batch, native builder and CLI changes. Earlier

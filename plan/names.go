@@ -4,7 +4,7 @@ import (
 	"context"
 
 	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/internal/nativename"
+	"github.com/gatework/firemon/internal/names"
 )
 
 // nameAllocator belongs to one candidate draft. Reservations include pending
@@ -15,7 +15,7 @@ type nameAllocator struct {
 	addresses map[string]bool
 	services  map[string]bool
 	ruleIDs   map[fm.ID]bool
-	ruleNames map[nativename.RuleKey]bool
+	ruleNames map[names.RuleKey]bool
 }
 
 func newNameAllocator(ctx context.Context, data *fm.Data, visits *visitBudget) (*nameAllocator, error) {
@@ -26,7 +26,7 @@ func newNameAllocator(ctx context.Context, data *fm.Data, visits *visitBudget) (
 	n := &nameAllocator{
 		visits: visits, vendor: data.Metadata.Vendor,
 		addresses: make(map[string]bool), services: make(map[string]bool),
-		ruleIDs: make(map[fm.ID]bool), ruleNames: make(map[nativename.RuleKey]bool),
+		ruleIDs: make(map[fm.ID]bool), ruleNames: make(map[names.RuleKey]bool),
 	}
 	// Generated global objects must also avoid local names that could shadow
 	// them in a zone's address book. Reserve both IDs and names across scopes.
@@ -34,7 +34,10 @@ func newNameAllocator(ctx context.Context, data *fm.Data, visits *visitBudget) (
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		names[string(object.ID)], names[nativename.Name(object)] = true, true
+		names[string(object.ID)] = true
+		if object.Name != "" {
+			names[object.Name] = true
+		}
 		return nil
 	}
 	for _, address := range data.Addresses {
@@ -62,8 +65,8 @@ func newNameAllocator(ctx context.Context, data *fm.Data, visits *visitBudget) (
 			return nil, err
 		}
 		n.ruleIDs[rule.ID] = true
-		if nativename.NamedRules(n.vendor) {
-			n.ruleNames[nativename.Rule(n.vendor, rule)] = true
+		if names.NamedRules(n.vendor) && rule.Name != "" {
+			n.ruleNames[names.Rule(n.vendor, rule)] = true
 		}
 	}
 	return n, nil
@@ -91,13 +94,13 @@ func (n *nameAllocator) rule(ctx context.Context, id fm.ID, rule fm.RuleRecord) 
 			return "", err
 		}
 		rule.ID, rule.Name = id, string(id)
-		key := nativename.Rule(n.vendor, rule)
-		if !n.ruleIDs[id] && (!nativename.NamedRules(n.vendor) || !n.ruleNames[key]) {
+		key := names.Rule(n.vendor, rule)
+		if !n.ruleIDs[id] && (!names.NamedRules(n.vendor) || !n.ruleNames[key]) {
 			if err := n.visits.take(ctx, 1); err != nil {
 				return "", err
 			}
 			n.ruleIDs[id] = true
-			if nativename.NamedRules(n.vendor) {
+			if names.NamedRules(n.vendor) {
 				n.ruleNames[key] = true
 			}
 			return id, nil

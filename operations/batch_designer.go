@@ -3,7 +3,6 @@ package operations
 import (
 	"context"
 	"maps"
-	"slices"
 	"time"
 
 	fm "github.com/gatework/firemon"
@@ -22,6 +21,8 @@ type BatchStore interface {
 	inventory.RevisionLoader
 }
 type BatchDesignerOptions struct {
+	Topology       *inventory.Topology
+	Clocks         map[string]fm.ScheduleClock
 	Store          BatchStore
 	NativeRenderer plan.NativeRenderer
 	Engine         policy.Engine
@@ -34,6 +35,19 @@ func NewBatchDesigner(o BatchDesignerOptions) (*BatchDesigner, error) {
 	if dependency.Nil(o.Store) || o.NativeRenderer != nil && dependency.Nil(o.NativeRenderer) || o.MaxCandidates < 0 || o.Timeout < 0 {
 		return nil, ErrInvalid
 	}
+	if _, ok := o.Store.(*inventory.Cache); !ok {
+		cache, err := inventory.NewCache(o.Store, inventory.CacheLimits{})
+		if err != nil {
+			return nil, err
+		}
+		o.Store = cache
+	}
+	var err error
+	o.Topology, err = copyTopology(context.Background(), o.Topology, o.Engine.Limits)
+	if err != nil {
+		return nil, err
+	}
+	o.Clocks = maps.Clone(o.Clocks)
 	return &BatchDesigner{options: o}, nil
 }
 
@@ -46,15 +60,19 @@ type BatchRequest struct {
 // AccessRequest preserves the business input. Automatic location uses Original
 // wire coordinates unless an explicit view is supplied. Scope/VRF nil means all.
 type AccessRequest struct {
-	Native         *NativeEffects
-	ID             string
-	Traffic        flow.Traffic
-	View           inventory.View
-	Scope, VRF     *string
-	At             time.Time
-	Targets        []AccessTarget
-	WireCandidates []WireCandidate
-	Sources        []string
+	// Src, Dst and Service are business input. Traffic is the exact native form;
+	// callers choose one form. A missing service is a query filter, not a grant.
+	Src, Dst, Service string
+	Window            *fm.TimeWindow
+	Native            *NativeEffects
+	ID                string
+	Traffic           flow.Traffic
+	View              inventory.View
+	Scope, VRF        *string
+	At                time.Time
+	Targets           []AccessTarget
+	WireCandidates    []WireCandidate
+	Sources           []string
 }
 
 // AccessTarget is an explicit policy view by default. Packet=true requests native
@@ -81,6 +99,12 @@ type Issue struct {
 	Sources                      []string
 }
 type TargetOutcome struct {
+	// TrafficView identifies Wire and Matches.Original coordinates.
+	TrafficView      string
+	At               time.Time
+	Window           *fm.TimeWindow
+	Conditional      bool
+	Matches          []RuleMatch
 	Device, Revision string
 	Wire             flow.Traffic
 	Real             flow.Traffic
@@ -91,9 +115,11 @@ type TargetOutcome struct {
 	Disposition      plan.BatchDisposition
 }
 type RequestOutcome struct {
-	Index    int
-	Request  AccessRequest
-	Outcomes []TargetOutcome
+	Normalized *NormalizedInput
+	Error      *InputError
+	Index      int
+	Request    AccessRequest
+	Outcomes   []TargetOutcome
 }
 
 // BatchSource connects a device-local PlanBatch input to the original business input.
@@ -113,39 +139,80 @@ type BatchReport struct {
 }
 
 func (d BatchDesigner) Design(ctx context.Context, q BatchRequest) (BatchReport, error) {
-	return d.run(ctx, q, true)
+	if err := preflightBusinessNative(ctx, q.Requests, d.options.Engine.Limits); err != nil {
+		return BatchReport{}, err
+	}
+	ctx, cancel := operationContext(ctx, d.options.Timeout)
+	defer cancel()
+	if q.Topology == nil {
+		q.Topology = d.options.Topology
+	}
+	r, err := resolveBatch(ctx, d.options.Store, d.options.Engine, q)
+	if r == nil {
+		return BatchReport{}, err
+	}
+	if err == nil {
+		r.renderer, r.maxCandidates, r.clocks = d.options.NativeRenderer, d.options.MaxCandidates, d.options.Clocks
+		err = r.plan(ctx)
+	}
+	if err == nil {
+		err = r.budgetErr
+	}
+	return r.finish(err), err
 }
-func (d BatchDesigner) Query(ctx context.Context, q BatchRequest) (BatchReport, error) {
-	return d.run(ctx, q, false)
-}
-func (d BatchDesigner) run(ctx context.Context, q BatchRequest, design bool) (report BatchReport, err error) {
+
+func resolveBatch(ctx context.Context, store BatchStore, engine policy.Engine, q BatchRequest) (r *targetBatch, err error) {
 	if err = ctx.Err(); err != nil {
-		return report, err
+		return nil, err
 	}
-	if dependency.Nil(d.options.Store) || q.Version != 1 || len(q.Requests) == 0 || len(q.Requests) > 100 {
-		return report, ErrInvalid
+	if q.Version == 0 {
+		q.Version = 1
 	}
-	if err = preflightBusinessNative(ctx, q.Requests, d.options.Engine.Limits); err != nil {
-		return report, err
+	if dependency.Nil(store) || q.Version != 1 || len(q.Requests) == 0 || len(q.Requests) > 100 {
+		return nil, ErrInvalid
 	}
-	if q.Topology != nil {
-		if err = q.Topology.Validate(); err != nil {
-			return report, err
-		}
-		frozen := *q.Topology
-		frozen.Bindings = slices.Clone(q.Topology.Bindings)
-		for i := range frozen.Bindings {
-			frozen.Bindings[i].Networks = slices.Clone(frozen.Bindings[i].Networks)
-			frozen.Bindings[i].Sources = slices.Clone(frozen.Bindings[i].Sources)
-		}
-		q.Topology = &frozen
+	if q.Topology, err = copyTopology(ctx, q.Topology, engine.Limits); err != nil {
+		return nil, err
 	}
 	totalRegions := 0
+	totalBytes := 0
+	remaining := engine.Limits.WithDefaults().MaxVisits
 	for _, a := range q.Requests {
+		cost := 1 + len(a.Sources) + len(a.Targets) + len(a.WireCandidates)
+		if cost > remaining {
+			return nil, policy.ErrBudget
+		}
+		remaining -= cost
+		totalBytes += len(a.Src) + len(a.Dst) + len(a.Service) + len(a.ID)
+		if a.Scope != nil {
+			totalBytes += len(*a.Scope)
+		}
+		if a.VRF != nil {
+			totalBytes += len(*a.VRF)
+		}
+		for _, target := range a.Targets {
+			totalBytes += targetBytes(target)
+		}
+		for _, candidate := range a.WireCandidates {
+			totalBytes += targetBytes(candidate.Target)
+		}
+
+		for _, source := range a.Sources {
+			totalBytes += len(source)
+		}
+		if totalBytes > MaxRequestBytes {
+			return nil, policy.ErrBudget
+		}
 		totalRegions += a.Traffic.RegionCount()
+		if a.Src != "" || a.Dst != "" || a.Service != "" {
+			if len(a.Targets) > 100 || len(a.WireCandidates) > 100 {
+				return nil, policy.ErrBudget
+			}
+			continue
+		}
 		if a.Native != nil {
 			if len(a.Targets) != 1 || len(a.WireCandidates) != 0 || (a.View != "" && a.View != inventory.Original) {
-				return report, ErrInvalid
+				return nil, ErrInvalid
 			}
 			totalRegions += a.Native.PolicyTraffic.RegionCount()
 			for _, n := range a.Native.NAT {
@@ -153,66 +220,68 @@ func (d BatchDesigner) run(ctx context.Context, q BatchRequest, design bool) (re
 			}
 		}
 		if a.View != "" && a.View != inventory.Original && a.View != inventory.Real && a.View != inventory.Translated {
-			return report, ErrInvalid
+			return nil, ErrInvalid
 		}
 		if len(a.WireCandidates) > 100 || len(a.WireCandidates) > 0 && (len(a.Targets) > 0 || (a.View != inventory.Translated && a.View != inventory.Real)) {
-			return report, ErrInvalid
+			return nil, ErrInvalid
 		}
 		for _, c := range a.WireCandidates {
 			totalRegions += c.Traffic.RegionCount()
 			if c.Target.Device == "" || !c.Target.Request.Traffic.Empty() || c.Traffic.Empty() {
-				return report, ErrInvalid
+				return nil, ErrInvalid
 			}
 		}
-		if totalRegions > d.options.Engine.Limits.WithDefaults().MaxRegions {
-			return report, ErrInvalid
+		if totalRegions > engine.Limits.WithDefaults().MaxRegions {
+			return nil, ErrInvalid
 		}
-		if len(a.Targets) > 100 || a.Traffic.RegionCount() > d.options.Engine.Limits.WithDefaults().MaxRegions {
-			return report, ErrInvalid
+		if len(a.Targets) > 100 || a.Traffic.RegionCount() > engine.Limits.WithDefaults().MaxRegions {
+			return nil, ErrInvalid
 		}
 		for _, t := range a.Targets {
 			if t.Device == "" || !t.Request.Traffic.Empty() {
-				return report, ErrInvalid
+				return nil, ErrInvalid
 			}
 		}
 	}
-	ctx, cancel := operationContext(ctx, d.options.Timeout)
-	defer cancel()
-	manifest, err := d.options.Store.Manifest(ctx)
+	manifest, err := store.Manifest(ctx)
 	if err != nil {
-		return report, err
+		return nil, err
 	}
 	if err = ctx.Err(); err != nil {
-		return report, err
+		return nil, err
+	}
+	if len(manifest.Devices)+len(manifest.Reservations) > engine.Limits.WithDefaults().MaxVisits {
+		return nil, policy.ErrBudget
 	}
 	if manifest.Version != 1 {
-		return report, snapshot.ErrFormat
+		return nil, snapshot.ErrFormat
 	}
 	// Detach maps from custom stores before any Load callback can advance state.
 	frozen := snapshot.Manifest{Version: manifest.Version, Generation: manifest.Generation, Devices: make(map[string]snapshot.Head), Reservations: make(map[string]snapshot.Reservation)}
 	maps.Copy(frozen.Devices, manifest.Devices)
 	maps.Copy(frozen.Reservations, manifest.Reservations)
-	r := targetBatch{
-		designer: d, manifest: frozen, topology: q.Topology, design: design,
+	r = &targetBatch{
+		store: store, engine: engine, manifest: frozen, topology: q.Topology,
 		graphs: make(map[string]*fm.Firewall), loadErrors: make(map[string]error),
-		work: make(map[string][]*targetEntry), visits: d.options.Engine.Limits.WithDefaults().MaxVisits,
+		work: make(map[string][]*targetEntry), visits: engine.Limits.WithDefaults().MaxVisits,
 	}
-	defer func() { report = r.finish(err) }()
+	now := time.Now().Round(0).UTC()
 	for i, a := range q.Requests {
+		if a.At.IsZero() && a.Window == nil && (a.Src != "" || a.Dst != "") {
+			a.At = now
+		}
 		if err = r.resolve(ctx, i, a); err != nil {
-			return report, err
+			return r, err
 		}
 	}
 	if r.budgetErr != nil {
-		return report, r.budgetErr
+		return r, r.budgetErr
 	}
-	if design {
-		if err = r.plan(ctx); err != nil {
-			return report, err
-		}
-	}
-	if r.budgetErr != nil {
-		return report, r.budgetErr
-	}
-	return report, ctx.Err()
+
+	return r, ctx.Err()
+}
+
+func targetBytes(t AccessTarget) int {
+	q := t.Request
+	return len(t.Device) + len(t.Revision) + len(t.VRF) + len(q.Scope) + len(q.RuleSet) + len(q.FromZone) + len(q.ToZone) + len(q.EgressInterface)
 }

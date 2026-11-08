@@ -25,7 +25,7 @@ func TestHistoricalInspectReportsRequestedRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := run([]string{"inspect", "--store", root, "--revision", revision}, &out); err != nil {
+	if err := execute(t.Context(), []string{"inspect", "--store", root, "--revision", revision}, &out); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {

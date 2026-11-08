@@ -10,11 +10,11 @@ import (
 )
 
 func TestCatalogReusesOnlyCompleteVisibleCoverage(t *testing.T) {
-	for _, kind := range []string{"multi-address", "address-group", "multi-service", "service-group", "wider-address", "service-hole", "foreign-address-group", "foreign-service-group", "shadowed-address", "shadowed-service", "local-service", "address-book-group", "wrong-address-book-group", "shadowed-address-group", "shadowed-service-group"} {
+	for _, kind := range []string{"unnamed-address", "unnamed-service", "multi-address", "address-group", "multi-service", "service-group", "wider-address", "service-hole", "foreign-address-group", "foreign-service-group", "shadowed-address", "shadowed-service", "local-service", "address-book-group", "wrong-address-book-group", "shadowed-address-group", "shadowed-service-group"} {
 		t.Run(kind, func(t *testing.T) {
 			data := baseline(t).Export()
 			data.Rules = nil
-			data.Zones = []fm.ZoneRecord{{Object: fm.Object{ID: "inside"}}, {Object: fm.Object{ID: "outside"}}}
+			data.Zones = []fm.ZoneRecord{{Object: fm.Object{ID: "inside", Name: "inside"}}, {Object: fm.Object{ID: "outside", Name: "outside"}}}
 			q := request(t, "192.0.2.0/30")
 			q.FromZone, q.ToZone, q.Scope = "inside", "outside", "selected"
 			region := q.Traffic.Regions()[0]
@@ -27,12 +27,18 @@ func TestCatalogReusesOnlyCompleteVisibleCoverage(t *testing.T) {
 			first, second := data.Services[0].Terms[0], data.Services[0].Terms[0]
 			first.DestinationPort.High, second.DestinationPort.Low = 443, 444
 			switch kind {
+			case "unnamed-address":
+				data.Addresses[0].Name = ""
+				wantAddress = fm.AddressRef{}
+			case "unnamed-service":
+				data.Services[0].Name = ""
+				wantService = fm.ServiceRef{}
 			case "multi-address":
 				data.Addresses[0].Ranges = []flow.AddressRange{addressRange("192.0.2.0/31"), addressRange("192.0.2.2/31")}
 			case "address-group", "foreign-address-group", "address-book-group", "wrong-address-book-group":
 				data.Addresses[0].Ranges = []flow.AddressRange{addressRange("192.0.2.0/31")}
-				data.Addresses = append(data.Addresses, fm.AddressRecord{Object: fm.Object{ID: "src-second"}, Ranges: []flow.AddressRange{addressRange("192.0.2.2/31")}})
-				data.AddressGroups = []fm.AddressGroupRecord{{Object: fm.Object{ID: "source-group"}, Members: []fm.AddressRef{{Kind: fm.AddressObject, ID: "src"}, {Kind: fm.AddressObject, ID: "src-second"}}}}
+				data.Addresses = append(data.Addresses, fm.AddressRecord{Object: fm.Object{ID: "src-second", Name: "src-second"}, Ranges: []flow.AddressRange{addressRange("192.0.2.2/31")}})
+				data.AddressGroups = []fm.AddressGroupRecord{{Object: fm.Object{ID: "source-group", Name: "source-group"}, Members: []fm.AddressRef{{Kind: fm.AddressObject, ID: "src"}, {Kind: fm.AddressObject, ID: "src-second"}}}}
 				wantAddress = fm.AddressRef{Kind: fm.AddressGroupObject, ID: "source-group"}
 				if kind == "foreign-address-group" {
 					data.AddressGroups[0].Scope = "other"
@@ -50,8 +56,8 @@ func TestCatalogReusesOnlyCompleteVisibleCoverage(t *testing.T) {
 				data.Services[0].Terms = []fm.ServiceTerm{first, second}
 			case "service-group", "foreign-service-group":
 				data.Services[0].Terms = []fm.ServiceTerm{first}
-				data.Services = append(data.Services, fm.ServiceRecord{Object: fm.Object{ID: "second-port"}, Terms: []fm.ServiceTerm{second}})
-				data.ServiceGroups = []fm.ServiceGroupRecord{{Object: fm.Object{ID: "service-group"}, Members: []fm.ServiceRef{{Kind: fm.ServiceObject, ID: "https"}, {Kind: fm.ServiceObject, ID: "second-port"}}}}
+				data.Services = append(data.Services, fm.ServiceRecord{Object: fm.Object{ID: "second-port", Name: "second-port"}, Terms: []fm.ServiceTerm{second}})
+				data.ServiceGroups = []fm.ServiceGroupRecord{{Object: fm.Object{ID: "service-group", Name: "service-group"}, Members: []fm.ServiceRef{{Kind: fm.ServiceObject, ID: "https"}, {Kind: fm.ServiceObject, ID: "second-port"}}}}
 				wantService = fm.ServiceRef{Kind: fm.ServiceGroupObject, ID: "service-group"}
 				if kind == "foreign-service-group" {
 					data.ServiceGroups[0].Scope = "other"
@@ -76,7 +82,7 @@ func TestCatalogReusesOnlyCompleteVisibleCoverage(t *testing.T) {
 				data.AddressGroups = []fm.AddressGroupRecord{{Object: fm.Object{ID: "shadowing", Name: "src", Scope: "selected"}, Members: []fm.AddressRef{{Kind: fm.AddressObject, ID: "dst"}}}}
 				wantAddress = fm.AddressRef{}
 			case "shadowed-service-group":
-				data.Services = append(data.Services, fm.ServiceRecord{Object: fm.Object{ID: "first-port"}, Terms: []fm.ServiceTerm{first}})
+				data.Services = append(data.Services, fm.ServiceRecord{Object: fm.Object{ID: "first-port", Name: "first-port"}, Terms: []fm.ServiceTerm{first}})
 				data.ServiceGroups = []fm.ServiceGroupRecord{{Object: fm.Object{ID: "shadowing", Name: "https", Scope: "selected"}, Members: []fm.ServiceRef{{Kind: fm.ServiceObject, ID: "first-port"}}}}
 				wantService = fm.ServiceRef{}
 			case "local-service":

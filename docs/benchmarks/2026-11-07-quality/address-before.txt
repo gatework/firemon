@@ -1,0 +1,246 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/flow
+cpu: Apple M5
+BenchmarkAddressSet/difference/ipv4/disjoint/128         	     552	    433796 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/128       	  921466	       267.7 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/128           	100000000	         2.099 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/128          	     547	    437673 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/128        	  343240	       726.7 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/128            	122801983	         1.954 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/128        	     356	    674268 ns/op	 3437272 B/op	    1120 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/128      	  341031	       730.2 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/128          	 2003494	       119.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/disjoint/1024        	       9	  24938093 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/1024      	  125380	      1921 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/1024          	100000000	         2.094 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/1024         	       9	  25030736 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/1024       	   42720	      5684 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/1024           	123896678	         1.938 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/1024       	       5	  40736708 ns/op	234482264 B/op	   12475 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/1024     	   41886	      5658 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/1024         	  251965	       958.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/128         	     525	    455902 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/128       	    1111	    216116 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/128           	     531	    447816 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/128          	     522	    459474 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/128        	    1118	    215659 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/128            	     537	    451075 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/128        	     336	    713475 ns/op	 3476840 B/op	    1123 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/128      	    1087	    220867 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/128          	     997	    241469 ns/op	 1104080 B/op	     861 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/1024        	       8	  26418312 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/1024      	      16	  13670464 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/1024          	       8	  26319307 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/1024         	       8	  27135438 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/1024       	      16	  13400544 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/1024           	       8	  26537318 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/1024       	       5	  44276842 ns/op	234823016 B/op	   12477 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/1024     	      16	  13402164 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/1024         	      16	  13961177 ns/op	71045328 B/op	    9905 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/flow
+cpu: Apple M5
+BenchmarkAddressSet/difference/ipv4/disjoint/128         	     544	    438817 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/128       	 1000000	       259.5 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/128           	100000000	         2.111 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/128          	     543	    440546 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/128        	  342601	       723.6 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/128            	121476956	         1.971 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/128        	     352	    680270 ns/op	 3437272 B/op	    1120 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/128      	  324148	       731.3 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/128          	 1994815	       120.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/disjoint/1024        	       9	  25029444 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/1024      	  141686	      1700 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/1024          	100000000	         2.095 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/1024         	       8	  25226026 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/1024       	   41080	      5832 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/1024           	123785755	         1.938 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/1024       	       5	  40942433 ns/op	234482264 B/op	   12475 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/1024     	   41121	      5788 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/1024         	  250516	       954.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/128         	     505	    469512 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/128       	    1076	    224886 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/128           	     526	    459031 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/128          	     512	    466060 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/128        	     988	    238879 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/128            	     516	    461107 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/128        	     327	    731582 ns/op	 3476840 B/op	    1123 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/128      	    1024	    231090 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/128          	     987	    245133 ns/op	 1104080 B/op	     861 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/1024        	       8	  27148427 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/1024      	      16	  14319044 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/1024          	       8	  26959661 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/1024         	       8	  27227344 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/1024       	      15	  14008136 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/1024           	       8	  27011510 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/1024       	       5	  44527633 ns/op	234823016 B/op	   12477 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/1024     	      16	  14553281 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/1024         	      16	  14148951 ns/op	71045328 B/op	    9905 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/flow
+cpu: Apple M5
+BenchmarkAddressSet/difference/ipv4/disjoint/128         	     543	    438442 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/128       	 1000000	       250.2 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/128           	100000000	         2.099 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/128          	     548	    440224 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/128        	  348616	       714.9 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/128            	121964569	         1.966 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/128        	     355	    676197 ns/op	 3437272 B/op	    1120 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/128      	  344361	       719.9 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/128          	 1992709	       120.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/disjoint/1024        	       8	  25332839 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/1024      	  140462	      1914 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/1024          	100000000	         2.094 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/1024         	       9	  25073412 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/1024       	   42026	      5660 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/1024           	122254422	         1.961 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/1024       	       5	  40882092 ns/op	234482264 B/op	   12475 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/1024     	   42012	      5653 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/1024         	  252559	       954.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/128         	     505	    469949 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/128       	    1119	    220817 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/128           	     523	    454256 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/128          	     513	    463112 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/128        	    1062	    223642 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/128            	     526	    458394 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/128        	     336	    716263 ns/op	 3476840 B/op	    1123 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/128      	    1093	    225025 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/128          	     996	    243656 ns/op	 1104080 B/op	     861 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/1024        	       8	  27343005 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/1024      	      15	  13527633 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/1024          	       8	  26711458 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/1024         	       8	  27331380 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/1024       	      15	  14023069 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/1024           	       8	  26827750 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/1024       	       5	  44403992 ns/op	234823016 B/op	   12477 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/1024     	      15	  13983297 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/1024         	      15	  14310972 ns/op	71045328 B/op	    9905 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/flow
+cpu: Apple M5
+BenchmarkAddressSet/difference/ipv4/disjoint/128         	     546	    441199 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/128       	 1000000	       245.8 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/128           	100000000	         2.098 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/128          	     541	    443580 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/128        	  342226	       726.3 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/128            	100000000	         2.115 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/128        	     330	    697786 ns/op	 3437272 B/op	    1120 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/128      	  344161	       721.3 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/128          	 1957947	       121.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/disjoint/1024        	       8	  25425349 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/1024      	  127957	      1848 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/1024          	100000000	         2.105 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/1024         	       8	  25418188 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/1024       	   42624	      5694 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/1024           	100000000	         2.058 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/1024       	       5	  41038750 ns/op	234482264 B/op	   12475 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/1024     	   42525	      5640 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/1024         	  251130	       954.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/128         	     483	    482058 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/128       	    1023	    232652 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/128           	     494	    471058 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/128          	     500	    478316 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/128        	    1006	    236690 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/128            	     508	    473065 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/128        	     321	    750152 ns/op	 3476840 B/op	    1123 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/128      	    1026	    237232 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/128          	     940	    256392 ns/op	 1104080 B/op	     861 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/1024        	       8	  27617484 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/1024      	      15	  14334597 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/1024          	       8	  27137359 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/1024         	       8	  27451286 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/1024       	      15	  14539928 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/1024           	       8	  27186557 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/1024       	       5	  45168842 ns/op	234823016 B/op	   12477 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/1024     	      15	  14481364 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/1024         	      15	  14406469 ns/op	71045328 B/op	    9905 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/flow
+cpu: Apple M5
+BenchmarkAddressSet/difference/ipv4/disjoint/128         	     548	    438251 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/128       	  882528	       266.1 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/128           	100000000	         2.099 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/128          	     548	    438206 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/128        	  343884	       727.5 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/128            	100000000	         2.033 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/128        	     355	    682198 ns/op	 3437272 B/op	    1120 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/128      	  323486	       726.9 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/128          	 1696662	       140.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/disjoint/1024        	       9	  25203722 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/1024      	  141253	      1701 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/1024          	100000000	         2.107 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/1024         	       8	  25191266 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/1024       	   41145	      5724 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/1024           	100000000	         2.041 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/1024       	       5	  40790150 ns/op	234482264 B/op	   12475 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/1024     	   41706	      5704 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/1024         	  207060	      1073 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/128         	     520	    473545 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/128       	    1070	    220280 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/128           	     532	    450894 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/128          	     520	    465782 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/128        	    1076	    226776 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/128            	     535	    455209 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/128        	     332	    724984 ns/op	 3476840 B/op	    1123 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/128      	    1075	    229322 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/128          	     998	    243838 ns/op	 1104080 B/op	     861 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/1024        	       8	  26675578 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/1024      	      15	  14485297 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/1024          	       8	  26826646 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/1024         	       8	  26740609 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/1024       	      15	  14349178 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/1024           	       8	  26853214 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/1024       	       5	  44644592 ns/op	234823016 B/op	   12477 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/1024     	      15	  14156728 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/1024         	      15	  14087192 ns/op	71045328 B/op	    9905 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/flow
+cpu: Apple M5
+BenchmarkAddressSet/difference/ipv4/disjoint/128         	     548	    440469 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/128       	 1000000	       262.7 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/128           	100000000	         2.117 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/128          	     546	    439062 ns/op	 2025176 B/op	    1033 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/128        	  343296	       736.3 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/128            	100000000	         2.081 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/128        	     350	    678711 ns/op	 3437272 B/op	    1120 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/128      	  328573	       745.8 ns/op	    2064 B/op	       9 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/128          	 1991161	       120.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/disjoint/1024        	       8	  25519838 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/disjoint/1024      	  141397	      1699 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv4/disjoint/1024          	100000000	         2.105 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/overlap/1024         	       8	  25566188 ns/op	125256280 B/op	   11277 allocs/op
+BenchmarkAddressSet/intersection/ipv4/overlap/1024       	   39441	      6024 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/overlap/1024           	100000000	         2.031 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv4/contained/1024       	       5	  41306817 ns/op	234482264 B/op	   12475 allocs/op
+BenchmarkAddressSet/intersection/ipv4/contained/1024     	   41217	      5849 ns/op	   25232 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv4/contained/1024         	  250900	       954.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/128         	     514	    465343 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/128       	    1123	    208944 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/128           	     536	    450104 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/128          	     516	    457488 ns/op	 2044392 B/op	    1036 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/128        	    1126	    218586 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/128            	     532	    456678 ns/op	 2009088 B/op	    1024 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/128        	     330	    731696 ns/op	 3476840 B/op	    1123 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/128      	    1104	    215179 ns/op	   22248 B/op	      10 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/128          	    1002	    243815 ns/op	 1104080 B/op	     861 allocs/op
+BenchmarkAddressSet/difference/ipv6/disjoint/1024        	       8	  26610120 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/disjoint/1024      	      16	  13291188 ns/op	      24 B/op	       1 allocs/op
+BenchmarkAddressSet/contains/ipv6/disjoint/1024          	       8	  26664302 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/overlap/1024         	       8	  26420323 ns/op	125394280 B/op	   11279 allocs/op
+BenchmarkAddressSet/intersection/ipv6/overlap/1024       	      16	  13242453 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/overlap/1024           	       8	  26442484 ns/op	125124608 B/op	   11264 allocs/op
+BenchmarkAddressSet/difference/ipv6/contained/1024       	       5	  44400042 ns/op	234823016 B/op	   12477 allocs/op
+BenchmarkAddressSet/intersection/ipv6/contained/1024     	      16	  13400508 ns/op	  171368 B/op	      13 allocs/op
+BenchmarkAddressSet/contains/ipv6/contained/1024         	      16	  14115698 ns/op	71045328 B/op	    9905 allocs/op
+PASS

@@ -1,0 +1,66 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/inventory
+cpu: Apple M5
+BenchmarkCacheLoad/uncached-10         	      81	   1355579 ns/op	 2336540 B/op	   10684 allocs/op
+BenchmarkCacheLoad/uncached-10         	     100	   1223341 ns/op	 2361675 B/op	   10685 allocs/op
+BenchmarkCacheLoad/uncached-10         	     100	   1217375 ns/op	 2316157 B/op	   10683 allocs/op
+BenchmarkCacheLoad/uncached-10         	     100	   1204484 ns/op	 2288772 B/op	   10682 allocs/op
+BenchmarkCacheLoad/uncached-10         	      92	   1218848 ns/op	 2318474 B/op	   10683 allocs/op
+BenchmarkCacheLoad/uncached-10         	     100	   1221470 ns/op	 2288897 B/op	   10682 allocs/op
+BenchmarkCacheLoad/uncached-10         	     100	   1218252 ns/op	 2270657 B/op	   10682 allocs/op
+BenchmarkCacheLoad/uncached-10         	      99	   1216969 ns/op	 2249766 B/op	   10681 allocs/op
+BenchmarkCacheLoad/uncached-10         	      94	   1236300 ns/op	 2312975 B/op	   10683 allocs/op
+BenchmarkCacheLoad/uncached-10         	      94	   1236811 ns/op	 2332350 B/op	   10684 allocs/op
+BenchmarkCacheLoad/cold-10             	      97	   1224564 ns/op	 2339264 B/op	   10696 allocs/op
+BenchmarkCacheLoad/cold-10             	     100	   1225662 ns/op	 2326449 B/op	   10696 allocs/op
+BenchmarkCacheLoad/cold-10             	     100	   1209456 ns/op	 2326375 B/op	   10696 allocs/op
+BenchmarkCacheLoad/cold-10             	     100	   1202594 ns/op	 2262700 B/op	   10693 allocs/op
+BenchmarkCacheLoad/cold-10             	      97	   1206026 ns/op	 2292289 B/op	   10694 allocs/op
+BenchmarkCacheLoad/cold-10             	     100	   1205600 ns/op	 2253642 B/op	   10693 allocs/op
+BenchmarkCacheLoad/cold-10             	     100	   1227934 ns/op	 2353671 B/op	   10697 allocs/op
+BenchmarkCacheLoad/cold-10             	      98	   1214254 ns/op	 2211132 B/op	   10692 allocs/op
+BenchmarkCacheLoad/cold-10             	      97	   1195042 ns/op	 2245437 B/op	   10693 allocs/op
+BenchmarkCacheLoad/cold-10             	      96	   1199928 ns/op	 2299488 B/op	   10695 allocs/op
+BenchmarkCacheLoad/hot-10              	 1434540	        83.42 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheLoad/hot-10              	 1445095	        82.85 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheLoad/hot-10              	 1447855	        82.82 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheLoad/hot-10              	 1452020	        82.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheLoad/hot-10              	 1465650	        81.93 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheLoad/hot-10              	 1470724	        81.82 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheLoad/hot-10              	 1458883	        82.57 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheLoad/hot-10              	 1463604	        81.67 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheLoad/hot-10              	 1463670	        81.88 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheLoad/hot-10              	 1468782	        81.85 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/build-10                	      61	   1852414 ns/op	10707066 B/op	   50044 allocs/op
+BenchmarkIndex/build-10                	      61	   1852407 ns/op	10706972 B/op	   50044 allocs/op
+BenchmarkIndex/build-10                	      56	   1835232 ns/op	10706975 B/op	   50044 allocs/op
+BenchmarkIndex/build-10                	      58	   1833710 ns/op	10706969 B/op	   50044 allocs/op
+BenchmarkIndex/build-10                	      60	   1876069 ns/op	10706973 B/op	   50044 allocs/op
+BenchmarkIndex/build-10                	      60	   1850135 ns/op	10707068 B/op	   50044 allocs/op
+BenchmarkIndex/build-10                	      60	   1896773 ns/op	10706975 B/op	   50044 allocs/op
+BenchmarkIndex/build-10                	      63	   1852243 ns/op	10706982 B/op	   50044 allocs/op
+BenchmarkIndex/build-10                	      57	   1828069 ns/op	10706969 B/op	   50044 allocs/op
+BenchmarkIndex/build-10                	      63	   1877327 ns/op	10706973 B/op	   50044 allocs/op
+BenchmarkIndex/hot-10                  	 1632495	        72.56 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10                  	 1518072	        97.12 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10                  	 1559433	        92.45 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10                  	 1000000	       293.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10                  	 1285016	        87.25 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10                  	 1803999	        65.30 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10                  	 1556912	        76.58 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10                  	 1608438	        73.90 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10                  	 1680542	        71.47 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10                  	 1654621	        72.76 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/candidates-10           	     644	    187830 ns/op	     688 B/op	      10 allocs/op
+BenchmarkIndex/candidates-10           	     643	    186864 ns/op	     688 B/op	      10 allocs/op
+BenchmarkIndex/candidates-10           	     651	    183982 ns/op	     688 B/op	      10 allocs/op
+BenchmarkIndex/candidates-10           	     640	    187931 ns/op	     688 B/op	      10 allocs/op
+BenchmarkIndex/candidates-10           	     652	    183455 ns/op	     688 B/op	      10 allocs/op
+BenchmarkIndex/candidates-10           	     657	    182826 ns/op	     688 B/op	      10 allocs/op
+BenchmarkIndex/candidates-10           	     654	    183524 ns/op	     688 B/op	      10 allocs/op
+BenchmarkIndex/candidates-10           	     654	    183799 ns/op	     688 B/op	      10 allocs/op
+BenchmarkIndex/candidates-10           	     648	    184466 ns/op	     688 B/op	      10 allocs/op
+BenchmarkIndex/candidates-10           	     650	    183804 ns/op	     688 B/op	      10 allocs/op
+PASS
+ok  	github.com/gatework/firemon/inventory	7.825s

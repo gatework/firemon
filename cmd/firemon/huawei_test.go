@@ -32,7 +32,7 @@ security-policy
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := run([]string{"import", "--store", dir, "--device", "usg", "--vendor", "huawei", "--software", "V500R005", "--file", input, "--complete", "--publication", "one"}, &out); err != nil {
+	if err := execute(t.Context(), []string{"import", "--store", dir, "--device", "usg", "--vendor", "huawei", "--software", "V500R005", "--file", input, "--complete", "--publication", "one"}, &out); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(input); err != nil {
@@ -44,7 +44,7 @@ security-policy
 		{"plan", "192.0.2.10/32", "203.0.113.10/32", "trust", "untrust", `"TargetAllowed": true`},
 	} {
 		out.Reset()
-		if err := run([]string{tt.command, "--store", dir, "--device", "usg", "--source", tt.source, "--destination", tt.destination, "--service", "tcp/443", "--from-zone", tt.from, "--to-zone", tt.to}, &out); err != nil {
+		if err := execute(t.Context(), []string{tt.command, "--store", dir, "--device", "usg", "--source", tt.source, "--destination", tt.destination, "--service", "tcp/443", "--from-zone", tt.from, "--to-zone", tt.to}, &out); err != nil {
 			t.Fatal(tt.command, err)
 		}
 		if !strings.Contains(out.String(), tt.want) {

@@ -9,6 +9,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/policy"
 )
 
@@ -122,6 +123,9 @@ func (p Planner) Migrate(ctx context.Context, source, before *fm.Firewall, input
 	if source == nil || before == nil || len(input.Contexts) == 0 || len(input.Contexts) > 100 {
 		return nil, ErrInvalid
 	}
+	if p.Renderer != nil && dependency.Nil(p.Renderer) {
+		return nil, ErrInvalid
+	}
 	if !source.Complete() || !before.Complete() {
 		return nil, migrationFailure("", "incomplete-snapshot", "source and target must retain complete evidence")
 	}
@@ -154,15 +158,16 @@ func (p Planner) Migrate(ctx context.Context, source, before *fm.Firewall, input
 			mappings = append(mappings, MigrationRuleMapping{Source: id, Targets: slices.Clone(origins[id])})
 		}
 		native, err = compiler.CompileMigrationNAT(ctx, source, before, NativeMigrationDraft{Input: cloneMigrationInput(input), Changes: cloneNativeChanges(native), Rules: mappings, Limits: limits})
+		if canceled := ctx.Err(); canceled != nil {
+			return nil, canceled
+		}
 		if err != nil {
 			return nil, err
 		}
-		if err := visits.nativeAdditions(ctx, native.Additions); err != nil {
+		if err := visits.nativeChanges(ctx, native); err != nil {
 			return nil, err
 		}
-		if err := visits.take(ctx, len(native.Rules)); err != nil {
-			return nil, err
-		}
+		native = cloneNativeChanges(native)
 		if len(native.Additions.StaticNATs)+len(native.Additions.DynamicNATs) == 0 {
 			return nil, migrationFailure("", "missing-translation", "compiler omitted selected NAT declarations")
 		}
@@ -189,14 +194,13 @@ func (p Planner) Migrate(ctx context.Context, source, before *fm.Firewall, input
 	}
 	var commands []string
 	if len(native.Additions.Schedules)+len(native.Additions.StaticNATs)+len(native.Additions.DynamicNATs) > 0 {
-		renderer := p.NativeRenderer
-		if renderer == nil {
-			renderer, _ = p.Renderer.(NativeRenderer)
+		if dependency.Nil(p.NativeRenderer) {
+			p.NativeRenderer, _ = p.Renderer.(NativeRenderer)
 		}
-		if renderer == nil {
+		if dependency.Nil(p.NativeRenderer) {
 			return nil, migrationFailure("", "schedule-rendering", "target has no native schedule renderer")
 		}
-		commands, err = renderer.RenderNative(ctx, before, after, native)
+		commands, err = p.renderNative(ctx, before, after, native)
 	} else {
 		commands, err = p.renderChanges(ctx, before, after, changes)
 	}
@@ -378,7 +382,7 @@ func (p Planner) compileMigrationPolicy(ctx context.Context, source, before *fm.
 					Box     flow.TrafficRegion
 				}{r.ID, mapping.Target, box})
 				n := fm.RuleRecord{Object: fm.Object{ID: id, Name: string(id), Scope: mapping.Target.Chain.Scope}, RuleSet: mapping.Target.Chain.RuleSet, Position: len(rules), Match: match, Action: r.Action, Log: r.Log, LogStart: r.LogStart, LogEnd: r.LogEnd}
-				id, err = catalog.names.rule(ctx, id, n)
+				id, err = catalog.alloc.rule(ctx, id, n)
 				if err != nil {
 					return nil, nil, NativeChanges{}, err
 				}
@@ -568,7 +572,7 @@ func (p Planner) proveMigration(ctx context.Context, source, before, after *fm.F
 		if !prior.Complete || !next.Complete || !prior.Unknown.Empty() || !next.Unknown.Empty() {
 			return Proof{}, nil, migrationFailure("", "unknown-target", "target outside behavior is not established")
 		}
-		if err := preserveOutsideTargetOwnership(ctx, prior, next, domain, limit, visits); err != nil {
+		if err := preserveOutside(ctx, prior, next, domain, limit, visits); err != nil {
 			return Proof{}, nil, fmt.Errorf("%w: target outside migration selection", err)
 		}
 	}

@@ -164,7 +164,8 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 		}
 		d.ServiceGroups = append(d.ServiceGroups, g.record)
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }
 
 func (p *parser) lookupAddress(zone, name string) fm.AddressRef {

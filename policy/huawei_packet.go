@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	fm "github.com/gatework/firemon"
@@ -279,7 +280,7 @@ func (e Engine) huaweiPacket(ctx context.Context, fw *fm.Firewall, q PacketReque
 				if len(out.Paths) >= limit {
 					return PacketResult{}, ErrBudget
 				}
-				out.Paths = append(out.Paths, PacketPath{Real: request.Traffic, Original: wire, FromZone: q.FromZone, ToZone: request.ToZone, NAT: relation, Policy: verdict, NativeRequests: []Request{request}})
+				out.Paths = append(out.Paths, PacketPath{Real: request.Traffic, Original: wire, FromZone: q.FromZone, ToZone: request.ToZone, NAT: relation, Policy: verdict, PolicyNAT: slices.Clone(part.Steps), NativeRequests: []Request{request}})
 			}
 		}
 	}

@@ -191,16 +191,16 @@ func fortinetDestRefs(fw *fm.Firewall, refs []fm.AddressRef, budget *resolutionB
 		switch ref.Kind {
 		case fm.AddressObject:
 			a := fw.Address(ref.ID)
-			if a != nil && a.Record().VIP != (fm.NATRef{}) {
+			if a != nil && a.VIP() != (fm.NATRef{}) {
 				if a.VIPStaticNAT() == nil && a.VIPDynamicNAT() == nil {
 					known = false
 				} else {
-					vips[a.Record().VIP] = true
+					vips[a.VIP()] = true
 				}
 			} else {
 				ordinary = append(ordinary, ref)
 			}
-			if a == nil || len(a.Record().Unsupported) > 0 {
+			if a == nil || a.HasUnsupported() {
 				known = false
 			}
 		case fm.AddressGroupObject:
@@ -209,10 +209,10 @@ func fortinetDestRefs(fw *fm.Firewall, refs []fm.AddressRef, budget *resolutionB
 				known = false
 				break
 			}
-			if len(g.Record().Unsupported) > 0 {
+			if g.HasUnsupported() {
 				known = false
 			}
-			for _, member := range g.Record().Members {
+			for member := range g.Members() {
 				if err := visit(member); err != nil {
 					return err
 				}
@@ -232,21 +232,31 @@ func fortinetDestRefs(fw *fm.Firewall, refs []fm.AddressRef, budget *resolutionB
 }
 
 func (e Engine) fortinetPolicy(ctx context.Context, fw *fm.Firewall, q Request, view NATRelation, budget *int) (Result, error) {
-	rules := fw.Rules()
-	if len(rules) > *budget {
-		return Result{}, ErrBudget
+	selected, err := e.fortinetRules(ctx, fw, q, view, budget, false)
+	if err != nil {
+		return Result{}, err
 	}
-	*budget -= len(rules)
-	resolver := &resolutionBudget{ctx: ctx, limit: e.Limits.WithDefaults().MaxCombinations}
+	q.Traffic = view.Translated
+	return e.queryRules(ctx, fw, q, func(r fm.RuleRecord) (fm.RuleRecord, bool) { v, ok := selected[r.ID]; return v, ok })
+}
+
+func (e Engine) fortinetRules(ctx context.Context, fw *fm.Firewall, q Request, view NATRelation, budget *int, includeDisabled bool) (map[fm.ID]fm.RuleRecord, error) {
+	if err := chargeVisits(ctx, budget, fw.DeclarationSize()); err != nil {
+		return nil, err
+	}
+	limits := e.Limits.WithDefaults()
+	rules := fw.Rules()
+	resolver := &resolutionBudget{ctx: ctx, limit: limits.MaxCombinations}
+	serviceMatch := &resolutionBudget{ctx: ctx, cache: &resolutionCache{firewall: fw, remaining: limits.MaxCombinations}}
 	selected := make(map[fm.ID]fm.RuleRecord)
 	for _, rule := range rules {
 		r := rule.Record()
-		if r.Disabled || r.Scope != q.Scope {
+		if r.Disabled && !includeDisabled || r.Scope != q.Scope {
 			continue
 		}
 		normal, vips, known, err := fortinetDestRefs(fw, r.Match.Destinations, resolver)
 		if err != nil {
-			return Result{}, err
+			return nil, err
 		}
 		if !known {
 			r.Unsupported = append(r.Unsupported, "unresolved native VIP destination")
@@ -262,7 +272,7 @@ func (e Engine) fortinetPolicy(ctx context.Context, fw *fm.Firewall, q Request, 
 			r.Match.AnyDestination = true
 			n, err := transform(fw, view.Steps[0])
 			if err != nil {
-				return Result{}, err
+				return nil, err
 			}
 			if !n.match.AnyFromZone {
 				if q.FromZone == "" {
@@ -286,35 +296,42 @@ func (e Engine) fortinetPolicy(ctx context.Context, fw *fm.Firewall, q Request, 
 		if view.ID != "" && !r.Builtin && len(view.Steps) == 1 {
 			n, err := transform(fw, view.Steps[0])
 			if err != nil {
-				return Result{}, err
+				return nil, err
 			}
 			if len(n.destinationPorts) > 0 {
 				if *budget < 2 {
-					return Result{}, ErrBudget
+					return nil, ErrBudget
 				}
 				*budget -= 2
 				match := r.Match
 				match.AnyDestination = true
 				match.Destinations = nil
-				before, k1, err := e.Match(ctx, fw, match, q, view.Original)
+				spent := serviceMatch.spent
+				serviceMatch.limit = min(limits.MaxCombinations, spent+*budget)
+				before, k1, err := e.matchTraffic(ctx, fw, match, q, view.Original, serviceMatch)
 				if err != nil {
-					return Result{}, err
+					return nil, err
 				}
-				after, k2, err := e.Match(ctx, fw, match, q, view.Translated)
+				after, k2, err := e.matchTraffic(ctx, fw, match, q, view.Translated, serviceMatch)
 				if err != nil {
-					return Result{}, err
+					return nil, err
 				}
+				work := packetProofBudget{limits: limits, remaining: *budget}
+				if _, err := work.product(ctx, serviceMatch.spent-spent, max(1, view.Original.RegionCount(), view.Translated.RegionCount())); err != nil {
+					return nil, err
+				}
+				*budget = work.remaining
 				after, err = srxOriginal(fw, view, after, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
-					return Result{}, err
+					return nil, err
 				}
 				a, err := before.Difference(after, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
-					return Result{}, err
+					return nil, err
 				}
 				b, err := after.Difference(before, e.Limits.WithDefaults().MaxRegions)
 				if err != nil {
-					return Result{}, err
+					return nil, err
 				}
 				if !k1 || !k2 || !a.Empty() || !b.Empty() {
 					r.Unsupported = append(r.Unsupported, "unproven translated service view")
@@ -325,8 +342,7 @@ func (e Engine) fortinetPolicy(ctx context.Context, fw *fm.Firewall, q Request, 
 		}
 		selected[r.ID] = r
 	}
-	q.Traffic = view.Translated
-	return e.queryRules(ctx, fw, q, func(r fm.RuleRecord) (fm.RuleRecord, bool) { v, ok := selected[r.ID]; return v, ok })
+	return selected, nil
 }
 
 func fortinetOriginalResult(fw *fm.Firewall, view NATRelation, part Result, limit int) (Result, error) {

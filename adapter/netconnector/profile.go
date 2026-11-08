@@ -11,26 +11,24 @@ import (
 	"github.com/gatework/go-net-connector/vendors"
 )
 
-// Profile reuses the pinned connector's native dialects and adds ASA/ScreenOS.
+// Profile accepts a canonical vendor name, reuses the pinned connector's native
+// dialects and adds ASA/ScreenOS.
 // SRX accepts configuration prompts because the adapter owns its exclusive
 // candidate session. It does not enable legacy SSH recovery.
 func Profile(vendor string) (connector.Profile, error) {
-	switch domainVendor(vendor) {
-	case "hillstone":
-		return builtinProfile("hillstone")
-	case "paloalto":
-		return builtinProfile("palo_alto")
+	name := profileName(vendor)
+	switch vendor {
+	case "hillstone", "paloalto", "fortinet":
+		return builtinProfile(name)
 	case "srx":
-		p, err := builtinProfile("juniper")
+		p, err := builtinProfile(name)
 		if err != nil {
 			return p, err
 		}
 		p.CommandPrompt = textPattern(`(?:\A|[\r\n])[^\s@]+@[^\s>#]+[>#][ \t]*\z`)
 		return p, nil
-	case "fortinet":
-		return builtinProfile(domainVendor(vendor))
 	case "huawei":
-		p, err := builtinProfile("huawei")
+		p, err := builtinProfile(name)
 		// USG persists with save and a native confirmation interaction. Do not
 		// pass the Comware-specific force token as a Huawei filename.
 		p.SaveCommands = []string{"save"}
@@ -38,7 +36,7 @@ func Profile(vendor string) (connector.Profile, error) {
 	case "netscreen":
 		prompt := textPattern(`(?:\A|[\r\n])[A-Za-z0-9_.:/-]+(?:\([^\r\n()]*\))?->[ \t]*\z`)
 		return connector.Profile{
-			Name: "netscreen", LoginPrompt: prompt, CommandPrompt: prompt,
+			Name: name, LoginPrompt: prompt, CommandPrompt: prompt,
 			UsernamePrompt: textPattern(`(?i)(?:\A|[\r\n])[ \t]*login:[ \t]*\z`),
 			PasswordPrompt: textPattern(`(?i)(?:\A|[\r\n])[ \t]*password:[ \t]*\z`),
 			Pager:          textPattern(`(?i)(?:\A|[\r\n])[ \t]*--- more ---[^\r\n]*\z`), PagerResponse: " ",
@@ -50,7 +48,7 @@ func Profile(vendor string) (connector.Profile, error) {
 	case "asa":
 		stem := `(?:\A|[\r\n])[A-Za-z0-9_.:/-]+(?:\([A-Za-z0-9_/-]+\))?`
 		return connector.Profile{
-			Name:                 "asa",
+			Name:                 name,
 			LoginPrompt:          textPattern(stem + `[>#][ \t]*\z`),
 			CommandPrompt:        textPattern(stem + `[>#][ \t]*\z`),
 			UsernamePrompt:       textPattern(`(?i)(?:\A|[\r\n])[ \t]*Username:[ \t]*\z`),
@@ -79,6 +77,19 @@ func Profile(vendor string) (connector.Profile, error) {
 	default:
 		return connector.Profile{}, ErrInvalid
 	}
+}
+
+// profileName maps canonical vendors to the pinned connector's profile names.
+func profileName(vendor string) string {
+	switch vendor {
+	case "paloalto":
+		return "palo_alto"
+	case "srx":
+		return "juniper"
+	case "huawei", "hillstone", "fortinet", "netscreen", "asa":
+		return vendor
+	}
+	return ""
 }
 
 func confirmASA(step connector.StepResult) error {

@@ -211,25 +211,12 @@ func (p Planner) migrationNATDomains(ctx context.Context, source, target *fm.Fir
 				if owned.Empty() {
 					continue
 				}
-				var original flow.Traffic
-				same, err := native.Traffic.Equal(path.Original, limit)
-				if err != nil {
+				if err := visits.take(ctx, source.DeclarationSize()+owned.RegionCount()+path.Original.RegionCount()+len(path.PolicyNAT)); err != nil {
 					return nil, err
 				}
-				if same && migrationPolicyIdentity(source, path.NAT.Steps) {
-					original, err = owned.Intersection(path.Original, limit)
-					if err != nil {
-						return nil, err
-					}
-				} else {
-					covered, err := owned.Equal(native.Traffic, limit)
-					if err != nil {
-						return nil, err
-					}
-					if !covered || !path.Policy.Unmatched.Empty() {
-						return nil, migrationFailure("", "mixed-native-ownership", "changed policy coordinates need an exact inverse for mixed selected ownership")
-					}
-					original = path.Original
+				original, err := p.Engine.OriginalTraffic(ctx, source, path, owned)
+				if err != nil {
+					return nil, err
 				}
 				if original.Empty() {
 					continue
@@ -258,40 +245,6 @@ func (p Planner) migrationNATDomains(ctx context.Context, source, target *fm.Fir
 		}
 	}
 	return out, nil
-}
-
-// Equality of projected address sets does not prove identity: a destination
-// mapping may permute hosts. Until an exact ownership preimage is available,
-// only a wholly selected native domain may cross such a transformation.
-func migrationPolicyIdentity(fw *fm.Firewall, steps []policy.NATStep) bool {
-	for _, step := range steps {
-		if step.Reverse {
-			return false
-		}
-		switch step.Kind {
-		case fm.StaticNATObject:
-			n := fw.StaticNAT(step.ID)
-			if n == nil {
-				return false
-			}
-			r := n.Record()
-			if len(r.Destination)+len(r.DestinationPorts) > 0 {
-				return false
-			}
-		case fm.DynamicNATObject:
-			n := fw.DynamicNAT(step.ID)
-			if n == nil {
-				return false
-			}
-			r := n.Record()
-			if r.DestinationMode != fm.NoTranslation || r.DestinationPool != "" || len(r.Destination)+len(r.DestinationPorts) > 0 {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	return true
 }
 
 func (p Planner) proveMigrationNAT(ctx context.Context, source, before, after *fm.Firewall, input MigrationInput, visits *visitBudget) (policy.NATProof, error) {

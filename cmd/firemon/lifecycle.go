@@ -14,12 +14,12 @@ import (
 	"time"
 )
 
-type reclamationDocument struct {
+type reclaimDoc struct {
 	Version int                         `json:"version"`
 	Request analysis.ReclamationRequest `json:"request"`
 	Rules   []fm.ID                     `json:"rules"`
 }
-type migrationDocument struct {
+type migrationDoc struct {
 	Version        int                                 `json:"version"`
 	TargetRevision string                              `json:"target_revision"`
 	At             time.Time                           `json:"at"`
@@ -69,8 +69,8 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 	var targetRevision string
 	switch command {
 	case "reclamation-report", "reclamation-plan":
-		var d reclamationDocument
-		if err = readAnalysisDocument(ctx, *file, &d); err != nil {
+		var d reclaimDoc
+		if err = readJSON(ctx, *file, &d); err != nil {
 			return err
 		}
 		if d.Version != 1 || len(d.Rules) > 100 || d.Request.Revision != "" && d.Request.Revision != *revision {
@@ -99,8 +99,8 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 			}{rules, members}
 		}
 	case "migration-report", "migration-plan":
-		var d migrationDocument
-		if err = readAnalysisDocument(ctx, *file, &d); err != nil {
+		var d migrationDoc
+		if err = readJSON(ctx, *file, &d); err != nil {
 			return err
 		}
 		if d.Version != 1 || d.TargetRevision == "" || len(d.Zones) > 100 || len(d.Chains) > 100 || len(d.Rules) > 100 || len(d.Pairs) > 100 || len(d.Interfaces) > 100 || len(d.VRFs) > 100 || len(d.StaticNATs) > 100 || len(d.DynamicNATs) > 100 {
@@ -140,7 +140,7 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 			}
 			q.Chains[c.From] = c.To
 		}
-		p, e := (analysis.PolicyMigrator{Planner: plan.Planner{Renderer: targetRenderer}}).Plan(ctx, fw, target, q)
+		p, e := (analysis.Migrator{Planner: plan.Planner{Renderer: targetRenderer}}).Plan(ctx, fw, target, q)
 		if e != nil {
 			return e
 		}
@@ -154,7 +154,7 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 			At      time.Time `json:"at"`
 			Rules   []fm.ID   `json:"rules"`
 		}
-		if err = readAnalysisDocument(ctx, *file, &d); err != nil {
+		if err = readJSON(ctx, *file, &d); err != nil {
 			return err
 		}
 		if d.Version != 1 || len(d.Rules) > 100 {
@@ -166,7 +166,7 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 		}
 		report = lifecyclePlan(p)
 	case "usage-report":
-		report, err = readUsageDocument(ctx, *file, *revision, fw)
+		report, err = readUsage(ctx, *file, *revision, fw)
 		if err != nil {
 			return err
 		}
@@ -182,7 +182,7 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 	}{1, *revision, targetRevision, fw.SemanticDigest(), report})
 }
 
-type counterDocument struct {
+type counterDoc struct {
 	File        string    `json:"file"`
 	At          time.Time `json:"at"`
 	Revision    string    `json:"revision"`
@@ -192,19 +192,19 @@ type counterDocument struct {
 	Complete    bool      `json:"complete"`
 }
 
-func readUsageDocument(ctx context.Context, path, revision string, fw *fm.Firewall) (report analysis.UsageReport, err error) {
+func readUsage(ctx context.Context, path, revision string, fw *fm.Firewall) (report analysis.UsageReport, err error) {
 	var d struct {
-		Version     int               `json:"version"`
-		File        string            `json:"file"`
-		Revision    string            `json:"revision"`
-		GraphDigest string            `json:"graph_digest"`
-		Source      string            `json:"source"`
-		Scope       string            `json:"scope"`
-		Window      fm.TimeWindow     `json:"window"`
-		Complete    bool              `json:"complete"`
-		Samples     []counterDocument `json:"samples"`
+		Version     int           `json:"version"`
+		File        string        `json:"file"`
+		Revision    string        `json:"revision"`
+		GraphDigest string        `json:"graph_digest"`
+		Source      string        `json:"source"`
+		Scope       string        `json:"scope"`
+		Window      fm.TimeWindow `json:"window"`
+		Complete    bool          `json:"complete"`
+		Samples     []counterDoc  `json:"samples"`
 	}
-	if err := readAnalysisDocument(ctx, path, &d); err != nil {
+	if err := readJSON(ctx, path, &d); err != nil {
 		return analysis.UsageReport{}, err
 	}
 	if d.Version != 1 {

@@ -2,7 +2,9 @@ package config_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -18,20 +20,21 @@ func source(t *testing.T, s string) *config.Content {
 	}
 	return c
 }
-func TestSkipAndRewindKeepPendingWhileCommitIsAtomic(t *testing.T) {
+func TestReadingKeepsEvidenceUntilCommit(t *testing.T) {
 	c := source(t, "interface eth0\nrule 1\n")
 	b, err := config.NewBuilder(c, fm.Metadata{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	line, ok := c.NextPending()
-	if !ok || line.Number != 1 {
-		t.Fatal(line)
-	}
-	c.Rewind()
-	line, _ = c.NextPending()
-	if line.Number != 1 {
-		t.Fatal("skipped line was consumed")
+	for range 2 {
+		if _, err := config.Statements(t.Context(), c); err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range c.Evidence() {
+			if e.State != fm.Pending {
+				t.Fatal("reading consumed evidence")
+			}
+		}
 	}
 	tx := b.Begin()
 	tx.Emit(fm.Data{Interfaces: []fm.InterfaceRecord{{Object: fm.Object{ID: "eth0"}}}})
@@ -39,10 +42,11 @@ func TestSkipAndRewindKeepPendingWhileCommitIsAtomic(t *testing.T) {
 	if err := b.Commit(tx); err != nil {
 		t.Fatal(err)
 	}
-	c.Rewind()
-	line, _ = c.NextPending()
-	if line.Number != 2 {
-		t.Fatal("committed line remained pending")
+	if _, err := config.Statements(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	if c.Evidence()[0].State != fm.Parsed || c.Evidence()[1].State != fm.Pending {
+		t.Fatal("reading changed committed evidence")
 	}
 	failed := b.Begin()
 	failed.Emit(fm.Data{Rules: []fm.RuleRecord{{Object: fm.Object{ID: "r1"}}}})
@@ -54,19 +58,17 @@ func TestSkipAndRewindKeepPendingWhileCommitIsAtomic(t *testing.T) {
 		t.Fatal("failed commit leaked draft or evidence")
 	}
 }
-func TestRollbackRestoresPositionAndKnownIgnoreRequiresReason(t *testing.T) {
+func TestRollbackPreservesEvidenceAndKnownIgnoreRequiresReason(t *testing.T) {
 	c := source(t, "a\nb\n")
 	b, err := config.NewBuilder(c, fm.Metadata{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	tx := b.Begin()
-	c.NextPending()
 	tx.Parse(1)
 	tx.Rollback()
-	line, _ := c.Peek()
-	if line.Number != 1 {
-		t.Fatal("rollback position")
+	if c.Evidence()[0].State != fm.Pending {
+		t.Fatal("rollback consumed evidence")
 	}
 	tx = b.Begin()
 	tx.Ignore("", 1)
@@ -78,10 +80,9 @@ func TestRollbackRestoresPositionAndKnownIgnoreRequiresReason(t *testing.T) {
 	if err := b.Commit(tx); err != nil {
 		t.Fatal(err)
 	}
-	c.Rewind()
-	line, _ = c.NextPending()
-	if line.Number != 2 {
-		t.Fatal(line)
+	evidence := c.Evidence()
+	if evidence[0].State != fm.Ignored || evidence[0].Reason != "blank/comment" || evidence[1].State != fm.Pending {
+		t.Fatal("ignore changed unrelated evidence", evidence)
 	}
 }
 func TestPhaseRollsBackFailedWork(t *testing.T) {
@@ -168,33 +169,36 @@ func TestNativeBlocksKeepUnknownScopesAndUnclaimedChildren(t *testing.T) {
 	}
 }
 
-func TestFragmentContentClaimsExactBytesWithinSamePhysicalLine(t *testing.T) {
-	raw := "<known>x</known><unknown>y</unknown>"
-	split := len("<known>x</known>")
-	c, err := config.NewFragmentContent(context.Background(), config.Source{Text: raw, Complete: true}, []fm.Span{{First: 1, Last: 1, StartByte: 0, EndByte: split}, {First: 1, Last: 1, StartByte: split, EndByte: len(raw)}}, config.Limits{})
-	if err != nil {
-		t.Fatal(err)
+func TestPhysicalLinesRetainIndentationOffsetsAndSourceDigest(t *testing.T) {
+	raw := "  interface eth0\r\n\tzone trust\r# note\nexit"
+	c := source(t, raw)
+	parts := []string{"  interface eth0\r\n", "\tzone trust\r", "# note\n", "exit"}
+	if len(c.Lines()) != len(parts) {
+		t.Fatal("wrong physical line count")
+	}
+	end := 0
+	for i, line := range c.Lines() {
+		if line.Number != i+1 || line.StartByte != end || line.Raw != parts[i] {
+			t.Fatalf("line %d: %+v", i+1, line)
+		}
+		end += len(parts[i])
+		if line.EndByte != end || line.Text != strings.TrimRight(parts[i], "\r\n") {
+			t.Fatalf("line boundary or indentation changed: %+v", line)
+		}
+	}
+	if end != len(raw) {
+		t.Fatal("missing physical lines")
+	}
+	lines := c.Lines()
+	lines[0].Raw = "changed"
+	if c.Lines()[0].Raw != parts[0] {
+		t.Fatal("mutable source lines escaped")
 	}
 	b, err := config.NewBuilder(c, fm.Metadata{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	tx := b.Begin()
-	tx.Parse(1)
-	tx.Emit(fm.Data{Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "known"}}}})
-	if err := b.Commit(tx); err != nil {
-		t.Fatal(err)
-	}
-	evidence := c.Evidence()
-	if evidence[0].Span.EndByte != split || evidence[1].State != fm.Pending || evidence[1].Span.StartByte != split {
-		t.Fatal("same-line unknown syntax was claimed", evidence)
-	}
-	tx = b.Begin()
-	tx.Parse(2, 1)
-	if err := b.Commit(tx); err == nil || c.Evidence()[1].State != fm.Pending {
-		t.Fatal("fragment rollback leaked source claim")
-	}
-	if _, err := config.NewFragmentContent(context.Background(), config.Source{Text: raw}, []fm.Span{{First: 1, Last: 1, StartByte: 1, EndByte: len(raw)}}, config.Limits{}); err == nil {
-		t.Fatal("unclaimed byte gap accepted")
+	if got, want := b.Metadata().SourceDigest, fmt.Sprintf("%x", sha256.Sum256([]byte(raw))); got != want {
+		t.Fatalf("source digest = %s, want %s", got, want)
 	}
 }

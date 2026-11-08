@@ -32,18 +32,14 @@ type XMLDocument struct {
 // content, extra roots and namespaces unsupported by a vendor cannot become
 // command text. No external entity resolver or network access is installed.
 func XML(ctx context.Context, source Source, limits Limits) (XMLDocument, error) {
-	limits = limits.defaults()
-	if err := ctx.Err(); err != nil {
+	c, err := newContent(ctx, source, limits)
+	if err != nil {
 		return XMLDocument{}, err
 	}
-	if err := validateSource(ctx, source, limits); err != nil {
-		return XMLDocument{}, err
-	}
+	limits = c.limits
 	decoder := xml.NewDecoder(strings.NewReader(source.Text))
 	var document XMLDocument
 	var stack []*XMLNode
-	var spans []fm.Span
-	line := 1
 	for {
 		if err := ctx.Err(); err != nil {
 			return XMLDocument{}, err
@@ -60,29 +56,19 @@ func XML(ctx context.Context, source Source, limits Limits) (XMLDocument, error)
 			return XMLDocument{}, fmt.Errorf("%w: malformed XML: %w", ErrSource, err)
 		}
 		end := int(decoder.InputOffset())
-		span := fm.Span{First: line, Last: line, StartByte: start, EndByte: end}
-		for i := start; i < end; i++ {
-			if (i-start)%scanChunk == 0 {
-				if err := ctx.Err(); err != nil {
-					return XMLDocument{}, err
-				}
-			}
-			if source.Text[i] == '\n' {
-				line++
-			} else if source.Text[i] == '\r' && (i+1 == len(source.Text) || source.Text[i+1] != '\n') {
-				line++
-			}
-			if i < end-1 {
-				span.Last = line
-			}
-		}
+		var span fm.Span
 		claim := 0
 		if end > start {
-			if len(spans) >= limits.MaxLines || line > limits.MaxLines+1 {
-				return XMLDocument{}, fmt.Errorf("%w: XML token/line budget", ErrSource)
+			if len(c.evidence) >= limits.MaxLines {
+				return XMLDocument{}, fmt.Errorf("%w: XML token budget", ErrSource)
 			}
-			spans = append(spans, span)
-			claim = len(spans)
+			var ok bool
+			span, ok = c.span(start, end)
+			if !ok {
+				return XMLDocument{}, ErrSource
+			}
+			c.evidence = append(c.evidence, fm.Evidence{Span: span, State: fm.Pending})
+			claim = len(c.evidence)
 		}
 		switch value := token.(type) {
 		case xml.StartElement:
@@ -141,10 +127,6 @@ func XML(ctx context.Context, source Source, limits Limits) (XMLDocument, error)
 	if document.Root == nil || len(stack) != 0 {
 		return XMLDocument{}, ErrSource
 	}
-	cursor, err := NewFragmentContent(ctx, source, spans, limits)
-	if err != nil {
-		return XMLDocument{}, err
-	}
-	document.Content = cursor
+	document.Content = c
 	return document, nil
 }

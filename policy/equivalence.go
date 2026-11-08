@@ -138,7 +138,7 @@ func (e Engine) Equivalent(ctx context.Context, before, after *fm.Firewall, from
 	}
 	limits := e.Limits.WithDefaults()
 	remaining := limits.MaxVisits
-	if err := chargeVisits(ctx, &remaining, before.RecordCount(), after.RecordCount()); err != nil {
+	if err := chargeVisits(ctx, &remaining, before.DeclarationSize(), after.DeclarationSize()); err != nil {
 		return Equivalence{}, err
 	}
 	if err := e.preserveNATActivation(ctx, before, after, &remaining); err != nil {

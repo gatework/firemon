@@ -27,7 +27,7 @@ func generatedID(prefix string, value any) fm.ID {
 }
 
 func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.RuleRecord, gap flow.Traffic, visits *visitBudget) (*fm.Firewall, []Change, Cost, error) {
-	if err := visits.take(ctx, fw.RecordCount()); err != nil {
+	if err := visits.take(ctx, fw.DeclarationSize()); err != nil {
 		return nil, nil, Cost{}, err
 	}
 	d := fw.Export()
@@ -142,7 +142,7 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 }
 
 func (p Planner) createCandidate(ctx context.Context, fw *fm.Firewall, q policy.Request, gap flow.Traffic, visits *visitBudget) (*fm.Firewall, []Change, Cost, error) {
-	if err := visits.take(ctx, fw.RecordCount()); err != nil {
+	if err := visits.take(ctx, fw.DeclarationSize()); err != nil {
 		return nil, nil, Cost{}, err
 	}
 	d := fw.Export()
@@ -166,7 +166,7 @@ func (p Planner) createCandidate(ctx context.Context, fw *fm.Firewall, q policy.
 			return nil, nil, Cost{}, err
 		}
 		rule := fm.RuleRecord{Object: fm.Object{Scope: q.Scope}, RuleSet: q.RuleSet, Position: i, Match: m, Action: fm.Permit, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant}
-		id, err := catalog.names.rule(ctx, generatedID("fm-new-", box), rule)
+		id, err := catalog.alloc.rule(ctx, generatedID("fm-new-", box), rule)
 		if err != nil {
 			return nil, nil, Cost{}, err
 		}

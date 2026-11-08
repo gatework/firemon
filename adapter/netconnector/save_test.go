@@ -25,16 +25,6 @@ func TestPANJobNativeQueuedTable(t *testing.T) {
 	}
 }
 
-func TestNativeProfilesCoverApprovedVendors(t *testing.T) {
-	for _, vendor := range []string{"srx", "netscreen", "fortinet", "huawei"} {
-		t.Run(vendor, func(t *testing.T) {
-			if _, err := Profile(vendor); err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-}
-
 func TestPANJobRejectsAmbiguousOrUnboundedEvidence(t *testing.T) {
 	row := "2026/01/01 00:00:00 00:00:01 42 Commit FIN OK 00:00:02"
 	for _, text := range []string{

@@ -33,12 +33,6 @@ func quoted(value string) (string, error) {
 	}
 	return "\"" + value + "\"", nil
 }
-func label(o fm.Object) string {
-	if o.Name != "" {
-		return o.Name
-	}
-	return string(o.ID)
-}
 func portText(p flow.Interval) string { return fmt.Sprintf("%d-%d", p.Low, p.High) }
 func prefixRange(r flow.AddressRange) (netip.Prefix, bool) {
 	if !r.First.Is4() || !r.Last.Is4() {
@@ -82,10 +76,10 @@ func addressName(fw *fm.Firewall, ref fm.AddressRef) (string, error) {
 			o = a.Record().Object
 		}
 	}
-	if o.ID == "" || o.Scope != "" || o.ID != fm.ID(label(o)) {
+	if o.ID == "" || o.Scope != "" || o.ID != fm.ID(o.Name) {
 		return "", ErrRender
 	}
-	return quoted(label(o))
+	return quoted(o.Name)
 }
 func serviceName(fw *fm.Firewall, ref fm.ServiceRef) (string, error) {
 	if ref.Kind == fm.ServiceObject && ref.ID == "$ALL" {
@@ -105,10 +99,10 @@ func serviceName(fw *fm.Firewall, ref fm.ServiceRef) (string, error) {
 			o = s.Record().Object
 		}
 	}
-	if o.ID == "" || o.Scope != "" || o.ID != fm.ID(label(o)) {
+	if o.ID == "" || o.Scope != "" || o.ID != fm.ID(o.Name) {
 		return "", ErrRender
 	}
-	return quoted(label(o))
+	return quoted(o.Name)
 }
 func natOwner(fw *fm.Firewall, id fm.ID) bool {
 	return slices.ContainsFunc(fw.DynamicNATs(), func(n *fm.DynamicNAT) bool { return n.Record().Rule == id })
@@ -123,16 +117,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 }
 
 func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	builder, err := render.NewNativeBuilder(ctx, "fortinet", before, after, changes)
+	builder, err := render.NewBuilder(ctx, "fortinet", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-
-	timed, err := render.ScheduleCommands(before, after, changes)
-	if err != nil {
-		return nil, err
-	}
-	builder.AppendCommands(timed...)
 
 	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
 		return nil, err
@@ -192,7 +180,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		block("firewall service custom", name, fields)
 	}
 	if batch.Native() {
-		commands = append(commands, batch.NativeCommands()...)
+		commands = append(commands, batch.Commands()...)
 	}
 	used := make(map[fm.ID]bool)
 	first := fm.ID("")
@@ -327,7 +315,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			if err != nil {
 				return nil, err
 			}
-			schedule, err := batch.ScheduleReference(after, m.Schedule)
+			schedule, err := batch.ScheduleName(after, m.Schedule)
 			if err != nil {
 				return nil, err
 			}

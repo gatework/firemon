@@ -8,7 +8,6 @@ import (
 	"time"
 
 	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
 )
 
@@ -48,10 +47,10 @@ func (c RevisionComparer) Compare(ctx context.Context, before, after *fm.Firewal
 	}
 	limits := c.Engine.Limits.WithDefaults()
 	budget := visitBudget(limits.MaxVisits)
-	if err := budget.take(ctx, before.RecordCount()); err != nil {
+	if err := budget.take(ctx, before.DeclarationSize()); err != nil {
 		return RevisionComparison{}, err
 	}
-	if err := budget.take(ctx, after.RecordCount()); err != nil {
+	if err := budget.take(ctx, after.DeclarationSize()); err != nil {
 		return RevisionComparison{}, err
 	}
 	a, b := before.Export(), after.Export()
@@ -116,9 +115,6 @@ func (c RevisionComparer) Compare(ctx context.Context, before, after *fm.Firewal
 	}
 	if errors.Is(err, policy.ErrNotEquivalent) || errors.Is(err, policy.ErrNAT) {
 		return out, nil
-	}
-	if errors.Is(err, flow.ErrBudget) || errors.Is(err, policy.ErrBudget) || ctx.Err() != nil {
-		return RevisionComparison{}, err
 	}
 	return RevisionComparison{}, err
 }

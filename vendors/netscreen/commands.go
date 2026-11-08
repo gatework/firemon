@@ -31,12 +31,6 @@ func quoted(value string) (string, error) {
 	}
 	return "\"" + value + "\"", nil
 }
-func label(o fm.Object) string {
-	if o.Name != "" {
-		return o.Name
-	}
-	return string(o.ID)
-}
 func addressName(fw *fm.Firewall, zone fm.ID, ref fm.AddressRef) (string, error) {
 	if ref.ID == "$any-ipv4" && ref.Kind == fm.AddressObject {
 		return "\"Any\"", nil
@@ -56,18 +50,18 @@ func addressName(fw *fm.Firewall, zone fm.ID, ref fm.AddressRef) (string, error)
 		return "", ErrRender
 	}
 	for _, scope := range []string{addressScope(string(zone)), ""} {
-		id := addressID(scope, label(o))
+		id := addressID(scope, o.Name)
 		if a := fw.Address(id); a != nil {
 			if ref.Kind != fm.AddressObject || ref.ID != id {
 				return "", ErrRender
 			}
-			return quoted(label(o))
+			return quoted(o.Name)
 		}
 		if g := fw.AddressGroup(id); g != nil {
 			if ref.Kind != fm.AddressGroupObject || ref.ID != id {
 				return "", ErrRender
 			}
-			return quoted(label(o))
+			return quoted(o.Name)
 		}
 	}
 	return "", ErrRender
@@ -84,10 +78,10 @@ func serviceName(fw *fm.Firewall, ref fm.ServiceRef) (string, error) {
 			o = s.Record().Object
 		}
 	}
-	if o.ID == "" || o.Scope != "" || o.ID != fm.ID(label(o)) {
+	if o.ID == "" || o.Scope != "" || o.ID != fm.ID(o.Name) {
 		return "", ErrRender
 	}
-	return quoted(label(o))
+	return quoted(o.Name)
 }
 func portText(v flow.Interval) string { return fmt.Sprintf("%d-%d", v.Low, v.High) }
 func rangePrefix(v flow.AddressRange) (netip.Prefix, bool) {
@@ -121,16 +115,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 }
 
 func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	builder, err := render.NewNativeBuilder(ctx, "netscreen", before, after, changes)
+	builder, err := render.NewBuilder(ctx, "netscreen", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-
-	timed, err := render.ScheduleCommands(before, after, changes)
-	if err != nil {
-		return nil, err
-	}
-	builder.AppendCommands(timed...)
 
 	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
 		return nil, err
@@ -201,7 +189,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		}
 	}
 	if batch.Native() {
-		commands = append(commands, batch.NativeCommands()...)
+		commands = append(commands, batch.Commands()...)
 	}
 	used := make(map[fm.ID]bool)
 	for _, r := range before.Rules() {
@@ -327,7 +315,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 				action = strings.Join(attachment, " ") + " " + action
 			}
 			line := fmt.Sprintf("set policy id %s top from %s to %s %s %s %s %s", id, from, to, sources[0], destinations[0], services[0], action)
-			if name, err := batch.ScheduleReference(after, m.Schedule); err != nil {
+			if name, err := batch.ScheduleName(after, m.Schedule); err != nil {
 				return nil, err
 			} else if name != "" {
 				line += " schedule " + name

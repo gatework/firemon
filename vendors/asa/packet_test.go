@@ -38,6 +38,40 @@ func TestASAPacketUsesRealDestinationAndServiceAfterReverseStaticNAT(t *testing.
 			if !tc.allow && path.Policy.Denied.Empty() {
 				t.Fatal("implicit/outbound deny lost")
 			}
+			if len(path.PolicyNAT) != 1 || !path.PolicyNAT[0].Reverse {
+				t.Fatal("real destination lookup lost its selected reverse stage", path.PolicyNAT)
+			}
+			selected := path.Policy.Denied
+			if tc.allow {
+				selected = path.Policy.Allowed
+			}
+			original, err := (policy.Engine{}).OriginalTraffic(t.Context(), fw, path, selected)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if same, err := original.Equal(traffic, 16); err != nil || !same {
+				t.Fatal("real ACL address/service did not restore the wire request", original, err)
+			}
+			if tc.name == "outbound-deny" {
+				if len(path.NativeRequests) != 2 {
+					t.Fatal("composed ACLs lost their independent inputs", path.NativeRequests)
+				}
+				for _, request := range path.NativeRequests {
+					declared, err := (policy.Engine{}).Declared(t.Context(), fw, request, &path)
+					if err != nil || len(declared) == 0 {
+						t.Fatal("composed ACL declaration missing", declared, err)
+					}
+					for _, match := range declared {
+						if fw.Rule(match.Rule).Chain() != request.Chain() || !match.Known {
+							t.Fatal("declaration crossed native ACL chains", request, match)
+						}
+					}
+				}
+			}
+			path.PolicyNAT[0].ID = "mutated"
+			if path.NAT.Steps[0].ID == "mutated" {
+				t.Fatal("lookup evidence shares final NAT step storage")
+			}
 		})
 	}
 }

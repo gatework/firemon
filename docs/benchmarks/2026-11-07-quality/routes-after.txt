@@ -1,0 +1,42 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   57286	      4010 ns/op	    7448 B/op	     122 allocs/op
+BenchmarkRouteResolution/routes=1000       	     496	    470542 ns/op	 1034457 B/op	   11967 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   68068	      3540 ns/op	    7448 B/op	     122 allocs/op
+BenchmarkRouteResolution/routes=1000       	     483	    488390 ns/op	 1034457 B/op	   11967 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   68248	      3567 ns/op	    7448 B/op	     122 allocs/op
+BenchmarkRouteResolution/routes=1000       	     487	    479424 ns/op	 1034457 B/op	   11967 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   67521	      3631 ns/op	    7448 B/op	     122 allocs/op
+BenchmarkRouteResolution/routes=1000       	     472	    486340 ns/op	 1034458 B/op	   11967 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   66908	      3559 ns/op	    7448 B/op	     122 allocs/op
+BenchmarkRouteResolution/routes=1000       	     487	    481014 ns/op	 1034457 B/op	   11967 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkRouteResolution/routes=10         	   67438	      3547 ns/op	    7448 B/op	     122 allocs/op
+BenchmarkRouteResolution/routes=1000       	     482	    494985 ns/op	 1034457 B/op	   11967 allocs/op
+PASS

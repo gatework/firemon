@@ -72,5 +72,6 @@ func (p *parser) schedules(ctx context.Context, s *config.Builder) error {
 	for _, name := range schedules.names {
 		d.Schedules = append(d.Schedules, *schedules.entries[name])
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }

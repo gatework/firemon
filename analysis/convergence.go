@@ -50,6 +50,11 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Ti
 		budget = 4096
 	}
 	limits := c.Planner.Engine.Limits.WithDefaults()
+	// Rule.Record copies nested members before grouping can reject a rule or
+	// establish that no pair exists. Bound that view before taking any copies.
+	if fw.DeclarationSize() > limits.MaxVisits {
+		return nil, policy.ErrBudget
+	}
 	visits := visitBudget(limits.MaxVisits)
 	if err := visits.take(ctx, fw.RuleCount()); err != nil {
 		return nil, err
@@ -57,6 +62,9 @@ func (c Converger) Candidates(ctx context.Context, fw *fm.Firewall, from time.Ti
 	var rules []fm.RuleRecord
 	for rule := range fw.OrderedRules() {
 		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if err := visits.take(ctx, rule.DeclarationSize()); err != nil {
 			return nil, err
 		}
 		r := rule.Record()
@@ -209,6 +217,9 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 	if fw == nil || !fw.Complete() || len(ids) < 2 || len(ids) > 100 {
 		return nil, ErrInvalid
 	}
+	if fw.DeclarationSize() > int(*visits) {
+		return nil, policy.ErrBudget
+	}
 	limit := c.Planner.Engine.Limits.WithDefaults().MaxRegions
 	if err := visits.take(ctx, len(ids)); err != nil {
 		return nil, err
@@ -216,11 +227,15 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 	selected := make(map[fm.ID]bool)
 	var rules []fm.RuleRecord
 	for _, id := range ids {
-		if selected[id] || fw.Rule(id) == nil {
+		rule := fw.Rule(id)
+		if selected[id] || rule == nil {
 			return nil, ErrInvalid
 		}
 		selected[id] = true
-		r := fw.Rule(id).Record()
+		if err := visits.take(ctx, rule.DeclarationSize()); err != nil {
+			return nil, err
+		}
+		r := rule.Record()
 		if !eligibleForConvergence(r) {
 			return nil, &plan.RejectionError{Stage: plan.DeclarationRejection, Err: plan.ErrUnsafe}
 		}
@@ -300,7 +315,7 @@ func (c Converger) plan(ctx context.Context, fw *fm.Firewall, ids []fm.ID, from 
 			return nil, &plan.RejectionError{Stage: plan.DeclarationRejection, Err: plan.ErrUnsafe}
 		}
 	}
-	if err := visits.take(ctx, fw.RecordCount()); err != nil {
+	if err := visits.take(ctx, fw.DeclarationSize()); err != nil {
 		return nil, err
 	}
 	d := fw.Export()

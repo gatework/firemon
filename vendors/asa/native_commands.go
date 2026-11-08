@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.NativeBuilder) error {
+func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.Builder) error {
 	v := strings.TrimPrefix(strings.TrimSpace(before.Metadata().Software), "ASA Version ")
 	major, minor, ok := strings.Cut(v, ".")
 	end := 0

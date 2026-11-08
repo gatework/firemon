@@ -17,17 +17,17 @@ import (
 const maxAnalysisInput = 4 << 20
 const maxAnalysisOutput = 16 << 20
 
-type analysisContextDocument struct {
+type queryDoc struct {
 	Traffic         []flow.TrafficRegion `json:"traffic"`
 	Scope           string               `json:"scope,omitempty"`
 	RuleSet         string               `json:"ruleset,omitempty"`
 	FromZone        fm.ID                `json:"from_zone,omitempty"`
 	ToZone          fm.ID                `json:"to_zone,omitempty"`
 	EgressInterface fm.ID                `json:"egress_interface,omitempty"`
-	At              time.Time            `json:"at,omitempty"`
+	At              time.Time            `json:"at"`
 }
 
-func (d analysisContextDocument) request(limit int) (policy.Request, error) {
+func (d queryDoc) request(limit int) (policy.Request, error) {
 	if len(d.Traffic) == 0 || len(d.Traffic) > limit {
 		return policy.Request{}, analysis.ErrInvalid
 	}
@@ -35,19 +35,19 @@ func (d analysisContextDocument) request(limit int) (policy.Request, error) {
 	return policy.Request{Traffic: traffic, Scope: d.Scope, RuleSet: d.RuleSet, FromZone: d.FromZone, ToZone: d.ToZone, EgressInterface: d.EgressInterface, At: d.At}, err
 }
 
-type inspectionDocument struct {
-	Version    int                      `json:"version"`
-	Object     fm.AddressRef            `json:"object,omitempty"`
-	Addresses  []flow.AddressRange      `json:"addresses,omitempty"`
-	Evaluation *analysisContextDocument `json:"evaluation,omitempty"`
+type inspectDoc struct {
+	Version    int                 `json:"version"`
+	Object     fm.AddressRef       `json:"object"`
+	Addresses  []flow.AddressRange `json:"addresses,omitempty"`
+	Evaluation *queryDoc           `json:"evaluation,omitempty"`
 	Aliases    *struct {
-		Request analysisContextDocument `json:"request"`
-		VRF     string                  `json:"vrf,omitempty"`
-		View    policy.AliasView        `json:"view"`
+		Request queryDoc         `json:"request"`
+		VRF     string           `json:"vrf,omitempty"`
+		View    policy.AliasView `json:"view"`
 	} `json:"aliases,omitempty"`
 }
 
-func (d inspectionDocument) request(limit int) (analysis.InspectionRequest, error) {
+func (d inspectDoc) request(limit int) (analysis.InspectionRequest, error) {
 	if d.Version != 1 || len(d.Addresses) > limit {
 		return analysis.InspectionRequest{}, analysis.ErrInvalid
 	}
@@ -73,18 +73,18 @@ func (d inspectionDocument) request(limit int) (analysis.InspectionRequest, erro
 	return q, nil
 }
 
-type riskExpressionDocument struct {
+type riskExprDoc struct {
 	Predicate *struct {
 		Dimension analysis.Dimension  `json:"dimension"`
 		Relation  analysis.Relation   `json:"relation"`
 		Addresses []flow.AddressRange `json:"addresses,omitempty"`
 		Services  []fm.ServiceTerm    `json:"services,omitempty"`
 	} `json:"predicate,omitempty"`
-	All []riskExpressionDocument `json:"all,omitempty"`
-	Any []riskExpressionDocument `json:"any,omitempty"`
+	All []riskExprDoc `json:"all,omitempty"`
+	Any []riskExprDoc `json:"any,omitempty"`
 }
 
-func (d riskExpressionDocument) expression(depth int, nodes *int, limit int) (analysis.RiskExpression, error) {
+func (d riskExprDoc) expression(depth int, nodes *int, limit int) (analysis.RiskExpression, error) {
 	if depth >= 64 || *nodes <= 0 {
 		return analysis.RiskExpression{}, policy.ErrBudget
 	}
@@ -121,21 +121,21 @@ func (d riskExpressionDocument) expression(depth int, nodes *int, limit int) (an
 	return out, nil
 }
 
-type riskDocument struct {
-	Version     int                       `json:"version"`
-	Contexts    []analysisContextDocument `json:"contexts"`
+type riskDoc struct {
+	Version     int        `json:"version"`
+	Contexts    []queryDoc `json:"contexts"`
 	Definitions []struct {
-		ID         string                  `json:"id"`
-		Version    string                  `json:"version"`
-		Mode       analysis.RiskMode       `json:"mode"`
-		Relation   analysis.Relation       `json:"relation,omitempty"`
-		Traffic    []flow.TrafficRegion    `json:"traffic,omitempty"`
-		Actions    []fm.Action             `json:"actions,omitempty"`
-		Expression *riskExpressionDocument `json:"expression,omitempty"`
+		ID         string               `json:"id"`
+		Version    string               `json:"version"`
+		Mode       analysis.RiskMode    `json:"mode"`
+		Relation   analysis.Relation    `json:"relation,omitempty"`
+		Traffic    []flow.TrafficRegion `json:"traffic,omitempty"`
+		Actions    []fm.Action          `json:"actions,omitempty"`
+		Expression *riskExprDoc         `json:"expression,omitempty"`
 	} `json:"definitions"`
 }
 
-func (d riskDocument) request(limits policy.Limits) ([]policy.Request, []analysis.RiskDefinition, error) {
+func (d riskDoc) request(limits policy.Limits) ([]policy.Request, []analysis.RiskDefinition, error) {
 	if d.Version != 1 || len(d.Contexts) == 0 || len(d.Definitions) == 0 {
 		return nil, nil, analysis.ErrInvalid
 	}
@@ -172,7 +172,7 @@ func (d riskDocument) request(limits policy.Limits) ([]policy.Request, []analysi
 	}
 	return contexts, definitions, nil
 }
-func readAnalysisDocument(ctx context.Context, path string, value any) (err error) {
+func readJSON(ctx context.Context, path string, value any) (err error) {
 	input, finish, err := openInput(ctx, path)
 	if err != nil {
 		return err
@@ -201,18 +201,18 @@ func readAnalysisDocument(ctx context.Context, path string, value any) (err erro
 // leaves a truncated document that could be mistaken for a complete report.
 func analysisOutput(out io.Writer, v any) error {
 	var buf bytes.Buffer
-	if err := output(&boundedAnalysisWriter{writer: &buf, remaining: maxAnalysisOutput}, v); err != nil {
+	if err := output(&limitWriter{writer: &buf, remaining: maxAnalysisOutput}, v); err != nil {
 		return err
 	}
 	return writeOutput(out, buf.Bytes())
 }
 
-type boundedAnalysisWriter struct {
+type limitWriter struct {
 	writer    io.Writer
 	remaining int
 }
 
-func (w *boundedAnalysisWriter) Write(p []byte) (int, error) {
+func (w *limitWriter) Write(p []byte) (int, error) {
 	if len(p) > w.remaining {
 		return 0, policy.ErrBudget
 	}

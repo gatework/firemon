@@ -1,5 +1,7 @@
 # 2026-11-07 需求聚合与对象复用基准
 
+本报告保留测量时的名称与源码哈希；`RequestOptimizer` 现名 `Optimizer`，见 [当前清理记录](2026-11-07-go-cleanup.md)。以下数据不代表后续对象名称重构的性能测量。
+
 本次本地合成样本中，RequestOptimizer 的四个场景均减少了运行时间和分配量。完整规划的对象复用基准没有一致的 CPU 收益：100 和 1000 对额外对象场景的时间中位数分别增加 3.12% 和 2.25%，三个规模的分配次数均增加。对象目录的主要变化是正确复用完整对象和对象组、检查作用域及同名覆盖，不能把这些数据解释为所有规划场景都会更快。
 
 基线是实施前保存的 **716 个文件快照**，包括当时的工作区修改，不是某个 Git 提交。其 `manifest.json` 的 SHA-256 为 `38c5b461f53a9efb731123523b97f27d359f8e0fcce6b3cb8dd0227cf4ac8f6a`。原始快照和用于测量的 `before` 副本均逐项通过了全部 716 个文件的哈希检查。对象复用基准是本次新增的测试文件；同一文件复制到基线测量副本，未修改基线运行时代码。
@@ -25,7 +27,7 @@ GOWORK=off GOPROXY=off go test ./benchmarks -run '^$' -bench '^BenchmarkOptimize
 GOWORK=off GOPROXY=off go test ./plan -run '^$' -bench '^BenchmarkCatalogExactReuse$' -benchmem -count 6 -benchtime=100ms
 ```
 
-需求聚合使用相同的 [基准 fixture](../benchmarks/optimizer_bench_test.go)：`adjacent` 的请求只在连续源地址上变化，应聚合为一个精确流量区域；`paired` 同时改变对应的源、目的地址，应保留原来的 n 对关联，不能引入交叉组合。基准每次验证成功、一个上下文组和预期区域数。候选另有 [独立小域枚举测试](../analysis/request_optimizer_test.go)，逐包核对七个维度及 IPv4/IPv6，并覆盖固定点合并、上下文、输入来源、取消和预算边界。区域数断言本身不构成任意输入上的等价证明；这里没有用审批 JSON 的旧字节序列代替业务验证。
+需求聚合使用相同的 [基准 fixture](../benchmarks/optimizer_bench_test.go)：`adjacent` 的请求只在连续源地址上变化，应聚合为一个精确流量区域；`paired` 同时改变对应的源、目的地址，应保留原来的 n 对关联，不能引入交叉组合。基准每次验证成功、一个上下文组和预期区域数。候选另有 [独立小域枚举测试](../analysis/optimizer_test.go)，逐包核对七个维度及 IPv4/IPv6，并覆盖固定点合并、上下文、输入来源、取消和预算边界。区域数断言本身不构成任意输入上的等价证明；这里没有用审批 JSON 的旧字节序列代替业务验证。
 
 | 场景 | ns/op 基线 → 候选 | 时间变化 | B/op 基线 → 候选 | allocs/op 基线 → 候选 |
 | --- | ---: | ---: | ---: | ---: |

@@ -401,7 +401,8 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 		d.Schedules = append(d.Schedules, r)
 	}
 
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }
 
 func portText(p flow.Interval) string {

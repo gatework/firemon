@@ -41,6 +41,9 @@ func (e Engine) QueryNAT(ctx context.Context, fw *fm.Firewall, q Request) (NATRe
 	if fw == nil {
 		return NATResult{}, ErrInvalid
 	}
+	if err := e.Limits.checkRegions(q.Traffic.RegionCount()); err != nil {
+		return NATResult{}, err
+	}
 	for _, d := range fw.Diagnostics() {
 		if d.Object == "" {
 			return NATResult{Unknown: q.Traffic}, nil

@@ -1,5 +1,37 @@
 # Domain refactoring and API migration
 
+## v0.2.0 API cleanup
+
+The [module audit](2026-11-07-go-cleanup.md) describes the changes after v0.1.0.
+Use `analysis.Optimizer` for exact request optimization and `analysis.Migrator`
+for atomic policy/NAT migration. The previous `RequestOptimizer` and
+`PolicyMigrator` names are removed rather than retained as aliases.
+
+Vendor selection accepts exactly `paloalto`, `srx`, `huawei`, `hillstone`,
+`fortinet`, `netscreen` and `asa`. Inputs such as `palo_alto`, `juniper`,
+`screenos` and `cisco_asa` are rejected. The optional connector adapter bridges
+canonical names to the pinned connector's profile names internally; host
+metadata remains canonical. Native syntax and vendor version gates are unchanged.
+
+Bounded JSON transport lives in `internal/jsonio`; checksums, format versions,
+typed-nil checks and business error mapping remain in their owning packages.
+`snapshot` and `deploy` call `internal/durablefile` directly. Native renderers
+share schedule preparation through `render.Builder`, while each driver retains
+its own command syntax and ordering. This naming and wrapper cleanup adds no
+dependencies or persisted formats. The separate parser/set integration is
+described in [parser design](parser-design.md).
+
+Object and policy command names now come from their declared `Name`. The old
+`nativeName`, `nativename.Name` and `label` fallbacks are removed. Anonymous
+values remain valid graph records but are not reused as named declarations.
+`internal/names` owns only scoped object/rule name keys. Numeric policy IDs retain
+their vendor-specific meaning. A PAN insertion with an unnamed existing anchor
+is refused rather than silently omitting its move command.
+
+Rule collision checks retain SRX zone-pair scope and PAN/Huawei chain-wide names.
+Numbered policies and ASA ACL entries use their rule IDs, independently of display
+labels; separate policies are no longer rejected merely for sharing a label.
+
 ## Candidate search ownership
 
 `Planner.Plan` and `Planner.PlanBatch` share a private candidate-search module.
@@ -9,8 +41,9 @@ entry points' different rule-scan accounting, declaration refusals, proof and
 reporting contracts. Batch attempts remain shared across groups and singleton
 retries; rejected drafts do not reserve names or modify accepted changes.
 
-Public methods, `MaxCandidates`, snapshot format 9, approval digests and
-reconstruction encodings are unchanged. Existing proofs still run independently
+That candidate-search change preserved public methods, `MaxCandidates`, the
+then-current snapshot format 9, approval digests and reconstruction encodings.
+The current release uses snapshot format 10. Existing proofs still run independently
 for candidates and readback. The module does not merge access and batch intent
 or cache a baseline across different immutable graphs.
 
@@ -77,7 +110,7 @@ address/service sets, candidate cost and evidence-bound policy operations.
 | Perl responsibility | Go owner and review outcome |
 | --- | --- |
 | Config::Element roles / Parser::Elements | Root concrete immutable graph. Shared Rule/NAT matching views; scalar identity access; binding, validation, digest and sealing have separate source files in one package. |
-| Config::Content::Role / Parser::Role | config owns source, cursor, transactions and stage dependencies. Append-only drafts and evidence undo preserve rollback without full graph backups. |
+| Config::Content::Role / Parser::Role | config owns source evidence, transactions and stage dependencies; parser.Content owns the immutable text index. Append-only drafts and evidence undo preserve rollback without full graph backups. |
 | Native Parser and Designer modules | Seven native packages own grammar and rendering. Parser limits are uniform; native syntax, policy order and packet semantics stay explicit. |
 | Policy::Searcher | inventory locates immutable revisions; policy resolves groups and evaluates rules, routes and NAT. Unknown semantics and execution failures are distinct. |
 | Policy::Designer | plan owns candidate object reuse, cost ranking, renderability and independent traffic proofs. Proof, candidate construction and public contracts are separated. |
@@ -95,8 +128,8 @@ account service, workflow approval platform or new vendor family.
 
 | Previous usage | Current usage |
 | --- | --- |
-| `analysis.Optimizer` | `analysis.RequestOptimizer` |
-| `analysis.Translator` | `analysis.PolicyMigrator` (policy-only migration; existing NAT/time restrictions remain) |
+| `analysis.RequestOptimizer` | `analysis.Optimizer` |
+| `analysis.Translator`, `analysis.PolicyMigrator` | `analysis.Migrator` (atomic policy/NAT migration within the [capability matrix](../vendors/MIGRATION.md)) |
 | `analysis.Chain` | `firemon.PolicyChain{Scope, RuleSet}` |
 | `policy.Addresses(fw, refs, any)` | `engine.ResolveAddresses(ctx, fw, refs, any)` returning `(flow.AddressSet, bool, error)` |
 | `policy.Services(fw, refs, any)` | `engine.ResolveServices(ctx, fw, refs, any)` returning `([]firemon.ServiceTerm, bool, error)` |
@@ -119,7 +152,7 @@ aliases. Update consumers together with the optional adapter:
 | `policy.Routes(..., limit)` | `engine.ResolveRoutes(ctx, fw, vrf, addresses)` with `Engine.Limits` |
 | `RuleOrder.Chain [4]string` | `policy.RuleChain{PolicyChain, FromZone, ToZone}` |
 | `Reclaimer` evidence/time fields | `ReclamationRequest` passed to `Analyze`, `AnalyzeMembers` and `Plan` |
-| `PolicyMigrator` mappings/time fields and selection arguments | `MigrationRequest` passed to `Plan(ctx, source, target, request)` |
+| `PolicyMigrator` mappings/time fields and selection arguments | `MigrationRequest` passed to `Migrator.Plan(ctx, source, target, request)` |
 | `Converger.From` | `Candidates(ctx, fw, from)` and `Plan(ctx, fw, ids, from)` |
 | `RiskAnalyzer.Assess` | `RiskAnalyzer.Analyze` |
 | Raw-source or flag reads through a full record clone | `Firewall.Raw`, `HasUnsupported`, `Disabled`, `Rule.Builtin`, `Rule.Action` as applicable |
@@ -165,7 +198,7 @@ first refactor and dd15031 in the contract iteration; reuse,
 append and create approval digests are protected by baseline golden tests.
 
 Configuration stages append accepted drafts and commit consumed evidence together.
-Rollback restores data headers, claimed evidence and cursor position. A committed
+Rollback restores data headers and claimed evidence. Reading has no shared mutable position. A committed
 transaction transfers its copied draft once, clears it and ignores subsequent
 Emit/Parse/Ignore attempts; a second Commit returns ErrClosed. Unknown source stays
 pending or diagnostic. Interfaces still precede route binding.
@@ -234,8 +267,11 @@ analyses retain their distinct evidence and deletion-authority semantics.
 
 ## Cancellable scanner migration
 
-`config.NewContent(ctx, source, limits)` and
-`config.NewFragmentContent(ctx, source, spans, limits)` own native source evidence.
+`config.NewContent(ctx, source, limits)` owns CLI source evidence; `config.XML`
+constructs fragment evidence over the same immutable `parser.Content` index.
+The unused fragment constructor, local Line type and shared cursor APIs have
+been removed. `Content.Lines()` returns physical `parser.Line` values whose Text
+preserves indentation; native syntax explicitly decides when to trim whitespace.
 `NewBuilder(content, metadata)` replaces Session; `Builder.Begin` replaces
 `Cursor.Begin`, and `Builder.Commit` validates records and evidence together.
 `Builder.Phase(ctx, name, callback)` replaces Stage dependency declarations;
@@ -254,10 +290,18 @@ Invalid inputs retain ErrInvalid; malformed source, invalid claims and closed
 transactions retain ErrSource, ErrClaim and ErrClosed respectively.
 
 For bounded materialization, `Firewall.RecordCount()` counts top-level domain and
-evidence records, `flow.AddressSet.RangeCount()` counts normalized address intervals and
+evidence records; `Firewall.DeclarationSize()` also counts nested elements and is
+used before graph export and reconstruction. `flow.AddressSet.RangeCount()` counts normalized address intervals and
 `flow.Traffic.RegionCount()` counts disjoint traffic regions. Candidate object traversal now
 shares the planner's visit allowance, so large catalogs may require a higher
 explicit `MaxVisits` even when few rules participate in the requested change.
+
+Request JSON decoding now takes the caller's context:
+`operations.DecodeBatchRequest(ctx, reader)` and
+`operations.DecodeTopology(ctx, reader)`. The shared bounded reader checks
+cancellation between reads and rejects 100 consecutive reads without progress.
+It neither closes a borrowed reader nor interrupts an individual blocked Read.
+These signatures replace the previous forms without compatibility wrappers.
 
 ## Policy algorithm domain names
 
@@ -339,7 +383,7 @@ Unsupported outcomes keep their original positions, and fatal errors remove all
 plans while preserving partial discovery. Business and topology sources retain
 order and duplicates; topology sources do not enter native approval material.
 
-`vendors/internal/render.NativeBuilder` validates a native delta once per render
+`vendors/internal/render.Builder` validates a native delta once per render
 and records typed owners, generated declarations and policy attachments. Claims
 must name an actual new owner and an actual Match or typed VIP relationship.
 Shared literals allow multiple owners; policy attachments require their new

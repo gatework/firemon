@@ -25,6 +25,9 @@ func (e Engine) ResolveRoutes(ctx context.Context, fw *fm.Firewall, vrf string, 
 	if fw == nil {
 		return nil, ErrInvalid
 	}
+	if err := e.Limits.checkRegions(addresses.RangeCount()); err != nil {
+		return nil, err
+	}
 	limits := e.Limits.WithDefaults()
 	limit := limits.MaxRegions
 	var routes []routeCandidate
@@ -124,6 +127,10 @@ type PacketPath struct {
 	// NativeRequests retain the exact policy queries selected by this native
 	// pipeline. Multiple chains and builtin-only decisions are not one target.
 	NativeRequests []Request
+	// PolicyNAT retains the ordered destination transformations applied before
+	// policy evaluation, independently of post-policy NAT and deny behavior.
+	// OriginalTraffic uses these stages to restore exact wire ownership.
+	PolicyNAT []NATStep
 	// DesignUnsupported explains paths whose policy effects cannot yet be
 	// represented by an access plan. Query evidence remains usable.
 	DesignUnsupported string
@@ -150,6 +157,9 @@ func (e Engine) QueryPacket(ctx context.Context, fw *fm.Firewall, q PacketReques
 	}
 	if fw == nil {
 		return PacketResult{}, ErrInvalid
+	}
+	if err := e.Limits.checkRegions(q.Traffic.RegionCount()); err != nil {
+		return PacketResult{}, err
 	}
 	query := semantics(fw.Metadata().Vendor).queryPacket
 	if query == nil {

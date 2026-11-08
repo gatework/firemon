@@ -2,9 +2,13 @@
 package flow
 
 import (
+	"encoding/binary"
 	"errors"
+	"iter"
 	"net/netip"
 	"slices"
+
+	"github.com/gatework/set"
 )
 
 var ErrRange = errors.New("invalid address range")
@@ -52,7 +56,10 @@ func PrefixRange(p netip.Prefix) (AddressRange, error) {
 }
 
 // AddressSet is normalized, immutable and may contain separate IPv4 and IPv6 intervals. Its zero value is empty.
-type AddressSet struct{ ranges []AddressRange }
+type AddressSet struct {
+	v4 set.Set[uint32]
+	v6 []AddressRange
+}
 
 func NewAddressSet(rs ...AddressRange) (AddressSet, error) {
 	for _, r := range rs {
@@ -60,9 +67,26 @@ func NewAddressSet(rs ...AddressRange) (AddressSet, error) {
 			return AddressSet{}, ErrRange
 		}
 	}
-	return normalize(slices.Clone(rs)), nil
+	return normalize(rs), nil
 }
+
+// normalize owns its storage. Callers must validate ranges first: the integer
+// set accepts reversed endpoints, while firewall address ranges reject them.
 func normalize(rs []AddressRange) AddressSet {
+	v4 := make([]set.Range[uint32], 0)
+	v6 := make([]AddressRange, 0)
+	for _, r := range rs {
+		if r.First.Is4() {
+			v4 = append(v4, set.Range[uint32]{Min: ipv4Number(r.First), Max: ipv4Number(r.Last)})
+		} else {
+			v6 = append(v6, r)
+		}
+	}
+	return AddressSet{v4: *set.New(v4...), v6: normalizeIPv6(v6)}
+}
+
+// normalizeIPv6 sorts an owned slice; IPv4-mapped addresses remain IPv6.
+func normalizeIPv6(rs []AddressRange) []AddressRange {
 	slices.SortFunc(rs, func(a, b AddressRange) int {
 		if c := a.First.Compare(b.First); c != 0 {
 			return c
@@ -74,7 +98,7 @@ func normalize(rs []AddressRange) AddressSet {
 		if len(out) > 0 {
 			p := &out[len(out)-1]
 			next := p.Last.Next()
-			if p.First.BitLen() == r.First.BitLen() && (r.First.Compare(p.Last) <= 0 || next.IsValid() && next == r.First) {
+			if r.First.Compare(p.Last) <= 0 || next.IsValid() && next == r.First {
 				if r.Last.Compare(p.Last) > 0 {
 					p.Last = r.Last
 				}
@@ -83,53 +107,162 @@ func normalize(rs []AddressRange) AddressSet {
 		}
 		out = append(out, r)
 	}
-	return AddressSet{ranges: out}
+	return out
 }
 
 // RangeCount returns the normalized interval count without copying ranges.
-func (s AddressSet) RangeCount() int { return len(s.ranges) }
+func (s AddressSet) RangeCount() int { return s.v4.Len() + len(s.v6) }
 
-func (s AddressSet) Ranges() []AddressRange { return slices.Clone(s.ranges) }
-func (s AddressSet) Empty() bool            { return len(s.ranges) == 0 }
+// All visits normalized ranges as values, IPv4 before IPv6, without allocating
+// a detached slice. Stopping iteration does not change the immutable set.
+func (s AddressSet) All() iter.Seq[AddressRange] {
+	return func(yield func(AddressRange) bool) {
+		for r := range s.v4.All() {
+			if !yield(AddressRange{First: ipv4Address(r.Min), Last: ipv4Address(r.Max)}) {
+				return
+			}
+		}
+		for _, r := range s.v6 {
+			if !yield(r) {
+				return
+			}
+		}
+	}
+}
+
+func (s AddressSet) Ranges() []AddressRange {
+	if s.v4.IsEmpty() {
+		return slices.Clone(s.v6)
+	}
+	out := make([]AddressRange, 0, s.RangeCount())
+	return slices.AppendSeq(out, s.All())
+}
+
+func (s AddressSet) Empty() bool { return s.v4.IsEmpty() && len(s.v6) == 0 }
+
 func (s AddressSet) ContainsAddr(a netip.Addr) bool {
-	for _, r := range s.ranges {
+	if a.Is4() {
+		return s.v4.Contains(ipv4Number(a))
+	}
+	for _, r := range s.v6 {
 		if r.Contains(a) {
 			return true
 		}
 	}
 	return false
 }
-func (s AddressSet) Contains(t AddressSet) bool    { return t.Difference(s).Empty() }
-func (s AddressSet) Union(t AddressSet) AddressSet { return normalize(append(s.Ranges(), t.ranges...)) }
+
+func (s AddressSet) Contains(t AddressSet) bool {
+	if !s.v4.IsSuperset(&t.v4) {
+		return false
+	}
+	i := 0
+	for _, r := range t.v6 {
+		for i < len(s.v6) && s.v6[i].Last.Compare(r.First) < 0 {
+			i++
+		}
+		if i == len(s.v6) || s.v6[i].First.Compare(r.First) > 0 || s.v6[i].Last.Compare(r.Last) < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func (s AddressSet) Union(t AddressSet) AddressSet {
+	return AddressSet{
+		v4: *s.v4.Union(&t.v4),
+		v6: normalizeIPv6(append(slices.Clone(s.v6), t.v6...)),
+	}
+}
+
 func (s AddressSet) Intersection(t AddressSet) AddressSet {
 	var out []AddressRange
-	for _, a := range s.ranges {
-		for _, b := range t.ranges {
-			if r, ok := a.Intersection(b); ok {
-				out = append(out, r)
-			}
+	for i, j := 0, 0; i < len(s.v6) && j < len(t.v6); {
+		a, b := s.v6[i], t.v6[j]
+		first, last := a.First, a.Last
+		if b.First.Compare(first) > 0 {
+			first = b.First
+		}
+		if b.Last.Compare(last) < 0 {
+			last = b.Last
+		}
+		if first.Compare(last) <= 0 {
+			out = append(out, AddressRange{first, last})
+		}
+		if a.Last.Compare(b.Last) < 0 {
+			i++
+		} else {
+			j++
 		}
 	}
-	return normalize(out)
+	// Ordered, disjoint inputs produce ordered, disjoint intersections.
+	return AddressSet{v4: *s.v4.Intersection(&t.v4), v6: out}
 }
+
 func (s AddressSet) Difference(t AddressSet) AddressSet {
-	out := s.Ranges()
-	for _, b := range t.ranges {
-		var next []AddressRange
-		for _, a := range out {
-			x, ok := a.Intersection(b)
-			if !ok {
-				next = append(next, a)
-				continue
-			}
-			if a.First.Compare(x.First) < 0 {
-				next = append(next, AddressRange{a.First, x.First.Prev()})
-			}
-			if x.Last.Compare(a.Last) < 0 {
-				next = append(next, AddressRange{x.Last.Next(), a.Last})
-			}
-		}
-		out = next
+	if s.Empty() || t.Empty() {
+		return s
 	}
-	return AddressSet{ranges: out}
+	// The integer set has no difference operation. Subtract closed address
+	// intervals directly, preserving both families and endpoint bounds.
+	out := subtract(s.Ranges(), t.Ranges())
+	if len(out) == 0 {
+		return AddressSet{}
+	}
+	var v4 []set.Range[uint32]
+	for _, r := range out {
+		if !r.First.Is4() {
+			break
+		}
+		v4 = append(v4, set.Range[uint32]{Min: ipv4Number(r.First), Max: ipv4Number(r.Last)})
+	}
+	var v6 []AddressRange
+	if len(out) > len(v4) {
+		v6 = out[len(v4):]
+		if len(v4) > 0 {
+			// Do not retain converted IPv4 ranges in the IPv6 backing array.
+			v6 = slices.Clone(v6)
+		}
+	}
+	return AddressSet{v4: *set.New(v4...), v6: v6}
+}
+
+// subtract walks normalized intervals once, preserving their order and gaps.
+// An exclusion may span several input intervals, so retain it until exhausted.
+func subtract(rs, excluded []AddressRange) []AddressRange {
+	var out []AddressRange
+	j := 0
+	for _, r := range rs {
+		first := r.First
+		for j < len(excluded) && excluded[j].Last.Compare(first) < 0 {
+			j++
+		}
+		for j < len(excluded) && excluded[j].First.Compare(r.Last) <= 0 {
+			b := excluded[j]
+			if first.Compare(b.First) < 0 {
+				out = append(out, AddressRange{first, b.First.Prev()})
+			}
+			if b.Last.Compare(r.Last) >= 0 {
+				first = netip.Addr{}
+				break
+			}
+			first = b.Last.Next()
+			j++
+		}
+		if first.IsValid() {
+			out = append(out, AddressRange{first, r.Last})
+		}
+	}
+	return out
+}
+
+func ipv4Number(a netip.Addr) uint32 {
+	b := a.As4()
+	return binary.BigEndian.Uint32(b[:])
+}
+
+func ipv4Address(n uint32) netip.Addr {
+	var b [4]byte
+	binary.BigEndian.PutUint32(b[:], n)
+	return netip.AddrFrom4(b)
 }

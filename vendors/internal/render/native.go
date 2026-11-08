@@ -7,7 +7,6 @@ import (
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"net/netip"
-	"reflect"
 	"strconv"
 	"strings"
 )
@@ -53,7 +52,6 @@ func Prefix(r flow.AddressRange) (string, error) {
 	}
 	return "", plan.ErrRender
 }
-func SameMatch(a, b fm.Match) bool { return reflect.DeepEqual(a, b) }
 func Addresses(ctx context.Context, fw *fm.Firewall, refs []fm.AddressRef, any bool) ([]flow.AddressRange, error) {
 	if any {
 		if len(refs) != 0 {

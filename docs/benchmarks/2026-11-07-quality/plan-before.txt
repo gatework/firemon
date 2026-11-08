@@ -1,0 +1,72 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/plan
+cpu: Apple M5
+BenchmarkPlanCandidates/rules=10/attempts=1         	     607	    383038 ns/op	  517268 B/op	    3281 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8         	     627	    384714 ns/op	  519354 B/op	    3290 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1        	       9	  22236769 ns/op	30205442 B/op	  149493 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8        	       9	  24289690 ns/op	30207729 B/op	  149505 allocs/op
+BenchmarkCatalogExactReuse/objects=10               	    5217	     48198 ns/op	   73883 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=100              	     891	    261626 ns/op	  343097 B/op	    1472 allocs/op
+BenchmarkCatalogExactReuse/objects=1000             	     100	   2855648 ns/op	 3366384 B/op	   12326 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/plan
+cpu: Apple M5
+BenchmarkPlanCandidates/rules=10/attempts=1         	     640	    368127 ns/op	  517266 B/op	    3281 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8         	     624	    385004 ns/op	  519354 B/op	    3290 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1        	       9	  22306505 ns/op	30205461 B/op	  149493 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8        	       9	  24633583 ns/op	30207776 B/op	  149505 allocs/op
+BenchmarkCatalogExactReuse/objects=10               	    5235	     48119 ns/op	   73883 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=100              	     904	    262785 ns/op	  343097 B/op	    1472 allocs/op
+BenchmarkCatalogExactReuse/objects=1000             	     100	   2925793 ns/op	 3366384 B/op	   12326 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/plan
+cpu: Apple M5
+BenchmarkPlanCandidates/rules=10/attempts=1         	     634	    376607 ns/op	  517267 B/op	    3281 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8         	     626	    383557 ns/op	  519354 B/op	    3290 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1        	      10	  22214050 ns/op	30205443 B/op	  149493 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8        	       9	  24193106 ns/op	30207763 B/op	  149505 allocs/op
+BenchmarkCatalogExactReuse/objects=10               	    5197	     46866 ns/op	   73883 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=100              	     903	    260308 ns/op	  343097 B/op	    1472 allocs/op
+BenchmarkCatalogExactReuse/objects=1000             	     100	   3654550 ns/op	 3366382 B/op	   12325 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/plan
+cpu: Apple M5
+BenchmarkPlanCandidates/rules=10/attempts=1         	     636	    386062 ns/op	  517267 B/op	    3281 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8         	     595	    387502 ns/op	  519354 B/op	    3290 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1        	       9	  22284310 ns/op	30205461 B/op	  149493 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8        	       9	  24314259 ns/op	30207761 B/op	  149505 allocs/op
+BenchmarkCatalogExactReuse/objects=10               	    5289	     47270 ns/op	   73883 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=100              	     867	    265250 ns/op	  343097 B/op	    1472 allocs/op
+BenchmarkCatalogExactReuse/objects=1000             	     100	   3477828 ns/op	 3366384 B/op	   12326 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/plan
+cpu: Apple M5
+BenchmarkPlanCandidates/rules=10/attempts=1         	     643	    372783 ns/op	  517265 B/op	    3281 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8         	     625	    384094 ns/op	  519354 B/op	    3290 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1        	       9	  22455125 ns/op	30205448 B/op	  149493 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8        	       9	  24352972 ns/op	30207735 B/op	  149505 allocs/op
+BenchmarkCatalogExactReuse/objects=10               	    5154	     47768 ns/op	   73883 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=100              	     855	    274677 ns/op	  343097 B/op	    1472 allocs/op
+BenchmarkCatalogExactReuse/objects=1000             	     100	   3445894 ns/op	 3366382 B/op	   12325 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/plan
+cpu: Apple M5
+BenchmarkPlanCandidates/rules=10/attempts=1         	     637	    378067 ns/op	  517266 B/op	    3281 allocs/op
+BenchmarkPlanCandidates/rules=10/attempts=8         	     625	    386715 ns/op	  519354 B/op	    3290 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=1        	       9	  22531866 ns/op	30205444 B/op	  149493 allocs/op
+BenchmarkPlanCandidates/rules=100/attempts=8        	       9	  24520708 ns/op	30207761 B/op	  149505 allocs/op
+BenchmarkCatalogExactReuse/objects=10               	    5270	     48061 ns/op	   73883 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=100              	     906	    264273 ns/op	  343097 B/op	    1472 allocs/op
+BenchmarkCatalogExactReuse/objects=1000             	     100	   3622320 ns/op	 3366382 B/op	   12325 allocs/op
+PASS

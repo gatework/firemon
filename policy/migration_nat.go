@@ -44,78 +44,76 @@ type migrationStepView struct {
 	definition migrationNATStep
 }
 
-func migrationRelation(ctx context.Context, fw *fm.Firewall, path PacketPath, cache map[NATStep]migrationStepView, budget *packetProofBudget) (string, bool, error) {
+func migrationRelation(ctx context.Context, fw *fm.Firewall, path PacketPath, cache map[NATStep]migrationStepView, budget *packetProofBudget) (string, error) {
 	r := path.NAT
 	if len(r.Steps) > budget.limits.MaxCombinations {
-		return "", false, ErrBudget
+		return "", ErrBudget
 	}
 	if err := budget.take(ctx, len(r.Steps)); err != nil {
-		return "", false, err
+		return "", err
 	}
 	if same, err := budget.equal(ctx, r.Original, path.Original); err != nil {
-		return "", false, err
+		return "", err
 	} else if !same || len(r.Steps) == 0 && (r.ID != "" || r.Kind != fm.UnknownObject) {
-		return "", false, ErrNotEquivalent
+		return "", ErrNotEquivalent
 	}
 	signature := migrationNATSignature{Exact: true}
 	translated := r.Original
-	destinationRewrite := false
 	for _, step := range r.Steps {
 		if step.Reverse {
-			return "", false, ErrNAT
+			return "", ErrNAT
 		}
 		view, ok := cache[step]
 		if !ok {
 			if err := budget.take(ctx, fw.DeclarationSize()); err != nil {
-				return "", false, err
+				return "", err
 			}
 			n, err := transform(fw, step)
 			if err != nil {
-				return "", false, err
+				return "", err
 			}
 			if !n.known || n.disabled || n.inverseOf != nil {
-				return "", false, ErrNAT
+				return "", ErrNAT
 			}
 			definition, err := migrationDefinition(n)
 			if err != nil {
-				return "", false, err
+				return "", err
 			}
 			view = migrationStepView{transform: n, definition: definition}
 			cache[step] = view
 		}
 		signature.Steps = append(signature.Steps, view.definition)
-		destinationRewrite = destinationRewrite || len(view.definition.Destination) != 0 || len(view.definition.DestinationPorts) != 0
 		// Mapping and allocation inspect each input region against declarations.
 		// Charge their Cartesian work before apply allocates intermediate traffic.
 		count := fw.DeclarationSize()
 		if count != 0 && translated.RegionCount() > budget.remaining/count {
-			return "", false, ErrBudget
+			return "", ErrBudget
 		}
 		if err := budget.take(ctx, count*translated.RegionCount()); err != nil {
-			return "", false, err
+			return "", err
 		}
 		var exact, possible bool
 		var err error
 		translated, exact, possible, err = view.transform.apply(translated, budget.limits.MaxRegions)
 		if err != nil {
-			return "", false, err
+			return "", err
 		}
 		signature.Exact = signature.Exact && exact
 		signature.PossibleAllocation = signature.PossibleAllocation || possible
 	}
 	if signature.Exact != r.Exact || signature.PossibleAllocation != r.PossibleAllocation {
-		return "", false, ErrNotEquivalent
+		return "", ErrNotEquivalent
 	}
 	if same, err := budget.equal(ctx, translated, r.Translated); err != nil {
-		return "", false, err
+		return "", err
 	} else if !same {
-		return "", false, ErrNotEquivalent
+		return "", ErrNotEquivalent
 	}
 	encoded, err := json.Marshal(signature)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
-	return string(encoded), destinationRewrite, nil
+	return string(encoded), nil
 }
 
 func migrationDefinition(n natTransform) (migrationNATStep, error) {

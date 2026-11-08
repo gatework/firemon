@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.NativeBuilder) error {
+func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.Builder) error {
 	version := strings.TrimPrefix(before.Metadata().Software, "StoneOS ")
 	if version != "5.5R8" && !strings.HasPrefix(version, "5.5R8P") {
 		return ErrRender
@@ -36,7 +36,7 @@ func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.Nati
 			}
 			return quoted(value)
 		}
-		return quoted(nativeName(r.Object))
+		return quoted(r.Object.Name)
 	}
 	match := func(owner render.Owner, m fm.Match) (string, error) {
 		if !render.PlainMatch(m) || !m.AnyFromZone || !m.AnyToZone || len(m.FromZones) != 0 || len(m.ToZones) != 0 {
@@ -74,7 +74,7 @@ func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.Nati
 				return "", ErrRender
 			}
 			var err error
-			svc, err = quoted(nativeName(s.Record().Object))
+			svc, err = quoted(s.Record().Object.Name)
 			if err != nil {
 				return "", err
 			}

@@ -5,14 +5,15 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
-	"github.com/gatework/firemon/internal/nativename"
+	"github.com/gatework/firemon/internal/names"
 	"github.com/gatework/firemon/internal/servicecoverage"
 	"github.com/gatework/firemon/policy"
 )
 
 type catalogReference struct {
-	kind fm.Kind
-	id   fm.ID
+	kind        fm.Kind
+	id          fm.ID
+	name, scope string
 }
 type catalogService struct {
 	reference catalogReference
@@ -23,13 +24,12 @@ type catalogService struct {
 // name must still resolve to that same object in every requested scope.
 type objectCatalog struct {
 	data                       *fm.Data
-	baseline                   *fm.Firewall
 	visits                     *visitBudget
 	limits                     policy.Limits
-	names                      *nameAllocator
+	alloc                      *nameAllocator
 	addresses                  map[flow.AddressRange][]catalogReference
 	services                   map[fm.ServiceTerm][]catalogService
-	addressNames, serviceNames map[nativename.ObjectKey]catalogReference
+	addressNames, serviceNames map[names.ObjectKey]catalogReference
 	zones                      map[fm.ID]string
 	addressScopes              []string
 }
@@ -38,7 +38,7 @@ func newObjectCatalog(ctx context.Context, baseline *fm.Firewall, data *fm.Data,
 	if err := visits.nativeCounts(ctx, len(data.Addresses), len(data.AddressGroups), len(data.Services), len(data.ServiceGroups), len(data.Zones)); err != nil {
 		return nil, err
 	}
-	names, err := newNameAllocator(ctx, data, visits)
+	alloc, err := newNameAllocator(ctx, data, visits)
 	if err != nil {
 		return nil, err
 	}
@@ -49,14 +49,14 @@ func newObjectCatalog(ctx context.Context, baseline *fm.Firewall, data *fm.Data,
 	if err != nil {
 		return nil, err
 	}
-	c := &objectCatalog{data: data, baseline: baseline, visits: visits, limits: limits, names: names, addresses: make(map[flow.AddressRange][]catalogReference, len(data.Addresses)+len(data.AddressGroups)), services: make(map[fm.ServiceTerm][]catalogService, len(data.Services)+len(data.ServiceGroups)), addressNames: make(map[nativename.ObjectKey]catalogReference, len(data.Addresses)+len(data.AddressGroups)), serviceNames: make(map[nativename.ObjectKey]catalogReference, len(data.Services)+len(data.ServiceGroups)), zones: make(map[fm.ID]string)}
+	c := &objectCatalog{data: data, visits: visits, limits: limits, alloc: alloc, addresses: make(map[flow.AddressRange][]catalogReference, len(data.Addresses)+len(data.AddressGroups)), services: make(map[fm.ServiceTerm][]catalogService, len(data.Services)+len(data.ServiceGroups)), addressNames: make(map[names.ObjectKey]catalogReference, len(data.Addresses)+len(data.AddressGroups)), serviceNames: make(map[names.ObjectKey]catalogReference, len(data.Services)+len(data.ServiceGroups)), zones: make(map[fm.ID]string)}
 	for _, z := range data.Zones {
 		c.zones[z.ID] = z.AddressScope
 		c.addressScopes = append(c.addressScopes, z.AddressScope)
 	}
 	indexAddress := func(object fm.Object, kind fm.Kind) error {
-		entry := catalogReference{kind: kind, id: object.ID}
-		c.recordName(c.addressNames, entry, object)
+		entry := catalogReference{kind: kind, id: object.ID, name: object.Name, scope: object.Scope}
+		c.recordName(c.addressNames, entry)
 		if err := resolver.RestrictVisits(int(*visits)); err != nil {
 			return err
 		}
@@ -80,8 +80,8 @@ func newObjectCatalog(ctx context.Context, baseline *fm.Firewall, data *fm.Data,
 		if err := visits.take(ctx, len(a.Ranges)); err != nil {
 			return nil, err
 		}
-		entry := catalogReference{kind: fm.AddressObject, id: a.ID}
-		c.recordName(c.addressNames, entry, a.Object)
+		entry := catalogReference{kind: fm.AddressObject, id: a.ID, name: a.Name, scope: a.Scope}
+		c.recordName(c.addressNames, entry)
 		if a.FQDN != "" || a.VIP != (fm.NATRef{}) || len(a.Unsupported) != 0 {
 			continue
 		}
@@ -99,8 +99,8 @@ func newObjectCatalog(ctx context.Context, baseline *fm.Firewall, data *fm.Data,
 		}
 	}
 	indexService := func(object fm.Object, kind fm.Kind) error {
-		entry := catalogReference{kind: kind, id: object.ID}
-		c.recordName(c.serviceNames, entry, object)
+		entry := catalogReference{kind: kind, id: object.ID, name: object.Name, scope: object.Scope}
+		c.recordName(c.serviceNames, entry)
 		if err := resolver.RestrictVisits(int(*visits)); err != nil {
 			return err
 		}
@@ -128,8 +128,8 @@ func newObjectCatalog(ctx context.Context, baseline *fm.Firewall, data *fm.Data,
 	}
 	for _, s := range data.Services {
 		if len(s.Terms) == 1 && len(s.Unsupported) == 0 {
-			entry := catalogReference{kind: fm.ServiceObject, id: s.ID}
-			c.recordName(c.serviceNames, entry, s.Object)
+			entry := catalogReference{kind: fm.ServiceObject, id: s.ID, name: s.Name, scope: s.Scope}
+			c.recordName(c.serviceNames, entry)
 			c.services[s.Terms[0]] = append(c.services[s.Terms[0]], catalogService{reference: entry})
 		} else if err := indexService(s.Object, fm.ServiceObject); err != nil {
 			return nil, err
@@ -143,8 +143,11 @@ func newObjectCatalog(ctx context.Context, baseline *fm.Firewall, data *fm.Data,
 	return c, nil
 }
 
-func (c *objectCatalog) recordName(index map[nativename.ObjectKey]catalogReference, entry catalogReference, object fm.Object) {
-	key := nativename.Object(c.data.Metadata, object, entry.kind == fm.AddressGroupObject || entry.kind == fm.ServiceGroupObject)
+func (c *objectCatalog) recordName(index map[names.ObjectKey]catalogReference, entry catalogReference) {
+	if entry.name == "" {
+		return
+	}
+	key := names.Object(c.data.Metadata, fm.Object{Name: entry.name, Scope: entry.scope}, entry.kind == fm.AddressGroupObject || entry.kind == fm.ServiceGroupObject)
 	if prior, found := index[key]; found && prior != entry {
 		index[key] = catalogReference{}
 	} else {
@@ -152,34 +155,13 @@ func (c *objectCatalog) recordName(index map[nativename.ObjectKey]catalogReferen
 	}
 }
 
-// Recover only native identity, without cloning full address/service records.
-func (c *objectCatalog) nativeObject(entry catalogReference) fm.Object {
-	object := fm.Object{ID: entry.id, Name: string(entry.id)}
-	switch entry.kind {
-	case fm.AddressObject:
-		if v := c.baseline.Address(entry.id); v != nil {
-			object.Name, object.Scope = v.Name(), v.Scope()
-		}
-	case fm.AddressGroupObject:
-		if v := c.baseline.AddressGroup(entry.id); v != nil {
-			object.Name, object.Scope = v.Name(), v.Scope()
-		}
-	case fm.ServiceObject:
-		if v := c.baseline.Service(entry.id); v != nil {
-			object.Name, object.Scope = v.Name(), v.Scope()
-		}
-	case fm.ServiceGroupObject:
-		if v := c.baseline.ServiceGroup(entry.id); v != nil {
-			object.Name, object.Scope = v.Name(), v.Scope()
-		}
+func (c *objectCatalog) visible(entry catalogReference, scope string, index map[names.ObjectKey]catalogReference) bool {
+	if entry.name == "" {
+		return false
 	}
-	return object
-}
-func (c *objectCatalog) visible(entry catalogReference, scope string, index map[nativename.ObjectKey]catalogReference) bool {
-	object := c.nativeObject(entry)
 	group := entry.kind == fm.AddressGroupObject || entry.kind == fm.ServiceGroupObject
 	for _, namespace := range []string{scope, ""} {
-		key := nativename.Object(c.data.Metadata, fm.Object{Name: nativename.Name(object), Scope: namespace}, group)
+		key := names.Object(c.data.Metadata, fm.Object{Name: entry.name, Scope: namespace}, group)
 		if found, exists := index[key]; exists {
 			return found == entry
 		}
@@ -234,15 +216,15 @@ func (c *objectCatalog) ensureAddress(ctx context.Context, r flow.AddressRange, 
 			return fm.AddressRef{Kind: entry.kind, ID: entry.id}, nil
 		}
 	}
-	id, err := c.names.object(ctx, generatedID("fm-a-", r), c.names.addresses)
+	id, err := c.alloc.object(ctx, generatedID("fm-a-", r), c.alloc.addresses)
 	if err != nil {
 		return fm.AddressRef{}, err
 	}
 	object := fm.Object{ID: id, Name: string(id)}
 	c.data.Addresses = append(c.data.Addresses, fm.AddressRecord{Object: object, Ranges: []flow.AddressRange{r}})
-	entry := catalogReference{kind: fm.AddressObject, id: object.ID}
+	entry := catalogReference{kind: fm.AddressObject, id: object.ID, name: object.Name, scope: object.Scope}
 	c.addresses[r] = append(c.addresses[r], entry)
-	c.recordName(c.addressNames, entry, object)
+	c.recordName(c.addressNames, entry)
 	return fm.AddressRef{Kind: fm.AddressObject, ID: id}, nil
 }
 func serviceTermFromRegion(b flow.TrafficRegion) fm.ServiceTerm {
@@ -289,15 +271,15 @@ func (c *objectCatalog) ensureService(ctx context.Context, term fm.ServiceTerm, 
 			return fm.ServiceRef{Kind: candidate.reference.kind, ID: candidate.reference.id}, nil
 		}
 	}
-	id, err := c.names.object(ctx, generatedID("fm-s-", term), c.names.services)
+	id, err := c.alloc.object(ctx, generatedID("fm-s-", term), c.alloc.services)
 	if err != nil {
 		return fm.ServiceRef{}, err
 	}
 	object := fm.Object{ID: id, Name: string(id)}
 	c.data.Services = append(c.data.Services, fm.ServiceRecord{Object: object, Terms: []fm.ServiceTerm{term}})
-	candidate := catalogService{reference: catalogReference{kind: fm.ServiceObject, id: object.ID}}
+	candidate := catalogService{reference: catalogReference{kind: fm.ServiceObject, id: object.ID, name: object.Name, scope: object.Scope}}
 	c.services[term] = append(c.services[term], candidate)
-	c.recordName(c.serviceNames, candidate.reference, object)
+	c.recordName(c.serviceNames, candidate.reference)
 	return fm.ServiceRef{Kind: fm.ServiceObject, ID: id}, nil
 }
 func (c *objectCatalog) match(ctx context.Context, box flow.TrafficRegion, q policy.Request) (fm.Match, error) {

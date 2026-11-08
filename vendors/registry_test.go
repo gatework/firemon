@@ -63,22 +63,20 @@ func TestSharedParserContractRetainsUnsupportedSource(t *testing.T) {
 	}
 }
 
-func TestNativeRegistryParsesSevenVendorsAndExistingAliases(t *testing.T) {
+func TestNativeRegistryParsesSevenVendors(t *testing.T) {
 	for _, tc := range []struct {
-		name, vendor, fixture string
-		complete              bool
+		vendor, fixture string
+		complete        bool
 	}{
-		{"paloalto", "paloalto", "paloalto/testdata/basic.cfg", true},
-		{"palo_alto", "paloalto", "paloalto/testdata/basic.cfg", true},
-		{"srx", "srx", "srx/testdata/basic.set", true},
-		{"huawei", "huawei", "", true},
-		{"hillstone", "hillstone", "hillstone/testdata/basic.cfg", false},
-		{"fortinet", "fortinet", "fortinet/testdata/basic.conf", true},
-		{"netscreen", "netscreen", "netscreen/testdata/basic.set", true},
-		{"screenos", "netscreen", "netscreen/testdata/basic.set", true},
-		{"asa", "asa", "asa/testdata/basic.cfg", false},
+		{"paloalto", "paloalto/testdata/basic.cfg", true},
+		{"srx", "srx/testdata/basic.set", true},
+		{"huawei", "", true},
+		{"hillstone", "hillstone/testdata/basic.cfg", false},
+		{"fortinet", "fortinet/testdata/basic.conf", true},
+		{"netscreen", "netscreen/testdata/basic.set", true},
+		{"asa", "asa/testdata/basic.cfg", false},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.vendor, func(t *testing.T) {
 			t.Parallel()
 			raw := "security-policy\n rule name allow\n  source-address any\n  destination-address any\n  service any\n  action permit\n#\nreturn\n"
 			if tc.fixture != "" {
@@ -89,11 +87,22 @@ func TestNativeRegistryParsesSevenVendorsAndExistingAliases(t *testing.T) {
 				raw = string(b)
 			}
 			var parser config.Parser = vendors.Parser{}
-			metadata := fm.Metadata{Device: "synthetic", Vendor: tc.name}
+			metadata := fm.Metadata{Device: "synthetic", Vendor: tc.vendor}
 			source := config.Source{Text: raw, Complete: true}
 			if tc.vendor == "paloalto" {
-				metadata.Vendor, metadata.Software = tc.vendor, "10.2.7"
+				metadata.Software = "10.2.7"
 				source, metadata = observedScheduleSource(raw, metadata, true)
+			}
+			normalized, err := vendors.Normalize(metadata)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := metadata
+			if tc.vendor == "fortinet" {
+				want.Context = "root"
+			}
+			if normalized != want {
+				t.Fatalf("capture metadata changed: %+v, want %+v", normalized, want)
 			}
 			fw, err := parser.Parse(context.Background(), source, metadata)
 			if err != nil {
@@ -102,7 +111,7 @@ func TestNativeRegistryParsesSevenVendorsAndExistingAliases(t *testing.T) {
 			if fw.Metadata().Vendor != tc.vendor || fw.Metadata().Device != "synthetic" || fw.Raw() != raw || len(fw.Rules()) == 0 || fw.Complete() != tc.complete {
 				t.Fatalf("native graph/evidence lost: %+v, diagnostics: %+v", fw.Metadata(), fw.Diagnostics())
 			}
-			r, err := vendors.Renderer(tc.name)
+			r, err := vendors.Renderer(tc.vendor)
 			if err != nil || r == nil {
 				t.Fatal("native renderer missing", err)
 			}
@@ -140,8 +149,11 @@ func TestNativeRegistryUsesSelectedFortinetContext(t *testing.T) {
 }
 
 func TestNativeRegistryRejectsUnsupportedVendorsAndCancellation(t *testing.T) {
-	for _, vendor := range []string{"", "h3c", "topsec", "neteye", "fortinet\npassword"} {
+	for _, vendor := range []string{"", "palo_alto", "screenos", "h3c", "topsec", "neteye", "fortinet\npassword"} {
 		t.Run(vendor, func(t *testing.T) {
+			if _, err := vendors.Normalize(fm.Metadata{Vendor: vendor}); !errors.Is(err, vendors.ErrUnsupported) {
+				t.Fatal("unsupported vendor metadata accepted", err)
+			}
 			_, err := (vendors.Parser{}).Parse(context.Background(), config.Source{}, fm.Metadata{Device: "fw", Vendor: vendor})
 			if !errors.Is(err, vendors.ErrUnsupported) || strings.Contains(err.Error(), "password") {
 				t.Fatal("unsupported vendor accepted or echoed", err)

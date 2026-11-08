@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 
+	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/inventory"
 	"github.com/gatework/firemon/policy"
@@ -14,7 +15,7 @@ func (r *targetBatch) locate(ctx context.Context, input int, a AccessRequest, to
 		view = inventory.Original
 	}
 
-	limit := r.designer.options.Engine.Limits.WithDefaults().MaxRegions
+	limit := r.engine.Limits.WithDefaults().MaxRegions
 	count := 0
 	for _, box := range a.Traffic.Regions() {
 		src, _ := flow.NewAddressSet(box.Source)
@@ -152,7 +153,7 @@ func (r *targetBatch) locate(ctx context.Context, input int, a AccessRequest, to
 }
 
 func (r *targetBatch) candidates(ctx context.Context, input int, a AccessRequest) error {
-	limit := r.designer.options.Engine.Limits.WithDefaults().MaxRegions
+	limit := r.engine.Limits.WithDefaults().MaxRegions
 	var validated flow.Traffic
 	for _, candidate := range a.WireCandidates {
 		target := candidate.Target
@@ -193,40 +194,63 @@ func (r *targetBatch) aliases(ctx context.Context, input int, business flow.Traf
 	if err != nil || fw == nil {
 		return err
 	}
-	q := target.Request
-	q.Traffic = business
+	request := r.inputs[input].request
+	// Discover and verify each alias within the same NAT lifetime segment.
+	windows, err := r.times(ctx, fw, request)
+	if err != nil {
+		return err
+	}
+	for _, window := range windows {
+		proposal := targetProposal{traffic: business, target: target, sources: sources}
+		proposal.target.Request.At = window.Start
+		if request.Window != nil {
+			proposal.window = &window
+		}
+		if err := r.aliasesAt(ctx, input, fw, proposal, view); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
+}
+
+func (r *targetBatch) aliasesAt(ctx context.Context, input int, fw *fm.Firewall, proposal targetProposal, view inventory.View) error {
+	if err := r.chargeGraph(ctx, fw); err != nil {
+		return err
+	}
+	q := proposal.target.Request
+	q.Traffic = proposal.traffic
 	if q.Scope == "" {
 		q.Scope = fw.Metadata().Context
 	}
 	if q.RuleSet == "" {
 		q.RuleSet = "security"
 	}
-	result, err := r.designer.options.Engine.DiscoverStaticAliases(ctx, fw, policy.PacketRequest{Request: q, VRF: target.VRF}, policy.AliasView(view))
+	result, err := r.engine.DiscoverStaticAliases(ctx, fw, policy.PacketRequest{Request: q, VRF: proposal.target.VRF}, policy.AliasView(view))
 	if err != nil {
 		if fatalBatch(err) {
 			return err
 		}
-		r.issue(input, target.Device, "alias", "unsupported_alias", business, string(view), sources, err.Error())
-		return nil
+		r.issue(input, proposal.target.Device, "alias", "unsupported_alias", proposal.traffic, string(view), proposal.sources, err.Error())
+		return r.budgetErr
 	}
 	for _, part := range []struct {
 		code    string
 		traffic flow.Traffic
 	}{{"ambiguous_alias", result.Ambiguous}, {"unknown_alias", result.Unknown}, {"unlocated_alias", result.Unmatched}} {
 		if !part.traffic.Empty() {
-			r.issue(input, target.Device, "alias", part.code, part.traffic, string(view), sources, "")
+			r.issue(input, proposal.target.Device, "alias", part.code, part.traffic, string(view), proposal.sources, "")
 		}
 	}
 	for _, candidate := range result.Candidates {
 		if err := r.charge(ctx); err != nil {
 			return err
 		}
-		if _, err := r.evaluate(ctx, input, targetProposal{
-			traffic: candidate.Wire, target: target, sources: sources,
-			expected: &targetView{view: policy.AliasView(view), traffic: candidate.Business},
-		}); err != nil {
+		proof := proposal
+		proof.traffic = candidate.Wire
+		proof.expected = &targetView{view: policy.AliasView(view), traffic: candidate.Business}
+		if _, err := r.evaluate(ctx, input, proof); err != nil {
 			return err
 		}
 	}
-	return nil
+	return r.budgetErr
 }

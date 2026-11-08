@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 )
 
@@ -42,5 +43,64 @@ func TestXMLScannerRejectsEntitiesMixedContentAndResourceExcess(t *testing.T) {
 	cancel()
 	if _, err := config.XML(ctx, config.Source{Text: "<config/>"}, config.Limits{}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+}
+
+func TestXMLClaimsDoNotConsumeUnknownSiblingOnSameLine(t *testing.T) {
+	raw := "<config><known>192.0.2.1</known><unknown>condition</unknown></config>"
+	d, err := config.XML(t.Context(), config.Source{Text: raw}, config.Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lines := d.Content.Lines(); len(lines) != 1 || lines[0].Raw != raw {
+		t.Fatal("XML source is not indexed by physical lines", lines)
+	}
+	b, err := config.NewBuilder(d.Content, fm.Metadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	known, unknown := d.Root.Children[0], d.Root.Children[1]
+	tx := b.Begin()
+	tx.Parse(known.Claims...)
+	tx.Emit(fm.Data{Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "known"}}}})
+	if err := b.Commit(tx); err != nil {
+		t.Fatal(err)
+	}
+	evidence := d.Content.Evidence()
+	for _, claim := range known.Claims {
+		if evidence[claim-1].State != fm.Parsed {
+			t.Fatal("known node was not committed")
+		}
+	}
+	for _, claim := range unknown.Claims {
+		if e := evidence[claim-1]; e.State != fm.Pending || e.Span.First != 1 || e.Span.Last != 1 {
+			t.Fatal("unknown sibling lost evidence", e)
+		}
+	}
+	failed := b.Begin()
+	failed.Parse(unknown.Claims...)
+	failed.Parse(known.Claims...)
+	if err := b.Commit(failed); err == nil {
+		t.Fatal("repeated claim accepted")
+	}
+	for _, claim := range unknown.Claims {
+		if d.Content.Evidence()[claim-1].State != fm.Pending {
+			t.Fatal("failed transaction consumed unknown sibling")
+		}
+	}
+}
+
+func TestXMLBoundsPhysicalLinesAndTokens(t *testing.T) {
+	raw := "<config>\n\n\n</config>"
+	if _, err := config.XML(t.Context(), config.Source{Text: raw}, config.Limits{MaxLines: 3}); !errors.Is(err, config.ErrSource) {
+		t.Fatal("excess physical line accepted", err)
+	}
+	d, err := config.XML(t.Context(), config.Source{Text: raw}, config.Limits{MaxLines: 4})
+	if err != nil || len(d.Content.Lines()) != 4 || len(d.Content.Evidence()) != 3 {
+		t.Fatal("physical lines and tokens were conflated", err)
+	}
+	raw = "<config><known/><unknown/></config>"
+	if _, err := config.XML(t.Context(), config.Source{Text: raw}, config.Limits{MaxLines: 3}); !errors.Is(err, config.ErrSource) {
+		t.Fatal("excess XML token accepted", err)
 	}
 }

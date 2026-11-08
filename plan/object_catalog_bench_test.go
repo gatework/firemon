@@ -28,6 +28,13 @@ func BenchmarkCatalogExactReuse(b *testing.B) {
 				data.Services = append(data.Services, service)
 				address = address.Next()
 			}
+			// Reuse requires native declarations with names, independently of IDs.
+			for i := range data.Addresses {
+				data.Addresses[i].Name = string(data.Addresses[i].ID)
+			}
+			for i := range data.Services {
+				data.Services[i].Name = string(data.Services[i].ID)
+			}
 			fw, err := fm.Seal(data)
 			if err != nil {
 				b.Fatal(err)

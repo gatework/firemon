@@ -119,16 +119,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 }
 
 func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	builder, err := render.NewNativeBuilder(ctx, "huawei", before, after, changes)
+	builder, err := render.NewBuilder(ctx, "huawei", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-
-	timed, err := render.ScheduleCommands(before, after, changes)
-	if err != nil {
-		return nil, err
-	}
-	builder.AppendCommands(timed...)
 
 	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
 		return nil, err
@@ -191,7 +185,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		commands = append(commands, "quit")
 	}
 	if batch.Native() {
-		commands = append(commands, batch.NativeCommands()...)
+		commands = append(commands, batch.Commands()...)
 	}
 	ordered := slices.Clone(changes)
 	for _, c := range ordered {
@@ -321,7 +315,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			if action == "" || r.LogStart != fm.Irrelevant || r.Log != r.LogEnd || (r.Log != fm.Known && r.Log != fm.Irrelevant) {
 				return nil, ErrRender
 			}
-			if name, err := batch.ScheduleReference(after, m.Schedule); err != nil {
+			if name, err := batch.ScheduleName(after, m.Schedule); err != nil {
 				return nil, err
 			} else if name != "" {
 				commands = append(commands, "time-range "+name)

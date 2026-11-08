@@ -5,7 +5,6 @@ package vendors
 import (
 	"context"
 	"errors"
-	"slices"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
@@ -23,7 +22,6 @@ var ErrUnsupported = errors.New("vendor has no enabled native implementation")
 
 type definition struct {
 	name           string
-	aliases        []string
 	parser         func(config.Limits) config.Parser
 	renderer       nativeEmitter
 	defaultContext string
@@ -43,7 +41,7 @@ type driver struct {
 
 var definitions = []definition{
 	{
-		name: "paloalto", aliases: []string{"palo_alto"}, renderer: paloalto.Renderer{},
+		name: "paloalto", renderer: paloalto.Renderer{},
 		parser: func(l config.Limits) config.Parser { return paloalto.Parser{Limits: l} },
 	},
 	{
@@ -63,7 +61,7 @@ var definitions = []definition{
 		parser: func(l config.Limits) config.Parser { return fortinet.Parser{Limits: l} },
 	},
 	{
-		name: "netscreen", aliases: []string{"screenos"}, renderer: netscreen.Renderer{},
+		name: "netscreen", renderer: netscreen.Renderer{},
 		parser: func(l config.Limits) config.Parser { return netscreen.Parser{Limits: l} },
 	},
 	{
@@ -74,7 +72,7 @@ var definitions = []definition{
 
 func lookup(name string) (definition, error) {
 	for _, d := range definitions {
-		if d.name == name || slices.Contains(d.aliases, name) {
+		if d.name == name {
 			return d, nil
 		}
 	}
@@ -82,15 +80,14 @@ func lookup(name string) (definition, error) {
 }
 
 func (d definition) metadata(m fm.Metadata) fm.Metadata {
-	m.Vendor = d.name
 	if m.Context == "" {
 		m.Context = d.defaultContext
 	}
 	return m
 }
 
-// Normalize resolves the existing native vendor aliases and selected-domain
-// defaults. Other capture metadata is retained without inventing evidence.
+// Normalize validates the vendor and applies selected-domain defaults.
+// Other capture metadata is retained without inventing evidence.
 func Normalize(metadata fm.Metadata) (fm.Metadata, error) {
 	d, err := lookup(metadata.Vendor)
 	if err != nil {
@@ -115,7 +112,7 @@ func (p Parser) Parse(ctx context.Context, source config.Source, metadata fm.Met
 	return d.parser(p.Limits).Parse(ctx, source, metadata)
 }
 
-// Renderer returns the native renderer for an enabled vendor or existing alias.
+// Renderer returns the native renderer for an enabled vendor.
 func Renderer(vendor string) (plan.Renderer, error) {
 	d, err := lookup(vendor)
 	if err != nil {

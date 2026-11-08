@@ -9,6 +9,7 @@ import (
 	"time"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 )
@@ -98,5 +99,47 @@ func TestReadbackBudgetsObservedGraphBeforeCopying(t *testing.T) {
 		if allocated := end.TotalAlloc - start.TotalAlloc; allocated > 64<<10 {
 			t.Errorf("observed catalog copied (baseline=%v): %d bytes", baseline, allocated)
 		}
+	}
+}
+
+func TestReadbackBudgetsNestedDeclarationsBeforeCopying(t *testing.T) {
+	before := readbackGraph(t, 0, true)
+	q := request(t, "192.0.2.1/32")
+	result, err := (plan.Planner{Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 32}}}).Plan(
+		t.Context(), before, []policy.Request{q},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := before.Export()
+	ranges := make([]flow.AddressRange, 2048)
+	for i := range ranges {
+		ranges[i] = addressRange("203.0.113.1/32")
+	}
+	d.Addresses = []fm.AddressRecord{{Object: fm.Object{ID: "unused"}, Ranges: ranges}}
+	observed, err := fm.Seal(d)
+	if err != nil || !observed.Complete() {
+		t.Fatalf("fixture: %v", err)
+	}
+	for _, baseline := range []bool{false, true} {
+		var start, end runtime.MemStats
+		runtime.ReadMemStats(&start)
+		if baseline {
+			err = result.VerifyBaseline(t.Context(), observed)
+		} else {
+			_, err = result.Verify(t.Context(), observed)
+		}
+		runtime.ReadMemStats(&end)
+		if !errors.Is(err, policy.ErrBudget) {
+			t.Errorf("nested readback escaped budget (baseline=%v): %v", baseline, err)
+		}
+		if allocated := end.TotalAlloc - start.TotalAlloc; allocated > 64<<10 {
+			t.Errorf("nested readback copied (baseline=%v): %d bytes", baseline, allocated)
+		}
+	}
+	// The baseline fits twice, but independent result readback needs three graph views.
+	planner := plan.Planner{Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 2 * observed.DeclarationSize()}}}
+	if reused, err := planner.Plan(t.Context(), observed, []policy.Request{q}); reused != nil || !errors.Is(err, policy.ErrBudget) {
+		t.Fatalf("reuse skipped readback capacity: plan=%v, err=%v", reused != nil, err)
 	}
 }

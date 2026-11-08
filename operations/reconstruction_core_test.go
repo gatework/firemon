@@ -184,6 +184,11 @@ type reconstructionShortWriter struct{}
 
 func (reconstructionShortWriter) Write(p []byte) (int, error) { return len(p) - 1, nil }
 
+type reconstructionIO struct{ err error }
+
+func (r reconstructionIO) Read([]byte) (int, error)  { return 0, r.err }
+func (r reconstructionIO) Write([]byte) (int, error) { return 0, r.err }
+
 func TestCoreReconstructionIOAndCancellation(t *testing.T) {
 	_, revision, p := finiteReconstructionPlan(t)
 	if _, err := plan.EncodeReconstruction(t.Context(), reconstructionShortWriter{}, plan.SnapshotRevisions{Baseline: revision}, p); !errors.Is(err, io.ErrShortWrite) {
@@ -199,6 +204,43 @@ func TestCoreReconstructionIOAndCancellation(t *testing.T) {
 	}
 	if _, _, err := operations.RestorePlan(t.Context(), nil, revision, unusedRevisionLoader{}); !errors.Is(err, operations.ErrInvalid) {
 		t.Fatal("nil-reader error", err)
+	}
+	var typedNil *bytes.Buffer
+	if _, err := plan.EncodeReconstruction(t.Context(), typedNil, plan.SnapshotRevisions{Baseline: revision}, p); err != plan.ErrReconstruction {
+		t.Fatal("typed nil writer", err)
+	}
+	if _, err := plan.DecodeReconstruction(t.Context(), typedNil, revision); err != plan.ErrInvalid {
+		t.Fatal("typed nil reader", err)
+	}
+	if _, err := plan.DecodeReconstruction(t.Context(), typedNil, "invalid"); err != plan.ErrReconstruction {
+		t.Fatal("checksum validation precedence", err)
+	}
+	if _, _, err := operations.RestorePlan(t.Context(), typedNil, revision, unusedRevisionLoader{}); err != operations.ErrInvalid {
+		t.Fatal("restore typed nil reader", err)
+	}
+	failure := errors.New("reconstruction I/O failed")
+	if sum, err := plan.EncodeReconstruction(t.Context(), reconstructionIO{failure}, plan.SnapshotRevisions{Baseline: revision}, p); sum != "" || err != failure {
+		t.Fatal("writer error or partial checksum", sum, err)
+	}
+	if material, err := plan.DecodeReconstruction(t.Context(), reconstructionIO{failure}, revision); material != nil || err != failure {
+		t.Fatal("reader error or partial material", material, err)
+	}
+}
+
+func TestCoreReconstructionJSONErrors(t *testing.T) {
+	for _, raw := range []string{`{"version":"wrong"}`, `{}`, `{} {}`, `{} !`} {
+		sum := sha256.Sum256([]byte(raw))
+		material, err := plan.DecodeReconstruction(t.Context(), strings.NewReader(raw), hex.EncodeToString(sum[:]))
+		if material != nil || !errors.Is(err, plan.ErrReconstruction) {
+			t.Fatalf("%q: %v, %v", raw, material, err)
+		}
+		if strings.Contains(raw, "wrong") {
+			if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+				t.Fatal("lost JSON type error", err)
+			}
+		} else if err != plan.ErrReconstruction {
+			t.Fatal("trailing data or invalid document error changed", err)
+		}
 	}
 }
 

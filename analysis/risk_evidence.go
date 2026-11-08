@@ -29,7 +29,7 @@ const NativePolicyView RiskView = "native-policy"
 
 func riskEvidence(fw *fm.Firewall, rule *fm.Rule, q policy.Request, mode RiskMode, diagnostics map[fm.ID][]string) RiskEvidence {
 	r := rule.Record()
-	e := RiskEvidence{At: q.At, Chain: q.Chain(), FromZone: q.FromZone, ToZone: q.ToZone, View: NativePolicyView, Schedule: r.Match.Schedule, ScheduleActive: True, Disabled: r.Disabled, Spans: slices.Clone(r.Spans)}
+	e := RiskEvidence{At: q.At, Chain: q.Chain(), FromZone: q.FromZone, ToZone: q.ToZone, View: NativePolicyView, Schedule: r.Match.Schedule, ScheduleActive: True, Disabled: r.Disabled, Spans: r.Spans}
 	if !fw.Complete() {
 		e.Reasons = append(e.Reasons, "incomplete-snapshot")
 	}
@@ -40,7 +40,7 @@ func riskEvidence(fw *fm.Firewall, rule *fm.Rule, q policy.Request, mode RiskMod
 		e.Reasons = append(e.Reasons, "disabled-rule")
 	}
 	if schedule := rule.Schedule(); schedule != nil {
-		e.Timezone = schedule.Record().Timezone
+		e.Timezone = schedule.Timezone()
 		active, known := schedule.ActiveAt(q.At)
 		switch {
 		case !known:

@@ -57,7 +57,7 @@ func TestOfflineAnalysisReportsBoundRevisionsAndTrafficJSON(t *testing.T) {
 			args = append(args, "--file", file)
 		}
 		var out bytes.Buffer
-		if err := run(args, &out); err != nil {
+		if err := execute(t.Context(), args, &out); err != nil {
 			t.Fatalf("%s: %v", command, err)
 		}
 		var report map[string]json.RawMessage
@@ -79,7 +79,7 @@ func TestOfflineAnalysisReportsBoundRevisionsAndTrafficJSON(t *testing.T) {
 	if err := os.WriteFile(file, []byte(`{"version":1,"typo":true}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := run([]string{"inspect-address", "--store", root, "--revision", rev, "--file", file}, &out); err == nil || out.Len() != 0 {
+	if err := execute(t.Context(), []string{"inspect-address", "--store", root, "--revision", rev, "--file", file}, &out); err == nil || out.Len() != 0 {
 		t.Fatal("accepted unknown fields", err, out.String())
 	}
 }
@@ -90,8 +90,8 @@ func TestAnalysisDocumentRejectsTrailingAndOversizedInput(t *testing.T) {
 		if err := os.WriteFile(file, []byte(raw), 0600); err != nil {
 			t.Fatal(err)
 		}
-		var d inspectionDocument
-		if err := readAnalysisDocument(t.Context(), file, &d); err == nil {
+		var d inspectDoc
+		if err := readJSON(t.Context(), file, &d); err == nil {
 			t.Fatal("unbounded or trailing document accepted")
 		}
 	}
@@ -107,11 +107,11 @@ func TestOfflineRiskCompoundDocumentPreservesFalseOR(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw := `{"version":1,"contexts":[],"definitions":[{"id":"compound","version":"1","mode":1,"expression":{"any":[{"predicate":{"dimension":2,"relation":1,"addresses":[{"First":"203.0.113.1","Last":"203.0.113.1"}]}}]}}]}`
-	var d riskDocument
+	var d riskDoc
 	if err := json.Unmarshal([]byte(raw), &d); err != nil {
 		t.Fatal(err)
 	}
-	d.Contexts = []analysisContextDocument{{Traffic: traffic.Regions()}}
+	d.Contexts = []queryDoc{{Traffic: traffic.Regions()}}
 	contexts, definitions, err := d.request(policy.Limits{}.WithDefaults())
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +147,7 @@ func TestOfflineLifecycleCommandsAndUsage(t *testing.T) {
 	}
 	for _, command := range []string{"reclamation-report", "reclamation-plan"} {
 		var out bytes.Buffer
-		if err = run([]string{command, "--store", root, "--revision", rev, "--file", file}, &out); err != nil {
+		if err = execute(t.Context(), []string{command, "--store", root, "--revision", rev, "--file", file}, &out); err != nil {
 			t.Fatal(command, err)
 		}
 		if !strings.Contains(out.String(), rev) || command == "reclamation-plan" && !strings.Contains(out.String(), "no rule id 1") {
@@ -165,7 +165,7 @@ func TestOfflineLifecycleCommandsAndUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err = run([]string{"reclamation-plan", "--store", root, "--revision", live, "--file", file}, &out); err == nil || out.Len() != 0 {
+	if err = execute(t.Context(), []string{"reclamation-plan", "--store", root, "--revision", live, "--file", file}, &out); err == nil || out.Len() != 0 {
 		t.Fatal("unproven removal emitted", err, out.String())
 	}
 	if err = os.WriteFile(file, []byte(`{"version":1,"target_revision":"`+rev+`","zones":[{"from":"inside","to":"inside"},{"from":"outside","to":"outside"}],"pairs":[{"From":"inside","To":"outside"}],"rules":["1"]}`), 0600); err != nil {
@@ -173,7 +173,7 @@ func TestOfflineLifecycleCommandsAndUsage(t *testing.T) {
 	}
 	for _, command := range []string{"migration-report", "migration-plan"} {
 		out.Reset()
-		if err = run([]string{command, "--store", root, "--revision", live, "--file", file}, &out); err != nil {
+		if err = execute(t.Context(), []string{command, "--store", root, "--revision", live, "--file", file}, &out); err != nil {
 			t.Fatal(command, err)
 		}
 		if !strings.Contains(out.String(), "digest") {
@@ -211,7 +211,7 @@ func TestUsageCLIReadsExplicitRevisionAndPairedLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err = run([]string{"usage-report", "--store", root, "--revision", rev, "--file", file}, &out); err != nil {
+	if err = execute(t.Context(), []string{"usage-report", "--store", root, "--revision", rev, "--file", file}, &out); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), `"Tuples": [`) || !strings.Contains(out.String(), `"Hits": 1`) {

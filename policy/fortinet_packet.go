@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"slices"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
@@ -164,7 +165,7 @@ func (e Engine) fortinetPacket(ctx context.Context, fw *fm.Firewall, q PacketReq
 					}
 					native := request
 					native.Traffic = part.Original
-					out.Paths = append(out.Paths, PacketPath{Real: policyView, NativeRequests: []Request{native}, Original: part.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: part, Policy: result})
+					out.Paths = append(out.Paths, PacketPath{Real: policyView, NativeRequests: []Request{native}, Original: part.Original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: part, Policy: result, PolicyNAT: slices.Clone(piece.Steps)})
 				}
 			}
 			if !evaluated.Unmatched.Empty() {

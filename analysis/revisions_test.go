@@ -5,7 +5,9 @@ import (
 	"errors"
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/analysis"
+	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -76,5 +78,34 @@ func TestRevisionComparisonReportsNATDriftWithoutClaimingBehavior(t *testing.T) 
 	}
 	if _, err = (analysis.RevisionComparer{}).Compare(context.Background(), before, other, time.Time{}); !errors.Is(err, analysis.ErrInvalid) {
 		t.Fatal("compared unrelated devices", err)
+	}
+}
+
+func TestRevisionComparisonBudgetsNestedDeclarationsBeforeCopying(t *testing.T) {
+	d := graph(t, [][2]string{{"192.0.2.1", "198.51.100.1"}}).Export()
+	r := d.Addresses[0].Ranges[0]
+	d.Addresses[0].Ranges = make([]flow.AddressRange, 2048)
+	for i := range d.Addresses[0].Ranges {
+		d.Addresses[0].Ranges[i] = r
+	}
+	fw, err := fm.Seal(d)
+	if err != nil || !fw.Complete() {
+		t.Fatalf("fixture: %v", err)
+	}
+	comparer := analysis.RevisionComparer{Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 32}}}
+	var start, end runtime.MemStats
+	runtime.ReadMemStats(&start)
+	_, err = comparer.Compare(t.Context(), fw, fw, time.Time{})
+	runtime.ReadMemStats(&end)
+	if !errors.Is(err, policy.ErrBudget) {
+		t.Errorf("nested declarations escaped budget: %v", err)
+	}
+	if allocated := end.TotalAlloc - start.TotalAlloc; allocated > 64<<10 {
+		t.Errorf("nested declarations copied before rejection: %d bytes", allocated)
+	}
+	comparer.Engine.Limits.MaxVisits = 100000
+	result, err := comparer.Compare(t.Context(), fw, fw, time.Time{})
+	if err != nil || result.Behavior != "equivalent" {
+		t.Fatalf("adequate nested declaration budget: %+v, %v", result, err)
 	}
 }

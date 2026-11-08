@@ -221,16 +221,6 @@ func (f *Firewall) issue(id ID, code, message string) {
 	f.diagnostics = append(f.diagnostics, Diagnostic{Object: id, Code: code, Message: message})
 }
 
-func cmpInt(a, b int) int {
-	if a < b {
-		return -1
-	}
-	if a > b {
-		return 1
-	}
-	return 0
-}
-
 // OrderedRules visits immutable rules by native position and stable identity.
 // Rules retains source declaration order; neither view exposes index storage.
 func (f *Firewall) OrderedRules() iter.Seq[*Rule] {

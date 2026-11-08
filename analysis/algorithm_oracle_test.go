@@ -121,7 +121,7 @@ func TestRequestOptimizationAgainstPacketOracle(t *testing.T) {
 				declared = append(declared, region)
 				requests = append(requests, policy.Request{Traffic: oracleMakeTraffic(t, region)})
 			}
-			groups, err := (analysis.RequestOptimizer{}).Optimize(context.Background(), requests)
+			groups, err := (analysis.Optimizer{}).Optimize(context.Background(), requests)
 			if err != nil || len(groups) != 1 {
 				t.Fatalf("groups=%d: %v", len(groups), err)
 			}

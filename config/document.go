@@ -24,7 +24,7 @@ func Statements(ctx context.Context, c *Content) ([]Statement, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if c == nil {
+	if c == nil || c.text == nil {
 		return nil, ErrInvalid
 	}
 	var out []Statement
@@ -41,11 +41,11 @@ func Statements(ctx context.Context, c *Content) ([]Statement, error) {
 			active = false
 		}
 	}
-	for _, line := range c.lines {
+	for line := range c.text.All() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rawEnd += len(line.Raw)
+		rawEnd = line.EndByte
 		nextCheck := scanChunk
 		for offset, r := range line.Raw {
 			if offset >= nextCheck {

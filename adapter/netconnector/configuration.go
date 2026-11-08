@@ -13,7 +13,7 @@ import (
 )
 
 var _ deploy.ConfigurationSession = (*Session)(nil)
-var configurationToken = regexp.MustCompile(`\A[0-9a-f]{48}\z`)
+var tokenPattern = regexp.MustCompile(`\A[0-9a-f]{48}\z`)
 
 // BeginConfiguration acquires native candidate isolation before the caller's
 // baseline capture. No candidate reset, takeover, retry or reconnect is used.
@@ -21,17 +21,17 @@ func (s *Session) BeginConfiguration(ctx context.Context, token string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !configurationToken.MatchString(token) {
+	if !tokenPattern.MatchString(token) {
 		return ErrInvalid
 	}
 	return s.run(ctx, func(ctx context.Context, op *connector.Operation) error {
-		if s.configurationToken != "" {
+		if s.token != "" {
 			return ErrConfigurationLock
 		}
-		b := responseBudget{remaining: s.options.MaxOutputBytes, digest: sha256.New()}
-		switch s.metadata.Vendor {
+		b := responseBudget{remaining: s.opts.MaxOutputBytes, digest: sha256.New()}
+		switch s.meta.Vendor {
 		case "paloalto":
-			if !s.options.ExclusivePANAdmin {
+			if !s.opts.ExclusivePANAdmin {
 				return ErrConfigurationLock
 			}
 			locks, err := s.panLocks(ctx, op, &b)
@@ -85,7 +85,7 @@ func (s *Session) BeginConfiguration(ctx context.Context, token string) error {
 				return err
 			}
 		}
-		s.configurationToken = token
+		s.token = token
 		return nil
 	})
 }
@@ -97,17 +97,17 @@ func (s *Session) EndConfiguration(ctx context.Context, token string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !configurationToken.MatchString(token) {
+	if !tokenPattern.MatchString(token) {
 		return ErrInvalid
 	}
 	return s.run(ctx, func(ctx context.Context, op *connector.Operation) error {
-		if s.configurationToken != "" && s.configurationToken != token {
+		if s.token != "" && s.token != token {
 			return ErrConfigurationLock
 		}
-		b := responseBudget{remaining: s.options.MaxOutputBytes, digest: sha256.New()}
-		switch s.metadata.Vendor {
+		b := responseBudget{remaining: s.opts.MaxOutputBytes, digest: sha256.New()}
+		switch s.meta.Vendor {
 		case "paloalto":
-			if !s.options.ExclusivePANAdmin {
+			if !s.opts.ExclusivePANAdmin {
 				return ErrConfigurationLock
 			}
 			locks, err := s.panLocks(ctx, op, &b)
@@ -151,7 +151,7 @@ func (s *Session) EndConfiguration(ctx context.Context, token string) error {
 				s.srxExclusive = false
 			}
 		}
-		s.configurationToken = ""
+		s.token = ""
 		return nil
 	})
 }
@@ -180,7 +180,7 @@ func cleanCandidate(ctx context.Context, op *connector.Operation, b *responseBud
 type panLock struct{ admin, comment string }
 
 func (s *Session) verifyPANLock(ctx context.Context, op *connector.Operation, b *responseBudget) error {
-	if s.configurationToken == "" {
+	if s.token == "" {
 		return ErrConfigurationLock
 	}
 	locks, err := s.panLocks(ctx, op, b)
@@ -191,7 +191,7 @@ func (s *Session) verifyPANLock(ctx context.Context, op *connector.Operation, b 
 	if err != nil {
 		return errors.Join(ErrConfigurationLock, err)
 	}
-	if !ownPANLock(locks, prompt, s.configurationToken) {
+	if !ownPANLock(locks, prompt, s.token) {
 		return ErrConfigurationLock
 	}
 	return nil
@@ -215,7 +215,7 @@ func (s *Session) panLocks(ctx context.Context, op *connector.Operation, b *resp
 	if err != nil {
 		return nil, errors.Join(ErrConfigurationLock, err)
 	}
-	locks, parseErr := parsePANLocks(ctx, text, int(s.options.MaxOutputBytes))
+	locks, parseErr := parsePANLocks(ctx, text, int(s.opts.MaxOutputBytes))
 	if parseErr != nil {
 		return nil, parseErr
 	}

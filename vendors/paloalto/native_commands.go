@@ -13,7 +13,7 @@ import (
 	"github.com/gatework/firemon/vendors/internal/render"
 )
 
-func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.NativeBuilder) error {
+func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.Builder) error {
 	if len(c.Additions.StaticNATs)+len(c.Additions.DynamicNATs)+len(c.Additions.NATPools) == 0 {
 		return nil
 	}
@@ -36,7 +36,8 @@ func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.Nati
 			o = r.Object
 			if value, ok := strings.CutPrefix(string(r.ID), "$literal:"); ok {
 				v, e := address(value)
-				if e != nil || r.Name != value || r.Scope != "" || r.Inline || r.FQDN != "" || r.VIP != (fm.NATRef{}) || len(r.Unsupported) > 0 || len(r.Ranges) != 1 || r.Ranges[0] != v {
+				// The literal belongs to this NAT owner, not a named declaration.
+				if e != nil || r.Name != "" || r.Scope != "" || !r.Inline || r.FQDN != "" || r.VIP != (fm.NATRef{}) || len(r.Unsupported) > 0 || len(r.Ranges) != 1 || r.Ranges[0] != v {
 					return "", ErrRender
 				}
 				if e = out.ClaimAddress(owner, ref); e != nil {

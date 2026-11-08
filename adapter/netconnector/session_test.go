@@ -132,6 +132,37 @@ func TestReadRejectsEmptySavedCaptureAndRetires(t *testing.T) {
 	}
 }
 
+func TestReadKeepsConfigurationBody(t *testing.T) {
+	for _, tc := range []struct{ name, text string }{
+		{"empty", ""},
+		{"single-line", "hostname captured"},
+		{"multiple-lines", "hostname captured\ninterface inside0\n nameif inside"},
+		{"prompt-suffix", "description fw#"},
+		{"last-line-prompt-suffix", "hostname captured\ndescription fw#"},
+		{"different-prompt", "hostname captured\nother#"},
+		{"prompt-prefix", "hostname captured\nfw# description"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := connector.Profile{
+				Name: "asa", LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`),
+				ConfigCommands: []string{"show current"},
+			}
+			s := sessionWith(t, "asa", profile, []exchange{{"show current", tc.text}}, adapter.Options{})
+			capture, err := s.Read(t.Context(), device.Running)
+			if tc.text == "" {
+				if !errors.Is(err, adapter.ErrCapture) || capture.Source.Complete {
+					t.Fatalf("empty capture accepted: %+v, %v", capture, err)
+				}
+			} else if err != nil || !capture.Source.Complete {
+				t.Fatalf("configuration capture failed: %+v, %v", capture, err)
+			}
+			if capture.Source.Text != tc.text {
+				t.Fatalf("configuration body changed: got %q, want %q", capture.Source.Text, tc.text)
+			}
+		})
+	}
+}
+
 func TestPANSaveWaitsForMatchingCommitJobAndDoesNotReplay(t *testing.T) {
 	for _, tc := range []struct {
 		name, status string

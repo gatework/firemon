@@ -59,8 +59,8 @@ func analysisCommand(ctx context.Context, command string, args []string, out io.
 		}
 		report, err = (analysis.RevisionComparer{Engine: engine}).Compare(ctx, fw, next, from)
 	case "inspect-address":
-		var d inspectionDocument
-		if err = readAnalysisDocument(ctx, *file, &d); err != nil {
+		var d inspectDoc
+		if err = readJSON(ctx, *file, &d); err != nil {
 			return err
 		}
 		q, e := d.request(*regions)
@@ -69,8 +69,8 @@ func analysisCommand(ctx context.Context, command string, args []string, out io.
 		}
 		report, err = (analysis.Inspector{Engine: engine}).Inspect(ctx, fw, q)
 	case "risk-report":
-		var d riskDocument
-		if err = readAnalysisDocument(ctx, *file, &d); err != nil {
+		var d riskDoc
+		if err = readJSON(ctx, *file, &d); err != nil {
 			return err
 		}
 		contexts, definitions, e := d.request(engine.Limits)

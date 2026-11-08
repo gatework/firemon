@@ -20,6 +20,9 @@ type command struct {
 }
 
 var commands = []command{
+	{"parse", "Check native configurations without publishing snapshots", func(ctx context.Context, _ string, args []string, out io.Writer) error {
+		return parseConfig(ctx, args, out)
+	}},
 	{"import", "Parse and publish a native configuration", func(ctx context.Context, _ string, args []string, out io.Writer) error {
 		return importConfig(ctx, args, out)
 	}},

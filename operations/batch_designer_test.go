@@ -119,8 +119,15 @@ func TestBatchDesignerLocalizesUnavailableSnapshots(t *testing.T) {
 			}
 			d, _ := operations.NewBatchDesigner(operations.BatchDesignerOptions{Store: store})
 			result, err := d.Design(context.Background(), operations.BatchRequest{Version: 1, Requests: []operations.AccessRequest{{Traffic: requestTraffic(t, "192.0.2.10/32", "198.51.100.10/32", 1024), Targets: []operations.AccessTarget{target}}}})
-			if err != nil || len(result.Devices) != 0 || len(result.Issues) != 1 || result.Issues[0].Code != want {
+			if err != nil || len(result.Devices) != 0 || len(result.Issues) == 0 || result.Issues[0].Code != want {
 				t.Fatal(result, err)
+			}
+			for _, input := range result.Inputs {
+				for _, outcome := range input.Outcomes {
+					if !outcome.Conditional || outcome.Disposition != plan.BatchPending {
+						t.Fatal("unavailable evidence became actionable", outcome)
+					}
+				}
 			}
 		})
 	}
@@ -145,7 +152,8 @@ func TestBatchDesignerForwardValidatesTranslatedCandidate(t *testing.T) {
 	}
 	d, _ := operations.NewBatchDesigner(operations.BatchDesignerOptions{Store: store})
 	request := operations.AccessRequest{Traffic: requestTraffic(t, "198.51.100.1/32", "10.0.0.10/32", 1024), View: inventory.Translated, WireCandidates: []operations.WireCandidate{{Traffic: requestTraffic(t, "198.51.100.1/32", "203.0.113.10/32", 1024), Target: operations.AccessTarget{Device: "pan", VRF: "vr", Request: policy.Request{FromZone: "outside"}}}}}
-	result, err := d.Query(ctx, operations.BatchRequest{Version: 1, Requests: []operations.AccessRequest{request}})
+	searcher, _ := operations.NewSearcher(operations.SearcherOptions{Store: store})
+	result, err := searcher.Query(ctx, operations.BatchRequest{Version: 1, Requests: []operations.AccessRequest{request}})
 	if err != nil || len(result.Issues) != 0 || len(result.Inputs[0].Outcomes) != 1 || result.Inputs[0].Outcomes[0].NativeRequests[0].Traffic.Regions()[0].Destination != r("203.0.113.10/32") {
 		t.Fatal(result, err)
 	}
@@ -217,7 +225,8 @@ func TestBatchDesignerDefaultRouteDoesNotOwnTrafficAndAmbiguitySurvives(t *testi
 	top := inventory.Topology{Version: 1}
 	d, _ := operations.NewBatchDesigner(operations.BatchDesignerOptions{Store: store})
 	batch := operations.BatchRequest{Version: 1, Topology: &top, Requests: []operations.AccessRequest{{Traffic: requestTraffic(t, "192.0.2.10/32", "198.51.100.10/32", 1024)}}}
-	result, err := d.Query(ctx, batch)
+	searcher, _ := operations.NewSearcher(operations.SearcherOptions{Store: store})
+	result, err := searcher.Query(ctx, batch)
 	if err != nil || len(result.Inputs[0].Outcomes) != 0 || len(result.Issues) != 2 {
 		t.Fatal("default route became ownership", result, err)
 	}
@@ -292,7 +301,7 @@ func TestBatchDesignerPreservesPossibleDynamicAllocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := operations.NewBatchDesigner(operations.BatchDesignerOptions{Store: store})
+	d, _ := operations.NewSearcher(operations.SearcherOptions{Store: store})
 	result, err := d.Query(ctx, operations.BatchRequest{Version: 1, Requests: []operations.AccessRequest{{Traffic: requestTraffic(t, "192.0.2.20/32", "198.51.100.20/32", 1024), Targets: []operations.AccessTarget{{Device: "srx", Packet: true, Request: policy.Request{FromZone: "inside"}}}}}})
 	if err != nil || len(result.Inputs[0].Outcomes) != 1 {
 		t.Fatal(result, err)
@@ -426,8 +435,8 @@ func TestBatchDesignerBoundsIssueExpansion(t *testing.T) {
 		{Traffic: requestTraffic(t, "192.0.2.1/32", "198.51.100.1/32", 1024), Targets: []operations.AccessTarget{{Device: "a"}, {Device: "b"}}},
 		{ID: "not visited"},
 	}})
-	if !errors.Is(err, policy.ErrBudget) || len(result.Inputs) != 1 || result.Inputs[0].Index != 0 || len(result.Issues) != 1 {
-		t.Fatal("fatal target resolution must retain only visited inputs", result, err)
+	if !errors.Is(err, policy.ErrBudget) || len(result.Inputs) != 0 || len(result.Issues) != 0 {
+		t.Fatal("input preflight must reject before retaining visited inputs", result, err)
 	}
 }
 
@@ -584,7 +593,7 @@ func TestBatchDesignerBusinessFailureCoordinates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := operations.NewBatchDesigner(operations.BatchDesignerOptions{Store: store})
+	d, _ := operations.NewSearcher(operations.SearcherOptions{Store: store})
 	network := func(s string) flow.AddressRange { v, _ := flow.PrefixRange(netip.MustParsePrefix(s)); return v }
 	business := requestTraffic(t, "198.51.100.1/32", "192.0.2.10/32", 1024)
 	for _, view := range []inventory.View{inventory.Real, inventory.Translated} {
@@ -647,7 +656,7 @@ func TestBatchDesignerWireCandidateFailureCoordinates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := operations.NewBatchDesigner(operations.BatchDesignerOptions{Store: store})
+	d, _ := operations.NewSearcher(operations.SearcherOptions{Store: store})
 	business := requestTraffic(t, "198.51.100.1/32", "192.0.2.10/32", 1024)
 	wire := requestTraffic(t, "198.51.100.1/32", "203.0.113.11/32", 1024)
 	for _, view := range []inventory.View{inventory.Real, inventory.Translated} {

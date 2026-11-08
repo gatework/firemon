@@ -28,7 +28,7 @@ func (b *resolutionBudget) chargeCount(count int) error {
 
 func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *resolutionBudget) (flow.AddressSet, bool, error) {
 	if any {
-		return allAddresses(), true, nil
+		return allAddresses, true, nil
 	}
 	known := true
 	states := make(map[fm.ID]uint8)
@@ -59,11 +59,13 @@ func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *re
 				known = false
 			}
 			set := a.Set()
-			// Reserve normalized ranges before Ranges allocates their detached view.
+			// Reserve normalized ranges before retaining their values.
 			if err := budget.chargeCount(set.RangeCount()); err != nil {
 				return err
 			}
-			ranges = append(ranges, set.Ranges()...)
+			for r := range set.All() {
+				ranges = append(ranges, r)
+			}
 		case fm.AddressGroupObject:
 			if states[ref.ID] == 1 {
 				known = false
@@ -98,7 +100,7 @@ func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *re
 		}
 	}
 	if !known {
-		return allAddresses(), false, nil
+		return allAddresses, false, nil
 	}
 	if err := budget.ctx.Err(); err != nil {
 		return flow.AddressSet{}, false, err

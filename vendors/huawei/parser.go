@@ -61,13 +61,6 @@ func (native Parser) Parse(ctx context.Context, source config.Source, metadata f
 }
 
 func object(name string) fm.Object { return fm.Object{ID: fm.ID(name), Name: name} }
-func (p *parser) commit(s *config.Builder, tx *config.Transaction, d fm.Data) error {
-	tx.Emit(d)
-	if err := s.Commit(tx); err != nil {
-		return err
-	}
-	return nil
-}
 
 type namedBlocks struct {
 	name, kind string

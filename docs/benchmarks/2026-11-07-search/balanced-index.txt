@@ -1,0 +1,36 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/inventory
+cpu: Apple M5
+BenchmarkIndex/build-10         	      55	   2063699 ns/op	10707072 B/op	   50044 allocs/op
+BenchmarkIndex/build-10         	      58	   1921891 ns/op	10706973 B/op	   50044 allocs/op
+BenchmarkIndex/build-10         	      61	   1927561 ns/op	10706977 B/op	   50044 allocs/op
+BenchmarkIndex/build-10         	      56	   1893481 ns/op	10706986 B/op	   50044 allocs/op
+BenchmarkIndex/build-10         	      56	   1951309 ns/op	10706975 B/op	   50044 allocs/op
+BenchmarkIndex/build-10         	      60	   2017077 ns/op	10706988 B/op	   50044 allocs/op
+BenchmarkIndex/build-10         	      57	   1912171 ns/op	10706977 B/op	   50044 allocs/op
+BenchmarkIndex/build-10         	      61	   1913204 ns/op	10706977 B/op	   50044 allocs/op
+BenchmarkIndex/build-10         	      57	   1911649 ns/op	10706982 B/op	   50044 allocs/op
+BenchmarkIndex/build-10         	      61	   1924683 ns/op	10706981 B/op	   50044 allocs/op
+BenchmarkIndex/hot-10           	 1710223	        70.17 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10           	 1713014	        68.47 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10           	 1749018	        68.67 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10           	 1767622	        68.60 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10           	 1760342	        67.61 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10           	 1664254	        71.97 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10           	 1666038	        71.90 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10           	 1671471	        71.77 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10           	 1660710	        72.13 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/hot-10           	 1668302	        71.94 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIndex/candidates-10    	  115860	      1040 ns/op	     712 B/op	      11 allocs/op
+BenchmarkIndex/candidates-10    	  116763	      1037 ns/op	     712 B/op	      11 allocs/op
+BenchmarkIndex/candidates-10    	  112682	      1061 ns/op	     712 B/op	      11 allocs/op
+BenchmarkIndex/candidates-10    	  111246	      1062 ns/op	     712 B/op	      11 allocs/op
+BenchmarkIndex/candidates-10    	  114852	      1056 ns/op	     712 B/op	      11 allocs/op
+BenchmarkIndex/candidates-10    	  113901	      1056 ns/op	     712 B/op	      11 allocs/op
+BenchmarkIndex/candidates-10    	  112352	      1075 ns/op	     712 B/op	      11 allocs/op
+BenchmarkIndex/candidates-10    	  111295	      1064 ns/op	     712 B/op	      11 allocs/op
+BenchmarkIndex/candidates-10    	  113850	      1064 ns/op	     712 B/op	      11 allocs/op
+BenchmarkIndex/candidates-10    	  113668	      1063 ns/op	     712 B/op	      11 allocs/op
+PASS
+ok  	github.com/gatework/firemon/inventory	3.747s

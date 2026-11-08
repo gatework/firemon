@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/firemon/internal/durablefile"
 )
 
 // blob binds encoded immutable evidence to its content-addressed revision.
@@ -43,7 +44,7 @@ func (s *Store) storeBlob(ctx context.Context, b blob) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return atomicWrite(path, b.data)
+	return durablefile.Replace(path, b.data)
 }
 
 // compareBlob bounds reads by the expected immutable encoding and requires real

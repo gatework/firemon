@@ -57,6 +57,17 @@ Those compiler tests establish native expression and exact NAT query results;
 they do not claim general cross-vendor DNAT packet migration. Native policy
 coordinates and reverse dependencies still require the planner's full proof.
 
+`migration_preimage_test.go` additionally proves Huawei-to-Huawei destination
+address/port migration with an independently authored native capture and rejects
+translation broadened to an unselected source. Selected policy ownership is
+pulled back through `PacketPath.PolicyNAT` with `Engine.OriginalTraffic`, preserving
+mixed selected/unselected traffic instead of rejecting every mixed partition.
+Query aliases support reversible port offsets and singleton constants, with
+native Match narrowing and full forward validation. This does not expand the
+compiler's source-port or implicit reverse-NAT forms. Full SRX DNAT-port migration
+still fails the existing equivalence proof; its alias/pullback tests are not
+complete migration evidence.
+
 `paloalto_native_test.go` exercises independently captured fixed source, pool
 PAT, pool no-PAT, interface PAT, destination+port and identity forms, and refuses
 a changed capture against the original typed delta.

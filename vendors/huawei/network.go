@@ -152,7 +152,8 @@ func (p *parser) network(ctx context.Context, s *config.Builder) error {
 		}
 		d.Zones = append(d.Zones, z)
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }
 func (p *parser) routes(ctx context.Context, s *config.Builder) error {
 	tx := s.Begin()
@@ -199,7 +200,8 @@ func (p *parser) routes(ctx context.Context, s *config.Builder) error {
 		add(r)
 		tx.Parse(row.Lines()...)
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }
 func staticRoute(w []string, preference uint32) (fm.RouteRecord, bool) {
 	r := fm.RouteRecord{Metric: preference}

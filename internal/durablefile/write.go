@@ -14,7 +14,7 @@ type file interface {
 	Sync() error
 	Close() error
 }
-type directory interface {
+type dir interface {
 	Sync() error
 	Close() error
 }
@@ -22,11 +22,16 @@ type filesystem struct {
 	create func(string, string) (file, error)
 	rename func(string, string) error
 	remove func(string) error
-	open   func(string) (directory, error)
+	open   func(string) (dir, error)
 }
 
 func Replace(path string, data []byte) error {
-	return replace(path, data, filesystem{create: func(d, p string) (file, error) { return os.CreateTemp(d, p) }, rename: os.Rename, remove: os.Remove, open: func(p string) (directory, error) { return os.Open(p) }})
+	return replace(path, data, filesystem{
+		create: func(d, p string) (file, error) { return os.CreateTemp(d, p) },
+		rename: os.Rename,
+		remove: os.Remove,
+		open:   func(p string) (dir, error) { return os.Open(p) },
+	})
 }
 func replace(path string, data []byte, fs filesystem) error {
 	dir := filepath.Dir(path)

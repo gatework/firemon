@@ -4,6 +4,8 @@ import (
 	"context"
 	"slices"
 
+	fm "github.com/gatework/firemon"
+
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
@@ -106,4 +108,20 @@ func preflightBusinessNative(ctx context.Context, requests []AccessRequest, limi
 	}
 	limits.MaxVisits = remaining
 	return plan.PreflightNativeRequests(ctx, native, limits)
+}
+
+func scheduledInput(entry *targetEntry, input targetInput, clock fm.ScheduleClock) *plan.NativeRequest {
+	window := *entry.outcome.Window
+	name := plan.ScheduleName(window, clock.Timezone)
+	id := fm.ID(name)
+	native := &plan.NativeRequest{
+		Request: entry.planning.request, Sources: slices.Clone(input.request.Sources),
+		Lifetime:  &plan.ScheduleIntent{Schedule: id, Window: window, Clock: clock},
+		Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{{Object: fm.Object{ID: id, Name: name, Scope: entry.planning.request.Scope}, Windows: []fm.TimeWindow{window}, Timezone: clock.Timezone}}},
+	}
+	if entry.proof != nil {
+		packet := entry.proof.packet
+		native.Packet = &packet
+	}
+	return native
 }

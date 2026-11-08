@@ -17,21 +17,21 @@ func TestOfflineImportInspectAndQuerySurviveRemovalOfRawFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	if err := run([]string{"import", "--store", store, "--device", "fw", "--vendor", "hillstone", "--file", input, "--complete", "--publication", "one"}, &output); err != nil {
+	if err := execute(t.Context(), []string{"import", "--store", store, "--device", "fw", "--vendor", "hillstone", "--file", input, "--complete", "--publication", "one"}, &output); err != nil {
 		t.Fatal(err, output.String())
 	}
 	if err := os.Remove(input); err != nil {
 		t.Fatal(err)
 	}
 	output.Reset()
-	if err := run([]string{"inspect", "--store", store, "--device", "fw"}, &output); err != nil {
+	if err := execute(t.Context(), []string{"inspect", "--store", store, "--device", "fw"}, &output); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(output.String(), "static_nats") || !strings.Contains(output.String(), "dynamic_nats") {
 		t.Fatal("typed NAT catalogs absent", output.String())
 	}
 	output.Reset()
-	if err := run([]string{"query", "--store", store, "--device", "fw", "--source", "192.0.2.0/24", "--destination", "198.51.100.1/32", "--service", "tcp/443"}, &output); err != nil {
+	if err := execute(t.Context(), []string{"query", "--store", store, "--device", "fw", "--source", "192.0.2.0/24", "--destination", "198.51.100.1/32", "--service", "tcp/443"}, &output); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(output.String(), `"complete": true`) || !strings.Contains(output.String(), `"allowed"`) {
@@ -46,11 +46,11 @@ func TestOfflinePANPlanUsesNativeRenderer(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := run([]string{"import", "--store", dir, "--device", "pan", "--vendor", "paloalto", "--file", input, "--complete", "--publication", "one"}, &out); err != nil {
+	if err := execute(t.Context(), []string{"import", "--store", dir, "--device", "pan", "--vendor", "paloalto", "--file", input, "--complete", "--publication", "one"}, &out); err != nil {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if err := run([]string{"plan", "--store", dir, "--device", "pan", "--source", "192.0.2.10/32", "--destination", "198.51.100.10/32", "--service", "tcp/443", "--from-zone", "inside", "--to-zone", "outside"}, &out); err != nil {
+	if err := execute(t.Context(), []string{"plan", "--store", dir, "--device", "pan", "--source", "192.0.2.10/32", "--destination", "198.51.100.10/32", "--service", "tcp/443", "--from-zone", "inside", "--to-zone", "outside"}, &out); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "set rulebase security rules") || !strings.Contains(out.String(), `"TargetAllowed": true`) {
@@ -69,21 +69,21 @@ func TestOfflineSRXImportNATAndPlanningUsePersistedGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := run([]string{"import", "--store", dir, "--device", "srx", "--vendor", "srx", "--file", input, "--complete", "--publication", "one"}, &out); err != nil {
+	if err := execute(t.Context(), []string{"import", "--store", dir, "--device", "srx", "--vendor", "srx", "--file", input, "--complete", "--publication", "one"}, &out); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(input); err != nil {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if err := run([]string{"nat", "--store", dir, "--device", "srx", "--source", "192.0.2.130/32", "--destination", "198.51.100.50/32", "--service", "tcp/443", "--from-zone", "inside", "--to-zone", "outside"}, &out); err != nil {
+	if err := execute(t.Context(), []string{"nat", "--store", dir, "--device", "srx", "--source", "192.0.2.130/32", "--destination", "198.51.100.50/32", "--service", "tcp/443", "--from-zone", "inside", "--to-zone", "outside"}, &out); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), `"Reverse": true`) || !strings.Contains(out.String(), `"198.51.100.130"`) {
 		t.Fatal(out.String())
 	}
 	out.Reset()
-	if err := run([]string{"plan", "--store", dir, "--device", "srx", "--source", "192.0.2.10/32", "--destination", "198.51.100.10/32", "--service", "tcp/443", "--from-zone", "inside", "--to-zone", "outside"}, &out); err != nil {
+	if err := execute(t.Context(), []string{"plan", "--store", dir, "--device", "srx", "--source", "192.0.2.10/32", "--destination", "198.51.100.10/32", "--service", "tcp/443", "--from-zone", "inside", "--to-zone", "outside"}, &out); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "set security policies") || !strings.Contains(out.String(), `"TargetAllowed": true`) {

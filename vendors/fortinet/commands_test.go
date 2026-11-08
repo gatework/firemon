@@ -75,13 +75,12 @@ end
 func TestFortinetAppendRendersFullGraphMembersWithoutRawReparse(t *testing.T) {
 	ctx := context.Background()
 	raw := fixture(t, "basic")
-	before := parse(t, raw)
 	q := policy.Request{Scope: "root", FromZone: "inside", ToZone: "wan1", Traffic: traffic(t, "192.0.2.11/32", "203.0.113.10/32", 6, 1000, 443)}
 	// Keep the original rule's other dimensions singleton for an exact append.
 	raw = strings.Replace(raw, "set end-ip 203.0.113.20", "set end-ip 203.0.113.10", 1)
 	raw = strings.Replace(raw, "443:1000-1001", "443:1000", 1)
 	raw = strings.Replace(raw, "        set udp-portrange 53:2000\n", "", 1)
-	before = parse(t, raw)
+	before := parse(t, raw)
 	p, err := (plan.Planner{Renderer: fortinet.Renderer{}}).Plan(ctx, before, []policy.Request{q})
 	if err != nil {
 		t.Fatal(err)

@@ -119,13 +119,13 @@ func TestLifecyclePreservationUsesEachCallTime(t *testing.T) {
 func TestMigrationRequestsAreIndependent(t *testing.T) {
 	source, target := translationGraphs(t)
 	d := target.Export()
-	d.Zones = append(d.Zones, fm.ZoneRecord{Object: fm.Object{ID: "other-in"}}, fm.ZoneRecord{Object: fm.Object{ID: "other-out"}})
+	d.Zones = append(d.Zones, fm.ZoneRecord{Object: fm.Object{ID: "other-in", Name: "other-in"}}, fm.ZoneRecord{Object: fm.Object{ID: "other-out", Name: "other-out"}})
 	var err error
 	target, err = fm.Seal(d)
 	if err != nil {
 		t.Fatal(err)
 	}
-	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: paloalto.Renderer{}}}
+	x := analysis.Migrator{Planner: plan.Planner{Renderer: paloalto.Renderer{}}}
 	check := func(t *testing.T, from, to fm.ID, at time.Time) {
 		t.Helper()
 		migration := analysis.MigrationRequest{At: at, Zones: map[fm.ID]fm.ID{"inside": from, "outside": to}, Chains: map[fm.PolicyChain]fm.PolicyChain{{RuleSet: "security"}: {RuleSet: "security"}}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}, Rules: []fm.ID{"2"}}

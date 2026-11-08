@@ -28,7 +28,7 @@ func (b Batch) DeclaresAddress(id fm.ID) bool { return b.addresses[id] }
 func (b Batch) DeclaresService(id fm.ID) bool { return b.services[id] }
 
 func (b Batch) Native() bool                     { return b.native }
-func (b Batch) NativeCommands() []string         { return slices.Clone(b.commands) }
+func (b Batch) Commands() []string               { return slices.Clone(b.commands) }
 func (b Batch) PolicyCommands(id fm.ID) []string { return slices.Clone(b.policy[id]) }
 func (b Batch) GeneratedAddress(id fm.ID) bool   { return b.generatedAddresses[id] }
 

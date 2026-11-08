@@ -50,9 +50,8 @@ func TestClosedTransactionCannotAccumulateEffects(t *testing.T) {
 		t.Fatal("closed commit accepted")
 	}
 }
-func TestCanceledPhaseRestoresPriorDataEvidenceAndPosition(t *testing.T) {
+func TestCanceledPhaseRestoresPriorDataAndEvidence(t *testing.T) {
 	b := testBuilder(t, "a\nb\n")
-	c := b.Content()
 	first := b.Begin()
 	first.Parse(1)
 	first.Emit(fm.Data{Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "a"}}}})
@@ -61,7 +60,6 @@ func TestCanceledPhaseRestoresPriorDataEvidenceAndPosition(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	err := b.Phase(ctx, "cancel", func(_ context.Context, b *Builder) error {
-		b.Content().NextPending()
 		tx := b.Begin()
 		tx.Parse(2)
 		tx.Emit(fm.Data{Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "b"}}}})
@@ -77,10 +75,6 @@ func TestCanceledPhaseRestoresPriorDataEvidenceAndPosition(t *testing.T) {
 	d := b.Data()
 	if len(d.Addresses) != 1 || d.Addresses[0].ID != "a" || d.Evidence[0].State != fm.Parsed || d.Evidence[1].State != fm.Pending {
 		t.Fatal(d)
-	}
-	line, _ := c.Peek()
-	if line.Number != 1 {
-		t.Fatal(line)
 	}
 	if _, ok := b.Address("b"); ok {
 		t.Fatal("canceled identity still indexed")

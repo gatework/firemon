@@ -1,0 +1,32 @@
+{
+  "after": {
+    "benchmarks/contracts_bench_test.go": "5a5282acaa3c3accb8f2198d3bb10748d9c0adb82d9940dfc418e38b2fa4a58e",
+    "flow/range.go": "f6809164f4129808e9de22fb232eebc59927594a08accc0270a638141b7290be",
+    "flow/range_bench_test.go": "046b8c09f01ebbc19116b938294f6c3d25cd608363afdf6df058a3acf381a285",
+    "flow/range_test.go": "ae5c1f21b54117f51119142b710cc08c6fb09db05976e4974920343ec0c3e5c7",
+    "go.mod": "0ade7087aad121e82fbcd8e371adbeb8e7461c659c13ad5fff1be4b7cdb65f85",
+    "go.sum": "57b2d81141459a1cfbd7b77d0947b63f5409776325686c8a4eb82a1072d4e615",
+    "plan/candidate_search_bench_test.go": "78bdc0d6b1c04ca183a91bb0d0b2b8de11caac7cb8412a08dd8fa9255aedc3a6",
+    "plan/candidates.go": "1fd90b95bd824e944a16cb9aa376f96127c2147a7aa52633e86cdafc389d37e6",
+    "plan/native_budget.go": "f7f9fe3268e478eef9bed2bac6f6ab3401dc628ae7498afbc40b11620389eb96",
+    "plan/object_catalog_bench_test.go": "779b1600e8b9f1f3801e8cba9cc9cb14c0ec362be2d946794b4a358470f2afcd",
+    "plan/readback_budget.go": "065799dea6cc2922e4a717100f96c2aa6595161bb0a5b7ede2deaaf08e6e4b13",
+    "policy/engine.go": "0665af9000158439b7ec3e13930b23f96150ada42b93ef68c5f6e39271adc28f",
+    "policy/routing.go": "ff2b7a5ee768e14ef3bdaf0c5cf84e8666f5f201d73e0fbd66ab2809231a3a9d"
+  },
+  "before": {
+    "benchmarks/contracts_bench_test.go": "5a5282acaa3c3accb8f2198d3bb10748d9c0adb82d9940dfc418e38b2fa4a58e",
+    "flow/range.go": "a88b55b0db96b02239bc9d5b9852fff6deb1957fa2113318b61c501c4d898062",
+    "flow/range_bench_test.go": "046b8c09f01ebbc19116b938294f6c3d25cd608363afdf6df058a3acf381a285",
+    "flow/range_test.go": "ae5c1f21b54117f51119142b710cc08c6fb09db05976e4974920343ec0c3e5c7",
+    "go.mod": "0ade7087aad121e82fbcd8e371adbeb8e7461c659c13ad5fff1be4b7cdb65f85",
+    "go.sum": "57b2d81141459a1cfbd7b77d0947b63f5409776325686c8a4eb82a1072d4e615",
+    "plan/candidate_search_bench_test.go": "78bdc0d6b1c04ca183a91bb0d0b2b8de11caac7cb8412a08dd8fa9255aedc3a6",
+    "plan/candidates.go": "35fc0a51162e16a545ea231ecbd0438b52cc3a4b2898eb5c724e49573642817e",
+    "plan/native_budget.go": "6cd4d1af4b56fd6cf73b34fe8cf8438d93987fb730280f02b107322688d7e06c",
+    "plan/object_catalog_bench_test.go": "779b1600e8b9f1f3801e8cba9cc9cb14c0ec362be2d946794b4a358470f2afcd",
+    "plan/readback_budget.go": "84f321b0e0dcce14b28e502a28515a33d966ba0e40ed7cbffce437d1a6941854",
+    "policy/engine.go": "851792c64766dd1c9a140e4ee748632f0b08402597e1a71b21b935404be9c0df",
+    "policy/routing.go": "d16d9f6498fed4a73109316c5e723a48a2862495f803b3004d7613d7bfe135f0"
+  }
+}

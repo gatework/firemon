@@ -124,7 +124,6 @@ func (s *Store) Manifest(ctx context.Context) (Manifest, error) {
 	}
 	return s.readManifest()
 }
-func atomicWrite(path string, data []byte) error { return durablefile.Replace(path, data) }
 func (s *Store) writeManifest(m Manifest) error {
 	data, err := json.Marshal(m)
 	if err != nil {
@@ -133,7 +132,7 @@ func (s *Store) writeManifest(m Manifest) error {
 	if int64(len(data)) > s.manifestLimit {
 		return fmt.Errorf("encode manifest: %w", ErrLimit)
 	}
-	return atomicWrite(filepath.Join(s.root, "manifest.json"), data)
+	return durablefile.Replace(filepath.Join(s.root, "manifest.json"), data)
 }
 func validRevision(revision string) bool {
 	if len(revision) != 64 {
@@ -225,7 +224,7 @@ func (s *Store) Publish(ctx context.Context, fw *fm.Firewall, options PublishOpt
 	}
 	revision := object.revision
 	device := fw.Metadata().Device
-	unlock, err := lock(ctx, filepath.Join(s.root, "manifest.lock"))
+	unlock, err := durablefile.Lock(ctx, filepath.Join(s.root, "manifest.lock"))
 	if err != nil {
 		return PublishResult{}, err
 	}
@@ -283,7 +282,7 @@ func (s *Store) Reserve(ctx context.Context, device, expected, token string) (er
 	if strings.TrimSpace(token) == "" || strings.TrimSpace(device) == "" || !validRevision(expected) {
 		return ErrInvalid
 	}
-	unlock, err := lock(ctx, filepath.Join(s.root, "manifest.lock"))
+	unlock, err := durablefile.Lock(ctx, filepath.Join(s.root, "manifest.lock"))
 	if err != nil {
 		return err
 	}
@@ -315,7 +314,7 @@ func (s *Store) ReleaseUnchanged(ctx context.Context, device, token, confirmedRe
 	if strings.TrimSpace(device) == "" || strings.TrimSpace(token) == "" || !validRevision(confirmedRevision) {
 		return ErrInvalid
 	}
-	unlock, err := lock(ctx, filepath.Join(s.root, "manifest.lock"))
+	unlock, err := durablefile.Lock(ctx, filepath.Join(s.root, "manifest.lock"))
 	if err != nil {
 		return err
 	}
@@ -363,7 +362,7 @@ func (s *Store) Acknowledge(ctx context.Context, sink string, expected, next uin
 	if strings.TrimSpace(sink) == "" || next < expected {
 		return ErrInvalid
 	}
-	unlock, err := lock(ctx, filepath.Join(s.root, "manifest.lock"))
+	unlock, err := durablefile.Lock(ctx, filepath.Join(s.root, "manifest.lock"))
 	if err != nil {
 		return err
 	}

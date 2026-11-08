@@ -77,3 +77,40 @@ func TestTransferRejectsOversizedTrafficBeforeCopying(t *testing.T) {
 		t.Fatalf("budget rejection copied oversized input: %d bytes/call", bytes)
 	}
 }
+
+func TestCandidateConstructionBudgetsNestedCatalogBeforeCopying(t *testing.T) {
+	ranges := make([]flow.AddressRange, 2048)
+	for i := range ranges {
+		ranges[i] = addressRange("203.0.113.1/32")
+	}
+	fw, err := fm.Seal(fm.Data{
+		Metadata:  fm.Metadata{Device: "test", Vendor: "hillstone"},
+		Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "unused"}, Ranges: ranges}},
+	})
+	if err != nil || !fw.Complete() {
+		t.Fatalf("fixture: %v", err)
+	}
+	q := request(t, "192.0.2.1/32")
+	planner := plan.Planner{Renderer: renderer{}, Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 32}}}
+	for _, entry := range []string{"plan", "transfer"} {
+		t.Run(entry, func(t *testing.T) {
+			var start, end runtime.MemStats
+			runtime.ReadMemStats(&start)
+			var result *plan.Plan
+			if entry == "plan" {
+				result, err = planner.Plan(t.Context(), fw, []policy.Request{q})
+			} else {
+				result, err = planner.Transfer(t.Context(), fw, []plan.RuleIntent{{
+					Request: q, Action: fm.Permit, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant,
+				}}, time.Time{})
+			}
+			runtime.ReadMemStats(&end)
+			if result != nil || !errors.Is(err, policy.ErrBudget) {
+				t.Errorf("nested catalog escaped budget: plan=%v, err=%v", result != nil, err)
+			}
+			if allocated := end.TotalAlloc - start.TotalAlloc; allocated > 64<<10 {
+				t.Errorf("nested catalog copied before rejection: %d bytes", allocated)
+			}
+		})
+	}
+}

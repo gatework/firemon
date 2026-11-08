@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"net/netip"
+	"slices"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
@@ -180,7 +181,7 @@ func (e Engine) asaPacket(ctx context.Context, fw *fm.Firewall, q PacketRequest)
 			if len(result.Paths) >= limits.MaxRegions {
 				return PacketResult{}, ErrBudget
 			}
-			result.Paths = append(result.Paths, PacketPath{Real: actual, Original: original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: selectedRelation, Policy: evaluated, NativeRequests: native, DesignUnsupported: "ASA ACL composition and security-level effects require a native chain plan"})
+			result.Paths = append(result.Paths, PacketPath{Real: actual, Original: original, FromZone: q.FromZone, ToZone: request.ToZone, NAT: selectedRelation, Policy: evaluated, PolicyNAT: slices.Clone(relation.Steps), NativeRequests: native, DesignUnsupported: "ASA ACL composition and security-level effects require a native chain plan"})
 		}
 	}
 	return result, nil

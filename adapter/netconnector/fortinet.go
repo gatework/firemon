@@ -2,9 +2,12 @@ package netconnector
 
 import (
 	"context"
+	"errors"
 	"regexp"
+	"slices"
 	"strings"
 
+	"github.com/gatework/firemon/config"
 	"github.com/gatework/go-net-connector/connector"
 )
 
@@ -13,14 +16,14 @@ var vdomName = regexp.MustCompile(`\A[A-Za-z0-9_.-]{1,79}\z`)
 // Read the native current domain before entering a domain. Checking inventory
 // first prevents "edit" from silently creating a missing VDOM.
 func (s *Session) fortinetContext(ctx context.Context, op *connector.Operation, b *responseBudget) error {
-	if !vdomName.MatchString(s.metadata.Context) {
+	if !vdomName.MatchString(s.meta.Context) {
 		return ErrInvalid
 	}
 	current, multiple, err := fortinetStatus(ctx, op, b)
 	if err != nil {
 		return err
 	}
-	if current == s.metadata.Context {
+	if current == s.meta.Context {
 		return nil
 	}
 	if !multiple {
@@ -40,14 +43,14 @@ func (s *Session) fortinetContext(ctx context.Context, op *connector.Operation, 
 	found := false
 	for line := range strings.SplitSeq(body, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) > 1 && fields[0] == "name="+s.metadata.Context && strings.HasPrefix(fields[1], "index=") {
+		if len(fields) > 1 && fields[0] == "name="+s.meta.Context && strings.HasPrefix(fields[1], "index=") {
 			found = true
 		}
 	}
 	if !found {
 		return ErrCapture
 	}
-	for _, command := range []string{"end", "config vdom", `edit "` + s.metadata.Context + `"`} {
+	for _, command := range []string{"end", "config vdom", `edit "` + s.meta.Context + `"`} {
 		if _, err := b.command(ctx, op, command); err != nil {
 			return err
 		}
@@ -56,7 +59,7 @@ func (s *Session) fortinetContext(ctx context.Context, op *connector.Operation, 
 	if err != nil {
 		return err
 	}
-	if current != s.metadata.Context {
+	if current != s.meta.Context {
 		return ErrCapture
 	}
 	return nil
@@ -124,29 +127,62 @@ func (s *Session) fortinetAutomatic(ctx context.Context, op *connector.Operation
 	if err != nil {
 		return err
 	}
-	text, err := persistenceText(step)
+	text, err := responseHistory(step)
 	if err != nil {
 		return err
 	}
-	prompt, err := step.Response().Prompt()
-	if err != nil {
+	if err := confirmAutomatic(ctx, text, int(s.opts.MaxOutputBytes)); err != nil {
 		return err
-	}
-	mode, count := "", 0
-	for line := range strings.SplitSeq(configBody(text, step.Command().Text, prompt), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == "set" && fields[1] == "cfg-save" {
-			if len(fields) != 3 {
-				return ErrPersistence
-			}
-			mode, count = fields[2], count+1
-		}
-	}
-	if mode != "automatic" || count != 1 {
-		return ErrPersistence
 	}
 	if multiple {
 		_, err = b.command(ctx, op, "end")
 	}
 	return err
+}
+
+// confirmAutomatic proves one complete system global block. Other setting values
+// are opaque data; a rejection outside a quoted value cannot become a statement.
+func confirmAutomatic(ctx context.Context, text string, limit int) error {
+	content, err := config.NewContent(ctx, config.Source{Text: text, Complete: true}, config.Limits{MaxBytes: limit})
+	if err != nil {
+		return errors.Join(ErrPersistence, err)
+	}
+	statements, err := config.Statements(ctx, content)
+	if err != nil {
+		return errors.Join(ErrPersistence, err)
+	}
+	opened, closed, automatic := false, false, false
+	for _, statement := range statements {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		words := statement.Words
+		if len(words) == 0 {
+			continue
+		}
+		switch {
+		case closed:
+			return ErrPersistence
+		case !opened:
+			if !slices.Equal(words, []string{"config", "system", "global"}) {
+				return ErrPersistence
+			}
+			opened = true
+		case len(words) == 1 && words[0] == "end":
+			closed = true
+		case len(words) >= 3 && words[0] == "set":
+			if words[1] == "cfg-save" {
+				if automatic || len(words) != 3 || words[2] != "automatic" {
+					return ErrPersistence
+				}
+				automatic = true
+			}
+		default:
+			return ErrPersistence
+		}
+	}
+	if !closed || !automatic {
+		return ErrPersistence
+	}
+	return ctx.Err()
 }

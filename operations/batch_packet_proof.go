@@ -10,7 +10,7 @@ import (
 // A native policy proof alone is insufficient when permitting the packet enables
 // post-policy NAT. Re-evaluate wire paths on the complete final device graph.
 func (r *targetBatch) recheck(ctx context.Context, fw *fm.Firewall, work []*targetEntry, batch plan.BatchResult) (bool, error) {
-	limit := r.designer.options.Engine.Limits.WithDefaults().MaxRegions
+	limit := r.engine.Limits.WithDefaults().MaxRegions
 	for i, w := range work {
 		if w.proof == nil || i >= len(batch.Inputs) || batch.Inputs[i].Disposition == plan.BatchRejected {
 			continue
@@ -26,7 +26,7 @@ func (r *targetBatch) recheck(ctx context.Context, fw *fm.Firewall, work []*targ
 			// original input times intact for review and reconstruction.
 			packet.At = w.planning.native.Lifetime.Window.Start
 		}
-		result, err := r.designer.options.Engine.QueryPacket(ctx, fw, packet)
+		result, err := r.engine.QueryPacket(ctx, fw, packet)
 		if err != nil {
 			if fatalBatch(err) {
 				return false, err

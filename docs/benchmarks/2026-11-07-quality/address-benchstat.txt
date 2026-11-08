@@ -1,0 +1,129 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/flow
+cpu: Apple M5
+                                            │ address-before.txt  │          address-after.txt           │
+                                            │       sec/op        │    sec/op     vs base                │
+AddressSet/difference/ipv4/disjoint/128            438.630µ ±  1%   5.187µ ± 12%   -98.82% (p=0.002 n=6)
+AddressSet/intersection/ipv4/disjoint/128            261.1n ±  6%   285.5n ± 12%         ~ (p=0.132 n=6)
+AddressSet/contains/ipv4/disjoint/128                2.099n ±  1%   2.155n ±  3%    +2.69% (p=0.002 n=6)
+AddressSet/difference/ipv4/overlap/128             439.643µ ±  1%   5.585µ ±  1%   -98.73% (p=0.002 n=6)
+AddressSet/intersection/ipv4/overlap/128             726.5n ±  2%   731.8n ±  2%    +0.72% (p=0.026 n=6)
+AddressSet/contains/ipv4/overlap/128                 2.002n ±  6%   2.030n ±  3%         ~ (p=0.589 n=6)
+AddressSet/difference/ipv4/contained/128           679.490µ ±  3%   8.121µ ±  4%   -98.80% (p=0.002 n=6)
+AddressSet/intersection/ipv4/contained/128           728.5n ±  2%   736.9n ±  5%         ~ (p=0.143 n=6)
+AddressSet/contains/ipv4/contained/128               120.4n ± 17%   120.1n ± 26%         ~ (p=0.669 n=6)
+AddressSet/difference/ipv4/disjoint/1024          25268.28µ ±  1%   37.53µ ±  1%   -99.85% (p=0.002 n=6)
+AddressSet/intersection/ipv4/disjoint/1024           1.775µ ±  8%   1.938µ ±  1%    +9.19% (p=0.002 n=6)
+AddressSet/contains/ipv4/disjoint/1024               2.100n ±  0%   2.162n ±  1%    +2.95% (p=0.002 n=6)
+AddressSet/difference/ipv4/overlap/1024           25208.65µ ±  1%   40.66µ ±  2%   -99.84% (p=0.002 n=6)
+AddressSet/intersection/ipv4/overlap/1024            5.709µ ±  6%   5.726µ ±  2%         ~ (p=0.937 n=6)
+AddressSet/contains/ipv4/overlap/1024                1.996n ±  3%   2.003n ±  5%         ~ (p=0.455 n=6)
+AddressSet/difference/ipv4/contained/1024         40912.26µ ±  1%   66.75µ ±  2%   -99.84% (p=0.002 n=6)
+AddressSet/intersection/ipv4/contained/1024          5.681µ ±  3%   5.689µ ±  3%         ~ (p=0.485 n=6)
+AddressSet/contains/ipv4/contained/1024              954.5n ± 12%   956.4n ± 15%         ~ (p=0.818 n=6)
+AddressSet/difference/ipv6/disjoint/128            469.731µ ±  3%   4.154µ ±  0%   -99.12% (p=0.002 n=6)
+AddressSet/intersection/ipv6/disjoint/128          220.549µ ±  5%   2.099µ ±  8%   -99.05% (p=0.002 n=6)
+AddressSet/contains/ipv6/disjoint/128           452575.000n ±  4%   7.000n ±  8%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/overlap/128             464.447µ ±  3%   4.581µ ±  1%   -99.01% (p=0.002 n=6)
+AddressSet/intersection/ipv6/overlap/128           225.209µ ±  6%   4.053µ ±  2%   -98.20% (p=0.002 n=6)
+AddressSet/contains/ipv6/overlap/128            457536.000n ±  3%   6.814n ±  7%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/contained/128           728.283µ ±  3%   6.469µ ±  1%   -99.11% (p=0.002 n=6)
+AddressSet/intersection/ipv6/contained/128         227.174µ ±  5%   4.027µ ±  2%   -98.23% (p=0.002 n=6)
+AddressSet/contains/ipv6/contained/128            243826.5n ±  5%   976.3n ± 10%   -99.60% (p=0.002 n=6)
+AddressSet/difference/ipv6/disjoint/1024          26912.00µ ±  3%   29.66µ ±  0%   -99.89% (p=0.002 n=6)
+AddressSet/intersection/ipv6/disjoint/1024        13994.75µ ±  5%   17.05µ ±  7%   -99.88% (p=0.002 n=6)
+AddressSet/contains/ipv6/disjoint/1024        26769052.000n ±  2%   6.971n ±  9%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/overlap/1024           27181.39µ ±  3%   33.29µ ±  2%   -99.88% (p=0.002 n=6)
+AddressSet/intersection/ipv6/overlap/1024         14015.60µ ±  6%   29.72µ ±  2%   -99.79% (p=0.002 n=6)
+AddressSet/contains/ipv6/overlap/1024         26840482.000n ±  1%   6.883n ±  5%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/contained/1024         44465.81µ ±  2%   53.92µ ±  3%   -99.88% (p=0.002 n=6)
+AddressSet/intersection/ipv6/contained/1024       14070.01µ ±  5%   29.63µ ±  6%   -99.79% (p=0.002 n=6)
+AddressSet/contains/ipv6/contained/1024          14132.325µ ±  2%   7.622µ ± 14%   -99.95% (p=0.002 n=6)
+geomean                                              104.3µ         1.098µ         -98.95%
+
+                                            │ address-before.txt │            address-after.txt             │
+                                            │        B/op        │     B/op      vs base                    │
+AddressSet/difference/ipv4/disjoint/128         1977.71Ki ± 0%     31.04Ki ± 0%   -98.43% (p=0.002 n=6)
+AddressSet/intersection/ipv4/disjoint/128           24.00 ± 0%       24.00 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/disjoint/128               0.000 ± 0%       0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/overlap/128          1977.71Ki ± 0%     31.04Ki ± 0%   -98.43% (p=0.002 n=6)
+AddressSet/intersection/ipv4/overlap/128          2.016Ki ± 0%     2.016Ki ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/overlap/128                0.000 ± 0%       0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/contained/128        3356.71Ki ± 0%     50.04Ki ± 0%   -98.51% (p=0.002 n=6)
+AddressSet/intersection/ipv4/contained/128        2.016Ki ± 0%     2.016Ki ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/contained/128              0.000 ± 0%       0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/disjoint/1024       122320.6Ki ± 0%     247.9Ki ± 0%   -99.80% (p=0.002 n=6)
+AddressSet/intersection/ipv4/disjoint/1024          24.00 ± 0%       24.00 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/disjoint/1024              0.000 ± 0%       0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/overlap/1024        122320.6Ki ± 0%     247.9Ki ± 0%   -99.80% (p=0.002 n=6)
+AddressSet/intersection/ipv4/overlap/1024         24.64Ki ± 0%     24.64Ki ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/overlap/1024               0.000 ± 0%       0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/contained/1024      228986.6Ki ± 0%     481.9Ki ± 0%   -99.79% (p=0.002 n=6)
+AddressSet/intersection/ipv4/contained/1024       24.64Ki ± 0%     24.64Ki ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/contained/1024             0.000 ± 0%       0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv6/disjoint/128         1996.48Ki ± 0%     28.10Ki ± 0%   -98.59% (p=0.002 n=6)
+AddressSet/intersection/ipv6/disjoint/128           24.00 ± 0%       24.00 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv6/disjoint/128             1.916Mi ± 0%     0.000Mi ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/overlap/128          1996.48Ki ± 0%     28.10Ki ± 0%   -98.59% (p=0.002 n=6)
+AddressSet/intersection/ipv6/overlap/128          21.73Ki ± 0%     15.35Ki ± 0%   -29.34% (p=0.002 n=6)
+AddressSet/contains/ipv6/overlap/128              1.916Mi ± 0%     0.000Mi ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/contained/128        3395.35Ki ± 0%     44.10Ki ± 0%   -98.70% (p=0.002 n=6)
+AddressSet/intersection/ipv6/contained/128        21.73Ki ± 0%     15.35Ki ± 0%   -29.34% (p=0.002 n=6)
+AddressSet/contains/ipv6/contained/128            1.053Mi ± 0%     0.000Mi ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/disjoint/1024       122455.4Ki ± 0%     215.4Ki ± 0%   -99.82% (p=0.002 n=6)
+AddressSet/intersection/ipv6/disjoint/1024          24.00 ± 0%       24.00 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv6/disjoint/1024            119.3Mi ± 0%       0.0Mi ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/overlap/1024        122455.4Ki ± 0%     215.4Ki ± 0%   -99.82% (p=0.002 n=6)
+AddressSet/intersection/ipv6/overlap/1024         167.4Ki ± 0%     119.4Ki ± 0%   -28.68% (p=0.002 n=6)
+AddressSet/contains/ipv6/overlap/1024             119.3Mi ± 0%       0.0Mi ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/contained/1024      229319.4Ki ± 0%     407.4Ki ± 0%   -99.82% (p=0.002 n=6)
+AddressSet/intersection/ipv6/contained/1024       167.4Ki ± 0%     119.4Ki ± 0%   -28.68% (p=0.002 n=6)
+AddressSet/contains/ipv6/contained/1024           67.75Mi ± 0%      0.00Mi ± 0%  -100.00% (p=0.002 n=6)
+geomean                                                        ²                 ?                      ² ³
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+³ ratios must be >0 to compute geomean
+
+                                            │ address-before.txt │            address-after.txt            │
+                                            │     allocs/op      │  allocs/op   vs base                    │
+AddressSet/difference/ipv4/disjoint/128           1033.00 ± 0%      17.00 ± 0%   -98.35% (p=0.002 n=6)
+AddressSet/intersection/ipv4/disjoint/128           1.000 ± 0%      1.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/disjoint/128               0.000 ± 0%      0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/overlap/128            1033.00 ± 0%      17.00 ± 0%   -98.35% (p=0.002 n=6)
+AddressSet/intersection/ipv4/overlap/128            9.000 ± 0%      9.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/overlap/128                0.000 ± 0%      0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/contained/128          1120.00 ± 0%      19.00 ± 0%   -98.30% (p=0.002 n=6)
+AddressSet/intersection/ipv4/contained/128          9.000 ± 0%      9.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/contained/128              0.000 ± 0%      0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/disjoint/1024         11277.00 ± 0%      24.00 ± 0%   -99.79% (p=0.002 n=6)
+AddressSet/intersection/ipv4/disjoint/1024          1.000 ± 0%      1.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/disjoint/1024              0.000 ± 0%      0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/overlap/1024          11277.00 ± 0%      24.00 ± 0%   -99.79% (p=0.002 n=6)
+AddressSet/intersection/ipv4/overlap/1024           13.00 ± 0%      13.00 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/overlap/1024               0.000 ± 0%      0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv4/contained/1024        12475.00 ± 0%      28.00 ± 0%   -99.78% (p=0.002 n=6)
+AddressSet/intersection/ipv4/contained/1024         13.00 ± 0%      13.00 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv4/contained/1024             0.000 ± 0%      0.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/difference/ipv6/disjoint/128           1036.00 ± 0%      11.00 ± 0%   -98.94% (p=0.002 n=6)
+AddressSet/intersection/ipv6/disjoint/128           1.000 ± 0%      1.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv6/disjoint/128              1.024k ± 0%     0.000k ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/overlap/128            1036.00 ± 0%      11.00 ± 0%   -98.94% (p=0.002 n=6)
+AddressSet/intersection/ipv6/overlap/128           10.000 ± 0%      9.000 ± 0%   -10.00% (p=0.002 n=6)
+AddressSet/contains/ipv6/overlap/128               1.024k ± 0%     0.000k ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/contained/128          1123.00 ± 0%      12.00 ± 0%   -98.93% (p=0.002 n=6)
+AddressSet/intersection/ipv6/contained/128         10.000 ± 0%      9.000 ± 0%   -10.00% (p=0.002 n=6)
+AddressSet/contains/ipv6/contained/128              861.0 ± 0%        0.0 ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/disjoint/1024         11279.00 ± 0%      14.00 ± 0%   -99.88% (p=0.002 n=6)
+AddressSet/intersection/ipv6/disjoint/1024          1.000 ± 0%      1.000 ± 0%         ~ (p=1.000 n=6) ¹
+AddressSet/contains/ipv6/disjoint/1024             11.26k ± 0%      0.00k ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/overlap/1024          11279.00 ± 0%      14.00 ± 0%   -99.88% (p=0.002 n=6)
+AddressSet/intersection/ipv6/overlap/1024           13.00 ± 0%      12.00 ± 0%    -7.69% (p=0.002 n=6)
+AddressSet/contains/ipv6/overlap/1024              11.26k ± 0%      0.00k ± 0%  -100.00% (p=0.002 n=6)
+AddressSet/difference/ipv6/contained/1024        12477.00 ± 0%      16.00 ± 0%   -99.87% (p=0.002 n=6)
+AddressSet/intersection/ipv6/contained/1024         13.00 ± 0%      12.00 ± 0%    -7.69% (p=0.002 n=6)
+AddressSet/contains/ipv6/contained/1024            9.905k ± 0%     0.000k ± 0%  -100.00% (p=0.002 n=6)
+geomean                                                        ²                ?                      ² ³
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+³ ratios must be >0 to compute geomean

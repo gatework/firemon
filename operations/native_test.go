@@ -34,7 +34,7 @@ func TestBusinessNativeJSONProducesJointPlan(t *testing.T) {
 	document := operations.RequestDocument{Version: 1, Requests: []operations.AccessDocument{{Traffic: traffic.Regions(), Targets: []operations.TargetDocument{target}, Native: &operations.NativeDocument{Additions: adds, NAT: []operations.NATIntentDocument{{Request: operations.PolicyDocument{Traffic: traffic.Regions(), FromZone: "inside", ToZone: "outside"}, Steps: []policy.NATStep{{Kind: fm.StaticNATObject, ID: "fixed"}}}}}}}}
 	document.Requests[0].Sources = []string{"ticket", "ticket", "native"}
 	raw, _ := json.Marshal(document)
-	input, err := operations.DecodeBatchRequest(bytes.NewReader(raw))
+	input, err := operations.DecodeBatchRequest(t.Context(), bytes.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestBusinessFiniteIntentJSONWithoutNAT(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := operations.DecodeBatchRequest(bytes.NewReader(raw))
+	request, err := operations.DecodeBatchRequest(t.Context(), bytes.NewReader(raw))
 	if err != nil {
 		t.Fatal(err)
 	}

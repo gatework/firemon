@@ -28,12 +28,6 @@ func commandName(s string) (string, error) {
 	}
 	return s, nil
 }
-func nativeName(o fm.Object) string {
-	if o.Name != "" {
-		return o.Name
-	}
-	return string(o.ID)
-}
 func ports(r flow.Interval) string {
 	if r.Low == r.High {
 		return "eq " + strconv.Itoa(int(r.Low))
@@ -50,16 +44,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 }
 
 func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	builder, err := render.NewNativeBuilder(ctx, "asa", before, after, changes)
+	builder, err := render.NewBuilder(ctx, "asa", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-
-	timed, err := render.ScheduleCommands(before, after, changes)
-	if err != nil {
-		return nil, err
-	}
-	builder.AppendCommands(timed...)
 
 	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
 		return nil, err
@@ -88,7 +76,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		if len(r.Ranges) != 1 || r.FQDN != "" || r.Scope != "" || len(r.Unsupported) > 0 {
 			return nil, ErrRender
 		}
-		name, err := commandName(nativeName(r.Object))
+		name, err := commandName(r.Object.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +98,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		if len(r.Terms) != 1 || r.Scope != "" || len(r.Unsupported) > 0 {
 			return nil, ErrRender
 		}
-		name, err := commandName(nativeName(r.Object))
+		name, err := commandName(r.Object.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +110,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		commands = append(commands, "object service "+name, "service "+proto+" source "+ports(t.SourcePort)+" destination "+ports(t.DestinationPort), "exit")
 	}
 	if batch.Native() {
-		commands = append(commands, batch.NativeCommands()...)
+		commands = append(commands, batch.Commands()...)
 	}
 	ordered := after.Rules()
 	slices.SortStableFunc(ordered, func(a, b *fm.Rule) int {
@@ -190,7 +178,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			default:
 				return "", ErrRender
 			}
-			name, err := commandName(nativeName(object))
+			name, err := commandName(object.Name)
 			return keyword + " " + name, err
 		}
 		src, err := address(m.Sources[0])
@@ -208,7 +196,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			if s == nil {
 				return nil, ErrRender
 			}
-			name, err := commandName(nativeName(s.Record().Object))
+			name, err := commandName(s.Record().Object.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -218,7 +206,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			if s == nil {
 				return nil, ErrRender
 			}
-			name, err := commandName(nativeName(s.Record().Object))
+			name, err := commandName(s.Record().Object.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -227,7 +215,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			return nil, ErrRender
 		}
 		line := fmt.Sprintf("access-list %s line %d extended permit %s %s %s", acl, positions[r.ID], svc, src, dst)
-		if name, err := batch.ScheduleReference(after, m.Schedule); err != nil {
+		if name, err := batch.ScheduleName(after, m.Schedule); err != nil {
 			return nil, err
 		} else if name != "" {
 			line += " time-range " + name

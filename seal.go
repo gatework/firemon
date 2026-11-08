@@ -1,6 +1,7 @@
 package firemon
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -321,10 +322,10 @@ func Seal(data Data) (*Firewall, error) {
 			return c
 		}
 		if a.Order.Stage != b.Order.Stage {
-			return cmpInt(a.Order.Stage, b.Order.Stage)
+			return cmp.Compare(a.Order.Stage, b.Order.Stage)
 		}
 		if a.Order.Position != b.Order.Position {
-			return cmpInt(a.Order.Position, b.Order.Position)
+			return cmp.Compare(a.Order.Position, b.Order.Position)
 		}
 		if a.Kind != b.Kind {
 			return int(a.Kind) - int(b.Kind)
@@ -334,7 +335,7 @@ func Seal(data Data) (*Firewall, error) {
 	f.orderedRules = f.Rules()
 	slices.SortStableFunc(f.orderedRules, func(a, b *Rule) int {
 		if a.Position() != b.Position() {
-			return cmpInt(a.Position(), b.Position())
+			return cmp.Compare(a.Position(), b.Position())
 		}
 		return strings.Compare(string(a.ID()), string(b.ID()))
 	})

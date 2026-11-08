@@ -10,10 +10,10 @@
 | --- | --- | --- |
 | 配置解析 | 七厂商统一 `Parser.Parse(ctx, source, metadata)`；新增绝对及周期时间表语义、原生命令和规则引用；PAN set/XML 保留选定 vsys | `config` 原子提交对象草稿与来源；未知成员保留在所属对象；接口先于路由绑定；见 [时间表能力](../vendors/SCHEDULES.md) |
 | 策略查询 | 复用精确多维流量集合、first-match 和各厂商 packet pipeline；增加跨厂商包效果等价证明 | [policy/migration.go](../policy/migration.go) 比较同一原始流量的动作、日志和有序转换关系，动态分配只表示可能性 |
-| 需求拆分聚合 | 保留按设备、上下文、安全域和 NAT 坐标拆分的业务流程；以索引完成精确固定点聚合 | [RequestOptimizer](../analysis/request_optimizer.go) 不把源/目的配对扩展为笛卡尔积；本次不引入“拆分已有原生规则”的操作 |
+| 需求拆分聚合 | 保留按设备、上下文、安全域和 NAT 坐标拆分的业务流程；以索引完成精确固定点聚合 | [Optimizer](../analysis/optimizer.go) 不把源/目的配对扩展为笛卡尔积；本次不引入“拆分已有原生规则”的操作 |
 | 策略设计 | 私有对象目录复用完整地址、服务及对象组；按 native namespace 检查作用域遮蔽和命名冲突 | [object_catalog.go](../plan/object_catalog.go) 只复用相等集合；有孔服务、更宽地址和外部作用域不能冒充等价对象 |
 | 风险策略发现 | 声明/有效模式结果增加时间、chain、安全域、时间表状态、来源跨度和未知原因 | [RiskEvidence](../analysis/risk_evidence.go) 明示 `native-policy` 坐标；不把 ACL 地址误标为线上原始地址或 NAT 后地址 |
-| 跨厂商迁移 | 目标驱动编译选定策略、对象、时间表及有效 NAT 依赖；整批证明后才产生计划 | [Planner.Migrate](../plan/migration.go)、[PolicyMigrator](../analysis/policy_migrator.go)、[能力矩阵](../vendors/MIGRATION.md) |
+| 跨厂商迁移 | 目标驱动编译选定策略、对象、时间表及有效 NAT 依赖；整批证明后才产生计划 | [Planner.Migrate](../plan/migration.go)、[Migrator](../analysis/migrator.go)、[能力矩阵](../vendors/MIGRATION.md) |
 | 审批与恢复 | intent kind 明确；迁移同时绑定源快照和目标基线，恢复时重新运行编译、渲染与证明 | [reconstruction.go](../plan/reconstruction.go)、[恢复测试](../operations/reconstruction_migration_test.go)；命令文本、旧 proof 标志不能直接恢复为批准计划 |
 
 不可变图继续使用具体领域对象，`StaticNAT` 和 `DynamicNAT` 分离。DTO 用于构造与持久化；封存后以私有索引和有序 slice 保存身份与执行顺序，对外提供标量访问、只读 `iter.Seq` 或独立副本。共享的是地址/服务集合、时钟、命名和证明原语，各厂商仍拥有自己的语法与行为差异。

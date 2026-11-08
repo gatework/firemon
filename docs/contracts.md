@@ -10,6 +10,13 @@ public policy queries and equivalence proofs independently receive the same
 maxima; this is not a global deadline or a shared whole-operation work quota.
 Candidate and pair-comparison limits are separate from visits.
 
+`MaxRegions` bounds both query input and retained results. `Query`, `QueryNAT`,
+`QueryPacket`, `DiscoverStaticAliases` and `Match` reject oversized input with
+`policy.ErrBudget` before unknown/no-match shortcuts. `Match` checks its explicit
+traffic input, independently of the request's traffic. Cancellation and invalid
+parameters retain precedence. The same bound applies to normalized input address
+intervals in route resolution; empty input remains valid.
+
 Graph collection counts are charged before copied views are materialized.
 Context enumeration charges rules, zones, schedules, absolute windows and weekly calendar work;
 risk findings remain bounded even when incomplete evidence returns unknown.
@@ -19,7 +26,7 @@ no partial rows or plan. Stricter accounting can reject a previously accepted
 low-budget request; raising an explicit limit does not bypass semantic proof.
 
 Lifecycle graph preparation follows the same rule: equivalence and NAT proofs,
-convergence, reclamation, preservation and readback charge `RecordCount()` before
+convergence, reclamation, preservation and readback charge `DeclarationSize()` before
 exporting each owned configuration view. A graph materialization includes its
 normalization; explicit identity scans and private proof passes also accumulate
 visits. NAT activation uses the enclosing proof's remaining visits. Dynamic NAT
@@ -38,7 +45,7 @@ success: changed captures and later proof work still consume runtime budgets.
 Insufficient minimum capacity returns `policy.ErrBudget`; increase `MaxVisits`
 and replan. Current format and API boundaries are described below.
 
-`RequestOptimizer` checks each input's `RegionCount()` before grouping or copying.
+`Optimizer` checks each input's `RegionCount()` before grouping or copying.
 `MaxRegions` bounds input and intermediate traffic, even when fixed-point
 coalescing could reduce the final result below the cap. Packed and split inputs
 cannot bypass this check; oversized traffic returns `flow.ErrBudget` with no
@@ -57,7 +64,7 @@ projection. No single vendor interface combines all these responsibilities.
 | Policy | `policy.Engine.Query`, `Match`, `QueryNAT`, `QueryPacket`, `ResolveRoutes` | Exact known partitions; unresolved traffic remains `Unknown`, independent of transport success |
 | Design | `plan.Planner.Plan`, `Transfer`, `Preserve`, `Migrate` | Renderable target and outside-traffic proof, with established translation behavior |
 | Readback | `Plan.VerifyBaseline`, `Plan.Verify` | Independent parsed native configuration establishes the approved baseline/result |
-| Lifecycle | `RiskAnalyzer.Analyze`, `Converger.Candidates`, `PolicyMigrator.Plan`, `Reclaimer.AnalyzeMembers` | Versioned findings or proven plans; findings alone never authorize changes |
+| Lifecycle | `RiskAnalyzer.Analyze`, `Converger.Candidates`, `Migrator.Plan`, `Reclaimer.AnalyzeMembers` | Versioned findings or proven plans; findings alone never authorize changes |
 | Collection | `operations.ReadOnlyFactory.OpenReadOnly`, `device.Reader` | Fresh owned reader with `Read` and `Close`, independent of deployment dependencies |
 | Deployment | `deploy.Factory.Open`, `deploy.Session` | Fresh session, explicit configuration isolation, bounded capture/execution/persistence and closure |
 | Publication | Snapshot CAS and durable operation reservation | Complete current state or explicitly unavailable state, never silent stale success |
@@ -71,13 +78,13 @@ is shared by the CLI and embedded operations.
 ## Parser and evaluation ownership
 
 `config.NewBuilder(content, metadata)` owns one typed, ordered record catalog and
-one source ledger. Content permits one builder owner. Transactions come from
+one source ledger. Content composes an immutable `parser.Content` index and permits one builder owner. Physical lines and XML fragments have separate claim boundaries; scanning never marks either as parsed. Transactions come from
 `Builder.Begin`; a foreign transaction is rejected without closing its owner.
 `Emit` inserts new IDs and `Replace` explicitly replaces existing IDs without
 reordering. All identities and source claims validate before mutation. Closed
 commits return `ErrClosed`, invalid ownership returns `ErrClaim`, and invalid
 builder input returns `ErrInvalid`. Explicit `Phase` calls restore records,
-identity indexes, evidence, cursor position and cached graph on failure or
+identity indexes, evidence and cached graph on failure or
 cancellation. Phase transactions cannot escape into a later phase.
 
 Accepted input and public record reads are isolated copies. `Seal` caches an
@@ -124,7 +131,7 @@ Reusable services retain their planner and configured limits. `ReclamationReques
 provides the current time, revision, observation window and rule/member evidence
 for each `Reclaimer` call. `MigrationRequest` provides time, zone/chain/interface/VRF
 mappings, pairs, rules, NAT selection and target clock evidence for
-`PolicyMigrator.Plan`. Its result contains either a plan or structured issues;
+`Migrator.Plan`. Its result contains either a plan or structured issues;
 unsupported selected effects cannot produce a partial executable plan.
 `Converger.Candidates` and
 `Plan` receive the proof start time per call. Inputs are read without retention or
@@ -293,16 +300,19 @@ calls, so an analyzer can be reused concurrently with immutable inputs.
 
 Content constructors take the caller context. UTF-8 validation, line/fragment
 indexing and statement scanning check cancellation in bounded byte chunks;
-XML checks between decoder calls and byte-span scans. Cancellation precedes
+XML checks between decoder calls and locates byte spans in the immutable index. Cancellation precedes
 entry validation, and errors return no partial content/document. Native entry
 points list explicit `Builder.Phase` calls in dependency order. Failed or canceled
-phases restore their records, indexes, source claims and reader position.
+phases restore their records, indexes and source claims. Reading immutable
+structure does not change semantic evidence.
 `NewBuilder` is a synchronous ownership constructor.
 
 Candidate construction shares the planner's counter through object-catalog,
 visibility and collision scans. `Firewall.RecordCount()` counts top-level domain
-and source-evidence records before candidate graph export; it is a visit unit,
-not a byte or nested-member count. `flow.AddressSet.RangeCount()` and
+and source-evidence records for top-level scans. `Firewall.DeclarationSize()`
+also counts nested declaration elements and is checked before graph export or
+reconstruction. Neither count includes scalar string bytes.
+`flow.AddressSet.RangeCount()` and
 `flow.Traffic.RegionCount()` permit rejection of oversized standards and transfer
 partitions before copied views are created. Native source-size limits and region
 limits retain their separate meanings; visits are not a peak-memory guarantee.
@@ -357,7 +367,7 @@ also avoid local object/group names across scopes, because native lookup can
 shadow global names. Indexing, probes and reservations consume the same candidate
 visit allowance. Plan and Transfer use this allocation contract.
 
-`internal/nativename` supplies the actual namespace keys used by independent native
+`internal/names` supplies the actual namespace keys used by independent native
 renderer validation: ASA separates objects from groups, Fortinet resolves the
 selected context, and named rules retain their native chain. PAN, SRX and Huawei
 reject creation that aliases an existing rule name even when graph IDs differ.
@@ -401,11 +411,31 @@ changes. Native policy, declared NAT effects and finite lifetime for one input
 are atomic. Full outside-target policy/NAT preservation and typed independent
 readback remain mandatory. Native additions never silently edit existing NAT.
 
-`BatchDesigner` loads one inventory manifest and cached immutable revisions.
+`Searcher.Query` owns read-only query composition; `BatchDesigner.Design` owns
+planning. `BatchDesigner.Query` is removed. Both load one inventory manifest and
+cached immutable revisions, and share normalized input and target resolution.
+Simple rows use source × destination × service within the row, never across rows.
+Invalid text is row-local; cancellation and budgets are batch-fatal. Missing
+service remains a query filter and cannot authorize unrestricted policy.
+`inventory.Cache` bounds graph/index retention and in-flight work, merges duplicate
+loads, and never caches manifests, schedule activity or policy decisions.
+`Cache.Index(ctx, revision, fw)` derives from the caller's already loaded graph;
+it cannot insert that graph into the source cache. Retained indexes require the
+same revision and graph pointer. A query keeps each loaded graph and derived index
+until its batch ends, independently of shared-cache retention or eviction.
+`policy.Engine.Declared`, `OriginalTraffic` and `Windows` provide native declaration
+matching, restricted-domain policy-to-wire pullback and exact finite time partitions.
+Conditional or incomplete evidence is queryable but cannot enter a planner.
 Topology distinguishes protection from ingress, and business coordinate view
 from native policy context. Static inverse proposals require ordered forward
 verification; ambiguous/unknown regions remain issues. Reports own their nested
 containers and retain original input/outcome/source indexes.
+Native declarations without interface-backed ingress remain conditional policy
+queries; they cannot invent a packet path or authorize changes. Explicit native
+`real`/`translated` inputs require that selected view's ordered forward proof and
+do not enter automatic cross-view association.
+Missing zone records or references retain declaration evidence with unknown
+effective traffic; an empty native context never establishes ingress or permission.
 
 ScheduleClock is a trusted integration attestation, bound to the independently
 captured source/identity/time. Absolute windows become exact half-open UTC

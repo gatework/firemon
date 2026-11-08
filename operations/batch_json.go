@@ -1,8 +1,7 @@
 package operations
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
 	"io"
 	"slices"
@@ -11,6 +10,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/internal/dependency"
+	"github.com/gatework/firemon/internal/jsonio"
 	"github.com/gatework/firemon/inventory"
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
@@ -25,14 +25,18 @@ type RequestDocument struct {
 	Requests []AccessDocument `json:"requests"`
 }
 type AccessDocument struct {
+	Src            string                  `json:"src,omitempty"`
+	Dst            string                  `json:"dst,omitempty"`
+	Service        string                  `json:"service,omitempty"`
+	Window         *fm.TimeWindow          `json:"window,omitempty"`
 	Native         *NativeDocument         `json:"native,omitempty"`
 	WireCandidates []WireCandidateDocument `json:"wire_candidates,omitempty"`
 	ID             string                  `json:"id,omitempty"`
-	Traffic        []flow.TrafficRegion    `json:"traffic"`
+	Traffic        []flow.TrafficRegion    `json:"traffic,omitempty"`
 	View           inventory.View          `json:"view,omitempty"`
 	Scope          *string                 `json:"scope,omitempty"`
 	VRF            *string                 `json:"vrf,omitempty"`
-	At             time.Time               `json:"at,omitempty"`
+	At             time.Time               `json:"at,omitzero"`
 	Targets        []TargetDocument        `json:"targets,omitempty"`
 	Sources        []string                `json:"sources,omitempty"`
 }
@@ -67,35 +71,38 @@ type PolicyDocument struct {
 	FromZone        fm.ID                `json:"from_zone"`
 	ToZone          fm.ID                `json:"to_zone"`
 	EgressInterface fm.ID                `json:"egress_interface,omitempty"`
-	At              time.Time            `json:"at,omitempty"`
+	At              time.Time            `json:"at,omitzero"`
 }
 
-func decodeBounded(reader io.Reader, value any) error {
+func decodeBounded(ctx context.Context, reader io.Reader, value any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if dependency.Nil(reader) {
 		return ErrInvalid
 	}
-	raw, err := io.ReadAll(io.LimitReader(reader, MaxRequestBytes+1))
+	raw, err := jsonio.Read(ctx, reader, MaxRequestBytes)
+	if err == jsonio.ErrLimit {
+		return fmt.Errorf("%w: request exceeds byte limit", ErrInvalid)
+	}
 	if err != nil {
 		return err
 	}
-	if len(raw) > MaxRequestBytes {
-		return fmt.Errorf("%w: request exceeds byte limit", ErrInvalid)
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(value); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
+	err = jsonio.Decode(raw, value)
+	if err == jsonio.ErrTrailing {
 		return fmt.Errorf("%w: trailing JSON", ErrInvalid)
 	}
-	return nil
+	return err
 }
-func DecodeBatchRequest(reader io.Reader) (BatchRequest, error) {
+
+// DecodeBatchRequest reads one bounded request document using the caller's context.
+func DecodeBatchRequest(ctx context.Context, reader io.Reader) (BatchRequest, error) {
 	var document RequestDocument
-	if err := decodeBounded(reader, &document); err != nil {
+	if err := decodeBounded(ctx, reader, &document); err != nil {
 		return BatchRequest{}, err
+	}
+	if document.Version == 0 {
+		document.Version = 1
 	}
 	if document.Version != 1 || len(document.Requests) == 0 || len(document.Requests) > 100 {
 		return BatchRequest{}, ErrInvalid
@@ -114,7 +121,7 @@ func DecodeBatchRequest(reader io.Reader) (BatchRequest, error) {
 		if a.View != "" && a.View != inventory.Original && a.View != inventory.Real && a.View != inventory.Translated {
 			return BatchRequest{}, ErrInvalid
 		}
-		req := AccessRequest{ID: a.ID, Traffic: traffic, View: a.View, Scope: a.Scope, VRF: a.VRF, At: a.At, Sources: a.Sources}
+		req := AccessRequest{Src: a.Src, Dst: a.Dst, Service: a.Service, Window: a.Window, ID: a.ID, Traffic: traffic, View: a.View, Scope: a.Scope, VRF: a.VRF, At: a.At, Sources: a.Sources}
 		if a.Native != nil {
 			if len(a.Native.NAT) == 0 && a.Native.Lifetime == nil || len(a.Native.NAT) > 100 || len(a.Targets) != 1 || len(a.WireCandidates) != 0 {
 				return BatchRequest{}, ErrInvalid
@@ -166,9 +173,11 @@ func DecodeBatchRequest(reader io.Reader) (BatchRequest, error) {
 	}
 	return out, nil
 }
-func DecodeTopology(reader io.Reader) (inventory.Topology, error) {
+
+// DecodeTopology reads and validates one bounded topology document.
+func DecodeTopology(ctx context.Context, reader io.Reader) (inventory.Topology, error) {
 	var top inventory.Topology
-	if err := decodeBounded(reader, &top); err != nil {
+	if err := decodeBounded(ctx, reader, &top); err != nil {
 		return top, err
 	}
 	return top, top.Validate()
@@ -187,7 +196,10 @@ func policyDocuments(requests []policy.Request) []PolicyDocument {
 	return out
 }
 func accessDocument(a AccessRequest) AccessDocument {
-	out := AccessDocument{ID: a.ID, Traffic: a.Traffic.Regions(), View: a.View, Scope: cloneString(a.Scope), VRF: cloneString(a.VRF), At: a.At, Sources: slices.Clone(a.Sources)}
+	out := AccessDocument{Src: a.Src, Dst: a.Dst, Service: a.Service, Window: a.Window, ID: a.ID, Traffic: a.Traffic.Regions(), View: a.View, Scope: cloneString(a.Scope), VRF: cloneString(a.VRF), At: a.At, Sources: slices.Clone(a.Sources)}
+	if a.Src != "" || a.Dst != "" || a.Service != "" {
+		out.Traffic = nil
+	}
 	a.Native = cloneNativeEffects(a.Native)
 	if a.Native != nil {
 		n := &NativeDocument{PolicyTraffic: a.Native.PolicyTraffic.Regions(), Additions: a.Native.Additions, Lifetime: a.Native.Lifetime}
@@ -215,11 +227,18 @@ type ReportDocument struct {
 	Issues     []IssueDocument     `json:"issues"`
 }
 type InputDocument struct {
-	Index    int               `json:"index"`
-	Request  AccessDocument    `json:"request"`
-	Outcomes []OutcomeDocument `json:"outcomes"`
+	Normalized *NormalizedInput  `json:"normalized,omitempty"`
+	Error      *InputError       `json:"error,omitempty"`
+	Index      int               `json:"index"`
+	Request    AccessDocument    `json:"request"`
+	Outcomes   []OutcomeDocument `json:"outcomes"`
 }
 type OutcomeDocument struct {
+	TrafficView    string                `json:"traffic_view"`
+	At             time.Time             `json:"at,omitzero"`
+	Window         *fm.TimeWindow        `json:"window,omitempty"`
+	Conditional    bool                  `json:"conditional"`
+	Matches        []RuleMatch           `json:"matches"`
 	Real           []flow.TrafficRegion  `json:"real"`
 	Sources        []string              `json:"sources,omitempty"`
 	Device         string                `json:"device"`
@@ -317,9 +336,9 @@ func (r BatchReport) Document() ReportDocument {
 		out.Topology = &t
 	}
 	for _, input := range r.Inputs {
-		row := InputDocument{Index: input.Index, Request: accessDocument(input.Request)}
+		row := InputDocument{Index: input.Index, Request: accessDocument(input.Request), Normalized: input.Normalized, Error: input.Error}
 		for _, o := range input.Outcomes {
-			row.Outcomes = append(row.Outcomes, OutcomeDocument{Device: o.Device, Revision: o.Revision, Wire: o.Wire.Regions(), Real: o.Real.Regions(), NativeRequests: policyDocuments(o.NativeRequests), Sources: slices.Clone(o.Sources), Policy: coverageDocument(o.Policy), NAT: NATDocument{Original: o.NAT.Original.Regions(), Translated: o.NAT.Translated.Regions(), Steps: slices.Clone(o.NAT.Steps), Exact: o.NAT.Exact, PossibleAllocation: o.NAT.PossibleAllocation}, Disposition: o.Disposition})
+			row.Outcomes = append(row.Outcomes, OutcomeDocument{TrafficView: o.TrafficView, At: o.At, Window: o.Window, Conditional: o.Conditional, Matches: slices.Clone(o.Matches), Device: o.Device, Revision: o.Revision, Wire: o.Wire.Regions(), Real: o.Real.Regions(), NativeRequests: policyDocuments(o.NativeRequests), Sources: slices.Clone(o.Sources), Policy: coverageDocument(o.Policy), NAT: NATDocument{Original: o.NAT.Original.Regions(), Translated: o.NAT.Translated.Regions(), Steps: slices.Clone(o.NAT.Steps), Exact: o.NAT.Exact, PossibleAllocation: o.NAT.PossibleAllocation}, Disposition: o.Disposition})
 		}
 		out.Inputs = append(out.Inputs, row)
 	}
@@ -329,7 +348,7 @@ func (r BatchReport) Document() ReportDocument {
 	for _, device := range r.Devices {
 		row := DeviceDocument{Device: device.Device, Revision: device.Revision, SemanticDigest: device.SemanticDigest}
 		for _, source := range device.Sources {
-			row.Sources = append(row.Sources, BatchSourceDocument{Index: source.Index, Input: source.Input, Outcome: source.Outcome})
+			row.Sources = append(row.Sources, BatchSourceDocument(source))
 		}
 		for _, input := range device.Batch.Inputs {
 			row.Inputs = append(row.Inputs, BatchInputDocument{Index: input.Index, Request: policyDocument(input.Request), Disposition: input.Disposition, Attempts: slices.Clone(input.Attempts)})

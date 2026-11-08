@@ -13,14 +13,10 @@ import (
 // proveBatch shares only original-baseline evaluations. Candidate and readback
 // graphs always undergo fresh target, full-context ownership and NAT proofs.
 func (p Planner) proveBatch(ctx context.Context, before, after *fm.Firewall, targets []policy.Request, baseline map[string]policy.Result, visits *visitBudget) (Proof, error) {
-	return p.proveBatchPolicy(ctx, before, after, targets, baseline, visits, true)
+	return p.proveTargets(ctx, before, after, targets, nil, baseline, visits, true)
 }
 
-func (p Planner) proveBatchPolicy(ctx context.Context, before, after *fm.Firewall, targets []policy.Request, baseline map[string]policy.Result, visits *visitBudget, preserveNAT bool) (Proof, error) {
-	return p.proveBatchPolicyWindows(ctx, before, after, targets, nil, baseline, visits, preserveNAT)
-}
-
-func (p Planner) proveBatchPolicyWindows(ctx context.Context, before, after *fm.Firewall, targets []policy.Request, windows []fm.TimeWindow, baseline map[string]policy.Result, visits *visitBudget, preserveNAT bool) (Proof, error) {
+func (p Planner) proveTargets(ctx context.Context, before, after *fm.Firewall, targets []policy.Request, windows []fm.TimeWindow, baseline map[string]policy.Result, visits *visitBudget, preserveNAT bool) (Proof, error) {
 	if err := ctx.Err(); err != nil {
 		return Proof{}, err
 	}
@@ -106,7 +102,7 @@ func (p Planner) proveBatchPolicyWindows(ctx context.Context, before, after *fm.
 		}
 		var target flow.Traffic
 		for index, t := range targets {
-			// Legacy targets remain permanent. Finite native targets contribute only
+			// Policy targets remain permanent. Finite native targets contribute only
 			// during their explicitly proven half-open lifetime.
 			if t.Scope != q.Scope || t.RuleSet != q.RuleSet || t.FromZone != "" && t.FromZone != q.FromZone || t.ToZone != "" && t.ToZone != q.ToZone {
 				continue
@@ -153,7 +149,7 @@ func (p Planner) proveBatchPolicyWindows(ctx context.Context, before, after *fm.
 				return Proof{}, ErrUnsafe
 			}
 		}
-		if err := preserveOutsideTargetOwnership(ctx, prior, next, target, limits.MaxRegions, visits); err != nil {
+		if err := preserveOutside(ctx, prior, next, target, limits.MaxRegions, visits); err != nil {
 			return Proof{}, err
 		}
 	}

@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.NativeBuilder) error {
+func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.Builder) error {
 	if err := render.AppendNAT(before, after); err != nil {
 		return err
 	}

@@ -96,6 +96,31 @@ type preparedRiskDefinition struct {
 	actions    []fm.Action
 }
 
+// riskPartition belongs to one immutable graph and request within AnalyzeBatch.
+// Querying stays lazy so declared-only and unresolved analyses keep their paths.
+type riskPartition struct {
+	ready, known bool
+	traffic      map[fm.ID]flow.Traffic
+}
+
+func (p *riskPartition) evaluate(ctx context.Context, engine policy.Engine, fw *fm.Firewall, q policy.Request) error {
+	if p.ready {
+		return ctx.Err()
+	}
+	result, err := engine.Query(ctx, fw, q)
+	if err != nil {
+		return err
+	}
+	p.ready, p.known = true, result.Complete && result.Unknown.Empty()
+	if p.known {
+		p.traffic = make(map[fm.ID]flow.Traffic, len(result.Decisions))
+		for _, decision := range result.Decisions {
+			p.traffic[decision.Rule] = decision.Traffic
+		}
+	}
+	return nil
+}
+
 // AnalyzeBatch prepares each definition once, then evaluates in context-major,
 // definition-minor order. Preparation capacity and evaluation visits/nodes are
 // cumulative across this call; delegated engine queries retain their own limits.
@@ -154,13 +179,20 @@ func (a RiskAnalyzer) AnalyzeBatch(ctx context.Context, fw *fm.Firewall, context
 		}
 		prepared = append(prepared, p)
 	}
+	// Bound the graph before taking owned views, including unknown findings.
+	// Copies, logical visits, expression nodes and retained output regions
+	// remain cumulative across definitions below.
+	if fw.DeclarationSize() > limits.MaxVisits {
+		return nil, policy.ErrBudget
+	}
 	budget := visitBudget(limits.MaxVisits)
 	comparisons := limits.MaxCombinations
 	retained := limits.MaxRegions
 	var out []RiskContextFindings
 	for ci, q := range contexts {
+		var partition riskPartition
 		for di, p := range prepared {
-			rows, err := a.analyzePrepared(ctx, fw, q, p, &budget, &comparisons, &retained)
+			rows, err := a.analyzePrepared(ctx, fw, q, p, &partition, &budget, &comparisons, &retained)
 			if err != nil {
 				return nil, err
 			}
@@ -170,7 +202,7 @@ func (a RiskAnalyzer) AnalyzeBatch(ctx context.Context, fw *fm.Firewall, context
 	return out, nil
 }
 
-func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q policy.Request, p preparedRiskDefinition, budget *visitBudget, comparisons, retained *int) ([]RiskFinding, error) {
+func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q policy.Request, p preparedRiskDefinition, partition *riskPartition, budget *visitBudget, comparisons, retained *int) ([]RiskFinding, error) {
 	definition, prepared, actions := p.definition, p.expression, p.actions
 	limit := a.Engine.Limits.WithDefaults().MaxRegions
 	if q.RuleSet == "" {
@@ -203,6 +235,9 @@ func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q po
 			if err := budget.take(ctx, count); err != nil {
 				return nil, err
 			}
+			if err := budget.take(ctx, rule.DeclarationSize()); err != nil {
+				return nil, err
+			}
 			rows = append(rows, RiskFinding{PolicyID: definition.ID, PolicyVersion: definition.Version, GraphDigest: fw.SemanticDigest(), Rule: rule.ID(), Mode: definition.Mode, Evidence: riskEvidence(fw, rule, q, definition.Mode, diagnostics)})
 		}
 	}
@@ -212,20 +247,15 @@ func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q po
 	if hasUnassignedDiagnostics(fw) {
 		return rows, nil
 	}
-	effective := make(map[fm.ID]flow.Traffic)
 	if definition.Mode == Effective {
-		r, err := a.Engine.Query(ctx, fw, q)
-		if err != nil {
+		if err := partition.evaluate(ctx, a.Engine, fw, q); err != nil {
 			return nil, err
 		}
-		if !r.Complete || !r.Unknown.Empty() {
+		if !partition.known {
 			for i := range rows {
 				rows[i].Evidence.Reasons = append(rows[i].Evidence.Reasons, "effective-partition-unknown")
 			}
 			return rows, nil
-		}
-		for _, decision := range r.Decisions {
-			effective[decision.Rule] = decision.Traffic
 		}
 	}
 	for i := range rows {
@@ -243,10 +273,14 @@ func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q po
 			rows[i].Value = False
 			continue
 		}
-		r := rule.Record()
-		actual := effective[r.ID]
+		actual := partition.traffic[rule.ID()]
 		known := true
+		var r fm.RuleRecord
 		if definition.Mode == Declared {
+			if err := budget.take(ctx, rule.DeclarationSize()); err != nil {
+				return nil, err
+			}
+			r = rule.Record()
 			var err error
 			actual, known, err = a.Engine.Match(ctx, fw, r.Match, q, q.Traffic)
 			if err != nil {

@@ -31,7 +31,7 @@ func (e Engine) PreserveNAT(ctx context.Context, before, after *fm.Firewall, fro
 	}
 	limits := e.Limits.WithDefaults()
 	remaining := limits.MaxVisits
-	if err := chargeVisits(ctx, &remaining, before.RecordCount(), after.RecordCount()); err != nil {
+	if err := chargeVisits(ctx, &remaining, before.DeclarationSize(), after.DeclarationSize()); err != nil {
 		return err
 	}
 	a, b := before.Export(), after.Export()

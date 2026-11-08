@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"slices"
@@ -54,10 +53,10 @@ type recordTable[T any] struct {
 
 // NewBuilder gives one builder exclusive ownership of a content's claims.
 func NewBuilder(c *Content, m fm.Metadata) (*Builder, error) {
-	if c == nil || !c.valid || c.owner != nil {
+	if c == nil || c.text == nil || c.owner != nil {
 		return nil, ErrInvalid
 	}
-	sum := sha256.Sum256([]byte(c.source.Text))
+	sum := c.text.Digest()
 	m.SourceDigest = hex.EncodeToString(sum[:])
 	if c.source.ScheduleClock != nil {
 		clock := *c.source.ScheduleClock
@@ -119,7 +118,7 @@ func (b *Builder) Seal() (*fm.Firewall, error) {
 }
 
 // Phase runs an explicitly ordered native parse phase. A failed or canceled
-// phase restores records, identity indexes, source claims and reader position.
+// phase restores records, identity indexes and source claims.
 // Nested phases keep their undo records until the outer phase succeeds.
 func (b *Builder) Phase(ctx context.Context, name string, run func(context.Context, *Builder) error) (err error) {
 	if err = ctx.Err(); err != nil {
@@ -130,7 +129,6 @@ func (b *Builder) Phase(ctx context.Context, name string, run func(context.Conte
 	}
 	frame := &phaseFrame{parent: b.phase}
 	b.phase = frame
-	point := b.content.Checkpoint()
 	undoStart, evidenceStart := len(b.undo), len(b.evidenceUndo)
 	diagnosticsStart := len(b.diagnostics)
 	cached := b.sealed
@@ -177,7 +175,6 @@ func (b *Builder) Phase(ctx context.Context, name string, run func(context.Conte
 			clear(b.undo[undoStart:])
 			b.undo = b.undo[:undoStart]
 			b.sealed = cached
-			_ = b.content.Restore(point)
 		}
 		b.phase = frame.parent
 		if b.phase == nil {

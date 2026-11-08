@@ -203,7 +203,7 @@ func TestMigrationRecurringScheduleToSevenNativeTargets(t *testing.T) {
 				request.Zones[fm.ID(src.to)] = ""
 			}
 			renderer, _ := vendors.Renderer(dst.vendor)
-			result, err := (analysis.PolicyMigrator{Planner: plan.Planner{Renderer: renderer}}).Plan(t.Context(), source, target, request)
+			result, err := (analysis.Migrator{Planner: plan.Planner{Renderer: renderer}}).Plan(t.Context(), source, target, request)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -271,7 +271,7 @@ func TestMigrationRejectsSubsetWithTimeVaryingSourceShadowing(t *testing.T) {
 	}
 	request := analysis.MigrationRequest{At: time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC), Clock: &clock, Zones: map[fm.ID]fm.ID{"inside": "inside", "outside": "outside"}, Chains: map[fm.PolicyChain]fm.PolicyChain{chain: chain}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}, Rules: []fm.ID{"allow"}}
 	renderer, _ := vendors.Renderer(src.vendor)
-	m := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: renderer}}
+	m := analysis.Migrator{Planner: plan.Planner{Renderer: renderer}}
 	result, err := m.Plan(t.Context(), source, target, request)
 	if err != nil {
 		t.Fatal(err)
@@ -323,7 +323,7 @@ func TestMigrationFortyTwoDirectedPolicyPairs(t *testing.T) {
 				if dst.vendor == "asa" {
 					request.Zones[fm.ID(src.to)] = ""
 				}
-				result, err := (analysis.PolicyMigrator{Planner: plan.Planner{Renderer: renderer}}).Plan(t.Context(), source, target, request)
+				result, err := (analysis.Migrator{Planner: plan.Planner{Renderer: renderer}}).Plan(t.Context(), source, target, request)
 				if err != nil {
 					t.Fatal(err)
 				}

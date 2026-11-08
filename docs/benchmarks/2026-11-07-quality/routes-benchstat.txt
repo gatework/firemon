@@ -1,0 +1,23 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+                            │ routes-before.txt │          routes-after.txt          │
+                            │      sec/op       │    sec/op     vs base              │
+RouteResolution/routes=10           3.782µ ± 2%   3.563µ ± 13%       ~ (p=0.065 n=6)
+RouteResolution/routes=1000         521.9µ ± 5%   483.7µ ±  3%  -7.32% (p=0.002 n=6)
+geomean                             44.42µ        41.51µ        -6.55%
+
+                            │ routes-before.txt │           routes-after.txt            │
+                            │       B/op        │     B/op       vs base                │
+RouteResolution/routes=10          7.273Ki ± 0%    7.273Ki ± 0%       ~ (p=1.000 n=6) ¹
+RouteResolution/routes=1000       1010.2Ki ± 0%   1010.2Ki ± 0%       ~ (p=1.000 n=6)
+geomean                            85.72Ki         85.72Ki       +0.00%
+¹ all samples are equal
+
+                            │ routes-before.txt │          routes-after.txt           │
+                            │     allocs/op     │  allocs/op   vs base                │
+RouteResolution/routes=10            122.0 ± 0%    122.0 ± 0%       ~ (p=1.000 n=6) ¹
+RouteResolution/routes=1000         11.97k ± 0%   11.97k ± 0%       ~ (p=1.000 n=6) ¹
+geomean                             1.208k        1.208k       +0.00%
+¹ all samples are equal

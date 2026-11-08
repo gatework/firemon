@@ -2,6 +2,7 @@ package vendors_test
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
-	"github.com/gatework/firemon/vendors/internal/render"
 )
 
 type weeklyCase struct{ vendor, version, raw, command string }
@@ -56,8 +56,12 @@ func TestSevenNativeRecurringSchedules(t *testing.T) {
 			}
 			// The independently captured after configuration is the input. Renderer
 			// output is checked against native syntax, never used as its own oracle.
-			before, clock := scheduleCapture(t, tc.vendor, tc.version, "", true)
-			commands, err := render.ScheduleCommands(before, fw, plan.NativeChanges{Clock: &clock, Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{s.Record()}}})
+			before, after, changes := scheduledPolicy(t, fw)
+			renderer, err := vendors.Renderer(tc.vendor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			commands, err := renderer.(plan.NativeRenderer).RenderNative(t.Context(), before, after, changes)
 			if err != nil || !strings.Contains(strings.Join(commands, "\n"), tc.command) {
 				t.Fatal(commands, err)
 			}
@@ -93,8 +97,12 @@ func TestAdditionalAbsoluteNativeSchedules(t *testing.T) {
 			if active, known := fw.Schedule("temporary").ActiveAt(at); !active || !known {
 				t.Fatal(active, known)
 			}
-			before, clock := scheduleCapture(t, tc.vendor, tc.version, "", true)
-			commands, err := render.ScheduleCommands(before, fw, plan.NativeChanges{Clock: &clock, Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{fw.Schedule("temporary").Record()}}})
+			before, after, changes := scheduledPolicy(t, fw)
+			renderer, err := vendors.Renderer(tc.vendor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			commands, err := renderer.(plan.NativeRenderer).RenderNative(t.Context(), before, after, changes)
 			if err != nil || len(commands) == 0 {
 				t.Fatal(commands, err)
 			}
@@ -124,8 +132,12 @@ func TestDateBoundsIntersectPeriodicEntries(t *testing.T) {
 					t.Fatal(test, active, known)
 				}
 			}
-			before, clock := scheduleCapture(t, tc.vendor, tc.version, "", true)
-			if _, err := render.ScheduleCommands(before, fw, plan.NativeChanges{Clock: &clock, Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{s.Record()}}}); err != nil {
+			before, after, changes := scheduledPolicy(t, fw)
+			renderer, err := vendors.Renderer(tc.vendor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := renderer.(plan.NativeRenderer).RenderNative(t.Context(), before, after, changes); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -171,15 +183,29 @@ func TestNativeScheduleUnrepresentableMeaningIsRejected(t *testing.T) {
 		}
 	}
 	fw, _ := scheduleCapture(t, "fortinet", "7.2.8", "config firewall schedule recurring\nedit office\nset day monday\nset start 09:00\nset end 17:00\nnext\nend\n", true)
-	r := fw.Schedule("office").Record()
+	before, after, changes := scheduledPolicy(t, fw)
+	r := after.Schedule("office").Record()
 	r.Weekly[0].Windows = append(r.Weekly[0].Windows, fm.WeeklyWindow{Day: time.Tuesday, Start: 10 * time.Hour, End: 11 * time.Hour})
-	before, clock := scheduleCapture(t, "fortinet", "7.2.8", "", true)
-	if _, err := render.ScheduleCommands(before, fw, plan.NativeChanges{Clock: &clock, Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{r}}}); err == nil {
-		t.Fatal("heterogeneous FortiOS schedule widened")
+	data := after.Export()
+	data.Schedules = []fm.ScheduleRecord{r}
+	after, err := fm.Seal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes.Additions.Schedules = []fm.ScheduleRecord{r}
+	renderer, err := vendors.Renderer("fortinet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := renderer.(plan.NativeRenderer).RenderNative(t.Context(), before, after, changes); !errors.Is(err, plan.ErrRender) {
+		t.Fatal("heterogeneous FortiOS schedule widened", err)
 	}
 }
 
-func TestSevenNativeRecurringPolicyAttachments(t *testing.T) {
+func scheduledPolicy(t *testing.T, fw *fm.Firewall) (*fm.Firewall, *fm.Firewall, plan.NativeChanges) {
+	t.Helper()
+	m := fw.Metadata()
+	name := fw.Schedules()[0].ID()
 	rules := map[string]string{
 		"hillstone": "policy-global\nrule id 10\nsrc-zone inside\ndst-zone outside\nsrc-addr any\ndst-addr any\nservice any\nschedule office\naction permit\nexit\nexit\n",
 		"asa":       "object network client\nhost 192.0.2.10\n!\nobject network server\nhost 198.51.100.20\n!\nobject service https\nservice tcp destination eq 443\n!\naccess-list IN extended permit object https object client object server time-range office\n",
@@ -189,30 +215,36 @@ func TestSevenNativeRecurringPolicyAttachments(t *testing.T) {
 		"huawei":    "security-policy\n rule name office-rule\n  source-zone trust\n  destination-zone untrust\n  time-range office\n  action permit\n#\n",
 		"netscreen": "set policy id 10 from Trust to Untrust Any Any ANY permit schedule office\nexit\n",
 	}
+	base := ""
+	for _, native := range nativeCases() {
+		if native.vendor == m.Vendor {
+			base = native.before
+			break
+		}
+	}
+	if m.Vendor == "asa" {
+		base += "access-group IN in interface inside\n"
+	}
+	if m.Vendor == "paloalto" {
+		base = "set network interface ethernet ethernet1/1 layer3 ip 192.0.2.1/24\nset network interface ethernet ethernet1/2 layer3 ip 198.51.100.1/24\nset zone inside network layer3 ethernet1/1\nset zone outside network layer3 ethernet1/2\n"
+	}
+	before, clock := scheduleCapture(t, m.Vendor, m.Software, base, true)
+	after, _ := scheduleCapture(t, m.Vendor, m.Software, base+fw.Raw()+strings.ReplaceAll(rules[m.Vendor], "office", string(name)), true)
+	if !before.Complete() || !after.Complete() {
+		t.Fatal(before.Diagnostics(), after.Diagnostics())
+	}
+	changes := nativeDelta(before, after)
+	changes.Clock = &clock
+	changes.Additions.Schedules = []fm.ScheduleRecord{after.Schedule(name).Record()}
+	return before, after, changes
+}
+
+func TestSevenNativeRecurringPolicyAttachments(t *testing.T) {
 	refs := map[string]string{"hillstone": "schedule office", "asa": "time-range office", "srx": "scheduler-name office", "paloalto": "schedule office", "fortinet": "set schedule office", "huawei": "time-range office", "netscreen": "schedule office"}
 	for _, tc := range weeklyCases() {
 		t.Run(tc.vendor, func(t *testing.T) {
-			base := ""
-			for _, native := range nativeCases() {
-				if native.vendor == tc.vendor {
-					base = native.before
-					break
-				}
-			}
-			if tc.vendor == "asa" {
-				base += "access-group IN in interface inside\n"
-			}
-			if tc.vendor == "paloalto" {
-				base = "set network interface ethernet ethernet1/1 layer3 ip 192.0.2.1/24\nset network interface ethernet ethernet1/2 layer3 ip 198.51.100.1/24\nset zone inside network layer3 ethernet1/1\nset zone outside network layer3 ethernet1/2\n"
-			}
-			before, clock := scheduleCapture(t, tc.vendor, tc.version, base, true)
-			after, _ := scheduleCapture(t, tc.vendor, tc.version, base+tc.raw+rules[tc.vendor], true)
-			if !before.Complete() || !after.Complete() {
-				t.Fatal(before.Diagnostics(), after.Diagnostics())
-			}
-			changes := nativeDelta(before, after)
-			changes.Clock = &clock
-			changes.Additions.Schedules = []fm.ScheduleRecord{after.Schedule("office").Record()}
+			fw, _ := scheduleCapture(t, tc.vendor, tc.version, tc.raw, true)
+			before, after, changes := scheduledPolicy(t, fw)
 			renderer, err := vendors.Renderer(tc.vendor)
 			if err != nil {
 				t.Fatal(err)
@@ -241,8 +273,12 @@ func TestPeriodicContinuousWeekdaySpansAndFortinetFullDays(t *testing.T) {
 		if !fw.Complete() {
 			t.Fatal(tc.vendor, fw.Diagnostics())
 		}
-		before, clock := scheduleCapture(t, tc.vendor, tc.version, "", true)
-		commands, err := render.ScheduleCommands(before, fw, plan.NativeChanges{Clock: &clock, Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{fw.Schedule("office").Record()}}})
+		before, after, changes := scheduledPolicy(t, fw)
+		renderer, err := vendors.Renderer(tc.vendor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		commands, err := renderer.(plan.NativeRenderer).RenderNative(t.Context(), before, after, changes)
 		if err != nil || len(commands) == 0 {
 			t.Fatal(tc.vendor, commands, err)
 		}
@@ -266,8 +302,12 @@ func TestPeriodicContinuousWeekdaySpansAndFortinetFullDays(t *testing.T) {
 		if active, known := fw.Schedule("office").ActiveAt(at); !active || !known {
 			t.Fatal(start, active, known)
 		}
-		before, clock := scheduleCapture(t, "fortinet", "7.2.8", "", true)
-		commands, err := render.ScheduleCommands(before, fw, plan.NativeChanges{Clock: &clock, Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{fw.Schedule("office").Record()}}})
+		before, after, changes := scheduledPolicy(t, fw)
+		renderer, err := vendors.Renderer("fortinet")
+		if err != nil {
+			t.Fatal(err)
+		}
+		commands, err := renderer.(plan.NativeRenderer).RenderNative(t.Context(), before, after, changes)
 		if err != nil || !strings.Contains(strings.Join(commands, "\n"), "set start "+start) || !strings.Contains(strings.Join(commands, "\n"), "set end "+start) {
 			t.Fatal(commands, err)
 		}

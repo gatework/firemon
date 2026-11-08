@@ -82,8 +82,8 @@ func (b *packetProofBudget) disjoint(ctx context.Context, a, c flow.Traffic) err
 // translated relation, allowing native object and zone names to differ. Both
 // requests must supply the same wire traffic and instant, explicit ingress and
 // post-route destination zones, and complete native evidence. Unmatched policy,
-// unknown logging, reverse NAT, and ambiguous policy-coordinate projections are
-// rejected. Dynamic allocation modes and pools remain possibilities, never an
+// unknown logging, reverse NAT, and unproved policy transformations are rejected.
+// Dynamic allocation modes and pools remain possibilities, never an
 // observed session mapping.
 func (e Engine) EquivalentPacketEffects(ctx context.Context, source, target *fm.Firewall, sourceRequest, targetRequest PacketRequest) (PacketEquivalence, error) {
 	if err := ctx.Err(); err != nil {
@@ -180,28 +180,22 @@ func packetEffectPartitions(ctx context.Context, fw *fm.Firewall, request Packet
 		if err != nil {
 			return nil, err
 		}
-		signature, destinationRewrite, err := migrationRelation(ctx, fw, path, steps, budget)
+		signature, err := migrationRelation(ctx, fw, path, steps, budget)
 		if err != nil {
 			return nil, err
 		}
-		effects, err := packetPolicyPartitions(ctx, fw, native.Traffic, path.Policy, rules, budget)
+		mapping, err := policyCoordinates(ctx, fw, path, budget)
 		if err != nil {
 			return nil, err
 		}
-		identity, err := budget.equal(ctx, native.Traffic, path.Original)
+		effects, err := packetPolicyPartitions(ctx, fw, mapping.traffic, path.Policy, rules, budget)
 		if err != nil {
 			return nil, err
-		}
-		// Equal projected sets alone do not prove coordinate identity: DNAT can
-		// permute addresses while retaining the same union. Without a strict
-		// preimage, only a homogeneous effect can be assigned to the wire domain.
-		identity = identity && !destinationRewrite
-		if !identity && len(effects) != 1 {
-			return nil, ErrNotEquivalent
 		}
 		for effect, traffic := range effects {
-			if !identity {
-				traffic = path.Original
+			traffic, err = mapping.original(ctx, traffic, budget)
+			if err != nil {
+				return nil, err
 			}
 			key := packetEffectKey{policy: effect, nat: signature}
 			if _, exists := out[key]; !exists && len(out) >= budget.limits.MaxCombinations {

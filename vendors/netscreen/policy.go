@@ -114,7 +114,8 @@ func (p *parser) policies(ctx context.Context, s *config.Builder) error {
 		d.Rules = append(d.Rules, fm.RuleRecord{Object: object(nativeID("$intrazone", string(z.ID)), "intrazone-bypass", ""), Position: -1, RuleSet: "security", Action: fm.Permit, Builtin: true, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant, Match: fm.Match{Sources: []fm.AddressRef{{Kind: fm.AddressObject, ID: "$any-ipv4"}}, Destinations: []fm.AddressRef{{Kind: fm.AddressObject, ID: "$any-ipv4"}}, AnyService: true, FromZones: []fm.ID{z.ID}, ToZones: []fm.ID{z.ID}}})
 	}
 	d.Rules = append(d.Rules, fm.RuleRecord{Object: object("$default", "default-policy", ""), Position: len(d.Rules), RuleSet: "security", Action: fm.Deny, Builtin: true, Log: fm.Irrelevant, LogStart: fm.Irrelevant, LogEnd: fm.Irrelevant, Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}})
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }
 func (p *parser) policyTail(r *fm.RuleRecord, rest []string) bool {
 	if len(rest) == 0 {

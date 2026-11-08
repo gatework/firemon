@@ -224,7 +224,7 @@ func (r Reclaimer) Plan(ctx context.Context, fw *fm.Firewall, request Reclamatio
 		selected[id] = true
 		changes = append(changes, plan.Change{Kind: plan.RemoveRule, Rule: id})
 	}
-	if err := visits.take(ctx, fw.RecordCount()); err != nil {
+	if err := visits.take(ctx, fw.DeclarationSize()); err != nil {
 		return nil, err
 	}
 	if err := visits.take(ctx, fw.RuleCount()); err != nil {

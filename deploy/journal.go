@@ -51,7 +51,7 @@ func (j *FileJournal) Acquire(ctx context.Context, id string) (Lease, error) {
 	}
 	sum := sha256.Sum256([]byte(id))
 	path := filepath.Join(j.root, hex.EncodeToString(sum[:]))
-	unlock, err := journalLock(ctx, path+".lock")
+	unlock, err := durablefile.Lock(ctx, path+".lock")
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (l *fileLease) Save(ctx context.Context, r Record) (Record, error) {
 	if err := ctx.Err(); err != nil {
 		return Record{}, err
 	}
-	if err := writeJournal(l.path, data); err != nil {
+	if err := durablefile.Replace(l.path, data); err != nil {
 		return Record{}, err
 	}
 	return r, nil
@@ -164,5 +164,3 @@ func (l *fileLease) Close() error {
 	l.closed = true
 	return l.unlock()
 }
-
-func writeJournal(path string, data []byte) error { return durablefile.Replace(path, data) }

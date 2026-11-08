@@ -30,12 +30,6 @@ func token(s string) (string, error) {
 	}
 	return s, nil
 }
-func nativeName(o fm.Object) string {
-	if o.Name != "" {
-		return o.Name
-	}
-	return string(o.ID)
-}
 func portText(p flow.Interval) string {
 	if p.Low == p.High {
 		return strconv.Itoa(int(p.Low))
@@ -49,7 +43,7 @@ func policyPath(r fm.RuleRecord) (string, error) {
 	}
 	from, e1 := token(string(r.Match.FromZones[0]))
 	to, e2 := token(string(r.Match.ToZones[0]))
-	name, e3 := token(nativeName(r.Object))
+	name, e3 := token(r.Object.Name)
 	if e1 != nil || e2 != nil || e3 != nil {
 		return "", ErrRender
 	}
@@ -73,7 +67,7 @@ func addressName(fw *fm.Firewall, zone fm.ID, ref fm.AddressRef) (string, error)
 	default:
 		return "", ErrRender
 	}
-	name, err := token(nativeName(object))
+	name, err := token(object.Name)
 	if err != nil {
 		return "", err
 	}
@@ -121,10 +115,10 @@ func applicationName(fw *fm.Firewall, ref fm.ServiceRef) (string, error) {
 	} else {
 		return "", ErrRender
 	}
-	if o.Scope != "" || o.ID != fm.ID(nativeName(o)) {
+	if o.Scope != "" || o.ID != fm.ID(o.Name) {
 		return "", ErrRender
 	}
-	return token(nativeName(o))
+	return token(o.Name)
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
@@ -136,16 +130,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 }
 
 func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	builder, err := render.NewNativeBuilder(ctx, "srx", before, after, changes)
+	builder, err := render.NewBuilder(ctx, "srx", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-
-	timed, err := render.ScheduleCommands(before, after, changes)
-	if err != nil {
-		return nil, err
-	}
-	builder.AppendCommands(timed...)
 
 	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
 		return nil, err
@@ -221,7 +209,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 	}
 	ordered := slices.Collect(before.OrderedRules())
 	if batch.Native() {
-		commands = append(commands, batch.NativeCommands()...)
+		commands = append(commands, batch.Commands()...)
 	}
 	for _, change := range changes {
 		if err := ctx.Err(); err != nil {
@@ -298,7 +286,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			return nil, ErrRender
 		}
 		commands = append(commands, "set "+path+" then "+action)
-		if name, err := batch.ScheduleReference(after, r.Match.Schedule); err != nil {
+		if name, err := batch.ScheduleName(after, r.Match.Schedule); err != nil {
 			return nil, err
 		} else if name != "" {
 			commands = append(commands, "set "+path+" scheduler-name "+name)
@@ -321,7 +309,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			if after.Rule(p.ID) == nil || p.Builtin || p.Scope != r.Scope || p.RuleSet != r.RuleSet || !slices.Equal(p.Match.FromZones, r.Match.FromZones) || !slices.Equal(p.Match.ToZones, r.Match.ToZones) {
 				continue
 			}
-			name, err := token(nativeName(p.Object))
+			name, err := token(p.Object.Name)
 			if err != nil {
 				return nil, err
 			}

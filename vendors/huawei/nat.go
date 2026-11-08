@@ -212,7 +212,8 @@ func (p *parser) nat(ctx context.Context, s *config.Builder) error {
 		}
 		d.DynamicNATs = append(d.DynamicNATs, r)
 	}
-	return p.commit(s, tx, d)
+	tx.Emit(d)
+	return s.Commit(tx)
 }
 
 func (p *parser) transportServices(m fm.Match, d fm.Data) bool {

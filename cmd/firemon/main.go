@@ -29,5 +29,3 @@ func mainExit(args []string, stdout, stderr io.Writer) int {
 	}()
 	return runCLI(ctx, args, stdout, stderr)
 }
-
-func run(args []string, out io.Writer) error { return execute(context.Background(), args, out) }

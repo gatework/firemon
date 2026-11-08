@@ -70,6 +70,24 @@ func (b *visitBudget) nativeObject(ctx context.Context, o fm.Object) error {
 func (b *visitBudget) nativeMatch(ctx context.Context, m fm.Match) error {
 	return b.nativeCounts(ctx, len(m.Sources), len(m.Destinations), len(m.Services), len(m.FromZones), len(m.ToZones), len(m.Applications), len(m.Users), len(m.Unsupported))
 }
+
+// nativeChanges reserves every container copied when taking ownership of a
+// compiler result, including nested members in its declared rule changes.
+func (b *visitBudget) nativeChanges(ctx context.Context, changes NativeChanges) error {
+	if err := b.nativeAdditions(ctx, changes.Additions); err != nil {
+		return err
+	}
+	if err := b.take(ctx, len(changes.Rules)); err != nil {
+		return err
+	}
+	for _, change := range changes.Rules {
+		if err := b.nativeCounts(ctx, len(change.Sources), len(change.Destinations), len(change.Services)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (b *visitBudget) nativeAdditions(ctx context.Context, a NativeAdditions) error {
 	// Pay for every outer container before traversing its records.
 	if err := b.nativeCounts(ctx, len(a.Rules), len(a.Addresses), len(a.Services), len(a.StaticNATs), len(a.DynamicNATs), len(a.NATPools), len(a.Schedules)); err != nil {

@@ -61,7 +61,7 @@ func (p Planner) proveWithBaseline(ctx context.Context, before, after *fm.Firewa
 		return Proof{}, ErrUnsafe
 	}
 	// Preserve effective ownership outside the target, including logging/order.
-	if err := preserveOutsideTargetOwnership(ctx, *baselineResult, candidateResult, q.Traffic, limit, visits); err != nil {
+	if err := preserveOutside(ctx, *baselineResult, candidateResult, q.Traffic, limit, visits); err != nil {
 		return Proof{}, err
 	}
 	return Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), TargetAllowed: true, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}, nil

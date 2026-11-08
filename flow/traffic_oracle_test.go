@@ -60,6 +60,10 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		clipped, err := x.Clip(boxes[2], 4096)
+		if err != nil {
+			t.Fatal(err)
+		}
 		contains := func(b flow.TrafficRegion, packet int) bool {
 			values := [7]uint16{}
 			for axis := range values {
@@ -83,7 +87,7 @@ func FuzzTrafficAgainstPacketOracle(f *testing.F) {
 			for _, tc := range []struct {
 				got  flow.Traffic
 				want bool
-			}{{diff, inX && !inY}, {union, inX || inY}, {intersection, inX && inY}} {
+			}{{diff, inX && !inY}, {union, inX || inY}, {intersection, inX && inY}, {clipped, inX && contains(boxes[2], packet)}} {
 				matches := 0
 				for _, b := range tc.got.Regions() {
 					if contains(b, packet) {

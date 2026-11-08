@@ -12,7 +12,7 @@ Inline address/service values have no independent native declaration. Unreferenc
 
 ## Parsing
 
-Perl cursor behavior is deliberate: skip means pending for a later pass; rewind preserves committed state. Go parsing uses a native structural scanner followed by targeted scoped stages. Peek/NextPending/checkpoint/restore/rewind never authorize swallowing unrelated lines. Transactions commit drafts together with actual consumed spans; rollback restores both. Only known irrelevant syntax may be ignored with a reason. Unknown nested blocks and quoted text cannot create domain objects.
+Perl cursor behavior is deliberate: skip means pending for a later pass; rewind preserves committed state. Go uses `github.com/gatework/parser` for immutable source indexing, then a native structural scanner and targeted scoped stages. Reading never changes the Pending/Parsed/Ignored evidence ledger. Physical lines and XML byte fragments remain distinct. Transactions commit drafts together with actual consumed spans; rollback restores both. There is no shared mutable reader position or duplicate parsed-flag state. Only known irrelevant syntax may be ignored with a reason. Unknown nested blocks and quoted text cannot create domain objects.
 
 Stages: native structure/context; zones/interfaces; address/service/schedule drafts; direct/static routes; VRF-scoped next-hop resolution and interface-route binding; zone networks; group references; rules/ACL binding; PBR and NAT; diagnostics; seal. Resolve next hops by longest connected prefix within VRF, preserving ambiguous and unresolved evidence.
 
@@ -24,7 +24,31 @@ Publish immutable blobs via temp/fsync/rename before atomically replacing a gene
 
 ## Evaluation and planning
 
-IPv4/IPv6 interval algebra without enumeration. Exact multidimensional traffic union/difference preserves request pairs. First-match consumes known and potentially matching unknown traffic; conservative budgets prevent partial success. Scope, time, application/user, logging, route and NAT evidence participates.
+IPv4/IPv6 interval algebra without enumeration. `github.com/gatework/set` integer sets implement IPv4 normalization, union, intersection and inclusion; IPv6 and exact subtraction remain domain interval operations. Range validation precedes integer normalization, and public address sets remain immutable. Exact multidimensional traffic union/difference preserves request pairs. First-match consumes known and potentially matching unknown traffic; conservative budgets prevent partial success. Scope, time, application/user, logging, route and NAT evidence participates.
+
+Address subtraction and IPv6 intersection traverse normalized intervals in order;
+containment does not materialize a difference. Public policy, NAT, packet and alias
+queries bound input regions before any unknown/no-match shortcut. Match bounds
+its explicit input, and route resolution bounds input address intervals.
+`MaxRegions` remains 4096 by default. Graph-copy preflights use cached
+`DeclarationSize`, including nested members, before allocating owned views.
+Ordered policy evaluation keeps rule visits and owned declaration copies as
+independent `MaxVisits` allowances. Only eligible, reached rules consume copy
+capacity, measured by `Rule.DeclarationSize`; exceeding either allowance returns
+no partial result. Risk and convergence also charge their actual nested copies
+cumulatively, including evidence produced for unknown findings.
+
+Business queries accept source/destination text and optional service. Normalize
+formatting without guessing semantic errors; reject the invalid row while keeping
+valid siblings. Within-row sets form a product; across-row associations stay exact.
+Bare ports default to TCP; omitted services query all without authorizing an
+unrestricted change. `Searcher` owns query composition and the local immutable
+revision cache/index; `BatchDesigner` owns planning. No compatibility query facade.
+Manifest state and time-dependent decisions are always fresh. Device associations
+cover both endpoints and static NAT views without inventing ownership or ingress;
+conditional and incomplete evidence cannot authorize changes. Finite windows split
+at exact policy/NAT/calendar transitions. Native declaration matches, effective
+first-match decisions and original wire pullbacks remain distinct.
 
 Native NAT semantics govern selection: original match first; explicit identity/constant/offset/dynamic relations; no-NAT terminal; dynamic allocation is possible, not exact session state. Reverse inventory aliases require forward validation. PAN ordered NAT and ASA staged auto/manual semantics must not be conflated.
 
@@ -42,7 +66,7 @@ Validate stored revision, authorize exact plan, reserve, acquire native configur
 
 The user narrowed the vendor scope on 2026-10-28 to Hillstone, Palo Alto, ASA, SRX, Netscreen, Fortinet and Huawei. H3C, Topsec, Neteye and other vendors are out of scope for now. The final vendor sequence added Fortinet, then Huawei. Each capability is supported only when fixture and semantic evidence establish it. Never advertise a parser stub as vendor parity. No web app/account/approval platform.
 
-Validation includes independent small-domain algebra oracle, fuzz/race tests, native scoped fixtures, first-match/unknown behavior, NAT offsets/ports/stages, graph identity, cursor rollback, crash/CAS/projection ordering, offline CLI and conditional adapter checks. Benchmarks report measurements separately from real-device/CI evidence.
+Validation includes independent small-domain algebra oracle, fuzz/race tests, native scoped fixtures, first-match/unknown behavior, NAT offsets/ports/stages, graph identity, atomic evidence rollback, crash/CAS/projection ordering, offline CLI and conditional adapter checks. Benchmarks report measurements separately from real-device/CI evidence.
 
 ## Operations remediation
 
@@ -70,6 +94,10 @@ selected effects return structured issues without an executable partial plan.
 Explicit zone, chain, interface and VRF mappings describe existing target topology;
 the compiler does not generate that topology. Native rule splitting is outside
 the business-request decomposition contract.
+
+Migration owns compiler results after a bounded deep copy and uses the same
+native rendering boundary as other plans. Rendering receives owned arguments;
+returned commands are copied and cancellation is checked before a plan can be sealed.
 
 Approval version 4 uses explicit intent kinds. Reconstruction version 2 binds
 both immutable snapshots for migration and reruns the planner, renderer and

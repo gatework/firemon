@@ -31,12 +31,6 @@ func quoted(value string) (string, error) {
 	}
 	return "\"" + value + "\"", nil
 }
-func nativeName(o fm.Object) string {
-	if o.Name != "" {
-		return o.Name
-	}
-	return string(o.ID)
-}
 func portText(p flow.Interval) string {
 	if p.Low == p.High {
 		return strconv.Itoa(int(p.Low))
@@ -53,15 +47,10 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 }
 
 func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	builder, err := render.NewNativeBuilder(ctx, "paloalto", before, after, changes)
+	builder, err := render.NewBuilder(ctx, "paloalto", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-	timed, err := render.ScheduleCommands(before, after, changes)
-	if err != nil {
-		return nil, err
-	}
-	builder.AppendCommands(timed...)
 	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
 		return nil, err
 	}
@@ -92,7 +81,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		if len(r.Ranges) != 1 || r.FQDN != "" || r.Scope != "" || len(r.Unsupported) > 0 {
 			return nil, ErrRender
 		}
-		name, err := quoted(nativeName(r.Object))
+		name, err := quoted(r.Object.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +104,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		if len(r.Terms) != 1 || r.Scope != "" || len(r.Unsupported) > 0 {
 			return nil, ErrRender
 		}
-		name, err := quoted(nativeName(r.Object))
+		name, err := quoted(r.Object.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -131,7 +120,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		commands = append(commands, prefix+" port "+portText(t.DestinationPort), prefix+" source-port "+portText(t.SourcePort))
 	}
 	if batch.Native() {
-		commands = append(commands, batch.NativeCommands()...)
+		commands = append(commands, batch.Commands()...)
 	}
 	ordered := before.Rules()
 	slices.SortStableFunc(ordered, func(a, b *fm.Rule) int {
@@ -144,11 +133,11 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		}
 		return strings.Compare(string(x.ID), string(y.ID))
 	})
-	first := ""
+	var first *fm.Rule
 	for _, rule := range ordered {
 		r := rule.Record()
 		if r.Scope == "" && r.RuleSet == "security" && !r.Builtin && after.Rule(r.ID) != nil {
-			first = nativeName(r.Object)
+			first = rule
 			break
 		}
 	}
@@ -165,7 +154,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			if r.Scope != "" || r.RuleSet != "security" || r.Builtin {
 				return nil, ErrRender
 			}
-			name, err := quoted(nativeName(r.Object))
+			name, err := quoted(r.Object.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -180,7 +169,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 		if r.Scope != "" || r.RuleSet != "security" || r.Builtin || len(r.Unsupported) > 0 {
 			return nil, ErrRender
 		}
-		name, err := quoted(nativeName(r.Object))
+		name, err := quoted(r.Object.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -221,7 +210,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 					if z == nil {
 						return nil, ErrRender
 					}
-					v, err := quoted(nativeName(z.Record().Object))
+					v, err := quoted(z.Record().Object.Name)
 					if err != nil {
 						return nil, err
 					}
@@ -236,7 +225,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 				end = "yes"
 			}
 			commands = append(commands, prefix+" application any", prefix+" action "+action, prefix+" rule-type universal", prefix+" log-start "+start, prefix+" log-end "+end)
-			if name, err := batch.ScheduleReference(after, r.Match.Schedule); err != nil {
+			if name, err := batch.ScheduleName(after, r.Match.Schedule); err != nil {
 				return nil, err
 			} else if name != "" {
 				commands = append(commands, prefix+" schedule "+name)
@@ -270,7 +259,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 				default:
 					return nil, ErrRender
 				}
-				v, err := quoted(nativeName(object))
+				v, err := quoted(object.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -295,14 +284,14 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, batch rende
 			default:
 				return nil, ErrRender
 			}
-			v, err := quoted(nativeName(object))
+			v, err := quoted(object.Name)
 			if err != nil {
 				return nil, err
 			}
 			commands = append(commands, prefix+" service "+v)
 		}
-		if change.Kind == plan.CreateRule && first != "" {
-			blocker, err := quoted(first)
+		if change.Kind == plan.CreateRule && first != nil {
+			blocker, err := quoted(first.Name())
 			if err != nil {
 				return nil, err
 			}

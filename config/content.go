@@ -4,10 +4,11 @@ package config
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
-	"strings"
 
 	fm "github.com/gatework/firemon"
+	"github.com/gatework/parser"
 )
 
 var ErrInvalid = errors.New("config: invalid input")
@@ -51,155 +52,68 @@ func (l Limits) defaults() Limits {
 	return l
 }
 
-type Line struct {
-	Number    int
-	Raw, Text string
-}
+// Content combines an immutable physical source with semantic evidence. Evidence
+// claims refer to physical lines for CLI input and byte fragments for XML input.
 type Content struct {
 	source   Source
-	lines    []Line
+	text     *parser.Content
 	evidence []fm.Evidence
-	position int
 	owner    *Builder
-	valid    bool
 	limits   Limits
 }
 
 // NewContent indexes physical lines without consuming semantic evidence.
 func NewContent(ctx context.Context, source Source, limits Limits) (*Content, error) {
-	limits = limits.defaults()
-	if err := validateSource(ctx, source, limits); err != nil {
+	c, err := newContent(ctx, source, limits)
+	if err != nil {
 		return nil, err
 	}
-	c := &Content{source: source, limits: limits, valid: true}
-	start, nextCheck := 0, scanChunk
-	for i := 0; i < len(source.Text); i++ {
-		if i >= nextCheck {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			nextCheck = i + scanChunk
-		}
-		if source.Text[i] != '\n' && source.Text[i] != '\r' {
-			continue
-		}
-		end := i + 1
-		if source.Text[i] == '\r' && end < len(source.Text) && source.Text[end] == '\n' {
-			i++
-			end++
-		}
-		c.addLine(source.Text[start:end])
-		start = end
-		if len(c.lines) > limits.MaxLines {
-			return nil, ErrSource
-		}
+	if c.text.Len() > 0 {
+		c.evidence = make([]fm.Evidence, c.text.Len())
 	}
-	if start < len(source.Text) {
-		c.addLine(source.Text[start:])
-	}
-	if len(c.lines) > limits.MaxLines {
-		return nil, ErrSource
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	for line := range c.text.All() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		c.evidence[line.Number-1] = fm.Evidence{
+			Span: fm.Span{First: line.Number, Last: line.Number}, State: fm.Pending,
+		}
 	}
 	return c, nil
 }
 
-// NewFragmentContent tracks a native scanner's exact, contiguous byte partitions.
-// Claim numbers are fragment indexes, while persisted evidence retains physical
-// line/byte spans. Reading and structural scanning do not consume any fragment.
-func NewFragmentContent(ctx context.Context, source Source, spans []fm.Span, limits Limits) (*Content, error) {
+func newContent(ctx context.Context, source Source, limits Limits) (*Content, error) {
 	limits = limits.defaults()
 	if err := validateSource(ctx, source, limits); err != nil {
 		return nil, err
 	}
-	if len(spans) > limits.MaxLines {
-		return nil, ErrSource
-	}
-	c := &Content{source: source, limits: limits, valid: true}
-	end, line := 0, 1
-	for _, span := range spans {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	text, err := parser.NewWithContext(ctx, source.Text, parser.Limits{
+		MaxBytes: limits.MaxBytes, MaxLines: limits.MaxLines,
+	})
+	if err != nil {
+		if errors.Is(err, parser.ErrLimit) {
+			return nil, fmt.Errorf("%w: %w", ErrSource, err)
 		}
-		if span.StartByte != end || span.EndByte <= end || span.EndByte > len(source.Text) || span.First != line {
-			return nil, ErrSource
-		}
-		raw := source.Text[span.StartByte:span.EndByte]
-		last := line
-		for i := range len(raw) {
-			if i%scanChunk == 0 {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-			}
-			if raw[i] == '\n' {
-				line++
-			} else if raw[i] == '\r' && (span.StartByte+i+1 == len(source.Text) || source.Text[span.StartByte+i+1] != '\n') {
-				line++
-			}
-			if i < len(raw)-1 {
-				last = line
-			}
-		}
-		if span.Last != last {
-			return nil, ErrSource
-		}
-		n := len(c.lines) + 1
-		c.lines = append(c.lines, Line{Number: n, Raw: raw, Text: strings.TrimSpace(raw)})
-		c.evidence = append(c.evidence, fm.Evidence{Span: span, State: fm.Pending})
-		end = span.EndByte
-	}
-	if end != len(source.Text) {
-		return nil, ErrSource
-	}
-	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return &Content{source: source, text: text, limits: limits}, nil
 }
-func (c *Content) addLine(raw string) {
-	n := len(c.lines) + 1
-	c.lines = append(c.lines, Line{Number: n, Raw: raw, Text: strings.TrimSpace(raw)})
-	c.evidence = append(c.evidence, fm.Evidence{Span: fm.Span{First: n, Last: n}, State: fm.Pending})
+
+// span locates a nonempty byte interval, including any terminating line ending.
+func (c *Content) span(start, end int) (fm.Span, bool) {
+	if start < 0 || end <= start || end > len(c.source.Text) {
+		return fm.Span{}, false
+	}
+	first, _ := c.text.LineAt(start)
+	last, _ := c.text.LineAt(end - 1)
+	return fm.Span{First: first.Number, Last: last.Number, StartByte: start, EndByte: end}, true
 }
-func (c *Content) Lines() []Line           { return slices.Clone(c.lines) }
+
+// Lines returns physical lines with original indentation and line endings. It
+// does not change evidence; XML claims may cover only part of a returned line.
+func (c *Content) Lines() []parser.Line { return c.text.Lines() }
+
 func (c *Content) Evidence() []fm.Evidence { return slices.Clone(c.evidence) }
 
 // Limits returns the normalized limits shared by scanning and native parsing.
 func (c *Content) Limits() Limits { return c.limits }
-
-func (c *Content) Peek() (Line, bool) {
-	if c.position >= len(c.lines) {
-		return Line{}, false
-	}
-	return c.lines[c.position], true
-}
-func (c *Content) NextPending() (Line, bool) {
-	for c.position < len(c.lines) {
-		p := c.position
-		c.position++
-		if c.evidence[p].State == fm.Pending {
-			return c.lines[p], true
-		}
-	}
-	return Line{}, false
-}
-func (c *Content) Rewind() { c.position = 0 }
-
-type Checkpoint struct {
-	owner    *Content
-	position int
-}
-
-func (c *Content) Checkpoint() Checkpoint { return Checkpoint{c, c.position} }
-
-// Restore rewinds reading, never committed semantic evidence.
-func (c *Content) Restore(p Checkpoint) error {
-	if p.owner != c {
-		return ErrClaim
-	}
-	c.position = p.position
-	return nil
-}

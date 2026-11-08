@@ -28,7 +28,7 @@ type reconstructionPolicy struct {
 	FromZone        fm.ID                `json:"from_zone"`
 	ToZone          fm.ID                `json:"to_zone"`
 	EgressInterface fm.ID                `json:"egress_interface,omitempty"`
-	At              time.Time            `json:"at,omitempty"`
+	At              time.Time            `json:"at"`
 }
 
 func reconstructionPolicyOf(q policy.Request) reconstructionPolicy {

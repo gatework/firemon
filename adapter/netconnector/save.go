@@ -11,9 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/go-net-connector/connector"
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 func responseDigest(text string) string {
@@ -56,21 +58,73 @@ func (b *responseBudget) command(ctx context.Context, op *connector.Operation, t
 	return steps[0], nil
 }
 
-var color = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+var color = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 var failure = regexp.MustCompile(`(?i)\b(?:error|failed|failure|denied|cannot|unable|unsuccessful|aborted)\b`)
 var panEnqueued = regexp.MustCompile(`(?m)^[ \t]*Commit job enqueued with jobid[ \t]+([1-9][0-9]{0,9})[ \t]*$`)
 var panProgress = regexp.MustCompile(`(?m)^[ \t]*Commit job[ \t]+([1-9][0-9]{0,9}) is in progress\.?[ \t]*$`)
 
-// persistenceText checks the response history so a later carriage return or
-// terminal rendering cannot erase an earlier device rejection.
-func persistenceText(step connector.StepResult) (string, error) {
-	text := color.ReplaceAllString(step.Response().Raw(), "")
+// responseHistory removes only the verified final prompt and exact command echo.
+// Carriage returns become boundaries instead of erasing earlier device evidence.
+func responseHistory(step connector.StepResult) (string, error) {
+	response := step.Response()
+	if _, err := response.Output(); err != nil {
+		return "", errors.Join(ErrPersistence, err)
+	}
+	prompt, err := response.Prompt()
+	if err != nil {
+		return "", errors.Join(ErrPersistence, err)
+	}
+	raw, ok := strings.CutSuffix(response.Raw(), response.RawPrompt())
+	if !ok || response.RawPrompt() == "" {
+		return "", ErrPersistence
+	}
+	// Reuse the connector's verified encoding, never its terminal rendering.
+	// Rendering legacy text can erase a rejection before the parser sees it.
+	switch response.Encoding() {
+	case "utf-8":
+		if !utf8.ValidString(raw) {
+			return "", ErrPersistence
+		}
+	case "gbk", "gb18030":
+		codec := simplifiedchinese.GB18030
+		if response.Encoding() == "gbk" {
+			codec = simplifiedchinese.GBK
+		}
+		text, err := codec.NewDecoder().String(raw)
+		if err != nil {
+			return "", errors.Join(ErrPersistence, err)
+		}
+		original, err := codec.NewEncoder().String(text)
+		if err != nil || original != raw {
+			return "", errors.Join(ErrPersistence, err)
+		}
+		raw = text
+	default:
+		return "", ErrPersistence
+	}
+	text := color.ReplaceAllString(raw, "")
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	for _, r := range text {
 		if r < 32 && r != '\n' && r != '\t' || r == 127 {
 			return "", ErrPersistence
 		}
+	}
+	text = strings.TrimSpace(text)
+	first, rest, _ := strings.Cut(text, "\n")
+	echo := strings.TrimSpace(first)
+	if command := step.Command().Text; echo == command || echo == strings.TrimSpace(prompt)+command {
+		text = rest
+	}
+	return text, nil
+}
+
+// persistenceText checks the response history so terminal rendering cannot erase
+// a rejection. Configuration values use their native grammar instead.
+func persistenceText(step connector.StepResult) (string, error) {
+	text, err := responseHistory(step)
+	if err != nil {
+		return "", err
 	}
 	if failure.MatchString(text) {
 		return "", ErrPersistence
@@ -88,8 +142,8 @@ func (s *Session) Save(ctx context.Context, receive deploy.ReceiptFunc) (out dep
 		return out, ErrInvalid
 	}
 	err = s.run(ctx, func(ctx context.Context, op *connector.Operation) error {
-		b := responseBudget{remaining: s.options.MaxOutputBytes, digest: sha256.New()}
-		switch s.metadata.Vendor {
+		b := responseBudget{remaining: s.opts.MaxOutputBytes, digest: sha256.New()}
+		switch s.meta.Vendor {
 		case "hillstone", "huawei":
 			result, err := op.SaveConfig(ctx, connector.ExecuteOptions{MaxOutputBytes: b.remaining})
 			if limitErr := b.record(result); err == nil {
@@ -120,7 +174,7 @@ func (s *Session) Save(ctx context.Context, receive deploy.ReceiptFunc) (out dep
 			if !s.srxExclusive {
 				return ErrConfigurationLock
 			}
-			step, err := b.command(ctx, op, `commit comment "firemon:`+s.configurationToken+`"`)
+			step, err := b.command(ctx, op, `commit comment "firemon:`+s.token+`"`)
 			if err != nil {
 				return err
 			}
@@ -209,11 +263,11 @@ func (s *Session) panCommit(ctx context.Context, op *connector.Operation, b *res
 	if _, err := b.command(ctx, op, "exit"); err != nil {
 		return err
 	}
-	timer := time.NewTimer(s.options.PollInterval)
+	timer := time.NewTimer(s.opts.PollInterval)
 	defer timer.Stop()
-	for n := 0; n < s.options.MaxPolls; n++ {
+	for n := 0; n < s.opts.MaxPolls; n++ {
 		if n > 0 {
-			timer.Reset(s.options.PollInterval)
+			timer.Reset(s.opts.PollInterval)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

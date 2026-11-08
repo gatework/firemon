@@ -9,6 +9,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/internal/dependency"
+	"github.com/gatework/firemon/internal/names"
 	"github.com/gatework/firemon/policy"
 )
 
@@ -136,7 +137,7 @@ func ValidateNativeChanges(ctx context.Context, before, after *fm.Firewall, c Na
 	if err := validateScheduleChanges(before, after, c); err != nil {
 		return err
 	}
-	if err := validateNativeInlineOwnership(c.Additions); err != nil {
+	if err := validateInlineOwners(c.Additions); err != nil {
 		return err
 	}
 	expected := before.Export()
@@ -176,12 +177,12 @@ func ValidateNativeChanges(ctx context.Context, before, after *fm.Firewall, c Na
 	return ctx.Err()
 }
 func addRecords[T any](old, add []T, object func(T) fm.Object) ([]T, error) {
-	return addNativeRecords(old, add, object, func(r T) string { return nativeNameKey(object(r)) }, false)
+	return addNativeRecords(old, add, object, func(r T) objectKey { return objectKeyOf(object(r)) }, false)
 }
-func addNativeRecords[T any](old, add []T, object func(T) fm.Object, key func(T) string, inline bool) ([]T, error) {
+func addNativeRecords[T any, K comparable](old, add []T, object func(T) fm.Object, key func(T) K, inline bool) ([]T, error) {
 	var out []T
 	byID := map[fm.ID]T{}
-	names := map[string]fm.ID{}
+	names := map[K]fm.ID{}
 	for _, r := range old {
 		o := object(r)
 		byID[o.ID] = r
@@ -207,36 +208,31 @@ func addNativeRecords[T any](old, add []T, object func(T) fm.Object, key func(T)
 	}
 	return out, nil
 }
-func nativeNameKey(o fm.Object) string {
-	name := o.Name
-	if name == "" {
-		name = string(o.ID)
-	}
-	return o.Scope + "\x00" + name
-}
 func newAdditions(before *fm.Firewall, a NativeAdditions) (NativeAdditions, error) {
 	d := before.Export()
 	var out NativeAdditions
 	var err error
-	out.Rules, err = addRecords(d.Rules, a.Rules, func(r fm.RuleRecord) fm.Object { return r.Object })
-	if err != nil {
-		return out, err
-	}
-	out.Addresses, err = addNativeRecords(d.Addresses, a.Addresses, func(r fm.AddressRecord) fm.Object { return r.Object }, func(r fm.AddressRecord) string { return nativeNameKey(r.Object) }, true)
-	if err != nil {
-		return out, err
-	}
-	out.Services, err = addNativeRecords(d.Services, a.Services, func(r fm.ServiceRecord) fm.Object { return r.Object }, func(r fm.ServiceRecord) string { return nativeNameKey(r.Object) }, true)
-	if err != nil {
-		return out, err
-	}
-	out.StaticNATs, err = addNativeRecords(d.StaticNATs, a.StaticNATs, func(r fm.StaticNATRecord) fm.Object { return r.Object }, func(r fm.StaticNATRecord) string {
-		return nativeNATKey(d.Metadata.Vendor, r.Object, r.Order, r.SourceVIP != (fm.AddressRef{}))
+	out.Rules, err = addNativeRecords(d.Rules, a.Rules, func(r fm.RuleRecord) fm.Object { return r.Object }, func(r fm.RuleRecord) names.RuleKey {
+		return names.Rule(d.Metadata.Vendor, r)
 	}, false)
 	if err != nil {
 		return out, err
 	}
-	out.DynamicNATs, err = addNativeRecords(d.DynamicNATs, a.DynamicNATs, func(r fm.DynamicNATRecord) fm.Object { return r.Object }, func(r fm.DynamicNATRecord) string { return nativeNATKey(d.Metadata.Vendor, r.Object, r.Order, false) }, false)
+	out.Addresses, err = addNativeRecords(d.Addresses, a.Addresses, func(r fm.AddressRecord) fm.Object { return r.Object }, func(r fm.AddressRecord) objectKey { return objectKeyOf(r.Object) }, true)
+	if err != nil {
+		return out, err
+	}
+	out.Services, err = addNativeRecords(d.Services, a.Services, func(r fm.ServiceRecord) fm.Object { return r.Object }, func(r fm.ServiceRecord) objectKey { return objectKeyOf(r.Object) }, true)
+	if err != nil {
+		return out, err
+	}
+	out.StaticNATs, err = addNativeRecords(d.StaticNATs, a.StaticNATs, func(r fm.StaticNATRecord) fm.Object { return r.Object }, func(r fm.StaticNATRecord) objectKey {
+		return natKey(d.Metadata.Vendor, r.Object, r.Order, r.SourceVIP != (fm.AddressRef{}))
+	}, false)
+	if err != nil {
+		return out, err
+	}
+	out.DynamicNATs, err = addNativeRecords(d.DynamicNATs, a.DynamicNATs, func(r fm.DynamicNATRecord) fm.Object { return r.Object }, func(r fm.DynamicNATRecord) objectKey { return natKey(d.Metadata.Vendor, r.Object, r.Order, false) }, false)
 	if err != nil {
 		return out, err
 	}
@@ -253,41 +249,41 @@ func newAdditions(before *fm.Firewall, a NativeAdditions) (NativeAdditions, erro
 	if err := validVIPProjections(d.Metadata.Vendor, combined); err != nil {
 		return out, err
 	}
-	names := map[string]bool{}
+	names := map[objectKey]bool{}
 	for _, n := range d.StaticNATs {
-		names[nativeNATKey(d.Metadata.Vendor, n.Object, n.Order, n.SourceVIP != (fm.AddressRef{}))] = true
+		names[natKey(d.Metadata.Vendor, n.Object, n.Order, n.SourceVIP != (fm.AddressRef{}))] = true
 	}
 	for _, n := range d.DynamicNATs {
-		names[nativeNATKey(d.Metadata.Vendor, n.Object, n.Order, false)] = true
+		names[natKey(d.Metadata.Vendor, n.Object, n.Order, false)] = true
 	}
 	for _, n := range out.StaticNATs {
-		key := nativeNATKey(d.Metadata.Vendor, n.Object, n.Order, n.SourceVIP != (fm.AddressRef{}))
+		key := natKey(d.Metadata.Vendor, n.Object, n.Order, n.SourceVIP != (fm.AddressRef{}))
 		if names[key] {
 			return out, fmt.Errorf("%w: shared native nat name", ErrInvalid)
 		}
 		names[key] = true
 	}
 	for _, n := range out.DynamicNATs {
-		key := nativeNATKey(d.Metadata.Vendor, n.Object, n.Order, false)
+		key := natKey(d.Metadata.Vendor, n.Object, n.Order, false)
 		if names[key] {
 			return out, fmt.Errorf("%w: shared native nat name", ErrInvalid)
 		}
 		names[key] = true
 	}
-	addressGroups, serviceGroups := map[string]bool{}, map[string]bool{}
+	addressGroups, serviceGroups := map[objectKey]bool{}, map[objectKey]bool{}
 	for _, g := range d.AddressGroups {
-		addressGroups[nativeNameKey(g.Object)] = true
+		addressGroups[objectKeyOf(g.Object)] = true
 	}
 	for _, g := range d.ServiceGroups {
-		serviceGroups[nativeNameKey(g.Object)] = true
+		serviceGroups[objectKeyOf(g.Object)] = true
 	}
 	for _, a := range out.Addresses {
-		if addressGroups[nativeNameKey(a.Object)] {
+		if addressGroups[objectKeyOf(a.Object)] {
 			return out, ErrInvalid
 		}
 	}
 	for _, a := range out.Services {
-		if serviceGroups[nativeNameKey(a.Object)] {
+		if serviceGroups[objectKeyOf(a.Object)] {
 			return out, ErrInvalid
 		}
 	}
@@ -536,7 +532,7 @@ func (p Planner) proveNative(ctx context.Context, before, after *fm.Firewall, in
 			intents = append(intents, n)
 		}
 	}
-	proof, err := p.proveBatchPolicyWindows(ctx, before, after, targets, windows, nil, visits, len(intents) == 0)
+	proof, err := p.proveTargets(ctx, before, after, targets, windows, nil, visits, len(intents) == 0)
 	if err != nil {
 		return Proof{}, nil, err
 	}
@@ -684,10 +680,4 @@ func (p Planner) proveNativePacket(ctx context.Context, fw *fm.Firewall, input N
 		return ErrUnsafe
 	}
 	return nil
-}
-
-func nativeTrafficRegions(t flow.Traffic) []flow.TrafficRegion {
-	regions := t.Regions()
-	slices.SortFunc(regions, compareBatchRegion)
-	return regions
 }

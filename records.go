@@ -97,6 +97,8 @@ type Metadata struct {
 }
 
 // Object IDs are unique within their typed catalog. Scope retains the native VRF/vsys/context.
+// Name retains the declared device name and may be empty for anonymous values.
+// An internal ID is not a substitute for a missing name in device commands.
 type Object struct {
 	ID          ID
 	Name, Scope string

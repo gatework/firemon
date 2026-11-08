@@ -23,12 +23,12 @@ func (s *Session) Read(ctx context.Context, view device.View) (capture device.Ca
 	if view != device.Running && view != device.Saved {
 		return capture, ErrInvalid
 	}
-	capture.Metadata = s.metadata
+	capture.Metadata = s.meta
 	capture.Metadata.SourceDigest, capture.Metadata.ParserVersion = "", ""
 	err = s.run(ctx, func(ctx context.Context, op *connector.Operation) error {
-		budget := responseBudget{remaining: s.options.MaxOutputBytes, digest: sha256.New()}
+		budget := responseBudget{remaining: s.opts.MaxOutputBytes, digest: sha256.New()}
 		switch {
-		case s.metadata.Vendor == "srx":
+		case s.meta.Vendor == "srx":
 			// Operational show configuration is the last committed database,
 			// while configuration-mode show is the shared candidate.
 			command := "show configuration | display set | no-more"
@@ -41,7 +41,7 @@ func (s *Session) Read(ctx context.Context, view device.View) (capture device.Ca
 				return err
 			}
 			capture.Source.Text = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(text), "[edit]"))
-		case s.metadata.Vendor == "fortinet":
+		case s.meta.Vendor == "fortinet":
 			if view == device.Saved {
 				if err := s.fortinetAutomatic(ctx, op, &budget); err != nil {
 					return err
@@ -63,14 +63,14 @@ func (s *Session) Read(ctx context.Context, view device.View) (capture device.Ca
 		case view == device.Running:
 			result, err := op.RunningConfig(ctx)
 			_, complete := result.Config()
-			text, evidenceErr := captureEvidence(result, s.runningCommand(), s.options.MaxOutputBytes)
+			text, evidenceErr := captureEvidence(result, s.runningCommand(), s.opts.MaxOutputBytes)
 			capture.Source.Text = text
 			if err != nil || evidenceErr != nil || !complete {
 				return errors.Join(ErrCapture, err, evidenceErr)
 			}
 		default:
 			pager, command := "", ""
-			switch s.metadata.Vendor {
+			switch s.meta.Vendor {
 			case "asa":
 				pager, command = "terminal pager 0", "show startup-config"
 			case "hillstone":
@@ -94,8 +94,8 @@ func (s *Session) Read(ctx context.Context, view device.View) (capture device.Ca
 			if err != nil {
 				return err
 			}
-			if s.metadata.Vendor == "paloalto" {
-				xml, err := config.XML(ctx, config.Source{Text: capture.Source.Text, Complete: true}, config.Limits{MaxBytes: int(s.options.MaxOutputBytes)})
+			if s.meta.Vendor == "paloalto" {
+				xml, err := config.XML(ctx, config.Source{Text: capture.Source.Text, Complete: true}, config.Limits{MaxBytes: int(s.opts.MaxOutputBytes)})
 				if err != nil || xml.Root == nil || xml.Root.Name.Local != "config" {
 					return errors.Join(ErrCapture, err)
 				}
@@ -104,7 +104,7 @@ func (s *Session) Read(ctx context.Context, view device.View) (capture device.Ca
 		if strings.TrimSpace(capture.Source.Text) == "" || !utf8.ValidString(capture.Source.Text) {
 			return ErrCapture
 		}
-		if int64(len(capture.Source.Text)) > s.options.MaxOutputBytes {
+		if int64(len(capture.Source.Text)) > s.opts.MaxOutputBytes {
 			return ErrLimit
 		}
 		capture.Source.Complete = true
@@ -133,7 +133,7 @@ func (b *responseBudget) capture(ctx context.Context, op *connector.Operation, c
 // excluding setup commands and PAN's checks after its configuration-mode show.
 func (s *Session) runningCommand() string {
 	commands := s.device.ConfigCommands()
-	if s.metadata.Vendor == "paloalto" {
+	if s.meta.Vendor == "paloalto" {
 		for _, command := range commands {
 			if command == "show" {
 				return command
@@ -204,15 +204,12 @@ func configBody(text, command, prompt string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.TrimSpace(text)
 	prompt = strings.TrimSpace(prompt)
-	if !strings.Contains(text, "\n") {
-		if text == prompt || text == command {
-			return ""
-		}
-	} else {
-		pos := strings.LastIndexByte(text, '\n')
-		if strings.TrimSpace(text[pos+1:]) == prompt {
-			text = text[:pos]
-		}
+	head, tail, found := strings.CutLast(text, "\n")
+	if !found && (text == prompt || text == command) {
+		return ""
+	}
+	if found && strings.TrimSpace(tail) == prompt {
+		text = head
 	}
 	first, rest, found := strings.Cut(text, "\n")
 	if strings.TrimSpace(first) == command || strings.TrimSpace(first) == prompt+command {

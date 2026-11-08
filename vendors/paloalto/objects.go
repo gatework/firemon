@@ -2,7 +2,6 @@ package paloalto
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"time"
 
@@ -23,10 +22,6 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 	schedules := make(map[string]fm.ScheduleRecord)
 	scheduleKinds := make(map[string]string)
 	local := make(map[string]bool)
-	type serviceDraft struct {
-		protocol string
-		src, dst []flow.Interval
-	}
 	serviceParts := make(map[string]serviceDraft)
 	for _, r := range p.rows {
 		if err := ctx.Err(); err != nil {
@@ -119,21 +114,11 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 				a.Object = object(name, r)
 			}
 			draft := serviceParts[name]
-			if field == "protocol" && len(rest) == 3 && (rest[0] == "tcp" || rest[0] == "udp") {
-				draft.protocol = rest[0]
-				parsed, err := ports(ctx, rest[2])
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			if field == "protocol" {
+				var err error
+				ok, err = draft.field(ctx, rest)
+				if err != nil {
 					return err
-				}
-				if err == nil {
-					switch rest[1] {
-					case "port":
-						draft.dst = parsed
-						ok = true
-					case "source-port":
-						draft.src = parsed
-						ok = true
-					}
 				}
 			} else if field == "description" || field == "tag" {
 				ok = true

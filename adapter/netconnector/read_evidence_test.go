@@ -215,6 +215,9 @@ func TestReadRetainsOnlyMatchingConfigurationCommandEvidence(t *testing.T) {
 		view  device.View
 		want  string
 	}{
+		{"empty-response", readFault{vendor: "asa", command: "show running-config", mode: "eof"}, device.Running, ""},
+		{"nonprompt-response", readFault{vendor: "asa", command: "show running-config", payload: "fw# description", mode: "eof"}, device.Running, "fw# description"},
+		{"nonprompt-last-line", readFault{vendor: "asa", command: "show running-config", payload: "hostname partial\nfw# description", mode: "eof"}, device.Running, "hostname partial\nfw# description"},
 		{"srx-saved", readFault{vendor: "srx", command: "show configuration | display set | no-more", payload: "set interfaces ge-0/0/0 description partial", mode: "eof"}, device.Saved, "set interfaces ge-0/0/0 description partial"},
 		{"fortinet-saved", readFault{vendor: "fortinet", command: "show full-configuration", payload: "config firewall address\nedit partial", mode: "eof"}, device.Saved, "config firewall address\nedit partial"},
 		{"asa-running", readFault{vendor: "asa", command: "show running-config", payload: "interface inside0\n nameif inside", mode: "eof"}, device.Running, "interface inside0\n nameif inside"},

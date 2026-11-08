@@ -1,93 +1,84 @@
 package hillstone
 
 import (
-	"context"
-	"fmt"
 	"slices"
 	"strings"
 
-	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
+	text "github.com/gatework/parser"
 )
 
-// A definition retains all reopenings of one native object in source order.
-type definition struct {
-	kind   string
-	id     fm.ID
-	scope  string
-	blocks []*config.Block
+// scanner uses StoneOS command contexts. Export indentation additionally fences
+// unfamiliar nested blocks, without assigning their children domain semantics.
+type scanner struct {
+	lines   []text.Line
+	indents []int
 }
 
-func (p *parser) definitions(ctx context.Context, kinds ...string) ([]definition, error) {
-	type key struct {
-		kind string
-		id   fm.ID
-	}
-	definitions := []definition{}
-	indexes := make(map[key]int)
-	for _, n := range p.nodes {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if !slices.Contains(kinds, n.block.Kind) {
+func (s *scanner) nested(line config.Statement) bool {
+	indent := indentation(line.Raw)
+	for _, next := range s.lines[line.Span.Last:] {
+		text := strings.TrimSpace(next.Text)
+		if text == "" || strings.HasPrefix(text, "#") || strings.HasPrefix(text, "!") {
 			continue
 		}
-		w := n.block.Header.Words
-		if !namedHeader(w) {
+		return indentation(next.Raw) > indent
+	}
+	return false
+}
+
+func (s *scanner) emptyBlock(line config.Statement) bool {
+	for _, next := range s.lines[line.Span.Last:] {
+		text := strings.TrimSpace(next.Text)
+		if text == "" || strings.HasPrefix(text, "#") || strings.HasPrefix(text, "!") {
 			continue
 		}
-		k := key{kind: n.block.Kind, id: fm.ID(w[1])}
-		if index, exists := indexes[k]; exists {
-			d := &definitions[index]
-			if d.scope != n.scope {
-				return nil, fmt.Errorf(
-					"%w: %s %q reopened in scopes %q and %q",
-					config.ErrSource, d.kind, d.id, d.scope, n.scope,
-				)
-			}
-			d.blocks = append(d.blocks, n.block)
-			continue
-		}
-		indexes[k] = len(definitions)
-		definitions = append(definitions, definition{
-			kind: k.kind, id: k.id, scope: n.scope, blocks: []*config.Block{n.block},
-		})
+		return text == "exit" && indentation(next.Raw) == indentation(line.Raw)
 	}
-	return definitions, ctx.Err()
+	return false
 }
 
-func (d definition) object() fm.Object {
-	return fm.Object{ID: d.id, Name: string(d.id), Scope: d.scope}
-}
-
-func (d definition) walk(
-	ctx context.Context,
-	tx *config.Transaction,
-	o *fm.Object,
-	member func([]string) bool,
-) error {
-	for _, b := range d.blocks {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		tx.Parse(b.Header.Lines()...)
-		o.Spans = append(o.Spans, b.Header.Span)
-		for _, line := range b.Members {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			consume(tx, line, member(line.Words), o)
-		}
-		if b.Complete {
-			tx.Parse(b.End.Lines()...)
+func indentation(raw string) int {
+	n := 0
+	for _, c := range raw {
+		switch c {
+		case ' ':
+			n++
+		case '\t':
+			n += 8 - n%8
+		default:
+			return n
 		}
 	}
-	return ctx.Err()
+	return n
 }
 
-func classify(s config.Statement, path []string) (config.Boundary, string) {
+func (scan *scanner) classify(s config.Statement, path []string) (config.Boundary, string) {
+	boundary, kind := scan.boundary(s, path)
+	switch boundary {
+	case config.OpenBlock:
+		scan.indents = append(scan.indents, indentation(s.Raw))
+	case config.CloseBlock:
+		if len(scan.indents) > 0 {
+			scan.indents = scan.indents[:len(scan.indents)-1]
+		}
+	}
+	return boundary, kind
+}
+
+func (s *scanner) opens(line config.Statement) bool {
+	if s.nested(line) {
+		return true
+	}
+	// A same-indent exit closes an empty child only when the child is deeper
+	// than its parent. Unindented members still belong to their native context.
+	deeper := len(s.indents) == 0 || indentation(line.Raw) > s.indents[len(s.indents)-1]
+	return deeper && s.emptyBlock(line)
+}
+
+func (scan *scanner) boundary(s config.Statement, path []string) (config.Boundary, string) {
 	w := s.Words
-	if len(w) == 0 {
+	if len(w) == 0 || strings.HasPrefix(w[0], "#") || strings.HasPrefix(w[0], "!") || w[0] == "hostname" {
 		return config.Member, ""
 	}
 	if len(w) == 1 && w[0] == "exit" {
@@ -97,12 +88,26 @@ func classify(s config.Statement, path []string) (config.Boundary, string) {
 	if len(path) > 0 {
 		owner = path[len(path)-1]
 	}
-	if owner == "outside" || owner == "unknown" {
+	// Tunnel interface bindings and domain routes are scalar members. Some
+	// exports indent domain-route more deeply without entering another context.
+	if owner == "tunnel" && (w[0] == "interface" || w[0] == "domain-route") {
+		return config.Member, ""
+	}
+	if owner == "outside" || owner == "unknown" || owner == "qos" {
+		if owner == "qos" && (w[0] == "root-pipe" || w[0] == "pipe") {
+			return config.OpenBlock, "qos"
+		}
+		if scan.opens(s) {
+			return config.OpenBlock, "unknown"
+		}
 		return config.Member, ""
 	}
 	if owner != "" && owner != "vrf" && owner != "policy" && owner != "policy-global" {
 		if owner == "pbr-policy" && w[0] == "match" {
 			return config.OpenBlock, "pbr-match"
+		}
+		if scan.opens(s) {
+			return config.OpenBlock, "unknown"
 		}
 		return config.Member, ""
 	}
@@ -119,17 +124,54 @@ func classify(s config.Statement, path []string) (config.Boundary, string) {
 		if len(w) > 1 && w[1] == "vrouter" {
 			return config.OpenBlock, "vrf"
 		}
-	case "admin", "aaa-server", "role", "track", "interface-group", "webauth", "vswitch":
-		return config.OpenBlock, "outside"
+	case "admin":
+		if len(w) == 3 && w[1] == "user" {
+			return config.OpenBlock, "outside"
+		}
+	case "aaa-server", "role":
+		if len(w) == 2 {
+			return config.OpenBlock, "outside"
+		}
+	case "qos-engine":
+		return config.OpenBlock, "qos"
+	case "tunnel":
+		if len(w) >= 3 {
+			return config.OpenBlock, "tunnel"
+		}
+	case "track", "interface-group", "webauth", "vswitch":
+		if len(w) == 2 {
+			return config.OpenBlock, "unknown"
+		}
 	}
-	if strings.HasSuffix(w[0], "-profile") {
-		return config.OpenBlock, "outside"
+	if strings.HasSuffix(w[0], "-profile") && len(w) == 2 {
+		return config.OpenBlock, "unknown"
+	}
+	if scan.opens(s) {
+		return config.OpenBlock, "unknown"
 	}
 	return config.Member, ""
 }
 
 func namedHeader(w []string) bool {
 	return len(w) == 2 && strings.TrimSpace(w[1]) != ""
+}
+
+func definitionHeader(w []string) bool {
+	if namedHeader(w) {
+		return true
+	}
+	if len(w) < 3 || w[1] == "" {
+		return false
+	}
+	switch w[0] {
+	case "zone":
+		return len(w) == 3 && w[2] == "l2"
+	case "interface":
+		return len(w) == 3 && w[2] == "local"
+	case "address":
+		return slices.Equal(w[2:], []string{"predefined"}) || slices.Equal(w[2:], []string{"ipv6"}) || slices.Equal(w[2:], []string{"ipv6", "predefined"})
+	}
+	return false
 }
 
 // Structural scanning keeps malformed wrappers scoped. Interpretation and
@@ -153,92 +195,3 @@ func ruleHeader(w []string) bool {
 	}
 	return namedHeader(w) && w[1] != "id"
 }
-
-func (p *parser) collect(blocks []*config.Block, scope, from, to string) {
-	for _, b := range blocks {
-		w := b.Header.Words
-		switch b.Kind {
-		case "vrf":
-			if contextHeader(b) {
-				p.collect(b.Children, w[2], from, to)
-				for _, line := range b.Members {
-					p.lines = append(p.lines, statement{line, w[2]})
-				}
-			}
-		case "policy":
-			if contextHeader(b) {
-				p.collect(b.Children, scope, w[2], w[4])
-			}
-		case "policy-global":
-			if contextHeader(b) {
-				p.collect(b.Children, scope, "any", "any")
-			}
-		default:
-			p.nodes = append(p.nodes, node{b, scope, from, to})
-		}
-	}
-}
-func (p *parser) structure(ctx context.Context, s *config.Builder) error {
-	tx := s.Begin()
-	tx.Emit(fm.Data{Diagnostics: p.document.Diagnostics})
-	var mark func([]*config.Block)
-	mark = func(blocks []*config.Block) {
-		for _, b := range blocks {
-			switch b.Kind {
-			case "vrf", "policy", "policy-global":
-				if !contextHeader(b) {
-					continue
-				}
-				tx.Parse(b.Header.Lines()...)
-				if b.Complete {
-					tx.Parse(b.End.Lines()...)
-				}
-				mark(b.Children)
-			case "outside":
-				tx.Ignore("native management block outside firewall domain", b.Header.Lines()...)
-				for _, l := range b.Members {
-					tx.Ignore("native management block outside firewall domain", l.Lines()...)
-				}
-				if b.Complete {
-					tx.Ignore("native management block boundary", b.End.Lines()...)
-				}
-			}
-		}
-	}
-	mark(p.document.Roots)
-	for _, row := range p.lines {
-		w := row.line.Words
-		if len(w) == 0 || strings.HasPrefix(w[0], "#") || strings.HasPrefix(w[0], "!") || w[0] == "hostname" {
-			tx.Ignore("comment or device display name", row.line.Lines()...)
-		}
-	}
-	return s.Commit(tx)
-}
-func object(n node) fm.Object {
-	w := n.block.Header.Words
-	id := ""
-	if len(w) > 1 {
-		id = w[1]
-	}
-	if w[0] == "rule" && len(w) > 2 && w[1] == "id" {
-		id = w[2]
-	}
-	return fm.Object{ID: fm.ID(id), Name: id, Scope: n.scope, Spans: []fm.Span{n.block.Header.Span}}
-}
-func begin(s *config.Builder, b *config.Block) *config.Transaction {
-	tx := s.Begin()
-	tx.Parse(b.Header.Lines()...)
-	if b.Complete {
-		tx.Parse(b.End.Lines()...)
-	}
-	return tx
-}
-func consume(tx *config.Transaction, line config.Statement, ok bool, o *fm.Object) {
-	if ok {
-		tx.Parse(line.Lines()...)
-		o.Spans = append(o.Spans, line.Span)
-	} else {
-		o.Unsupported = append(o.Unsupported, strings.TrimSpace(line.Raw))
-	}
-}
-func ancillary(w []string) bool { return len(w) == 0 || w[0] == "description" }
