@@ -115,11 +115,11 @@ func (o *ServiceGroup) Members() iter.Seq[ServiceRef] {
 type Schedule struct {
 	record        ScheduleRecord
 	location      *time.Location
-	known         bool
+	isKnown       bool
 	weeklyWindows int
 }
 
-func (o *Schedule) Record() ScheduleRecord { return o.record.clone() }
+func (s *Schedule) Record() ScheduleRecord { return s.record.clone() }
 
 type Rule struct {
 	record RuleRecord
@@ -232,9 +232,9 @@ func (o *ServiceGroup) ID() ID        { return o.record.ID }
 func (o *ServiceGroup) Name() string  { return o.record.Name }
 func (o *ServiceGroup) Scope() string { return o.record.Scope }
 
-func (o *Schedule) ID() ID        { return o.record.ID }
-func (o *Schedule) Name() string  { return o.record.Name }
-func (o *Schedule) Scope() string { return o.record.Scope }
+func (s *Schedule) ID() ID        { return s.record.ID }
+func (s *Schedule) Name() string  { return s.record.Name }
+func (s *Schedule) Scope() string { return s.record.Scope }
 
 func (o *Rule) ID() ID        { return o.record.ID }
 func (o *Rule) Name() string  { return o.record.Name }
@@ -265,7 +265,7 @@ func (o *Address) HasUnsupported() bool      { return len(o.record.Unsupported) 
 func (o *AddressGroup) HasUnsupported() bool { return len(o.record.Unsupported) != 0 }
 func (o *Service) HasUnsupported() bool      { return len(o.record.Unsupported) != 0 }
 func (o *ServiceGroup) HasUnsupported() bool { return len(o.record.Unsupported) != 0 }
-func (o *Schedule) HasUnsupported() bool     { return len(o.record.Unsupported) != 0 }
+func (s *Schedule) HasUnsupported() bool     { return len(s.record.Unsupported) != 0 }
 func (o *Rule) HasUnsupported() bool         { return len(o.record.Unsupported) != 0 }
 func (o *RuleBinding) HasUnsupported() bool  { return len(o.record.Unsupported) != 0 }
 func (o *StaticNAT) HasUnsupported() bool    { return len(o.record.Unsupported) != 0 }

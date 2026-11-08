@@ -142,6 +142,10 @@ func trimUnreferencedInline(d *Data) {
 	for _, n := range d.DynamicNATs {
 		match(n.Match)
 	}
-	d.Addresses = slices.DeleteFunc(d.Addresses, func(a AddressRecord) bool { return a.Inline && !addresses[a.ID] && len(a.Unsupported) == 0 })
-	d.Services = slices.DeleteFunc(d.Services, func(s ServiceRecord) bool { return s.Inline && !services[s.ID] && len(s.Unsupported) == 0 })
+	// An inline value with unsupported syntax keeps its evidence in the digest.
+	isOrphan := func(o Object, referenced map[ID]bool) bool {
+		return o.Inline && !referenced[o.ID] && len(o.Unsupported) == 0
+	}
+	d.Addresses = slices.DeleteFunc(d.Addresses, func(a AddressRecord) bool { return isOrphan(a.Object, addresses) })
+	d.Services = slices.DeleteFunc(d.Services, func(s ServiceRecord) bool { return isOrphan(s.Object, services) })
 }

@@ -50,6 +50,11 @@ type RuleDecision struct {
 	// Known requires an established match, active schedule and valid action.
 	Known bool
 }
+
+// Result partitions the requested traffic by its established policy outcome.
+// Complete reports that every outcome was established. Any Unknown traffic
+// clears Complete, so a Complete result never carries Unknown traffic; proofs
+// may still check both. Decisions follow native evaluation order.
 type Result struct {
 	Allowed, Denied, Unknown, Unmatched flow.Traffic
 	Decisions                           []RuleDecision

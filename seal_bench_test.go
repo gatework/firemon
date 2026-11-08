@@ -39,7 +39,10 @@ func sealBenchmarkData(n int) fm.Data {
 	var members []fm.AddressRef
 	for i := range n {
 		id := fm.ID(fmt.Sprintf("host-%d", i))
-		d.Addresses = append(d.Addresses, fm.AddressRecord{Object: fm.Object{ID: id}, Ranges: []flow.AddressRange{{First: host(i), Last: host(i)}}})
+		d.Addresses = append(d.Addresses, fm.AddressRecord{
+			Object: fm.Object{ID: id},
+			Ranges: []flow.AddressRange{{First: host(i), Last: host(i)}},
+		})
 		members = append(members, fm.AddressRef{Kind: fm.AddressObject, ID: id})
 		d.Rules = append(d.Rules, fm.RuleRecord{
 			Object:   fm.Object{ID: fm.ID(fmt.Sprintf("rule-%d", i))},
@@ -58,10 +61,10 @@ func sealBenchmarkData(n int) fm.Data {
 	for i := range n / 8 {
 		var mappings []fm.Mapping
 		for j := range 8 {
-			first := host(i*8 + j)
+			original, translated := host(i*8+j), netip.AddrFrom4([4]byte{192, 0, 2, byte(j)})
 			mappings = append(mappings, fm.Mapping{
-				Original:   flow.AddressRange{First: first, Last: first},
-				Translated: flow.AddressRange{First: netip.AddrFrom4([4]byte{192, 0, 2, byte(j)}), Last: netip.AddrFrom4([4]byte{192, 0, 2, byte(j)})},
+				Original:   flow.AddressRange{First: original, Last: original},
+				Translated: flow.AddressRange{First: translated, Last: translated},
 				Mode:       fm.Offset,
 			})
 		}

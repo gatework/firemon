@@ -17,8 +17,14 @@ func TestSemanticDigestLeavesSealedDeclarationIntact(t *testing.T) {
 	input := fm.Data{
 		Metadata: fm.Metadata{Device: "synthetic", Vendor: "huawei"},
 		Addresses: []fm.AddressRecord{
-			{Object: fm.Object{ID: "z-host", Spans: []fm.Span{{First: 9, Last: 9}}}, Ranges: []flow.AddressRange{rng("192.0.2.9", "192.0.2.9")}},
-			{Object: fm.Object{ID: "a-orphan", Inline: true, Spans: []fm.Span{{First: 3, Last: 3}}}, Ranges: []flow.AddressRange{rng("192.0.2.3", "192.0.2.3")}},
+			{
+				Object: fm.Object{ID: "z-host", Spans: []fm.Span{{First: 9, Last: 9}}},
+				Ranges: []flow.AddressRange{rng("192.0.2.9", "192.0.2.9")},
+			},
+			{
+				Object: fm.Object{ID: "a-orphan", Inline: true, Spans: []fm.Span{{First: 3, Last: 3}}},
+				Ranges: []flow.AddressRange{rng("192.0.2.3", "192.0.2.3")},
+			},
 		},
 		Schedules: []fm.ScheduleRecord{{
 			Object:  fm.Object{ID: "window", Spans: []fm.Span{{First: 5, Last: 6}}},

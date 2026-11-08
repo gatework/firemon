@@ -21,7 +21,11 @@ func (f *Firewall) bindVIPReferences() {
 			}
 		}
 		if a.vipStaticNAT == nil && a.vipDynamicNAT == nil {
-			f.issue(r.ID, "invalid-vip-reference", "VIP destination NAT is missing, has the wrong kind, or is outside the native scope")
+			f.issue(
+				r.ID,
+				"invalid-vip-reference",
+				"VIP destination NAT is missing, has the wrong kind, or is outside the native scope",
+			)
 		}
 	}
 	for _, n := range f.StaticNATs() {
@@ -30,12 +34,18 @@ func (f *Firewall) bindVIPReferences() {
 			continue
 		}
 		if r.SourceVIP.Kind == AddressObject {
-			if a := f.addresses[r.SourceVIP.ID]; a != nil && a.record.Scope == r.Scope && (a.vipStaticNAT != nil || a.vipDynamicNAT != nil) {
+			a := f.addresses[r.SourceVIP.ID]
+			isResolvedVIP := a != nil && (a.vipStaticNAT != nil || a.vipDynamicNAT != nil)
+			if isResolvedVIP && a.record.Scope == r.Scope {
 				n.sourceVIP = a
 			}
 		}
 		if n.sourceVIP == nil {
-			f.issue(r.ID, "invalid-source-vip-reference", "source mapping VIP address is missing, has the wrong kind, is unresolved, or is outside the native scope")
+			f.issue(
+				r.ID,
+				"invalid-source-vip-reference",
+				"source mapping VIP address is missing, has the wrong kind, is unresolved, or is outside the native scope",
+			)
 		}
 	}
 }
@@ -147,35 +157,60 @@ func (f *Firewall) bindGroups() {
 	for _, g := range f.ServiceGroups() {
 		g.services, g.groups = f.serviceRefs(g.record.ID, g.record.Members)
 	}
-	reportGroupCycles(f, f.AddressGroups(), func(g *AddressGroup) []*AddressGroup { return g.groups }, "cyclic address group")
-	reportGroupCycles(f, f.ServiceGroups(), func(g *ServiceGroup) []*ServiceGroup { return g.groups }, "cyclic service group")
+	reportGroupCycles(
+		f,
+		f.AddressGroups(),
+		func(g *AddressGroup) []*AddressGroup { return g.groups },
+		"cyclic address group",
+	)
+	reportGroupCycles(
+		f,
+		f.ServiceGroups(),
+		func(g *ServiceGroup) []*ServiceGroup { return g.groups },
+		"cyclic service group",
+	)
 }
 
 // reportGroupCycles reports each group reached again while its own members are
-// being visited. Groups are visited in declaration order.
+// being visited. Groups are visited depth-first in declaration order. The walk
+// keeps its path on an explicit stack, so nesting depth costs heap, not
+// goroutine stack, and a deeply nested declaration cannot exhaust the stack.
 func reportGroupCycles[G interface{ ID() ID }](f *Firewall, groups []G, children func(G) []G, message string) {
 	const (
 		visiting = iota + 1
 		visited
 	)
-	states := make(map[ID]uint8)
-	var visit func(G)
-	visit = func(g G) {
-		switch states[g.ID()] {
-		case visiting:
-			f.issue(g.ID(), "group-cycle", message)
-			return
-		case visited:
-			return
-		}
-		states[g.ID()] = visiting
-		for _, child := range children(g) {
-			visit(child)
-		}
-		states[g.ID()] = visited
+	type frame struct {
+		group G
+		next  int
 	}
-	for _, g := range groups {
-		visit(g)
+	states := make(map[ID]uint8)
+	var path []frame
+	for _, root := range groups {
+		if states[root.ID()] != 0 {
+			continue
+		}
+		states[root.ID()] = visiting
+		path = append(path, frame{group: root})
+		for len(path) > 0 {
+			top := &path[len(path)-1]
+			members := children(top.group)
+			if top.next == len(members) {
+				states[top.group.ID()] = visited
+				path = path[:len(path)-1]
+				continue
+			}
+			child := members[top.next]
+			top.next++
+			switch states[child.ID()] {
+			case visiting:
+				f.issue(child.ID(), "group-cycle", message)
+			case visited:
+			default:
+				states[child.ID()] = visiting
+				path = append(path, frame{group: child})
+			}
+		}
 	}
 }
 

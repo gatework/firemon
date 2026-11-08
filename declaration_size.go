@@ -17,7 +17,16 @@ func (c *declarationCounter) add(counts ...int) {
 
 func (c *declarationCounter) object(o Object) { c.add(1, len(o.Spans), len(o.Unsupported)) }
 func (c *declarationCounter) match(m Match) {
-	c.add(len(m.Sources), len(m.Destinations), len(m.Services), len(m.FromZones), len(m.ToZones), len(m.Applications), len(m.Users), len(m.Unsupported))
+	c.add(
+		len(m.Sources),
+		len(m.Destinations),
+		len(m.Services),
+		len(m.FromZones),
+		len(m.ToZones),
+		len(m.Applications),
+		len(m.Users),
+		len(m.Unsupported),
+	)
 }
 
 func declarationSize(d Data) int {
@@ -68,7 +77,12 @@ func declarationSize(d Data) int {
 	for _, r := range d.StaticNATs {
 		count.object(r.Object)
 		count.match(r.Match)
-		count.add(len(r.Source), len(r.Destination), len(r.SourcePorts), len(r.DestinationPorts))
+		count.add(
+			len(r.Source),
+			len(r.Destination),
+			len(r.SourcePorts),
+			len(r.DestinationPorts),
+		)
 	}
 	for _, r := range d.DynamicNATs {
 		count.object(r.Object)

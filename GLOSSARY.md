@@ -28,6 +28,13 @@ rendered commands and evidence for its intent. It still requires authorization,
 a fresh baseline and independent readback before execution can succeed.
 _Avoid_: approved script, executable report
 
+**Change-safety proof**:
+The evidence within a proven plan that a candidate change provides its intended
+target behavior while all traffic outside the target keeps its baseline
+ownership, with no incomplete or unknown evaluation. Full equivalence of an
+unchanged policy is a different obligation.
+_Avoid_: verification, safety check, equivalence proof
+
 **Approval digest**:
 The identifier of the exact planning result presented for approval, using the
 intent family's established encoding. It is distinct from reconstruction and

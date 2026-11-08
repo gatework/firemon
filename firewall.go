@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-var ErrGraph = errors.New("invalid firewall graph")
+var ErrGraph = errors.New("firemon: invalid firewall graph")
 
 type Firewall struct {
 	data            Data
@@ -122,7 +122,11 @@ func (f *Firewall) Raw() string { return f.data.Raw }
 // materializing their views. It counts records, not bytes or nested members.
 func (f *Firewall) RecordCount() int {
 	d := &f.data
-	return len(d.Zones) + len(d.Interfaces) + len(d.Routes) + len(d.Addresses) + len(d.AddressGroups) + len(d.Services) + len(d.ServiceGroups) + len(d.Schedules) + len(d.Rules) + len(d.RuleBindings) + len(d.StaticNATs) + len(d.DynamicNATs) + len(d.NATPools) + len(d.Evidence) + len(d.Diagnostics)
+	domain := len(d.Zones) + len(d.Interfaces) + len(d.Routes) +
+		len(d.Addresses) + len(d.AddressGroups) + len(d.Services) + len(d.ServiceGroups) +
+		len(d.Schedules) + len(d.Rules) + len(d.RuleBindings) +
+		len(d.StaticNATs) + len(d.DynamicNATs) + len(d.NATPools)
+	return domain + len(d.Evidence) + len(d.Diagnostics)
 }
 
 // DeclarationSize counts records and nested structural elements without

@@ -14,10 +14,10 @@ import (
 
 func insertUnique[T any](m map[ID]*T, id ID, v *T) error {
 	if strings.TrimSpace(string(id)) == "" {
-		return fmt.Errorf("%w: empty object ID", ErrGraph)
+		return fmt.Errorf("%w: empty object id", ErrGraph)
 	}
 	if _, ok := m[id]; ok {
-		return fmt.Errorf("%w: duplicate ID %q", ErrGraph, id)
+		return fmt.Errorf("%w: duplicate id %q", ErrGraph, id)
 	}
 	m[id] = v
 	return nil
@@ -86,43 +86,78 @@ func verifySource(data *Data) error {
 // structural error and the unsupported diagnostics are deterministic.
 func (f *Firewall) indexCatalogs() error {
 	var err error
-	if f.zones, err = indexCatalog(f, f.data.Zones, func(r ZoneRecord) Zone { return Zone{record: r} }); err != nil {
+	f.zones, err = indexCatalog(f, f.data.Zones, func(r ZoneRecord) Zone {
+		return Zone{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	if f.interfaces, err = indexCatalog(f, f.data.Interfaces, func(r InterfaceRecord) Interface { return Interface{record: r} }); err != nil {
+	f.interfaces, err = indexCatalog(f, f.data.Interfaces, func(r InterfaceRecord) Interface {
+		return Interface{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	if f.routes, err = indexCatalog(f, f.data.Routes, func(r RouteRecord) Route { return Route{record: r} }); err != nil {
+	f.routes, err = indexCatalog(f, f.data.Routes, func(r RouteRecord) Route {
+		return Route{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	if f.addresses, err = indexCatalog(f, f.data.Addresses, func(r AddressRecord) Address { return Address{record: r} }); err != nil {
+	f.addresses, err = indexCatalog(f, f.data.Addresses, func(r AddressRecord) Address {
+		return Address{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	if f.addressGroups, err = indexCatalog(f, f.data.AddressGroups, func(r AddressGroupRecord) AddressGroup { return AddressGroup{record: r} }); err != nil {
+	f.addressGroups, err = indexCatalog(f, f.data.AddressGroups, func(r AddressGroupRecord) AddressGroup {
+		return AddressGroup{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	if f.services, err = indexCatalog(f, f.data.Services, func(r ServiceRecord) Service { return Service{record: r} }); err != nil {
+	f.services, err = indexCatalog(f, f.data.Services, func(r ServiceRecord) Service {
+		return Service{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	if f.serviceGroups, err = indexCatalog(f, f.data.ServiceGroups, func(r ServiceGroupRecord) ServiceGroup { return ServiceGroup{record: r} }); err != nil {
+	f.serviceGroups, err = indexCatalog(f, f.data.ServiceGroups, func(r ServiceGroupRecord) ServiceGroup {
+		return ServiceGroup{record: r}
+	})
+	if err != nil {
 		return err
 	}
 	if err = f.indexSchedules(); err != nil {
 		return err
 	}
-	if f.rules, err = indexCatalog(f, f.data.Rules, func(r RuleRecord) Rule { return Rule{record: r} }); err != nil {
+	f.rules, err = indexCatalog(f, f.data.Rules, func(r RuleRecord) Rule {
+		return Rule{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	if f.ruleBindings, err = indexCatalog(f, f.data.RuleBindings, func(r RuleBindingRecord) RuleBinding { return RuleBinding{record: r} }); err != nil {
+	f.ruleBindings, err = indexCatalog(f, f.data.RuleBindings, func(r RuleBindingRecord) RuleBinding {
+		return RuleBinding{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	if f.staticNATs, err = indexCatalog(f, f.data.StaticNATs, func(r StaticNATRecord) StaticNAT { return StaticNAT{record: r} }); err != nil {
+	f.staticNATs, err = indexCatalog(f, f.data.StaticNATs, func(r StaticNATRecord) StaticNAT {
+		return StaticNAT{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	if f.dynamicNATs, err = indexCatalog(f, f.data.DynamicNATs, func(r DynamicNATRecord) DynamicNAT { return DynamicNAT{record: r} }); err != nil {
+	f.dynamicNATs, err = indexCatalog(f, f.data.DynamicNATs, func(r DynamicNATRecord) DynamicNAT {
+		return DynamicNAT{record: r}
+	})
+	if err != nil {
 		return err
 	}
-	f.natPools, err = indexCatalog(f, f.data.NATPools, func(r NATPoolRecord) NATPool { return NATPool{record: r} })
+	f.natPools, err = indexCatalog(f, f.data.NATPools, func(r NATPoolRecord) NATPool {
+		return NATPool{record: r}
+	})
 	return err
 }
 
@@ -138,11 +173,11 @@ func (f *Firewall) indexSchedules() error {
 		}
 		r.Weekly = normalizeWeeklyPeriods(r.Weekly)
 		s := &schedules[i]
-		*s = Schedule{record: *r, known: r.Validate() == nil}
+		*s = Schedule{record: *r, isKnown: r.Validate() == nil}
 		for _, period := range r.Weekly {
 			s.weeklyWindows += len(period.Windows)
 		}
-		if s.known && r.HasRecurrence() {
+		if s.isKnown && r.HasRecurrence() {
 			s.location, _ = scheduleLocation(r.Timezone)
 		}
 		if err := insertUnique(f.schedules, r.ID, s); err != nil {
@@ -226,7 +261,7 @@ func (f *Firewall) bindPolicies() error {
 		}
 	}
 	for _, s := range f.Schedules() {
-		if !s.known && len(s.record.Unsupported) == 0 {
+		if !s.isKnown && len(s.record.Unsupported) == 0 {
 			f.issue(s.record.ID, "unknown-schedule", "schedule intervals or civil calendar evidence are missing")
 		}
 	}
@@ -243,7 +278,9 @@ func (f *Firewall) bindPolicies() error {
 	for _, b := range f.RuleBindings() {
 		b.iface = f.interfaces[b.record.Interface]
 		b.zone = f.zones[b.record.Zone]
-		if b.record.Interface != "" && b.iface == nil || b.record.Zone != "" && b.zone == nil {
+		hasMissingInterface := b.record.Interface != "" && b.iface == nil
+		hasMissingZone := b.record.Zone != "" && b.zone == nil
+		if hasMissingInterface || hasMissingZone {
 			f.issue(b.record.ID, "missing-binding", "unresolved rule binding")
 		}
 	}
@@ -305,13 +342,19 @@ func (f *Firewall) bindDynamicNAT(n *DynamicNAT) error {
 		if n.rule == nil {
 			f.issue(r.ID, "missing-rule", string(r.Rule))
 		} else if !ownsDynamicNAT(n.rule.record, r) {
-			f.issue(r.ID, "policy-nat-mismatch", "translation must retain its owning permit policy's complete match and state")
+			f.issue(
+				r.ID,
+				"policy-nat-mismatch",
+				"translation must retain its owning permit policy's complete match and state",
+			)
 		}
 	}
 	n.sourcePool = f.natPools[r.SourcePool]
 	n.destinationPool = f.natPools[r.DestinationPool]
 	n.iface = f.interfaces[r.Interface]
-	if r.SourcePool != "" && n.sourcePool == nil || r.DestinationPool != "" && n.destinationPool == nil {
+	hasMissingSourcePool := r.SourcePool != "" && n.sourcePool == nil
+	hasMissingDestinationPool := r.DestinationPool != "" && n.destinationPool == nil
+	if hasMissingSourcePool || hasMissingDestinationPool {
 		f.issue(r.ID, "missing-pool", "unresolved dynamic NAT pool")
 	}
 	if r.Interface != "" && n.iface == nil {
@@ -328,7 +371,11 @@ func (f *Firewall) bindDynamicNAT(n *DynamicNAT) error {
 		f.issue(r.ID, "missing-allocation", "interface translation has no interface")
 	}
 	if r.InterfaceAddress.IsValid() && !n.selectsKnownInterfaceHost() {
-		f.issue(r.ID, "invalid-interface-selection", "selected NAT source must be one known host assigned to its allocation interface")
+		f.issue(
+			r.ID,
+			"invalid-interface-selection",
+			"selected NAT source must be one known host assigned to its allocation interface",
+		)
 	}
 	isDestinationTranslated := r.DestinationMode != NoTranslation && r.DestinationMode != UnknownTranslation
 	if isDestinationTranslated && n.destinationPool == nil && len(r.Destination) == 0 {
@@ -351,21 +398,25 @@ func (f *Firewall) bindDynamicNAT(n *DynamicNAT) error {
 // ownsDynamicNAT reports whether a policy-based translation retains its owning
 // permit policy's complete match and state.
 func ownsDynamicNAT(owner RuleRecord, n DynamicNATRecord) bool {
-	return sameMatch(owner.Match, n.Match) && owner.Scope == n.Scope && owner.Disabled == n.Disabled && owner.Action == Permit
+	isSameState := owner.Scope == n.Scope && owner.Disabled == n.Disabled
+	return owner.Action == Permit && isSameState && sameMatch(owner.Match, n.Match)
 }
 
 // selectsKnownInterfaceHost reports whether the selected InterfaceIP source is
 // one specific host assigned to an enabled, fully modeled allocation interface.
-func (n *DynamicNAT) selectsKnownInterfaceHost() bool {
-	r := n.record
+func (o *DynamicNAT) selectsKnownInterfaceHost() bool {
+	r := o.record
 	addr := r.InterfaceAddress
-	if r.SourceMode != InterfaceIP || r.SourcePool != "" || n.iface == nil || addr.Zone() != "" || addr.IsUnspecified() {
+	isInterfaceAllocation := r.SourceMode == InterfaceIP && r.SourcePool == "" && o.iface != nil
+	isSpecificHost := addr.Zone() == "" && !addr.IsUnspecified()
+	if !isInterfaceAllocation || !isSpecificHost {
 		return false
 	}
-	iface := n.iface.record
-	return !iface.Disabled && len(iface.Unsupported) == 0 && slices.ContainsFunc(iface.Addresses, func(prefix netip.Prefix) bool {
-		return prefix.Addr() == addr
-	})
+	iface := o.iface.record
+	if iface.Disabled || len(iface.Unsupported) != 0 {
+		return false
+	}
+	return slices.ContainsFunc(iface.Addresses, func(prefix netip.Prefix) bool { return prefix.Addr() == addr })
 }
 
 // order fixes NAT execution order and native rule evaluation order.

@@ -1,6 +1,8 @@
 package firemon_test
 
 import (
+	"fmt"
+	"runtime/debug"
 	"slices"
 	"testing"
 
@@ -39,5 +41,29 @@ func TestGroupCyclesAreReportedOnceAtTheirReentryGroup(t *testing.T) {
 	}
 	if fw.Complete() {
 		t.Fatal("cyclic groups must leave the graph incomplete")
+	}
+}
+
+// Nesting depth is attacker-controlled through snapshots and captures, so the
+// cycle walk must not grow the goroutine stack with it: exceeding the stack
+// limit is a fatal error that no caller can recover from.
+func TestDeepGroupNestingDoesNotGrowTheStack(t *testing.T) {
+	const depth = 200_000
+	defer debug.SetMaxStack(debug.SetMaxStack(4 << 20))
+	d := fm.Data{Metadata: fm.Metadata{Device: "synthetic", Vendor: "huawei"}}
+	for i := range depth {
+		next := fm.ID(fmt.Sprint((i + 1) % depth))
+		d.AddressGroups = append(d.AddressGroups, fm.AddressGroupRecord{
+			Object:  fm.Object{ID: fm.ID(fmt.Sprint(i))},
+			Members: []fm.AddressRef{{Kind: fm.AddressGroupObject, ID: next}},
+		})
+	}
+	fw, err := fm.Seal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []fm.Diagnostic{{Code: "group-cycle", Object: "0", Message: "cyclic address group"}}
+	if got := fw.Diagnostics(); !slices.Equal(got, expected) {
+		t.Fatalf("got %d diagnostics %v, expected %v", len(got), got[:min(len(got), 3)], expected)
 	}
 }
