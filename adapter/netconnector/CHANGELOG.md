@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.2.0 - 2026-11-08
+
+Requires Go 1.27 or newer. This development release removes vendor aliases;
+callers must use the seven canonical names documented in [README](README.md).
+
+- Pin published Firemon core v0.2.0; retain go-net-connector v0.2.0 and
+  go-expect v0.4.0 without local replacements or vendored dependency source.
+- Map canonical Firemon names to connector profiles internally, preserving host
+  metadata and rejecting legacy aliases before dialing.
+- Decode verified UTF-8/GBK/GB18030 response history without terminal repainting.
+  Earlier save rejections remain visible, while verified prompt names are kept
+  outside persistence evidence.
+- Require a complete, unambiguous Fortinet automatic-save setting. Treat ordinary
+  configuration values containing error words as data; reject malformed,
+  conflicting or unsupported save evidence.
+
+Validation uses synthetic captures and simulated sessions. No real-device
+acceptance or unrestricted firmware interoperability is claimed.
+
 ## v0.1.0 - 2026-11-07
 
 First versioned release of `github.com/gatework/firemon/adapter/netconnector`,
