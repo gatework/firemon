@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/netip"
-	"slices"
 
 	"github.com/gatework/firemon/flow"
 )
@@ -13,9 +12,11 @@ func (f *Firewall) validateMatch(owner ID, m Match) {
 	if m.ZoneRelation != AnyZoneRelation && m.ZoneRelation != SameZone && m.ZoneRelation != DifferentZones {
 		f.issue(owner, "unsupported-match", "unknown zone relation")
 	}
-	for _, id := range append(slices.Clone(m.FromZones), m.ToZones...) {
-		if f.zones[id] == nil {
-			f.issue(owner, "missing-zone", string(id))
+	for _, zones := range [][]ID{m.FromZones, m.ToZones} {
+		for _, id := range zones {
+			if f.zones[id] == nil {
+				f.issue(owner, "missing-zone", string(id))
+			}
 		}
 	}
 	for _, reason := range m.Unsupported {

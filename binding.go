@@ -40,7 +40,7 @@ func (f *Firewall) bindVIPReferences() {
 	}
 }
 
-func (f *Firewall) bindRoute(r *Route) error {
+func (f *Firewall) bindRoute(r *Route, interfaces []*Interface) error {
 	if !r.record.Destination.IsValid() {
 		return fmt.Errorf("%w: invalid route prefix", ErrGraph)
 	}
@@ -52,30 +52,8 @@ func (f *Firewall) bindRoute(r *Route) error {
 			f.issue(r.record.ID, "missing-interface", "route interface missing or outside VRF")
 		}
 	} else if r.record.NextHop.IsValid() {
-		best := -1
-		var matches []*Interface
-		for _, i := range f.Interfaces() {
-			if i.record.Scope != r.record.Scope || i.record.Disabled {
-				continue
-			}
-			local := -1
-			for _, p := range i.record.Addresses {
-				if p.Contains(r.record.NextHop) && p.Bits() > local {
-					local = p.Bits()
-				}
-			}
-			if local < 0 {
-				continue
-			}
-			if local > best {
-				best = local
-				matches = []*Interface{i}
-			} else if local == best {
-				matches = append(matches, i)
-			}
-		}
-		if len(matches) == 1 {
-			r.iface = matches[0]
+		if i := uniqueNextHopInterface(r.record, interfaces); i != nil {
+			r.iface = i
 		} else {
 			f.issue(r.record.ID, "unresolved-route", "next hop has no unique longest-prefix interface")
 		}
@@ -86,6 +64,36 @@ func (f *Firewall) bindRoute(r *Route) error {
 		r.iface.routes = append(r.iface.routes, r)
 	}
 	return nil
+}
+
+// uniqueNextHopInterface returns the one enabled interface in the route's scope
+// whose longest connected prefix contains the next hop, or nil when no
+// interface or more than one interface has that longest prefix.
+func uniqueNextHopInterface(route RouteRecord, interfaces []*Interface) *Interface {
+	best, ties := -1, 0
+	var match *Interface
+	for _, i := range interfaces {
+		if i.record.Scope != route.Scope || i.record.Disabled {
+			continue
+		}
+		local := -1
+		for _, p := range i.record.Addresses {
+			if p.Contains(route.NextHop) && p.Bits() > local {
+				local = p.Bits()
+			}
+		}
+		switch {
+		case local < 0:
+		case local > best:
+			best, ties, match = local, 1, i
+		case local == best:
+			ties++
+		}
+	}
+	if ties != 1 {
+		return nil
+	}
+	return match
 }
 
 func (f *Firewall) addressRefs(owner ID, refs []AddressRef) (as []*Address, gs []*AddressGroup) {

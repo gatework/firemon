@@ -24,12 +24,15 @@ func insertUnique[T any](m map[ID]*T, id ID, v *T) error {
 }
 
 // indexCatalog registers one sealed object per record in declaration order and
-// reports each unsupported declaration as it is registered.
-func indexCatalog[R any, P catalogRecord[R], T any](f *Firewall, records []R, view func(R) *T) (map[ID]*T, error) {
-	index := make(map[ID]*T)
+// reports each unsupported declaration as it is registered. A catalog's
+// objects share one allocation; they live exactly as long as the firewall.
+func indexCatalog[R any, P catalogRecord[R], T any](f *Firewall, records []R, view func(R) T) (map[ID]*T, error) {
+	index := make(map[ID]*T, len(records))
+	objects := make([]T, len(records))
 	for i := range records {
 		o := P(&records[i]).object()
-		if err := insertUnique(index, o.ID, view(records[i])); err != nil {
+		objects[i] = view(records[i])
+		if err := insertUnique(index, o.ID, &objects[i]); err != nil {
 			return nil, err
 		}
 		f.unsupported(*o)
@@ -83,57 +86,59 @@ func verifySource(data *Data) error {
 // structural error and the unsupported diagnostics are deterministic.
 func (f *Firewall) indexCatalogs() error {
 	var err error
-	if f.zones, err = indexCatalog(f, f.data.Zones, func(r ZoneRecord) *Zone { return &Zone{record: r} }); err != nil {
+	if f.zones, err = indexCatalog(f, f.data.Zones, func(r ZoneRecord) Zone { return Zone{record: r} }); err != nil {
 		return err
 	}
-	if f.interfaces, err = indexCatalog(f, f.data.Interfaces, func(r InterfaceRecord) *Interface { return &Interface{record: r} }); err != nil {
+	if f.interfaces, err = indexCatalog(f, f.data.Interfaces, func(r InterfaceRecord) Interface { return Interface{record: r} }); err != nil {
 		return err
 	}
-	if f.routes, err = indexCatalog(f, f.data.Routes, func(r RouteRecord) *Route { return &Route{record: r} }); err != nil {
+	if f.routes, err = indexCatalog(f, f.data.Routes, func(r RouteRecord) Route { return Route{record: r} }); err != nil {
 		return err
 	}
-	if f.addresses, err = indexCatalog(f, f.data.Addresses, func(r AddressRecord) *Address { return &Address{record: r} }); err != nil {
+	if f.addresses, err = indexCatalog(f, f.data.Addresses, func(r AddressRecord) Address { return Address{record: r} }); err != nil {
 		return err
 	}
-	if f.addressGroups, err = indexCatalog(f, f.data.AddressGroups, func(r AddressGroupRecord) *AddressGroup { return &AddressGroup{record: r} }); err != nil {
+	if f.addressGroups, err = indexCatalog(f, f.data.AddressGroups, func(r AddressGroupRecord) AddressGroup { return AddressGroup{record: r} }); err != nil {
 		return err
 	}
-	if f.services, err = indexCatalog(f, f.data.Services, func(r ServiceRecord) *Service { return &Service{record: r} }); err != nil {
+	if f.services, err = indexCatalog(f, f.data.Services, func(r ServiceRecord) Service { return Service{record: r} }); err != nil {
 		return err
 	}
-	if f.serviceGroups, err = indexCatalog(f, f.data.ServiceGroups, func(r ServiceGroupRecord) *ServiceGroup { return &ServiceGroup{record: r} }); err != nil {
+	if f.serviceGroups, err = indexCatalog(f, f.data.ServiceGroups, func(r ServiceGroupRecord) ServiceGroup { return ServiceGroup{record: r} }); err != nil {
 		return err
 	}
 	if err = f.indexSchedules(); err != nil {
 		return err
 	}
-	if f.rules, err = indexCatalog(f, f.data.Rules, func(r RuleRecord) *Rule { return &Rule{record: r} }); err != nil {
+	if f.rules, err = indexCatalog(f, f.data.Rules, func(r RuleRecord) Rule { return Rule{record: r} }); err != nil {
 		return err
 	}
-	if f.ruleBindings, err = indexCatalog(f, f.data.RuleBindings, func(r RuleBindingRecord) *RuleBinding { return &RuleBinding{record: r} }); err != nil {
+	if f.ruleBindings, err = indexCatalog(f, f.data.RuleBindings, func(r RuleBindingRecord) RuleBinding { return RuleBinding{record: r} }); err != nil {
 		return err
 	}
-	if f.staticNATs, err = indexCatalog(f, f.data.StaticNATs, func(r StaticNATRecord) *StaticNAT { return &StaticNAT{record: r} }); err != nil {
+	if f.staticNATs, err = indexCatalog(f, f.data.StaticNATs, func(r StaticNATRecord) StaticNAT { return StaticNAT{record: r} }); err != nil {
 		return err
 	}
-	if f.dynamicNATs, err = indexCatalog(f, f.data.DynamicNATs, func(r DynamicNATRecord) *DynamicNAT { return &DynamicNAT{record: r} }); err != nil {
+	if f.dynamicNATs, err = indexCatalog(f, f.data.DynamicNATs, func(r DynamicNATRecord) DynamicNAT { return DynamicNAT{record: r} }); err != nil {
 		return err
 	}
-	f.natPools, err = indexCatalog(f, f.data.NATPools, func(r NATPoolRecord) *NATPool { return &NATPool{record: r} })
+	f.natPools, err = indexCatalog(f, f.data.NATPools, func(r NATPoolRecord) NATPool { return NATPool{record: r} })
 	return err
 }
 
 // indexSchedules normalizes each owned schedule record in place before it is
 // registered; a malformed interval fails before its identity is checked.
 func (f *Firewall) indexSchedules() error {
-	f.schedules = make(map[ID]*Schedule)
+	f.schedules = make(map[ID]*Schedule, len(f.data.Schedules))
+	schedules := make([]Schedule, len(f.data.Schedules))
 	for i := range f.data.Schedules {
 		r := &f.data.Schedules[i]
 		if err := r.validateShape(); err != nil {
 			return fmt.Errorf("%w: schedule interval", ErrGraph)
 		}
 		r.Weekly = normalizeWeeklyPeriods(r.Weekly)
-		s := &Schedule{record: *r, known: r.Validate() == nil}
+		s := &schedules[i]
+		*s = Schedule{record: *r, known: r.Validate() == nil}
 		for _, period := range r.Weekly {
 			s.weeklyWindows += len(period.Windows)
 		}
@@ -183,8 +188,9 @@ func (f *Firewall) bindAddressing() error {
 			return err
 		}
 	}
+	interfaces := f.Interfaces()
 	for _, r := range f.Routes() {
-		if err := f.bindRoute(r); err != nil {
+		if err := f.bindRoute(r, interfaces); err != nil {
 			return err
 		}
 	}
@@ -281,8 +287,10 @@ func (f *Firewall) bindStaticNAT(n *StaticNAT) error {
 			return err
 		}
 	}
-	if err := f.validatePorts(r.ID, append(slices.Clone(r.SourcePorts), r.DestinationPorts...)); err != nil {
-		return err
+	for _, ports := range [][]PortMapping{r.SourcePorts, r.DestinationPorts} {
+		if err := f.validatePorts(r.ID, ports); err != nil {
+			return err
+		}
 	}
 	f.validateMatch(r.ID, r.Match)
 	n.match = f.matchObjects(r.ID, r.Match)
@@ -329,8 +337,10 @@ func (f *Firewall) bindDynamicNAT(n *DynamicNAT) error {
 	if err := f.validateMappings(r.ID, r.Destination); err != nil {
 		return err
 	}
-	if err := f.validatePorts(r.ID, append(slices.Clone(r.SourcePorts), r.DestinationPorts...)); err != nil {
-		return err
+	for _, ports := range [][]PortMapping{r.SourcePorts, r.DestinationPorts} {
+		if err := f.validatePorts(r.ID, ports); err != nil {
+			return err
+		}
 	}
 	f.validateMatch(r.ID, r.Match)
 	n.match = f.matchObjects(r.ID, r.Match)

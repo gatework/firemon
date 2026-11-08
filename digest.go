@@ -5,13 +5,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"slices"
 	"sort"
 	"time"
 )
 
+// semanticDigest hashes the canonical declaration. It copies only record
+// slices: canonicalization replaces record fields, reorders and trims records,
+// and normalizes schedule windows, while every other nested value is read-only.
 func semanticDigest(d Data) (string, error) {
-	d = d.Clone()
+	d = d.recordCopy()
 	trimUnreferencedInline(&d)
 	d.Raw = ""
 	d.Evidence = nil
@@ -26,7 +30,7 @@ func semanticDigest(d Data) (string, error) {
 	canonicalRecords(d.Services)
 	canonicalRecords(d.ServiceGroups)
 	for i := range d.Schedules {
-		d.Schedules[i].Windows = normalizeWindows(d.Schedules[i].Windows)
+		d.Schedules[i].Windows = normalizeWindows(slices.Clone(d.Schedules[i].Windows))
 	}
 	canonicalRecords(d.Schedules)
 	canonicalRecords(d.Rules)
@@ -34,12 +38,31 @@ func semanticDigest(d Data) (string, error) {
 	canonicalRecords(d.StaticNATs)
 	canonicalRecords(d.DynamicNATs)
 	canonicalRecords(d.NATPools)
-	b, err := json.Marshal(d)
-	if err != nil {
+	// Streaming with the v1 defaults hashes exactly the bytes of json.Marshal.
+	h := sha256.New()
+	if err := jsonv2.MarshalWrite(h, d, json.DefaultOptionsV1()); err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:]), nil
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// recordCopy copies each top-level catalog slice and shares all nested values,
+// including evidence and diagnostics, which digesting discards.
+func (d Data) recordCopy() Data {
+	d.Zones = slices.Clone(d.Zones)
+	d.Interfaces = slices.Clone(d.Interfaces)
+	d.Routes = slices.Clone(d.Routes)
+	d.Addresses = slices.Clone(d.Addresses)
+	d.AddressGroups = slices.Clone(d.AddressGroups)
+	d.Services = slices.Clone(d.Services)
+	d.ServiceGroups = slices.Clone(d.ServiceGroups)
+	d.Schedules = slices.Clone(d.Schedules)
+	d.Rules = slices.Clone(d.Rules)
+	d.RuleBindings = slices.Clone(d.RuleBindings)
+	d.StaticNATs = slices.Clone(d.StaticNATs)
+	d.DynamicNATs = slices.Clone(d.DynamicNATs)
+	d.NATPools = slices.Clone(d.NATPools)
+	return d
 }
 
 // normalizeWindows converts absolute windows to UTC and merges overlapping or
