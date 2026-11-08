@@ -2,7 +2,20 @@
 
 This separate module implements `operations.ReadOnlyFactory`, `device.Reader`, `deploy.Factory` and `deploy.Session` contracts for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA using published `github.com/gatework/go-net-connector v0.2.0` and `github.com/gatework/go-expect v0.4.0`. The root module remains independent of the connector. No dependency source or local `replace` directive is included.
 
-The exact published core version is recorded in [go.mod](go.mod). See the [migration guide](../../docs/refactoring.md#connector-v020) for the connector migration and [integration verification](../../docs/integration-verification.md) for standalone versioned-consumer and current-core evidence.
+Version v0.1.0 requires Go 1.27 or newer and pins Firemon core v0.1.0 in
+[go.mod](go.mod). Install it from an application without a local workspace or
+replace directive:
+
+```sh
+go get github.com/gatework/firemon/adapter/netconnector@v0.1.0
+```
+
+This nested module uses the repository tag `adapter/netconnector/v0.1.0`;
+the root module uses `v0.1.0`. See the
+[migration guide](../../docs/refactoring.md#connector-v020) and
+[integration verification](../../docs/integration-verification.md) for connector
+contracts and standalone/current-core evidence. Releases contain source modules,
+without precompiled CLI binaries.
 
 The host supplies identity, credentials and transport options through `Factory.Resolve`. `Factory.Open` creates a fresh device for each initial connection, independent readback and recovery. `Profile(vendor)` exposes the supported native profile; SRX, Huawei, Hillstone, Fortinet and PAN reuse the pinned connector profiles with narrowly scoped adapter adjustments. ASA and ScreenOS profiles are provided here. `New` transfers ownership of an already constructed device on success; its caller must set bounded transport limits and a validated profile.
 
