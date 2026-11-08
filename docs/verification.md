@@ -2,6 +2,13 @@
 
 This records the requirement audit, independent review and verification of the approved [specification](spec.md), original [plan](plans/go-firewall.md) and subsequent operations remediation. The original core correction was [`49b866f`](https://github.com/gatework/firemon/commit/49b866f6aa3cac32dbcfa355fad7450de15b4bd7). The supported vendor boundary is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. Capability-based implementation does not imply complete native grammar or firmware parity.
 
+## Go 1.27 module update on 2026-11-07
+
+The [current verification record](2026-11-07-go127-verification.md) covers the
+Go 1.27 migration, parser capacity, deployment finalization, snapshot bounds,
+NAT context identity, target batch, native builder and CLI changes. Earlier
+results below describe their original revisions.
+
 ## Operations remediation on 2026-10-29
 
 The user requested execution of the review remediation and uniform cross-vendor

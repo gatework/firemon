@@ -16,7 +16,7 @@ import (
 
 const DefaultMaxBytes int64 = 128 << 20
 const formatVersion uint16 = 1
-const semanticVersion uint16 = 9
+const semanticVersion uint16 = 10
 
 var magic = [8]byte{'F', 'I', 'R', 'E', 'M', 'O', 'N', 0}
 

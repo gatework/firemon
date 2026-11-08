@@ -14,7 +14,7 @@ import (
 
 func parse(t *testing.T, text string) *fm.Firewall {
 	t.Helper()
-	f, err := hillstone.Parse(context.Background(), config.Source{Text: text, Complete: true}, fm.Metadata{Device: "synthetic"})
+	f, err := (hillstone.Parser{}).Parse(context.Background(), config.Source{Text: text, Complete: true}, fm.Metadata{Device: "synthetic"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestEmptyAddressPredeclarationDoesNotShadowActualDefinition(t *testing.T) {
 func TestNATServiceGroupDAGDoesNotDuplicatePortMappings(t *testing.T) {
 	text := "address public\nip 203.0.113.10/32\nexit\naddress private\nip 192.0.2.10/32\nexit\nservice web\ntcp dst-port 443 443\nexit\n"
 	previous := "web"
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		name := fmt.Sprintf("g%d", i)
 		text += fmt.Sprintf("servgroup %s\nservice %s\nservice %s\nexit\n", name, previous, previous)
 		previous = name

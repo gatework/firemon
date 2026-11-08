@@ -2,7 +2,8 @@
 
 `operations.BatchDesigner` produces reviewable per-device plans and independent
 input issues. A report is not an executable import or write authorization.
-The caller explicitly selects `Device`, immutable `Revision`, and `PlanDigest`.
+The caller explicitly selects `Device`, immutable `Revision`, and `PlanDigest`;
+migration also requires its retained `SourceRevision`.
 `NewBatchExecutor(directory, deploymentEngine, snapshotStore)` then provides:
 
 ```go
@@ -40,8 +41,9 @@ pending commands. Recovery makes no Execute/Save calls and never starts an
 unstarted device. Missing original snapshots cause local reconstruction failure;
 other selected devices can still proceed.
 
-`EncodePlan` / `RestorePlan` use strict bounded JSON version 1, algorithm
-`firemon-business-v1`, with a 4 MiB material limit. It stores original baseline
+`plan.EncodeReconstruction` / `operations.RestorePlan` use strict bounded JSON
+version 2, algorithm `firemon-business-v2`, with a 4 MiB material limit.
+It stores original baseline
 revision, metadata, source/semantic digests, all original ordered inputs including
 rejections, effective planner options and expected approval digest. Native inputs
 retain NAT steps, declarations, provenance, packet proof requests, schedule clock
@@ -52,18 +54,26 @@ source or trusts a stored after-graph, commands or proof flags. It reruns full
 planning, rendering and proof and requires the same plan digest.
 
 The `plan` module owns this format independently of report documents.
-`operations.EncodePlan` and `operations.RestorePlan` retain their existing
-interfaces and delegate to it. A host with its own snapshot and renderer adapters
-can use the core interface directly:
+`operations.RestorePlan` loads both retained snapshots when required;
+`operations.EncodePlan` and its error alias were removed. A host with its own
+snapshot and renderer adapters can use the core interface directly:
 
 ```go
-checksum, err := plan.EncodeReconstruction(ctx, writer, revision, original)
+revisions := plan.SnapshotRevisions{Baseline: revision}
+if original.MigrationSource() != nil {
+    revisions.Source = sourceRevision
+}
+checksum, err := plan.EncodeReconstruction(ctx, writer, revisions, original)
 // Retain checksum independently; decoding does not authorize a write.
 material, err := plan.DecodeReconstruction(ctx, reader, checksum)
 // After checking err, load material.Revision() from the immutable snapshot store.
 baseline, err := store.Load(ctx, material.Revision())
+snapshots := plan.ReconstructionSnapshots{Baseline: baseline}
+if material.SourceRevision() != "" {
+    snapshots.Source, err = store.Load(ctx, material.SourceRevision())
+}
 // After checking err, supply a renderer selector with the existing shape.
-rebuilt, err := material.Rebuild(ctx, baseline, vendors.Renderer)
+rebuilt, err := material.Rebuild(ctx, snapshots, vendors.Renderer)
 ```
 
 `DecodeReconstruction` checks the checksum, strict format and input budgets before
@@ -72,9 +82,11 @@ metadata and semantic identity before invoking the selector. Every rebuild runs
 planning and proof again with the saved effective options and checks the approval
 digest. Decoded material is immutable and supports independent concurrent
 rebuilds; nil and zero values cannot be rebuilt. Cancellation takes precedence at
-each core entry point. `operations.ErrReconstruction` aliases
-`plan.ErrReconstruction`; the existing nil-reader error in `RestorePlan` remains
-`operations.ErrInvalid`. The core module imports no snapshot or vendor adapter.
+each core entry point. Callers use `plan.ErrReconstruction`; the nil-reader error
+in `RestorePlan` remains `operations.ErrInvalid`. The core module imports no
+snapshot or vendor adapter. Migration checks source and target metadata and
+semantic identity before selecting a renderer, then reruns the complete closure
+and preservation proof against those exact immutable snapshots.
 
 Material permits at most 100 inputs, 10,000 candidates, 10,000,000 visits, 65,536
 regions and 65,536 combinations; effective original options must fit these
@@ -85,11 +97,10 @@ baseline or changed algorithm output stop reconstruction. Keep the original
 algorithm available across software upgrades; this format does not promise
 silent migration to a future planner.
 
-Policy-batch approval bytes and native permanent approval version 2 remain
-unchanged. Finite native approval is version 3. Reconstruction version 1 is a
-separate transport format. Only `PlanBatch` / `PlanNativeBatch` business plans are
-supported; legacy single-target and lifecycle plans do not retain all required
-original intent and are not reconstructed by guessing defaults.
+Approval version 4 uses explicit access, policy, native, preserve, transfer and
+migration kinds; all retain the inputs needed for reconstruction version 2.
+Preservation candidates are untrusted proposals that must be resealed and proved.
+Old approval bytes and reconstruction versions are not compatibility contracts.
 
 Tests use temporary stores and synthetic sessions with the real deployment
 engine, production renderers and independent native parsers. They cover restart,
@@ -99,5 +110,6 @@ Twenty supported native NAT forms and finite packet intent reconstruct and
 revalidate locally. These checks do not establish real-device acceptance.
 
 See the [planning glossary](../GLOSSARY.md) and
-[intent refactor evidence](intent-verification.md) for ownership and compatibility
-checks.
+[intent refactor evidence](intent-verification.md) for historical ownership checks,
+and the [current implementation report](2026-11-07-domain-improvements.md) for
+the new format and behavior verification.

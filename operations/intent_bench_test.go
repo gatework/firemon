@@ -13,7 +13,7 @@ import (
 // The same benchmark source runs against the frozen and refactored modules.
 // Fixture parsing, snapshot publication and initial proof are outside the loop.
 func BenchmarkIntentLifecycle(b *testing.B) {
-	store, revision, finite := finiteCompatibilityPlan(b)
+	store, revision, finite := finiteReconstructionPlan(b)
 	renderer, err := vendors.Renderer(finite.Before().Metadata().Vendor)
 	if err != nil {
 		b.Fatal(err)
@@ -33,7 +33,7 @@ func BenchmarkIntentLifecycle(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			var material bytes.Buffer
-			sum, err := operations.EncodePlan(b.Context(), &material, revision, tc.p)
+			sum, err := plan.EncodeReconstruction(b.Context(), &material, plan.SnapshotRevisions{Baseline: revision}, tc.p)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -54,7 +54,7 @@ func BenchmarkIntentLifecycle(b *testing.B) {
 			b.Run("Encode", func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
-					got, err := operations.EncodePlan(b.Context(), io.Discard, revision, tc.p)
+					got, err := plan.EncodeReconstruction(b.Context(), io.Discard, plan.SnapshotRevisions{Baseline: revision}, tc.p)
 					if err != nil || got != sum {
 						b.Fatal("encoding changed", err)
 					}

@@ -48,7 +48,11 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 	}
 	expected, actual := p.after.Export(), observed.Export()
 	var typedIDs map[NativeIdentity]fm.ID
-	_, hasNative := p.intent.(nativeIntent)
+	hasNative := false
+	switch p.intent.(type) {
+	case nativeIntent, migrationIntent:
+		hasNative = true
+	}
 	if hasNative {
 		var err error
 		typedIDs, err = p.remapNative(&actual)
@@ -116,15 +120,8 @@ func (p *Plan) Verify(ctx context.Context, observed *fm.Firewall) (Readback, err
 		return Readback{}, fmt.Errorf("%w: unexpected native rules", ErrReadback)
 	}
 	if hasNative {
-		reverse := make(map[fm.ID]fm.ID, len(ids))
-		for planned, observed := range ids {
-			typedIDs[NativeIdentity{NativeRule, planned}] = observed
-			reverse[observed] = planned
-		}
-		for i := range actual.DynamicNATs {
-			if planned := reverse[actual.DynamicNATs[i].Rule]; planned != "" {
-				actual.DynamicNATs[i].Rule = planned
-			}
+		if err := p.remapNativeOwners(&actual, ids, typedIDs); err != nil {
+			return Readback{}, err
 		}
 	}
 	before, err := normalized(p.before.Export())

@@ -25,7 +25,15 @@ type Source struct {
 // DefaultMaxBytes bounds native configuration source size.
 const DefaultMaxBytes = 16 << 20
 
-type Limits struct{ MaxBytes, MaxLines, MaxDepth int }
+// DefaultMaxServiceTerms bounds the accepted service catalog, not parse work.
+const DefaultMaxServiceTerms = 100000
+
+type Limits struct {
+	MaxBytes, MaxLines, MaxDepth int
+	// MaxServiceTerms bounds the total terms in the accepted service catalog
+	// and in each pending transaction. Replacement and rollback release capacity.
+	MaxServiceTerms int
+}
 
 func (l Limits) defaults() Limits {
 	if l.MaxBytes <= 0 {
@@ -36,6 +44,9 @@ func (l Limits) defaults() Limits {
 	}
 	if l.MaxDepth <= 0 {
 		l.MaxDepth = 64
+	}
+	if l.MaxServiceTerms <= 0 {
+		l.MaxServiceTerms = DefaultMaxServiceTerms
 	}
 	return l
 }
@@ -155,6 +166,10 @@ func (c *Content) addLine(raw string) {
 }
 func (c *Content) Lines() []Line           { return slices.Clone(c.lines) }
 func (c *Content) Evidence() []fm.Evidence { return slices.Clone(c.evidence) }
+
+// Limits returns the normalized limits shared by scanning and native parsing.
+func (c *Content) Limits() Limits { return c.limits }
+
 func (c *Content) Peek() (Line, bool) {
 	if c.position >= len(c.lines) {
 		return Line{}, false

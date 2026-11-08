@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/analysis"
@@ -46,6 +47,37 @@ func translationGraphs(t *testing.T) (*fm.Firewall, *fm.Firewall) {
 	return source, target
 }
 
+func TestMigrationCalendarRefusalRemainsAtomicIssue(t *testing.T) {
+	source, target := translationGraphs(t)
+	d := source.Export()
+	for i, timezone := range []string{"UTC", "America/New_York"} {
+		id := fm.ID(timezone)
+		d.Schedules = append(d.Schedules, fm.ScheduleRecord{Object: fm.Object{ID: id}, Timezone: timezone, Calendar: fm.CalendarCivil,
+			Weekly: []fm.WeeklyPeriod{{Windows: []fm.WeeklyWindow{{Day: time.Monday, Start: 8 * time.Hour, End: 9 * time.Hour}}}}})
+		d.Rules[i].Match.Schedule = id
+	}
+	var err error
+	source, err = fm.Seal(d)
+	if err != nil || !source.Complete() {
+		t.Fatal(source, err)
+	}
+	request := analysis.MigrationRequest{At: time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC),
+		Zones: map[fm.ID]fm.ID{"inside": "trust", "outside": "untrust"}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}}
+	result, err := (analysis.PolicyMigrator{}).Plan(t.Context(), source, target, request)
+	if err != nil || result == nil || result.Plan != nil || len(result.Issues) != 1 || result.Issues[0].Code != "unproven-selection" {
+		t.Fatalf("unsupported calendar must return an issue without a plan: %+v, %v", result, err)
+	}
+	limited := analysis.PolicyMigrator{Planner: plan.Planner{Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 1}}}}
+	if result, err := limited.Plan(t.Context(), source, target, request); result != nil || !errors.Is(err, policy.ErrBudget) {
+		t.Fatalf("budget failure must remain an error: %+v, %v", result, err)
+	}
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if result, err := (analysis.PolicyMigrator{}).Plan(cancelled, source, target, request); result != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation must remain an error: %+v, %v", result, err)
+	}
+}
+
 func TestTranslationExplicitASAIngressChainAllowsOmittedTargetDestinationZone(t *testing.T) {
 	ctx := context.Background()
 	interfaces := `interface GigabitEthernet0/0
@@ -61,7 +93,7 @@ interface GigabitEthernet0/1
 `
 	parse := func(raw, device string) *fm.Firewall {
 		t.Helper()
-		fw, err := asa.Parse(ctx, config.Source{Text: raw, Complete: true}, fm.Metadata{Device: device})
+		fw, err := (asa.Parser{}).Parse(ctx, config.Source{Text: raw, Complete: true}, fm.Metadata{Device: device})
 		if err != nil || !fw.Complete() {
 			t.Fatalf("ASA native capture: %v, %v", err, fw.Diagnostics())
 		}
@@ -72,10 +104,14 @@ interface GigabitEthernet0/1
 	target := parse(raw, "target")
 	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: asa.Renderer{}}}
 	migration := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{"inside": "inside", "outside": ""}, Chains: map[fm.PolicyChain]fm.PolicyChain{{RuleSet: "IN"}: {RuleSet: "TARGET"}}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}}
-	p, err := x.Plan(ctx, source, target, migration)
+	result, err := x.Plan(ctx, source, target, migration)
 	if err != nil {
 		t.Fatalf("explicit native ACL mapping must render: %v", err)
 	}
+	if result.Plan == nil {
+		t.Fatalf("migration rejected: %+v", result.Issues)
+	}
+	p := result.Plan
 	var objects, entries []string
 	inObject := false
 	for _, command := range p.Commands() {
@@ -141,10 +177,14 @@ func TestTranslationRequiresExplicitAmbiguousChainMapping(t *testing.T) {
 		t.Fatalf("ambiguous target chain must require mapping: %v", err)
 	}
 	migration.Chains = map[fm.PolicyChain]fm.PolicyChain{{RuleSet: "security"}: {Scope: "red", RuleSet: "security"}}
-	p, err := x.Plan(context.Background(), source, target, migration)
+	result, err := x.Plan(context.Background(), source, target, migration)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if result.Plan == nil {
+		t.Fatalf("migration rejected: %+v", result.Issues)
+	}
+	p := result.Plan
 	q := request(t, "192.0.2.2", "198.51.100.1")
 	q.FromZone, q.ToZone = "trust", "untrust"
 	for _, scope := range []string{"blue", "red"} {
@@ -206,7 +246,7 @@ end
 `
 	parse := func(text, device string) *fm.Firewall {
 		t.Helper()
-		fw, err := fortinet.Parse(ctx, config.Source{Text: text, Complete: true}, fm.Metadata{Device: device})
+		fw, err := (fortinet.Parser{}).Parse(ctx, config.Source{Text: text, Complete: true}, fm.Metadata{Device: device})
 		if err != nil || !fw.Complete() {
 			t.Fatalf("native capture: %v, %v", err, fw.Diagnostics())
 		}
@@ -215,10 +255,14 @@ end
 	source, target := parse(native, "source"), parse(topology, "target")
 	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: fortinet.Renderer{}}}
 	migration := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{"inside": "inside", "outside": "outside"}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}}
-	p, err := x.Plan(ctx, source, target, migration)
+	result, err := x.Plan(ctx, source, target, migration)
 	if err != nil {
 		t.Fatalf("native no-NAT migration must select root/security: %v", err)
 	}
+	if result.Plan == nil {
+		t.Fatalf("migration rejected: %+v", result.Issues)
+	}
+	p := result.Plan
 	observed := parse(topology+strings.Join(p.Commands(), "\n")+"\n", "target")
 	if _, err := p.Verify(ctx, observed); err != nil {
 		t.Fatalf("independent native readback: %v", err)
@@ -235,10 +279,14 @@ func TestTranslationUsesEffectivePartitionsAndExplicitZoneMapping(t *testing.T) 
 	source, target := translationGraphs(t)
 	x := analysis.PolicyMigrator{Planner: plan.Planner{Renderer: paloalto.Renderer{}}}
 	migration := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{"inside": "trust", "outside": "untrust"}, Pairs: []analysis.ZonePair{{From: "inside", To: "outside"}}}
-	p, err := x.Plan(context.Background(), source, target, migration)
+	result, err := x.Plan(context.Background(), source, target, migration)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if result.Plan == nil {
+		t.Fatalf("migration rejected: %+v", result.Issues)
+	}
+	p := result.Plan
 	for _, tc := range []struct {
 		src     string
 		allowed bool
@@ -277,7 +325,8 @@ func TestTranslationRejectsNATAndImplicitZoneMerging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := x.Plan(context.Background(), withNAT, target, migration); err == nil {
+	migration.StaticNATs = []fm.ID{"nat"}
+	if result, err := x.Plan(context.Background(), withNAT, target, migration); err != nil || result.Plan != nil || len(result.Issues) == 0 {
 		t.Fatal("NAT semantics silently omitted from translation")
 	}
 }

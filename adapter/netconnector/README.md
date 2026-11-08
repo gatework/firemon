@@ -55,7 +55,7 @@ GOWORK=off go build ./...
 GOWORK=off go mod verify
 ```
 
-Public CI runs these checks on Go 1.26.0 and 1.27.x. Separate jobs use a temporary workspace to pair this adapter with the checked-out core; those jobs establish current-source compatibility and do not replace the versioned-consumer checks. No workspace file is committed. Further native semantic limits are in [the semantics notes](../../docs/native-semantics.md).
+Public CI runs these checks on Go 1.27.0 and 1.27.x. Separate jobs use a temporary workspace to pair this adapter with the checked-out core; those jobs establish current-source compatibility and do not replace the versioned-consumer checks. No workspace file is committed. Further native semantic limits are in [the semantics notes](../../docs/native-semantics.md).
 
 ## Read-only collection contract
 

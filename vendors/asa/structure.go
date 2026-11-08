@@ -32,6 +32,16 @@ func (p *parser) scan(ctx context.Context, statements []config.Statement) error 
 			owner = len(p.blocks) - 1
 			continue
 		}
+		if w[0] == "time-range" && len(w) == 2 {
+			p.blocks = append(p.blocks, block{header: line, kind: "time-range", name: w[1]})
+			owner = len(p.blocks) - 1
+			continue
+		}
+		if w[0] == "exit" && len(w) == 1 {
+			owner = -1
+			p.lines = append(p.lines, line)
+			continue
+		}
 		if (w[0] == "object" || w[0] == "object-group") && len(w) >= 3 {
 			b := block{header: line, kind: w[0] + "/" + w[1], name: w[2]}
 			if len(w) > 3 {

@@ -50,7 +50,7 @@ func TestIndependentReadbackAcceptsNativeAllocatedIDsAndRenumberedPositions(t *t
 func TestReadbackComparesIndependentNativeConfigurationWithStableRouteIdentity(t *testing.T) {
 	raw := "zone outside\nexit\ninterface wan\nzone outside\nip address 198.51.100.2/24\nexit\nip route 0.0.0.0/0 198.51.100.254\naddress src\nip 192.0.2.1/32\nexit\naddress dst\nip 198.51.100.1/32\nexit\nservice https\ntcp dst-port 443 443\nexit\nrule id 10\nsrc-zone any\ndst-zone any\nsrc-addr src\ndst-addr dst\nservice https\naction permit\nexit\n"
 	metadata := fm.Metadata{Device: "fw"}
-	fw, err := hillstone.Parse(context.Background(), config.Source{Text: raw, Complete: true}, metadata)
+	fw, err := (hillstone.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, metadata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,14 +63,14 @@ func TestReadbackComparesIndependentNativeConfigurationWithStableRouteIdentity(t
 	}
 	ref := p.Changes()[0].Sources[0].ID
 	readback := fmt.Sprintf("address %s\nip 192.0.2.2/32\nexit\n", ref) + raw + fmt.Sprintf("rule id 10\nsrc-addr %s\nexit\n", ref)
-	observed, err := hillstone.Parse(context.Background(), config.Source{Text: readback, Complete: true}, metadata)
+	observed, err := (hillstone.Parser{}).Parse(context.Background(), config.Source{Text: readback, Complete: true}, metadata)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := p.Verify(context.Background(), observed); err != nil {
 		t.Fatal("independent readback failed", err)
 	}
-	unchanged, err := hillstone.Parse(context.Background(), config.Source{Text: "\n\n" + raw, Complete: true}, metadata)
+	unchanged, err := (hillstone.Parser{}).Parse(context.Background(), config.Source{Text: "\n\n" + raw, Complete: true}, metadata)
 	if err != nil {
 		t.Fatal(err)
 	}

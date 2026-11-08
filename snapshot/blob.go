@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -33,11 +35,8 @@ func (s *Store) storeBlob(ctx context.Context, b blob) error {
 		return err
 	}
 	path := filepath.Join(s.root, "objects", b.revision+".gob")
-	if existing, err := os.ReadFile(path); err == nil {
-		if !bytes.Equal(existing, b.data) {
-			return ErrFormat
-		}
-		return ctx.Err()
+	if existing, err := os.Open(path); err == nil {
+		return errors.Join(compareBlob(ctx, existing, b.data), existing.Close())
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -45,4 +44,30 @@ func (s *Store) storeBlob(ctx context.Context, b blob) error {
 		return err
 	}
 	return atomicWrite(path, b.data)
+}
+
+// compareBlob bounds reads by the expected immutable encoding and requires real
+// EOF; an oversized or corrupt existing object is never loaded in its entirety.
+func compareBlob(ctx context.Context, reader io.Reader, expected []byte) error {
+	var buffer [32 << 10]byte
+	for len(expected) > 0 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		n := min(len(expected), len(buffer))
+		if _, err := io.ReadFull(reader, buffer[:n]); err != nil {
+			return fmt.Errorf("%w: compare snapshot blob: %w", ErrFormat, err)
+		}
+		if !bytes.Equal(buffer[:n], expected[:n]) {
+			return ErrFormat
+		}
+		expected = expected[n:]
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if n, err := io.ReadFull(reader, buffer[:1]); n != 0 || err != io.EOF {
+		return errors.Join(ErrFormat, err)
+	}
+	return ctx.Err()
 }

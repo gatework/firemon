@@ -1,0 +1,30 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/benchmarks
+cpu: Apple M5
+BenchmarkOptimize/adjacent/requests=10-10         	   37723	      6311 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10-10         	   38601	      6229 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10-10         	   38859	      6201 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10-10         	   38733	      6162 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10-10         	   37976	      6249 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=10-10         	   38116	      6244 ns/op	   24152 B/op	      82 allocs/op
+BenchmarkOptimize/adjacent/requests=100-10        	     823	    289959 ns/op	  936605 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100-10        	     835	    291184 ns/op	  936604 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100-10        	     825	    293156 ns/op	  936605 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100-10        	     810	    300002 ns/op	  936605 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100-10        	     812	    295087 ns/op	  936604 B/op	     737 allocs/op
+BenchmarkOptimize/adjacent/requests=100-10        	     811	    293552 ns/op	  936604 B/op	     737 allocs/op
+BenchmarkOptimize/paired/requests=10-10           	   18094	     13291 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10-10           	   17821	     13424 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10-10           	   18001	     13386 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10-10           	   17842	     13440 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10-10           	   17803	     13498 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=10-10           	   18026	     13364 ns/op	   41768 B/op	     212 allocs/op
+BenchmarkOptimize/paired/requests=100-10          	     241	    999814 ns/op	 2403668 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100-10          	     238	   1005434 ns/op	 2403670 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100-10          	     238	   1002840 ns/op	 2403671 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100-10          	     240	    998440 ns/op	 2403667 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100-10          	     238	   1007653 ns/op	 2403668 B/op	   15495 allocs/op
+BenchmarkOptimize/paired/requests=100-10          	     238	   1007803 ns/op	 2403669 B/op	   15495 allocs/op
+PASS
+ok  	github.com/gatework/firemon/benchmarks	6.131s

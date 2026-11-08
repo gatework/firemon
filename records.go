@@ -174,11 +174,39 @@ type ServiceGroupRecord struct {
 	Members []ServiceRef
 }
 type TimeWindow struct{ Start, End time.Time }
+
+// CalendarMode states how the device applies recurring civil time, including
+// daylight-saving changes. Missing evidence is distinct from civil-clock rules.
+type CalendarMode uint8
+
+const (
+	CalendarUnknown CalendarMode = iota
+	// CalendarCivil matches the current local clock. Both occurrences of a
+	// repeated wall time match; a skipped wall time has no matching instant.
+	CalendarCivil
+)
+
+// WeeklyWindow is one half-open interval within a local weekday. End may be
+// 24 hours; cross-midnight declarations are split into adjacent daily windows.
+type WeeklyWindow struct {
+	Day        time.Weekday
+	Start, End time.Duration
+}
+
+// WeeklyPeriod intersects a union of weekly windows with optional UTC bounds.
+// A zero Start or End is unbounded on that side.
+type WeeklyPeriod struct {
+	Start, End time.Time
+	Windows    []WeeklyWindow
+}
+
+// ScheduleRecord admits the union of absolute Windows and bounded Weekly periods.
 type ScheduleRecord struct {
 	Object
-	Windows   []TimeWindow
-	Timezone  string
-	Recurring []string
+	Windows  []TimeWindow
+	Timezone string
+	Weekly   []WeeklyPeriod
+	Calendar CalendarMode
 }
 type Match struct {
 	Sources, Destinations []AddressRef
@@ -356,7 +384,10 @@ func (r ServiceGroupRecord) clone() ServiceGroupRecord {
 func (r ScheduleRecord) clone() ScheduleRecord {
 	r.Object = r.Object.clone()
 	r.Windows = slices.Clone(r.Windows)
-	r.Recurring = slices.Clone(r.Recurring)
+	r.Weekly = slices.Clone(r.Weekly)
+	for i := range r.Weekly {
+		r.Weekly[i].Windows = slices.Clone(r.Weekly[i].Windows)
+	}
 	return r
 }
 func (r RuleRecord) clone() RuleRecord {

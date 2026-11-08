@@ -156,7 +156,7 @@ func TestPANAnyCreationRoundTripsThroughParser(t *testing.T) {
 			native = append(native, c)
 		}
 	}
-	parsed, err := paloalto.Parse(context.Background(), config.Source{Text: strings.Join(native, "\n") + "\n", Complete: true}, fm.Metadata{Device: "fw"})
+	parsed, err := (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: strings.Join(native, "\n") + "\n", Complete: true}, fm.Metadata{Device: "fw"})
 	if err != nil || !parsed.Complete() {
 		t.Fatalf("any command readback: %v %v", err, parsed.Diagnostics())
 	}
@@ -268,7 +268,7 @@ func TestNativeInsertionAnchorsUsePositionAndIdentity(t *testing.T) {
 
 func TestNetscreenTopCreationReversesIdentityTies(t *testing.T) {
 	raw := "set interface ethernet0/1 zone Trust\nset interface ethernet0/1 ip 192.0.2.1/24\nset interface ethernet0/2 zone Untrust\nset interface ethernet0/2 ip 198.51.100.1/24\nset policy id 10 from Trust to Untrust Any Any ANY deny\nexit\n"
-	before, err := netscreen.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "fw"})
+	before, err := (netscreen.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "fw"})
 	if err != nil {
 		t.Fatal(err)
 	}

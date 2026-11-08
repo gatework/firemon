@@ -24,32 +24,19 @@ type parser struct {
 	interfaceDomains map[*config.Block]string
 }
 
-// Parse selects the root VDOM. ParseVDOM selects another domain explicitly.
+// Parser retains the capture and interprets Metadata.Context, defaulting to
+// root. Captures without a config vdom wrapper belong to that selected domain.
 type Parser struct{ Limits config.Limits }
-
-func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-	return ParseVDOM(ctx, source, metadata, "root")
-}
 
 func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	vdom := metadata.Context
 	if vdom == "" {
 		vdom = "root"
 	}
-	return native.ParseVDOM(ctx, source, metadata, vdom)
-}
-
-// ParseVDOM retains the complete source but only interprets the selected domain.
-// A capture without a config vdom wrapper is assumed to be from this domain.
-func ParseVDOM(ctx context.Context, source config.Source, metadata fm.Metadata, vdom string) (*fm.Firewall, error) {
-	return (Parser{}).ParseVDOM(ctx, source, metadata, vdom)
-}
-
-func (native Parser) ParseVDOM(ctx context.Context, source config.Source, metadata fm.Metadata, vdom string) (*fm.Firewall, error) {
 	if strings.TrimSpace(vdom) == "" {
 		return nil, fmt.Errorf("%w: VDOM is required", config.ErrSource)
 	}
-	metadata.Vendor, metadata.ParserVersion, metadata.Context = "fortinet", "fortios-go-3", vdom
+	metadata.Vendor, metadata.ParserVersion, metadata.Context = "fortinet", "fortios-go-4", vdom
 	content, err := config.NewContent(ctx, source, native.Limits)
 	if err != nil {
 		return nil, err

@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
 
 	"github.com/gatework/firemon/operations"
 	"github.com/gatework/firemon/snapshot"
 )
 
 func requestCommand(ctx context.Context, command string, args []string, out io.Writer) error {
-	fs := flags(command)
+	fs := flags(command, out)
 	root := fs.String("store", "", "snapshot directory")
 	file := fs.String("file", "", "version-1 request JSON")
 	topologyFile := fs.String("topology", "", "version-1 topology JSON")
@@ -19,32 +18,32 @@ func requestCommand(ctx context.Context, command string, args []string, out io.W
 		return err
 	}
 	if fs.NArg() != 0 || *root == "" || *file == "" {
-		return errors.New("store and file are required")
+		return usage(errors.New("store and file are required"))
 	}
-	input, err := os.Open(*file)
+	input, finish, err := openInput(ctx, *file)
 	if err != nil {
 		return err
 	}
 	request, decodeErr := operations.DecodeBatchRequest(input)
-	closeErr := input.Close()
-	if err = errors.Join(decodeErr, closeErr); err != nil {
+	closeErr := finish()
+	if err = errors.Join(usage(decodeErr), closeErr); err != nil {
 		return err
 	}
 	if *topologyFile != "" {
-		f, err := os.Open(*topologyFile)
+		f, finish, err := openInput(ctx, *topologyFile)
 		if err != nil {
 			return err
 		}
 		top, decodeErr := operations.DecodeTopology(f)
-		closeErr := f.Close()
-		if err = errors.Join(decodeErr, closeErr); err != nil {
+		closeErr := finish()
+		if err = errors.Join(usage(decodeErr), closeErr); err != nil {
 			return err
 		}
 		request.Topology = &top
 	}
 	store, err := snapshot.Open(*root)
 	if err != nil {
-		return err
+		return snapshotArgumentError(err)
 	}
 	designer, err := operations.NewBatchDesigner(operations.BatchDesignerOptions{Store: store})
 	if err != nil {

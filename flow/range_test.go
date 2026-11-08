@@ -70,7 +70,7 @@ func FuzzSetAgainstByteOracle(f *testing.F) {
 		x := set(t, flow.AddressRange{First: addr(a), Last: addr(b)})
 		y := set(t, flow.AddressRange{First: addr(c), Last: addr(d)})
 		diff, intersection, union := x.Difference(y), x.Intersection(y), x.Union(y)
-		for i := 0; i < 256; i++ {
+		for i := range 256 {
 			inX, inY := i >= int(a) && i <= int(b), i >= int(c) && i <= int(d)
 			if diff.ContainsAddr(addr(uint8(i))) != (inX && !inY) || intersection.ContainsAddr(addr(uint8(i))) != (inX && inY) || union.ContainsAddr(addr(uint8(i))) != (inX || inY) {
 				t.Fatalf("wrong membership at %d", i)

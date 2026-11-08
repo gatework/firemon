@@ -19,9 +19,9 @@ import (
 	"github.com/gatework/firemon/vendors"
 )
 
-func TestCoreReconstructionOwnsReplayAndLegacyBytes(t *testing.T) {
+func TestCoreReconstructionOwnsConcurrentReplay(t *testing.T) {
 	b := newBatchFixture(t)
-	store, revision, finite := finiteCompatibilityPlan(t)
+	store, revision, finite := finiteReconstructionPlan(t)
 	for _, tc := range []struct {
 		name, revision string
 		p              *plan.Plan
@@ -30,16 +30,11 @@ func TestCoreReconstructionOwnsReplayAndLegacyBytes(t *testing.T) {
 		{"finite", revision, finite},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var core, old bytes.Buffer
-			sum, err := plan.EncodeReconstruction(t.Context(), &core, tc.revision, tc.p)
+			var core bytes.Buffer
+			sum, err := plan.EncodeReconstruction(t.Context(), &core, plan.SnapshotRevisions{Baseline: tc.revision}, tc.p)
 			if err != nil {
 				t.Fatal(err)
 			}
-			legacy, err := operations.EncodePlan(t.Context(), &old, tc.revision, tc.p)
-			if err != nil || sum != legacy || !bytes.Equal(core.Bytes(), old.Bytes()) {
-				t.Fatal("adapter bytes", err)
-			}
-			assertMaterialGolden(t, tc.name+".json", core.Bytes())
 			raw := bytes.Clone(core.Bytes())
 			material, err := plan.DecodeReconstruction(t.Context(), bytes.NewReader(raw), sum)
 			if err != nil || material.Revision() != tc.revision {
@@ -52,7 +47,7 @@ func TestCoreReconstructionOwnsReplayAndLegacyBytes(t *testing.T) {
 			for range 2 {
 				wg.Go(func() {
 					called := 0
-					p, err := material.Rebuild(t.Context(), tc.p.Before(), func(vendor string) (plan.Renderer, error) {
+					p, err := material.Rebuild(t.Context(), plan.ReconstructionSnapshots{Baseline: tc.p.Before()}, func(vendor string) (plan.Renderer, error) {
 						called++
 						return vendors.Renderer(vendor)
 					})
@@ -63,7 +58,7 @@ func TestCoreReconstructionOwnsReplayAndLegacyBytes(t *testing.T) {
 			}
 			wg.Wait()
 			if tc.name == "finite" {
-				if _, _, err := operations.RestorePlan(t.Context(), bytes.NewReader(old.Bytes()), sum, store); err != nil {
+				if _, _, err := operations.RestorePlan(t.Context(), bytes.NewReader(core.Bytes()), sum, store); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -72,9 +67,9 @@ func TestCoreReconstructionOwnsReplayAndLegacyBytes(t *testing.T) {
 }
 
 func TestCoreReconstructionChecksBaselineBeforeRenderer(t *testing.T) {
-	_, revision, p := finiteCompatibilityPlan(t)
+	_, revision, p := finiteReconstructionPlan(t)
 	var raw bytes.Buffer
-	sum, err := plan.EncodeReconstruction(t.Context(), &raw, revision, p)
+	sum, err := plan.EncodeReconstruction(t.Context(), &raw, plan.SnapshotRevisions{Baseline: revision}, p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,31 +87,31 @@ func TestCoreReconstructionChecksBaselineBeforeRenderer(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, fw := range []*fm.Firewall{nil, wrong, p.After()} {
-		if got, err := material.Rebuild(t.Context(), fw, selectRenderer); !errors.Is(err, operations.ErrReconstruction) || got != nil || called {
+		if got, err := material.Rebuild(t.Context(), plan.ReconstructionSnapshots{Baseline: fw}, selectRenderer); !errors.Is(err, plan.ErrReconstruction) || got != nil || called {
 			t.Fatal("renderer before baseline", err, called)
 		}
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := material.Rebuild(ctx, nil, selectRenderer); !errors.Is(err, context.Canceled) || called {
+	if _, err := material.Rebuild(ctx, plan.ReconstructionSnapshots{}, selectRenderer); !errors.Is(err, context.Canceled) || called {
 		t.Fatal(err, called)
 	}
 	var zero plan.Reconstruction
 	if zero.Revision() != "" {
 		t.Fatal("zero material revision")
 	}
-	if _, err := zero.Rebuild(t.Context(), p.Before(), selectRenderer); !errors.Is(err, plan.ErrReconstruction) || called {
+	if _, err := zero.Rebuild(t.Context(), plan.ReconstructionSnapshots{Baseline: p.Before()}, selectRenderer); !errors.Is(err, plan.ErrReconstruction) || called {
 		t.Fatal(err, called)
 	}
-	if _, err := material.Rebuild(t.Context(), p.Before(), nil); !errors.Is(err, plan.ErrReconstruction) {
+	if _, err := material.Rebuild(t.Context(), plan.ReconstructionSnapshots{Baseline: p.Before()}, nil); !errors.Is(err, plan.ErrReconstruction) {
 		t.Fatal(err)
 	}
-	if _, err := material.Rebuild(t.Context(), p.Before(), selectRenderer); !errors.Is(err, rendererError) || !called {
+	if _, err := material.Rebuild(t.Context(), plan.ReconstructionSnapshots{Baseline: p.Before()}, selectRenderer); !errors.Is(err, rendererError) || !called {
 		t.Fatal("renderer error lost", err)
 	}
 }
 
-func TestCoreReconstructionRetainsUnsupportedFamilies(t *testing.T) {
+func TestCoreReconstructionCoversAccessPreservationAndTransfer(t *testing.T) {
 	b := newBatchFixture(t)
 	fw := b.report.Devices[0].Batch.Plan.Before()
 	revision := b.report.Devices[0].Revision
@@ -137,19 +132,28 @@ func TestCoreReconstructionRetainsUnsupportedFamilies(t *testing.T) {
 	}
 	for _, p := range []*plan.Plan{access, preserved, transfer} {
 		var raw bytes.Buffer
-		if _, err := plan.EncodeReconstruction(t.Context(), &raw, revision, p); !errors.Is(err, plan.ErrReconstruction) || raw.Len() != 0 {
-			t.Fatal(err, raw.Len())
+		sum, err := plan.EncodeReconstruction(t.Context(), &raw, plan.SnapshotRevisions{Baseline: revision}, p)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if _, err := operations.EncodePlan(t.Context(), &raw, revision, p); !errors.Is(err, operations.ErrReconstruction) || raw.Len() != 0 {
-			t.Fatal(err, raw.Len())
+		material, err := plan.DecodeReconstruction(t.Context(), &raw, sum)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rebuilt, err := material.Rebuild(t.Context(), plan.ReconstructionSnapshots{Baseline: fw}, vendors.Renderer)
+		if err != nil || rebuilt.Digest() != p.Digest() || rebuilt.After().SemanticDigest() != p.After().SemanticDigest() {
+			t.Fatal("business reconstruction", err)
+		}
+		if _, err := rebuilt.Verify(t.Context(), p.After()); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
 
 func TestCoreReconstructionRequiresTheReplannedDigest(t *testing.T) {
-	_, revision, p := finiteCompatibilityPlan(t)
+	_, revision, p := finiteReconstructionPlan(t)
 	var material bytes.Buffer
-	if _, err := plan.EncodeReconstruction(t.Context(), &material, revision, p); err != nil {
+	if _, err := plan.EncodeReconstruction(t.Context(), &material, plan.SnapshotRevisions{Baseline: revision}, p); err != nil {
 		t.Fatal(err)
 	}
 	var doc map[string]any
@@ -167,7 +171,7 @@ func TestCoreReconstructionRequiresTheReplannedDigest(t *testing.T) {
 		t.Fatal("well-formed material", err)
 	}
 	called := false
-	rebuilt, err := decoded.Rebuild(t.Context(), p.Before(), func(vendor string) (plan.Renderer, error) {
+	rebuilt, err := decoded.Rebuild(t.Context(), plan.ReconstructionSnapshots{Baseline: p.Before()}, func(vendor string) (plan.Renderer, error) {
 		called = true
 		return vendors.Renderer(vendor)
 	})
@@ -181,20 +185,20 @@ type reconstructionShortWriter struct{}
 func (reconstructionShortWriter) Write(p []byte) (int, error) { return len(p) - 1, nil }
 
 func TestCoreReconstructionIOAndCancellation(t *testing.T) {
-	_, revision, p := finiteCompatibilityPlan(t)
-	if _, err := plan.EncodeReconstruction(t.Context(), reconstructionShortWriter{}, revision, p); !errors.Is(err, io.ErrShortWrite) {
+	_, revision, p := finiteReconstructionPlan(t)
+	if _, err := plan.EncodeReconstruction(t.Context(), reconstructionShortWriter{}, plan.SnapshotRevisions{Baseline: revision}, p); !errors.Is(err, io.ErrShortWrite) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := plan.EncodeReconstruction(ctx, nil, "", nil); !errors.Is(err, context.Canceled) {
+	if _, err := plan.EncodeReconstruction(ctx, nil, plan.SnapshotRevisions{}, nil); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if _, err := plan.DecodeReconstruction(ctx, nil, ""); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if _, _, err := operations.RestorePlan(t.Context(), nil, revision, unusedRevisionLoader{}); !errors.Is(err, operations.ErrInvalid) {
-		t.Fatal("legacy nil-reader error", err)
+		t.Fatal("nil-reader error", err)
 	}
 }
 

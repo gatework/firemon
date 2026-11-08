@@ -19,6 +19,23 @@ type batchReaders struct {
 	readers map[string]*captureDevice
 }
 
+func TestCollectBatchKeepsPublishedCompletionWhenCloseFails(t *testing.T) {
+	c, store, reader, request := collectionFixture(t)
+	reader.closeErr = errors.New("reader close failed")
+	collector, err := operations.NewCollector(c.CollectorOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := collector.CollectBatch(t.Context(), []operations.CollectRequest{request}, operations.CollectBatchOptions{})
+	if err != nil || len(rows) != 1 || rows[0].Status != "complete" || !rows[0].Result.Published() || !rows[0].Result.Complete || !errors.Is(rows[0].Err, reader.closeErr) {
+		t.Fatalf("published completion changed by cleanup: %+v %v", rows, err)
+	}
+	_, head, err := store.Current(t.Context(), request.Device)
+	if err != nil || head.Revision != rows[0].Result.Revision {
+		t.Fatalf("publication missing: %v", err)
+	}
+}
+
 func (b *batchReaders) OpenReadOnly(ctx context.Context, id string) (device.Reader, error) {
 	b.mu.Lock()
 	d := b.readers[id]

@@ -16,18 +16,27 @@ import (
 	"time"
 )
 
+func observedScheduleSource(raw string, m fm.Metadata, trusted bool) (config.Source, fm.Metadata) {
+	m.CapturedAt = time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
+	sum := sha256.Sum256([]byte(raw))
+	m.SourceDigest = hex.EncodeToString(sum[:])
+	c := fm.ScheduleClock{CapturedAt: m.CapturedAt, Device: m.Device, Vendor: m.Vendor, Software: m.Software, Context: m.Context, SourceDigest: m.SourceDigest, Timezone: "Asia/Hong_Kong", Reference: "synthetic independent clock/calendar observation", EndBoundary: "exclusive", TickSeconds: 1, Calendar: fm.CalendarCivil}
+	source := config.Source{Text: raw, Complete: true}
+	if trusted {
+		source.ScheduleClock = &c
+	}
+	return source, m
+}
 func scheduleCapture(t *testing.T, vendor, version, raw string, clock bool) (*fm.Firewall, fm.ScheduleClock) {
 	t.Helper()
-	m := fm.Metadata{CapturedAt: time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC), Device: "synthetic-time", Vendor: vendor, Software: version}
+	m := fm.Metadata{Device: "synthetic-time", Vendor: vendor, Software: version}
 	if vendor == "fortinet" {
 		m.Context = "root"
 	}
-	sum := sha256.Sum256([]byte(raw))
-	m.SourceDigest = hex.EncodeToString(sum[:])
-	c := fm.ScheduleClock{CapturedAt: m.CapturedAt, Device: m.Device, Vendor: m.Vendor, Software: m.Software, Context: m.Context, SourceDigest: m.SourceDigest, Timezone: "Asia/Hong_Kong", Reference: "synthetic clock/endpoint observation", EndBoundary: "exclusive", TickSeconds: 1}
-	source := config.Source{Text: raw, Complete: true}
-	if clock {
-		source.ScheduleClock = &c
+	source, m := observedScheduleSource(raw, m, true)
+	c := *source.ScheduleClock
+	if !clock {
+		source.ScheduleClock = nil
 	}
 	fw, err := (vendors.Parser{}).Parse(t.Context(), source, m)
 	if err != nil {
@@ -35,6 +44,7 @@ func scheduleCapture(t *testing.T, vendor, version, raw string, clock bool) (*fm
 	}
 	return fw, c
 }
+
 func scheduleCases() []struct{ vendor, version, raw string } {
 	return []struct{ vendor, version, raw string }{
 		{"hillstone", "5.5R8", "schedule temporary\nabsolute start 10/31/2026 10:00 end 10/31/2026 11:00\nexit\n"},

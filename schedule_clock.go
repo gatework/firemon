@@ -2,6 +2,7 @@ package firemon
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,17 +20,14 @@ type ScheduleClock struct {
 	Device, Vendor, Software, Context, SourceDigest string
 	Timezone, Reference, EndBoundary                string
 	TickSeconds                                     int
+	Calendar                                        CalendarMode
 }
 
 func (c ScheduleClock) location() (*time.Location, error) {
-	if c.Timezone == "" || c.Timezone == "Local" || len(c.Timezone) > 128 || strings.HasPrefix(c.Timezone, "/") || strings.Contains(c.Timezone, "..") || c.Reference == "" || len(c.Reference) > 1024 || c.EndBoundary != "exclusive" && c.EndBoundary != "inclusive" || c.TickSeconds != 1 && c.TickSeconds != 60 {
+	if c.Reference == "" || len(c.Reference) > 1024 || c.EndBoundary != "exclusive" && c.EndBoundary != "inclusive" || c.TickSeconds != 1 && c.TickSeconds != 60 || c.Calendar > CalendarCivil {
 		return nil, ErrScheduleTime
 	}
-	loc, err := time.LoadLocation(c.Timezone)
-	if err != nil {
-		return nil, ErrScheduleTime
-	}
-	return loc, nil
+	return scheduleLocation(c.Timezone)
 }
 
 // Validate checks identity against metadata of the independently captured source.
@@ -88,22 +86,15 @@ func civilTime(layout, value string, loc *time.Location) (time.Time, error) {
 
 // ParseWindow converts independently captured native civil times without rounding.
 func (c ScheduleClock) ParseWindow(layout, start, end string) (TimeWindow, error) {
-	loc, err := c.location()
+	a, err := c.ParseBound(layout, start, false)
 	if err != nil {
 		return TimeWindow{}, err
 	}
-	a, err := civilTime(layout, start, loc)
+	b, err := c.ParseBound(layout, end, true)
 	if err != nil {
 		return TimeWindow{}, err
 	}
-	b, err := civilTime(layout, end, loc)
-	if err != nil {
-		return TimeWindow{}, err
-	}
-	if c.EndBoundary == "inclusive" {
-		b = b.Add(time.Duration(c.TickSeconds) * time.Second)
-	}
-	if a.IsZero() || !a.Before(b) {
+	if a.IsZero() || b.IsZero() || !a.Before(b) {
 		return TimeWindow{}, ErrScheduleTime
 	}
 	return TimeWindow{Start: a, End: b}, nil
@@ -112,25 +103,177 @@ func (c ScheduleClock) ParseWindow(layout, start, end string) (TimeWindow, error
 // NativeWindow returns exact civil endpoints at the supported native precision.
 // The inverse parse must recover precisely the supplied half-open UTC window.
 func (c ScheduleClock) NativeWindow(w TimeWindow, precision time.Duration) (time.Time, time.Time, error) {
-	loc, err := c.location()
+	if w.Start.IsZero() || w.End.IsZero() || !w.Start.Before(w.End) {
+		return time.Time{}, time.Time{}, ErrScheduleTime
+	}
+	a, err := c.NativeBound(w.Start, false, precision)
 	if err != nil {
 		return time.Time{}, time.Time{}, err
 	}
-	if w.Start.IsZero() || !w.Start.Before(w.End) || precision != time.Minute && precision != time.Second {
-		return time.Time{}, time.Time{}, ErrScheduleTime
+	b, err := c.NativeBound(w.End, true, precision)
+	if err == nil && (b.Before(a) || b.Equal(a) && c.EndBoundary == "exclusive") {
+		err = ErrScheduleTime
+	}
+	return a, b, err
+}
+
+// ParseBound interprets an optional civil date bound. Empty means unbounded.
+// End bounds receive the verified inclusive-to-exclusive tick adjustment.
+func (c ScheduleClock) ParseBound(layout, value string, end bool) (time.Time, error) {
+	loc, err := c.location()
+	if err != nil || value == "" {
+		return time.Time{}, err
+	}
+	at, err := civilTime(layout, value, loc)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if end && c.EndBoundary == "inclusive" {
+		at = at.Add(time.Duration(c.TickSeconds) * time.Second)
+	}
+	return at, nil
+}
+
+// NativeBound returns an exactly representable optional native civil endpoint.
+func (c ScheduleClock) NativeBound(at time.Time, end bool, precision time.Duration) (time.Time, error) {
+	loc, err := c.location()
+	if err != nil {
+		return time.Time{}, err
+	}
+	if precision != time.Minute && precision != time.Second {
+		return time.Time{}, ErrScheduleTime
+	}
+	if at.IsZero() {
+		return time.Time{}, nil
+	}
+	native := at
+	if end && c.EndBoundary == "inclusive" {
+		native = native.Add(-time.Duration(c.TickSeconds) * time.Second)
+	}
+	native = native.In(loc)
+	if native.Year() < 1970 || native.Year() > 2099 || native.Nanosecond() != 0 || precision == time.Minute && native.Second() != 0 {
+		return time.Time{}, ErrScheduleTime
+	}
+	const layout = "2006-01-02 15:04:05"
+	round, err := c.ParseBound(layout, native.Format(layout), end)
+	if err != nil || !round.Equal(at) {
+		return time.Time{}, ErrScheduleTime
+	}
+	return native, nil
+}
+
+func wallClock(value string, end bool) (time.Duration, error) {
+	parts := strings.Split(value, ":")
+	if len(parts) != 2 && len(parts) != 3 {
+		return 0, ErrScheduleTime
+	}
+	var values [3]int
+	for i, part := range parts {
+		if len(part) != 2 {
+			return 0, ErrScheduleTime
+		}
+		for _, digit := range part {
+			if digit < '0' || digit > '9' {
+				return 0, ErrScheduleTime
+			}
+		}
+		v, err := strconv.Atoi(part)
+		if err != nil || v < 0 || v > 59 {
+			return 0, ErrScheduleTime
+		}
+		values[i] = v
+	}
+	if values[0] > 23 && !(end && values[0] == 24 && values[1] == 0 && values[2] == 0) {
+		return 0, ErrScheduleTime
+	}
+	return time.Duration(values[0])*time.Hour + time.Duration(values[1])*time.Minute + time.Duration(values[2])*time.Second, nil
+}
+
+func (c ScheduleClock) weeklyClocks(start, end string) (time.Duration, time.Duration, error) {
+	if _, err := c.location(); err != nil || c.Calendar != CalendarCivil {
+		return 0, 0, ErrScheduleTime
+	}
+	a, err := wallClock(start, false)
+	if err != nil {
+		return 0, 0, err
+	}
+	b, err := wallClock(end, true)
+	if err != nil {
+		return 0, 0, err
+	}
+	return a, b, nil
+}
+
+func splitWeeklySpan(day time.Weekday, start, end time.Duration) []WeeklyWindow {
+	var windows []WeeklyWindow
+	for start < end {
+		finish := min(end, civilDay)
+		windows = append(windows, WeeklyWindow{Day: day, Start: start, End: finish})
+		start, end = 0, end-civilDay
+		day = (day + 1) % 7
+	}
+	return windows
+}
+
+// ParseWeekly applies one native daily interval to each named weekday. Native
+// cross-midnight windows are split, including Saturday-to-Sunday wrapping.
+func (c ScheduleClock) ParseWeekly(days []time.Weekday, start, end string) ([]WeeklyWindow, error) {
+	if len(days) == 0 || len(days) > 7 {
+		return nil, ErrScheduleTime
+	}
+	a, b, err := c.weeklyClocks(start, end)
+	if err != nil || a == b && c.EndBoundary == "exclusive" {
+		return nil, ErrScheduleTime
+	}
+	if b < a {
+		b += civilDay
+	}
+	if c.EndBoundary == "inclusive" {
+		b += time.Duration(c.TickSeconds) * time.Second
+	}
+	var windows []WeeklyWindow
+	for _, day := range days {
+		if day < time.Sunday || day > time.Saturday {
+			return nil, ErrScheduleTime
+		}
+		windows = append(windows, splitWeeklySpan(day, a, b)...)
+	}
+	return normalizeWeekly(windows), nil
+}
+
+// ParseWeeklySpan interprets a continuous interval from one named weekday to
+// another, moving forward across the week boundary when necessary. Equal-day
+// spans must end later that day; use ParseWeekly for daily overnight intervals.
+func (c ScheduleClock) ParseWeeklySpan(startDay, endDay time.Weekday, start, end string) ([]WeeklyWindow, error) {
+	if startDay < time.Sunday || startDay > time.Saturday || endDay < time.Sunday || endDay > time.Saturday {
+		return nil, ErrScheduleTime
+	}
+	a, b, err := c.weeklyClocks(start, end)
+	if err != nil {
+		return nil, err
+	}
+	b += time.Duration((endDay-startDay+7)%7) * civilDay
+	if c.EndBoundary == "inclusive" {
+		b += time.Duration(c.TickSeconds) * time.Second
+	}
+	if b <= a || b-a > 7*civilDay {
+		return nil, ErrScheduleTime
+	}
+	return normalizeWeekly(splitWeeklySpan(startDay, a, b)), nil
+}
+
+// NativeWeekly returns native daily offsets without rounding. An exclusive
+// end of 24 hours must be representable by the selected vendor's grammar.
+func (c ScheduleClock) NativeWeekly(w WeeklyWindow, precision time.Duration) (time.Duration, time.Duration, error) {
+	if _, err := c.location(); err != nil || c.Calendar != CalendarCivil || precision != time.Minute && precision != time.Second || w.Day < time.Sunday || w.Day > time.Saturday || w.Start < 0 || w.Start >= w.End || w.End > civilDay {
+		return 0, 0, ErrScheduleTime
 	}
 	end := w.End
 	if c.EndBoundary == "inclusive" {
-		end = end.Add(-time.Duration(c.TickSeconds) * time.Second)
+		end -= time.Duration(c.TickSeconds) * time.Second
 	}
-	a, b := w.Start.In(loc), end.In(loc)
-	if a.Year() < 1970 || b.Year() > 2099 || !a.Before(b) || a.Nanosecond() != 0 || b.Nanosecond() != 0 || precision == time.Minute && (a.Second() != 0 || b.Second() != 0) {
-		return time.Time{}, time.Time{}, ErrScheduleTime
+	if end < w.Start || w.Start%precision != 0 || end%precision != 0 {
+		return 0, 0, ErrScheduleTime
 	}
-	layout := "2006-01-02 15:04:05"
-	round, err := c.ParseWindow(layout, a.Format(layout), b.Format(layout))
-	if err != nil || !round.Start.Equal(w.Start) || !round.End.Equal(w.End) {
-		return time.Time{}, time.Time{}, ErrScheduleTime
-	}
-	return a, b, nil
+	return w.Start, end, nil
 }

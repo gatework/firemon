@@ -60,9 +60,7 @@ func sessionWith(t *testing.T, vendor string, profile connector.Profile, dialogu
 	var peers sync.WaitGroup
 	d, err := connector.New(profile, connector.ConnectionConfig{Host: "synthetic", CommandTimeout: time.Second}, connector.WithTransportFactory(func(context.Context, connector.ConnectionConfig) (io.ReadWriteCloser, error) {
 		a, b := net.Pipe()
-		peers.Add(1)
-		go func() {
-			defer peers.Done()
+		peers.Go(func() {
 			defer b.Close()
 			_, _ = io.WriteString(b, prompt)
 			scanner := bufio.NewScanner(b)
@@ -79,7 +77,7 @@ func sessionWith(t *testing.T, vendor string, profile connector.Profile, dialogu
 			if scanner.Scan() {
 				t.Errorf("unexpected command after transcript: %q", scanner.Text())
 			}
-		}()
+		})
 		return a, nil
 	}))
 	if err != nil {

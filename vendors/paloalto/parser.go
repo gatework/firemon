@@ -7,7 +7,6 @@ import (
 	"net/netip"
 
 	"strings"
-	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
@@ -22,19 +21,18 @@ type parser struct {
 	rows     []row
 	builder  *config.Builder
 	graph    *fm.Firewall
-	location *time.Location
 	prefixes map[fm.ID]netip.Prefix
 }
 
 type Parser struct{ Limits config.Limits }
 
-func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-	return (Parser{}).Parse(ctx, source, metadata)
-}
-
 func (adapter Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor = "paloalto"
-	metadata.ParserVersion = "paloalto-go-4"
+	metadata.ParserVersion = "paloalto-go-5"
+	selected := metadata.Context
+	if selected == "" {
+		selected = "vsys1"
+	}
 	var c *config.Content
 	var statements []config.Statement
 	var native *xmlInput
@@ -60,7 +58,12 @@ func (adapter Parser) Parse(ctx context.Context, source config.Source, metadata 
 		return nil, err
 	}
 	p := &parser{builder: builder, prefixes: make(map[fm.ID]netip.Prefix)}
+	selection := builder.Begin()
+	defer selection.Rollback()
 	for _, line := range statements {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		w := line.Words
 		if len(w) == 0 {
 			p.rows = append(p.rows, row{source: line})
@@ -76,12 +79,16 @@ func (adapter Parser) Parse(ctx context.Context, source config.Source, metadata 
 			w = w[1:]
 		}
 		if len(w) > 1 && w[0] == "vsys" {
-			if w[1] != "vsys1" {
+			if w[1] != selected {
+				selection.Ignore("unselected virtual system", line.Lines()...)
 				continue
 			}
 			w = w[2:]
 		}
 		p.rows = append(p.rows, row{line, w, shared})
+	}
+	if err := builder.Commit(selection); err != nil {
+		return nil, err
 	}
 	if err := p.builder.Phase(ctx, "objects", p.objects); err != nil {
 		return nil, err

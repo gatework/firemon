@@ -2,12 +2,21 @@
 
 ## Unreleased — Go implementation
 
+- Require Go 1.27 and concentrate target provenance and native declaration
+  ownership in private business modules. Preserve command, approval and snapshot
+  formats; add bounded service-term expansion and manifest persistence, explicit
+  completion facts, evidence retention after cancellation and validated NAT time
+  identities. See [migration and verification](docs/2026-11-07-go127-verification.md).
+- Give the offline CLI consistent help, checked output, cancelable input and
+  exit codes 0/1/2/130/143. Scripts can distinguish invalid input, execution
+  failures and SIGINT/SIGTERM; successful JSON output remains compatible.
+
 - Share candidate discovery, cost ordering and bounded attempts between access
   and policy-batch planning while preserving their proof, refusal and digest
   contracts. Migrate the optional adapter to go-net-connector v0.2.0 and
   go-expect v0.4.0, retaining failed capture evidence and configuration isolation.
   CI covers the core, the versioned adapter and the current-core pairing on Go
-  1.26.0 and 1.27.x. See [integration verification](docs/integration-verification.md).
+  1.27.0 and 1.27.x. See [integration verification](docs/integration-verification.md).
 
 - Add Perl-grounded business request batches with independent input dispositions, frozen topology/revisions, exact whole-device policy/NAT proofs, 20 native NAT creation forms, four-vendor finite schedules with verified capture clocks, native usage evidence and offline lifecycle reports/plans. Persist explicitly selected device plans for exact reconstruction and no-write recovery through the existing deployment engine. See [business contracts and verification](docs/business-lifecycle.md).
 

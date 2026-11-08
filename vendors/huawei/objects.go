@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/vendors/internal/schedule"
 )
 
 // Indexed native members replace a prior member with the same ID. Automatic
@@ -374,9 +376,26 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 					ok = true
 				}
 			}
+			if len(w) >= 5 && w[0] == "period-range" && w[2] == "to" {
+				days, err := schedule.Days(w[4:], map[string][]time.Weekday{
+					"daily":       schedule.EveryDay(),
+					"working-day": {time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday},
+					"off-day":     {time.Saturday, time.Sunday},
+				})
+				if err == nil {
+					windows, zone, err := schedule.SameDay(s, days, w[1], w[3])
+					if err == nil {
+						schedule.AddWeekly(&r, windows, zone)
+						ok = true
+					}
+				}
+			}
 			claim(tx, &r.Object, line, ok)
 		}
-		if len(r.Windows) == 0 {
+		if len(r.Windows) > 0 && len(r.Weekly) > 0 {
+			r.Unsupported = append(r.Unsupported, "combined absolute and periodic time-range semantics not established for this capture")
+		}
+		if len(r.Windows) == 0 && len(r.Weekly) == 0 {
 			r.Unsupported = append(r.Unsupported, "native schedule clock or window not established")
 		}
 		d.Schedules = append(d.Schedules, r)

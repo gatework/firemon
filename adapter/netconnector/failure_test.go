@@ -37,9 +37,7 @@ func controlledDevice(t *testing.T, vendor string, serve func(net.Conn)) (*adapt
 	var peers sync.WaitGroup
 	d, err := connector.New(profile, connector.ConnectionConfig{Host: "synthetic", CommandTimeout: time.Second}, connector.WithTransportFactory(func(context.Context, connector.ConnectionConfig) (io.ReadWriteCloser, error) {
 		a, b := net.Pipe()
-		peers.Add(1)
-		go func() {
-			defer peers.Done()
+		peers.Go(func() {
 			defer b.Close()
 			_, _ = io.WriteString(b, prompt)
 			if vendor == "paloalto" {
@@ -57,7 +55,7 @@ func controlledDevice(t *testing.T, vendor string, serve func(net.Conn)) (*adapt
 				}
 			}
 			serve(b)
-		}()
+		})
 		return a, nil
 	}))
 	if err != nil {

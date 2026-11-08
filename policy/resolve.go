@@ -13,14 +13,16 @@ type resolutionBudget struct {
 	cache        *resolutionCache
 }
 
-func (b *resolutionBudget) charge() error {
+func (b *resolutionBudget) charge() error { return b.chargeCount(1) }
+
+func (b *resolutionBudget) chargeCount(count int) error {
 	if err := b.ctx.Err(); err != nil {
 		return err
 	}
-	if b.spent >= b.limit {
+	if count < 0 || count > b.limit-b.spent {
 		return ErrBudget
 	}
-	b.spent++
+	b.spent += count
 	return nil
 }
 
@@ -48,21 +50,20 @@ func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *re
 				known = false
 				return nil
 			}
-			r := a.Record()
-			if len(r.Unsupported) > 0 || r.FQDN != "" {
+			if a.HasUnsupported() || a.FQDN() != "" {
 				known = false
 			}
 			// A FortiOS VIP also selects ports, interfaces and a policy lookup
 			// class. Only the native evaluator may reduce it to address coverage.
-			if r.VIP != (fm.NATRef{}) {
+			if a.VIP() != (fm.NATRef{}) {
 				known = false
 			}
-			for _, interval := range a.Set().Ranges() {
-				if err := budget.charge(); err != nil {
-					return err
-				}
-				ranges = append(ranges, interval)
+			set := a.Set()
+			// Reserve normalized ranges before Ranges allocates their detached view.
+			if err := budget.chargeCount(set.RangeCount()); err != nil {
+				return err
 			}
+			ranges = append(ranges, set.Ranges()...)
 		case fm.AddressGroupObject:
 			if states[ref.ID] == 1 {
 				known = false
@@ -77,11 +78,10 @@ func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *re
 				return nil
 			}
 			states[ref.ID] = 1
-			r := g.Record()
-			if len(r.Unsupported) > 0 {
+			if g.HasUnsupported() {
 				known = false
 			}
-			for _, member := range r.Members {
+			for member := range g.Members() {
 				if err := visit(member); err != nil {
 					return err
 				}
@@ -99,6 +99,9 @@ func expandAddresses(fw *fm.Firewall, refs []fm.AddressRef, any bool, budget *re
 	}
 	if !known {
 		return allAddresses(), false, nil
+	}
+	if err := budget.ctx.Err(); err != nil {
+		return flow.AddressSet{}, false, err
 	}
 	set, err := flow.NewAddressSet(ranges...)
 	return set, err == nil, err
@@ -132,11 +135,10 @@ func expandServices(fw *fm.Firewall, refs []fm.ServiceRef, any bool, budget *res
 				known = false
 				return nil
 			}
-			r := s.Record()
-			if len(r.Unsupported) > 0 {
+			if s.HasUnsupported() {
 				known = false
 			}
-			for _, term := range r.Terms {
+			for term := range s.Terms() {
 				if err := budget.charge(); err != nil {
 					return err
 				}
@@ -159,11 +161,10 @@ func expandServices(fw *fm.Firewall, refs []fm.ServiceRef, any bool, budget *res
 				return nil
 			}
 			states[ref.ID] = 1
-			r := g.Record()
-			if len(r.Unsupported) > 0 {
+			if g.HasUnsupported() {
 				known = false
 			}
-			for _, member := range r.Members {
+			for member := range g.Members() {
 				if err := visit(member); err != nil {
 					return err
 				}

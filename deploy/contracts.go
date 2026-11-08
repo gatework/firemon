@@ -159,3 +159,8 @@ type Result struct {
 	Phase               Phase
 	Recovered           bool
 }
+
+// Terminal reports a durably confirmed publication or abortion. An accompanying
+// error, such as a transport or journal lease close failure, does not undo it.
+// Intermediate phases and zero results still require the caller to inspect error.
+func (r Result) Terminal() bool { return r.Phase == Published || r.Phase == Aborted }

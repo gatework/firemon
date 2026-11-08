@@ -2,6 +2,11 @@
 
 Spec: ../spec.md
 
+Continuation: the [2026-11-07 domain/migration plan](2026-11-07-domain-migration.md)
+and [implementation report](../2026-11-07-domain-improvements.md) add typed calendars,
+atomic policy/NAT migration, scoped reuse and explicit current-format APIs. The
+original task sequence below remains as historical execution context.
+
 Completion audit (2026-10-29): all nine tasks have implementation and executable verification evidence in [the requirement audit](../verification.md). The fresh whole-branch review's two Important findings were corrected with failing-then-passing regressions and a green full race suite. [Delivery status](../status.md) separates exact-commit CI, the pinned optional adapter and unverified real-device/native capabilities. The original task contracts below are retained.
 
 ## Global constraints

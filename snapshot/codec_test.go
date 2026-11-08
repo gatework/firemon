@@ -132,8 +132,8 @@ func TestGobRestoresExplicitVIPReferencesAndTypedPointerIdentity(t *testing.T) {
 	if err := snapshot.Encode(&buf, original); err != nil {
 		t.Fatal(err)
 	}
-	if version := uint16(buf.Bytes()[10])<<8 | uint16(buf.Bytes()[11]); version != 9 {
-		t.Fatalf("semantic version = %d, want 9", version)
+	if version := uint16(buf.Bytes()[10])<<8 | uint16(buf.Bytes()[11]); version != 10 {
+		t.Fatalf("semantic version = %d, want 10", version)
 	}
 	fw, err := snapshot.Decode(&buf, snapshot.DefaultMaxBytes)
 	if err != nil {

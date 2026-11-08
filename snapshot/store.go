@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -21,6 +22,9 @@ var ErrConflict = errors.New("snapshot revision conflict")
 var ErrUnavailable = errors.New("current firewall state is unavailable")
 var ErrReserved = errors.New("device has a pending operation")
 var ErrNotFound = errors.New("snapshot not found")
+
+// ErrLimit identifies a snapshot persistence resource limit.
+var ErrLimit = errors.New("snapshot resource limit exceeded")
 
 type Head struct {
 	Networks                                              []flow.AddressRange
@@ -50,7 +54,10 @@ type Manifest struct {
 	Events       []Event
 	Acknowledged map[string]uint64
 }
-type Store struct{ root string }
+type Store struct {
+	root          string
+	manifestLimit int64
+}
 
 func (s *Store) validate(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
@@ -73,7 +80,7 @@ func Open(root string) (*Store, error) {
 	if err = os.MkdirAll(filepath.Join(abs, "objects"), 0700); err != nil {
 		return nil, err
 	}
-	return &Store{root: abs}, nil
+	return &Store{root: abs, manifestLimit: DefaultMaxBytes}, nil
 }
 func emptyManifest() Manifest {
 	return Manifest{Version: 1, Devices: make(map[string]Head), Reservations: make(map[string]Reservation), Publications: make(map[string]Publication), Acknowledged: make(map[string]uint64)}
@@ -87,8 +94,15 @@ func (s *Store) readManifest() (result Manifest, err error) {
 		return Manifest{}, err
 	}
 	defer func() { err = errors.Join(err, f.Close()) }()
+	data, err := io.ReadAll(io.LimitReader(f, s.manifestLimit+1))
+	if err != nil {
+		return Manifest{}, fmt.Errorf("%w: read manifest: %w", ErrFormat, err)
+	}
+	if int64(len(data)) > s.manifestLimit {
+		return Manifest{}, fmt.Errorf("%w: manifest: %w", ErrFormat, ErrLimit)
+	}
 	var m Manifest
-	decoder := json.NewDecoder(io.LimitReader(f, DefaultMaxBytes))
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err = decoder.Decode(&m); err != nil {
 		return Manifest{}, fmt.Errorf("%w: manifest: %w", ErrFormat, err)
@@ -115,6 +129,9 @@ func (s *Store) writeManifest(m Manifest) error {
 	data, err := json.Marshal(m)
 	if err != nil {
 		return err
+	}
+	if int64(len(data)) > s.manifestLimit {
+		return fmt.Errorf("encode manifest: %w", ErrLimit)
 	}
 	return atomicWrite(filepath.Join(s.root, "manifest.json"), data)
 }

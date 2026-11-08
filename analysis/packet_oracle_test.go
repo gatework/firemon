@@ -112,7 +112,7 @@ func oracleSchedule(data fm.Data, id fm.ID, at time.Time) (bool, bool) {
 		if schedule.ID != id {
 			continue
 		}
-		if at.IsZero() || len(schedule.Unsupported) != 0 || len(schedule.Recurring) != 0 || len(schedule.Windows) == 0 {
+		if at.IsZero() || len(schedule.Unsupported) != 0 || len(schedule.Weekly) != 0 || len(schedule.Windows) == 0 {
 			return true, false
 		}
 		for _, window := range schedule.Windows {

@@ -18,7 +18,7 @@ import (
 
 func parse(t *testing.T, raw string) *fm.Firewall {
 	t.Helper()
-	fw, err := srx.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "fw"})
+	fw, err := (srx.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "fw"})
 	if err != nil {
 		t.Fatal(err)
 	}

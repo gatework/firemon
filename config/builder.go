@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	fm "github.com/gatework/firemon"
 )
@@ -36,6 +37,8 @@ type Builder struct {
 	staticNATs    recordTable[fm.StaticNATRecord]
 	dynamicNATs   recordTable[fm.DynamicNATRecord]
 	natPools      recordTable[fm.NATPoolRecord]
+
+	serviceTermCount int
 }
 
 type phaseFrame struct{ parent *phaseFrame }
@@ -137,6 +140,7 @@ func (b *Builder) Phase(ctx context.Context, name string, run func(context.Conte
 	addressesStart := len(b.addresses.records)
 	addressGroupsStart := len(b.addressGroups.records)
 	servicesStart := len(b.services.records)
+	serviceTermsStart := b.serviceTermCount
 	serviceGroupsStart := len(b.serviceGroups.records)
 	schedulesStart := len(b.schedules.records)
 	rulesStart := len(b.rules.records)
@@ -156,6 +160,7 @@ func (b *Builder) Phase(ctx context.Context, name string, run func(context.Conte
 			truncateRecords(&b.addresses, addressesStart, func(r fm.AddressRecord) fm.ID { return r.ID })
 			truncateRecords(&b.addressGroups, addressGroupsStart, func(r fm.AddressGroupRecord) fm.ID { return r.ID })
 			truncateRecords(&b.services, servicesStart, func(r fm.ServiceRecord) fm.ID { return r.ID })
+			b.serviceTermCount = serviceTermsStart
 			truncateRecords(&b.serviceGroups, serviceGroupsStart, func(r fm.ServiceGroupRecord) fm.ID { return r.ID })
 			truncateRecords(&b.schedules, schedulesStart, func(r fm.ScheduleRecord) fm.ID { return r.ID })
 			truncateRecords(&b.rules, rulesStart, func(r fm.RuleRecord) fm.ID { return r.ID })
@@ -358,4 +363,34 @@ func (b *Builder) ScheduleWindow(layout, start, end string) (fm.TimeWindow, stri
 	clock := *b.content.source.ScheduleClock
 	w, err := clock.ParseWindow(layout, start, end)
 	return w, clock.Timezone, err
+}
+
+// ScheduleBound interprets an optional date bound using capture-bound evidence.
+func (b *Builder) ScheduleBound(layout, value string, end bool) (time.Time, string, error) {
+	if b.content.source.ScheduleClock == nil {
+		return time.Time{}, "", fm.ErrScheduleTime
+	}
+	clock := *b.content.source.ScheduleClock
+	at, err := clock.ParseBound(layout, value, end)
+	return at, clock.Timezone, err
+}
+
+// ScheduleWeekly requires verified native civil-calendar and endpoint semantics.
+func (b *Builder) ScheduleWeekly(days []time.Weekday, start, end string) ([]fm.WeeklyWindow, string, error) {
+	if b.content.source.ScheduleClock == nil {
+		return nil, "", fm.ErrScheduleTime
+	}
+	clock := *b.content.source.ScheduleClock
+	windows, err := clock.ParseWeekly(days, start, end)
+	return windows, clock.Timezone, err
+}
+
+// ScheduleWeeklySpan parses one continuous native interval across weekdays.
+func (b *Builder) ScheduleWeeklySpan(startDay, endDay time.Weekday, start, end string) ([]fm.WeeklyWindow, string, error) {
+	if b.content.source.ScheduleClock == nil {
+		return nil, "", fm.ErrScheduleTime
+	}
+	clock := *b.content.source.ScheduleClock
+	windows, err := clock.ParseWeeklySpan(startDay, endDay, start, end)
+	return windows, clock.Timezone, err
 }

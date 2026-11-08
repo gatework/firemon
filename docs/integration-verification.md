@@ -107,11 +107,15 @@ Go 1.27.1. No CPU override was supplied; benchmark names record concurrency 10.
 
 ## Continuous integration
 
-The CI workflow checks core, adapter-pinned and adapter-current on Go 1.26.0 and
-1.27.x with module verification, vet, uncached race tests and builds. Fixed module
+At this integration baseline the CI workflow checked core, adapter-pinned and
+adapter-current on Go 1.26.0 and 1.27.x with module verification, vet, uncached
+race tests and builds. Fixed module
 jobs also check tidy output; only the adapter-current jobs create a temporary
 workspace. Formatting uses Go 1.27.x. Dependabot monitors the nested adapter
 module as well as the root module and GitHub Actions.
+
+The subsequent [Go 1.27 update](2026-11-07-go127-verification.md) raises the
+minimum to 1.27.0 and records its own six-cell verification matrix.
 
 No release, real-device operation or hardware interoperability certification is
 part of this integration. Existing historical delivery records remain intact.

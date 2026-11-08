@@ -143,7 +143,7 @@ func TestSRXDisabledPolicyRemovalHasIndependentReadbackProof(t *testing.T) {
 	path := "security policies from-zone inside to-zone outside policy permit-web"
 	before := parse(t, raw+"deactivate "+path+"\n")
 	var lines []string
-	for _, line := range strings.Split(raw, "\n") {
+	for line := range strings.SplitSeq(raw, "\n") {
 		if !strings.Contains(line, path) {
 			lines = append(lines, line)
 		}

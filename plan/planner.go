@@ -68,7 +68,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 			return nil, err
 		}
 		result := &Plan{before: fw, after: fw, proof: Proof{BaseDigest: fw.SemanticDigest(), ResultDigest: fw.SemanticDigest(), TargetAllowed: true, TargetSatisfied: true, OutsidePreserved: true, NATUnchanged: true}}
-		result.intent, result.engine = accessIntent{target: q}, p.Engine
+		result.intent, result.engine = accessIntent{target: q, options: p.effectiveOptions()}, p.Engine
 		if err := result.seal(); err != nil {
 			return nil, err
 		}
@@ -81,7 +81,7 @@ func (p Planner) Plan(ctx context.Context, fw *fm.Firewall, requests []policy.Re
 	if err := visits.take(ctx, fw.RuleCount()); err != nil {
 		return nil, err
 	}
-	for _, r := range fw.Rules() {
+	for r := range fw.DeclaredRules() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -123,7 +123,7 @@ func (a *accessSearchAdapter) rules(ctx context.Context) iter.Seq2[*fm.Rule, err
 			yield(nil, err)
 			return
 		}
-		for _, rule := range s.before.Rules() {
+		for rule := range s.before.DeclaredRules() {
 			if err := ctx.Err(); err != nil {
 				yield(nil, err)
 				return

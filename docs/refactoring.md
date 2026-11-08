@@ -136,11 +136,10 @@ context, exhausted budget or invalid graph is an execution error and must be
 propagated. Resolvers use `Engine.Limits.MaxCombinations`; they never invent a
 background context. `Match` and `Query` reject a nil firewall with `policy.ErrInvalid`.
 
-Existing package-level native `Parse` functions remain convenient default entry
-points. For Fortinet, `Parser.Parse` and the registry use `Metadata.Context`,
-defaulting to root. The older package `fortinet.Parse` retains its root-only
-behavior; `ParseVDOM` remains an explicit-context convenience. XML and CLI input
-obey the same configured limits. `config.DefaultMaxBytes` names the existing
+Native entry points are `Parser.Parse`; package-level `Parse` and `ParseVDOM`
+were removed in the 2026-11-07 development cleanup. Fortinet uses
+`Metadata.Context`, defaulting to root. XML and CLI input obey the same
+configured limits. `config.DefaultMaxBytes` names the existing
 16 MiB source ceiling; cumulative transport output is a distinct adapter limit.
 
 `Rules()` retains source declaration order. `OrderedRules()` is an `iter.Seq`
@@ -150,7 +149,12 @@ mutable containers. Query memoization is invocation-local, graph-bound and
 weight-bounded; cache hits charge the original traversal budget. Time, routing,
 VIP selection and decisions are not cached.
 
-## Compatibility and execution invariants
+## Historical compatibility and execution invariants
+
+The following format-9 compatibility statements describe the earlier refactor.
+The [2026-11-07 implementation](2026-11-07-domain-improvements.md) supersedes them
+with snapshot 10, reconstruction 2 and approval 4, removes parser/application
+forwarding APIs and replaces old approval golden bytes with behavior tests.
 
 Snapshot semantic format stays at **9**; manifest and journal layouts are unchanged.
 Request/record `Scope` and `RuleSet` fields retain their wire representation;
@@ -238,8 +242,9 @@ analyses retain their distinct evidence and deletion-authority semantics.
 native entry points now express phase order directly. `Builder.Seal` replaces
 `Seal(session.Data())`, avoiding a second whole-graph copy. `XMLDocument.Content`
 replaces its Cursor field; XML node navigation and the XML function are unchanged.
-These low-level APIs deliberately have no compatibility aliases. Parser, Source,
-Limits, native Parse/ParseVDOM and snapshot format 9 retain their contracts.
+These low-level APIs deliberately have no compatibility aliases. Parser, Source
+and Limits retain their responsibilities; the current domain continuation uses
+`Parser.Parse` and snapshot semantic format 10.
 
 Empty or malformed input observes an already canceled context first. Scanning
 checks cancellation during bounded byte chunks and before success. XML checks
@@ -279,3 +284,104 @@ member observations report usage and cannot establish paired-flow preservation.
 coverage and cannot produce a known decision. Shared `flow.AllTraffic` and
 `Traffic.Equal` replace duplicate universes and equality helpers without changing
 comparison direction or budgets.
+
+## Go 1.27 business module update
+
+The core and optional connector module now require Go 1.27. CI checks the
+minimum 1.27.0 and current 1.27.x in three configurations: core, separately pinned
+adapter, and adapter paired with the checked-out core. The dependency pin is
+unchanged; the paired check does not claim that unpublished core changes are
+available to independent consumers. See [verification](2026-11-07-go127-verification.md).
+
+### Public interface and behavior migration
+
+| Interface | Contract |
+| --- | --- |
+| `config.Limits.MaxServiceTerms` | Total `ServiceRecord.Terms` in the accepted catalog; zero or negative uses `config.DefaultMaxServiceTerms` (100,000). Applies to all seven parsers. |
+| `Content.Limits()` | Returns normalized parser limits by value. |
+| `deploy.Result.Terminal()` | True for durably confirmed Published or Aborted. Inspect both result and error; session/lease close failures do not undo completion. |
+| `operations.CollectResult.Published()` | Confirms publication independently of completeness and capture/close errors. Batch collection retains complete/incomplete status with its error. |
+| `snapshot.ErrLimit` | A manifest exceeds the 128 MiB persistence limit. An already stored oversized manifest also matches `snapshot.ErrFormat`. |
+| `Firewall.DeclaredRules()` | Visits shared immutable rules in source declaration order without allocating a rule slice; supports early stop. `OrderedRules()` retains native evaluation order and `Rules()` retains its owned slice. |
+| `policy.Engine.NATContexts` / `ProveNATEffects` | Requested and derived times must support the existing `time.Time` JSON encoding, or fail with `policy.ErrInvalid`. Zero time remains valid outside the existing nonzero Window-start requirement. |
+
+Service-term capacity counts builtins, repeated terms and terms retained on
+unsupported records. It is a catalog capacity, not a cumulative work budget.
+Replacement can release capacity. Each transaction bounds its pending new data
+before cloning, then checks the final accepted size after replacements. Failed
+or canceled phases restore both records and source evidence with the capacity
+count. PAN also checks source/destination port products before allocation;
+cancellation and capacity errors propagate instead of becoming unsupported
+syntax or unrestricted traffic.
+
+Deployment failure after observing running state retains that evidence through
+a separate five-second local finalization context. Device operations still use
+the caller's context. Uncertain evidence retains the reservation and recovery
+never retries device writes. A Reserve error may occur after installation, so it
+requires independent recovery rather than an assumed Aborted result. A known
+Aborted journal record is terminal on retry, including after authorization refusal.
+If an independent manifest has no reservation and the journal has neither a
+configuration token nor write intent, recovery can abort even if a concurrent
+publication advanced the head. A configuration token keeps that case pending.
+
+Manifest size is checked before atomic replacement. The old manifest remains
+unchanged after rejection, including its head, generation, reservation and
+outbox. This bounds committed documents; JSON encoding itself still buffers the
+value. Existing immutable blobs are compared in bounded chunks through real EOF.
+
+### Business modules
+
+`targetBatch` owns discovery, per-device planning and final report projection via
+`resolve`, `plan` and `finish`. One target entry holds provenance, outcome,
+planning input and packet/alias/lifetime proof. Device work references entries;
+there is no mutable intermediate report or slice-length protocol to synchronize.
+Unsupported outcomes keep their original positions, and fatal errors remove all
+plans while preserving partial discovery. Business and topology sources retain
+order and duplicates; topology sources do not enter native approval material.
+
+`vendors/internal/render.NativeBuilder` validates a native delta once per render
+and records typed owners, generated declarations and policy attachments. Claims
+must name an actual new owner and an actual Match or typed VIP relationship.
+Shared literals allow multiple owners; policy attachments require their new
+DynamicNAT owner and reject duplicates. Prepared batches own changes, commands,
+attachments and clock. Adapters retain their native syntax and order, including
+ASA derived NAT order, StoneOS ordering, SRX pools and schedule prefixes.
+
+The source references were `Firewall/Policy/Designer.pm:161-272`,
+`Firewall/Policy/Designer/Fortinet.pm:198` and
+`Firewall/Policy/Designer/Netscreen.pm:169` under the local Perl backend. They
+establish device-grouped provenance and syntax-generated declaration ownership.
+Go retains exact paired traffic, typed NAT, unknown conditions and independent
+change/readback proof rather than reproducing dynamic dispatch or dimension-wise
+merging. No Perl source is included in the Go module.
+
+### CLI migration
+
+Existing command names, flags and successful JSON fields/encoding are preserved.
+`firemon --help`, `firemon -h` and command help list the actual supported commands
+and flags on stdout. Errors go to stderr once. Output errors, including short
+writes, are returned; bounded reports still encode completely before writing.
+Input readers check cancellation between reads, and connected pipe reads are
+interruptible, including stdin. A blocked ordinary filesystem syscall is still
+subject to the operating system's behavior.
+Pipes must have a connected producer; an empty FIFO is rejected without waiting
+indefinitely for a writer. File open/read/close errors remain runtime failures.
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | Successful command or help |
+| 1 | Execution, storage or output failure |
+| 2 | Invalid command, flags, arguments or input document |
+| 130 | Interrupted with SIGINT or a canceled calling context |
+| 143 | Interrupted with SIGTERM |
+
+Scripts that previously treated every error as exit 1 should accept any nonzero
+status, or distinguish usage from runtime failure. A deadline remains a runtime
+failure. Existing CLI work ceilings remain separate from library defaults.
+
+Snapshot semantic format 9, manifest/journal layouts, request and reconstruction
+formats remain unchanged. Native command and approval fixtures pin valid inputs;
+legal time offsets and raw empty rule-set names retain their previous proof
+identities and sorting. JSON v2 interfaces, nil/empty changes and fixed random
+samples were not migrated. Mechanical changes use selected standard-library
+fixers; direct-local candidate rejection checks retain their original meaning.

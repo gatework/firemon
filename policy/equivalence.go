@@ -19,9 +19,9 @@ type Equivalence struct {
 	Contexts                 int
 }
 
-// Contexts enumerates all native zone/chain combinations and all absolute
-// schedule transitions at or after from. Each time represents the entire
-// half-open interval to the next transition; there is no polling approximation.
+// Contexts enumerates native zone/chain combinations and exact temporal cells
+// at or after from. Absolute/date bounds and common-timezone weekly phases form
+// a finite proof partition, including future civil-clock transitions.
 func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.Firewall) ([]Request, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 	}
 	chains := make(map[fm.PolicyChain]bool)
 	zones := make(map[fm.ID]bool)
-	times := []time.Time{from}
+	temporal := newSchedulePartition(from, limits.MaxCombinations, charge)
 	for _, fw := range firewalls {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -69,32 +69,14 @@ func (e Engine) Contexts(ctx context.Context, from time.Time, firewalls ...*fm.F
 			zones[z.ID()] = true
 		}
 		for _, schedule := range fw.Schedules() {
-			if err := ctx.Err(); err != nil {
+			if err := temporal.add(schedule); err != nil {
 				return nil, err
 			}
-			if from.IsZero() {
-				return nil, ErrNotEquivalent
-			}
-			if schedule.HasUnsupported() || schedule.HasRecurrence() {
-				return nil, ErrNotEquivalent
-			}
-			for w := range schedule.Windows() {
-				if err := charge(1); err != nil {
-					return nil, err
-				}
-				for _, at := range []time.Time{w.Start, w.End} {
-					if at.Before(from) {
-						continue
-					}
-					if !slices.ContainsFunc(times, func(v time.Time) bool { return v.Equal(at) }) {
-						times = append(times, at)
-					}
-					if len(times) > limits.MaxCombinations {
-						return nil, ErrBudget
-					}
-				}
-			}
 		}
+	}
+	times, err := temporal.times()
+	if err != nil {
+		return nil, err
 	}
 	if len(chains) == 0 {
 		chains[fm.PolicyChain{RuleSet: "security"}] = true

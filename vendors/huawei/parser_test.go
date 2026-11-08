@@ -57,7 +57,7 @@ return
 
 func parse(t *testing.T, raw string) *fm.Firewall {
 	t.Helper()
-	fw, err := huawei.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic-usg", Software: "V500R005"})
+	fw, err := (huawei.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic-usg", Software: "V500R005"})
 	if err != nil {
 		t.Fatal(err)
 	}

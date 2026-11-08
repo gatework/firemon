@@ -11,13 +11,15 @@ import (
 // native identities; Replace explicitly continues identities already accepted.
 // Neither operation chooses a vendor's append/replace semantics implicitly.
 type Transaction struct {
-	owner        *Builder
-	phase        *phaseFrame
-	checkpoint   Checkpoint
-	claims       []fm.Evidence
-	draft        fm.Data
-	replacements fm.Data
-	closed       bool
+	owner               *Builder
+	phase               *phaseFrame
+	checkpoint          Checkpoint
+	claims              []fm.Evidence
+	draft               fm.Data
+	replacements        fm.Data
+	pendingServiceTerms int
+	err                 error
+	closed              bool
 }
 
 func (b *Builder) Begin() *Transaction {
@@ -27,7 +29,7 @@ func (b *Builder) Begin() *Transaction {
 	return &Transaction{owner: b, phase: b.phase, checkpoint: b.content.Checkpoint()}
 }
 func (t *Transaction) Parse(lines ...int) {
-	if t == nil || t.closed {
+	if t == nil || t.closed || t.err != nil {
 		return
 	}
 	for _, n := range lines {
@@ -35,7 +37,7 @@ func (t *Transaction) Parse(lines ...int) {
 	}
 }
 func (t *Transaction) Ignore(reason string, lines ...int) {
-	if t == nil || t.closed {
+	if t == nil || t.closed || t.err != nil {
 		return
 	}
 	for _, n := range lines {
@@ -43,14 +45,29 @@ func (t *Transaction) Ignore(reason string, lines ...int) {
 	}
 }
 func (t *Transaction) Emit(d fm.Data) {
-	if t != nil && !t.closed {
+	if t.accept(d) {
 		appendData(&t.draft, d.Clone())
 	}
 }
 func (t *Transaction) Replace(d fm.Data) {
-	if t != nil && !t.closed {
+	if t.accept(d) {
 		appendData(&t.replacements, d.Clone())
 	}
+}
+
+// Pending capacity is checked before ownership copies. The final catalog is
+// checked at commit, after all replacements are known, regardless of call order.
+func (t *Transaction) accept(d fm.Data) bool {
+	if t == nil || t.closed || t.err != nil || t.owner == nil || t.owner.content == nil {
+		return false
+	}
+	count, err := countServiceTerms(d.Services, t.pendingServiceTerms, t.owner.content.limits.MaxServiceTerms)
+	if err != nil {
+		t.err = err
+		return false
+	}
+	t.pendingServiceTerms = count
+	return true
 }
 func (t *Transaction) Rollback() {
 	if t == nil || t.closed {
@@ -66,6 +83,8 @@ func (t *Transaction) close() {
 	t.draft = fm.Data{}
 	t.replacements = fm.Data{}
 	t.claims = nil
+	t.pendingServiceTerms = 0
+	t.err = nil
 }
 
 // Commit validates every identity and source claim before publishing any change.
@@ -83,6 +102,9 @@ func (b *Builder) Commit(t *Transaction) error {
 		return ErrClaim
 	}
 	fail := func(err error) error { t.Rollback(); return err }
+	if t.err != nil {
+		return fail(t.err)
+	}
 	seen := make(map[int]bool, len(t.claims))
 	for _, e := range t.claims {
 		n := e.Span.First
@@ -130,6 +152,17 @@ func (b *Builder) Commit(t *Transaction) error {
 	if err := validateRecords(b.natPools, t.draft.NATPools, t.replacements.NATPools, func(r fm.NATPoolRecord) fm.ID { return r.ID }, "NATPools"); err != nil {
 		return fail(err)
 	}
+	serviceTerms := b.serviceTermCount
+	for _, record := range t.replacements.Services {
+		serviceTerms -= len(b.services.records[b.services.index[record.ID]].Terms)
+	}
+	for _, records := range [][]fm.ServiceRecord{t.draft.Services, t.replacements.Services} {
+		var err error
+		serviceTerms, err = countServiceTerms(records, serviceTerms, b.content.limits.MaxServiceTerms)
+		if err != nil {
+			return fail(err)
+		}
+	}
 	// All validation precedes this synchronous ownership transfer.
 	applyRecords(b, &b.zones, t.draft.Zones, t.replacements.Zones, func(r fm.ZoneRecord) fm.ID { return r.ID })
 	applyRecords(b, &b.interfaces, t.draft.Interfaces, t.replacements.Interfaces, func(r fm.InterfaceRecord) fm.ID { return r.ID })
@@ -137,6 +170,7 @@ func (b *Builder) Commit(t *Transaction) error {
 	applyRecords(b, &b.addresses, t.draft.Addresses, t.replacements.Addresses, func(r fm.AddressRecord) fm.ID { return r.ID })
 	applyRecords(b, &b.addressGroups, t.draft.AddressGroups, t.replacements.AddressGroups, func(r fm.AddressGroupRecord) fm.ID { return r.ID })
 	applyRecords(b, &b.services, t.draft.Services, t.replacements.Services, func(r fm.ServiceRecord) fm.ID { return r.ID })
+	b.serviceTermCount = serviceTerms
 	applyRecords(b, &b.serviceGroups, t.draft.ServiceGroups, t.replacements.ServiceGroups, func(r fm.ServiceGroupRecord) fm.ID { return r.ID })
 	applyRecords(b, &b.schedules, t.draft.Schedules, t.replacements.Schedules, func(r fm.ScheduleRecord) fm.ID { return r.ID })
 	applyRecords(b, &b.rules, t.draft.Rules, t.replacements.Rules, func(r fm.RuleRecord) fm.ID { return r.ID })
@@ -157,6 +191,16 @@ func (b *Builder) Commit(t *Transaction) error {
 	b.sealed = nil
 	t.close()
 	return nil
+}
+
+func countServiceTerms(records []fm.ServiceRecord, count, limit int) (int, error) {
+	for _, record := range records {
+		if len(record.Terms) > limit-count {
+			return count, fmt.Errorf("%w: service terms exceed limit %d", ErrSource, limit)
+		}
+		count += len(record.Terms)
+	}
+	return count, nil
 }
 
 func validateRecords[T any](table recordTable[T], added, replaced []T, id func(T) fm.ID, name string) error {

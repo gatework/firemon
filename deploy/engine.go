@@ -130,15 +130,12 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	defer cancel()
 	lease, err := e.journal.Acquire(ctx, operation)
 	if err != nil {
-		if !dependency.Nil(lease) {
-			err = errors.Join(err, lease.Close())
-		}
-		return Result{}, err
+		return Result{}, errors.Join(err, closeLease(lease))
 	}
 	if dependency.Nil(lease) {
 		return Result{}, ErrInvalid
 	}
-	defer func() { err = errors.Join(err, lease.Close()) }()
+	defer func() { err = errors.Join(err, closeLease(lease)) }()
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
@@ -147,10 +144,11 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 		if prior.PlanDigest != p.Digest() || prior.BaselineRevision != expected || prior.Device != p.Before().Metadata().Device || prior.Context != p.Before().Metadata().Context {
 			return Result{}, ErrJournalConflict
 		}
-		if prior.Phase == Published {
-			return Result{Operation: operation, Revision: prior.PublishedRevision, Phase: Published}, nil
+		result := Result{Operation: operation, Revision: prior.PublishedRevision, Phase: prior.Phase}
+		if result.Terminal() {
+			return result, nil
 		}
-		return Result{Operation: operation, Phase: prior.Phase}, ErrPending
+		return result, ErrPending
 	}
 	if !errors.Is(err, ErrJournalNotFound) {
 		return Result{}, err
@@ -162,43 +160,40 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	}
 	current, head, err := e.store.Current(ctx, metadata.Device)
 	if err != nil {
-		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
+		return e.abort(ctx, a, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
 	if current == nil {
-		return Result{}, errors.Join(ErrInvalid, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
+		return e.abort(ctx, a, ErrInvalid)
 	}
 	if head.Revision != expected || current.SemanticDigest() != p.Before().SemanticDigest() {
-		return Result{}, errors.Join(snapshot.ErrConflict, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
+		return e.abort(ctx, a, snapshot.ErrConflict)
 	}
 	if err := e.authorizer.Authorize(ctx, Authorization{Operation: operation, Device: metadata.Device, BaselineRevision: expected, PlanDigest: p.Digest()}); err != nil {
-		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
+		return e.abort(ctx, a, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
 	if err := e.store.Reserve(ctx, metadata.Device, expected, operation); err != nil {
-		return Result{}, errors.Join(err, a.update(ctx, func(r *Record) { r.Phase = Aborted }))
+		// A failed durability step may still have installed the reservation.
+		// Only independent recovery can establish that this attempt owns none.
+		return Result{}, e.uncertain(ctx, a, err)
 	}
 	if err := a.update(ctx, func(r *Record) { r.Phase = Reserved }); err != nil {
 		return Result{}, errors.Join(ErrPending, err)
 	}
 	session, err := e.sessions.Open(ctx, metadata.Device)
 	if err != nil {
-		if !dependency.Nil(session) {
-			err = errors.Join(err, session.Close())
-		}
-		return Result{}, e.uncertain(ctx, a, err)
+		return Result{}, e.uncertain(ctx, a, errors.Join(err, closeSession(session)))
 	}
 	if dependency.Nil(session) {
 		return Result{}, e.uncertain(ctx, a, ErrInvalid)
 	}
 	defer func() {
-		if !dependency.Nil(session) {
-			err = errors.Join(err, session.Close())
-		}
+		err = errors.Join(err, closeSession(session))
 	}()
 	if err := ctx.Err(); err != nil {
 		return Result{}, e.uncertain(ctx, a, err)
@@ -217,10 +212,10 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	}
 	baseline, err := e.read(ctx, session, device.Running, a.get())
 	if err != nil {
-		return Result{}, e.uncertainRunning(ctx, a, baseline, err)
+		return Result{}, e.uncertainObserved(ctx, a, baseline, err)
 	}
 	if err := p.VerifyBaseline(ctx, baseline); err != nil {
-		return Result{}, errors.Join(ErrUncertain, err, e.observe(ctx, a, baseline))
+		return Result{}, e.uncertainObserved(ctx, a, baseline, err)
 	}
 	commands := p.Commands()
 	if len(commands) == 0 {
@@ -254,10 +249,11 @@ func (e Engine) Apply(ctx context.Context, operation, expected string, p *plan.P
 	if err := e.endConfiguration(ctx, session, a); err != nil {
 		return Result{}, e.uncertain(ctx, a, err)
 	}
-	if err := session.Close(); err != nil {
+	closing := session
+	session = nil
+	if err := closeSession(closing); err != nil {
 		return Result{}, e.uncertain(ctx, a, err)
 	}
-	session = nil
 	return e.readback(ctx, a, p, false)
 }
 
@@ -274,15 +270,12 @@ func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (re
 	defer cancel()
 	lease, err := e.journal.Acquire(ctx, operation)
 	if err != nil {
-		if !dependency.Nil(lease) {
-			err = errors.Join(err, lease.Close())
-		}
-		return Result{}, err
+		return Result{}, errors.Join(err, closeLease(lease))
 	}
 	if dependency.Nil(lease) {
 		return Result{}, ErrInvalid
 	}
-	defer func() { err = errors.Join(err, lease.Close()) }()
+	defer func() { err = errors.Join(err, closeLease(lease)) }()
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
@@ -341,7 +334,10 @@ func (e Engine) Recover(ctx context.Context, operation string, p *plan.Plan) (re
 			}
 			return Result{Operation: operation, Revision: r.BaselineRevision, Phase: phase, Recovered: true}, nil
 		}
-		if !r.WriteStarted && m.Devices[r.Device].Revision == r.BaselineRevision {
+		// Reserve can lose a race with another publication. No reservation and
+		// no configuration intent prove this attempt never reached device work,
+		// even when the current head has advanced beyond its baseline.
+		if !r.WriteStarted && r.ConfigurationToken == "" {
 			if err := a.update(ctx, func(r *Record) { r.Phase = Aborted }); err != nil {
 				return Result{}, err
 			}
@@ -364,15 +360,12 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 	r := a.get()
 	session, err := e.sessions.Open(ctx, r.Device)
 	if err != nil {
-		if !dependency.Nil(session) {
-			err = errors.Join(err, session.Close())
-		}
-		return Result{}, e.uncertain(ctx, a, err)
+		return Result{}, e.uncertain(ctx, a, errors.Join(err, closeSession(session)))
 	}
 	if dependency.Nil(session) {
 		return Result{}, e.uncertain(ctx, a, ErrInvalid)
 	}
-	defer func() { err = errors.Join(err, session.Close()) }()
+	defer func() { err = errors.Join(err, closeSession(session)) }()
 	if recovered {
 		if err := e.endConfiguration(ctx, session, a); err != nil {
 			return Result{}, e.uncertain(ctx, a, err)
@@ -380,7 +373,7 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 	}
 	observed, err := e.read(ctx, session, device.Running, r)
 	if err != nil {
-		return Result{}, e.uncertainRunning(ctx, a, observed, err)
+		return Result{}, e.uncertainObserved(ctx, a, observed, err)
 	}
 	_, afterErr := p.Verify(ctx, observed)
 	if afterErr == nil {
@@ -389,13 +382,13 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 		if recovered || !r.Saved {
 			saved, readErr := e.read(ctx, session, device.Saved, r)
 			if readErr != nil {
-				return Result{}, errors.Join(e.uncertain(ctx, a, readErr), e.observe(ctx, a, observed))
+				return Result{}, e.uncertainObserved(ctx, a, observed, readErr)
 			}
 			if _, err := p.Verify(ctx, saved); err != nil {
-				return Result{}, errors.Join(ErrUncertain, err, e.observe(ctx, a, observed))
+				return Result{}, e.uncertainObserved(ctx, a, observed, err)
 			}
 			if err := a.update(ctx, func(r *Record) { r.Saved = true }); err != nil {
-				return Result{}, e.uncertain(ctx, a, err)
+				return Result{}, e.uncertainObserved(ctx, a, observed, err)
 			}
 		}
 		return e.publish(ctx, a, observed, true, recovered)
@@ -404,10 +397,10 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 		if r.WriteStarted {
 			saved, readErr := e.read(ctx, session, device.Saved, r)
 			if readErr != nil {
-				return Result{}, errors.Join(e.uncertain(ctx, a, readErr), e.observe(ctx, a, observed))
+				return Result{}, e.uncertainObserved(ctx, a, observed, readErr)
 			}
 			if err := p.VerifyBaseline(ctx, saved); err != nil {
-				return Result{}, errors.Join(ErrUncertain, err, e.observe(ctx, a, observed))
+				return Result{}, e.uncertainObserved(ctx, a, observed, err)
 			}
 		}
 		// After an uncertain observation has advanced the head, republish the
@@ -420,7 +413,7 @@ func (e Engine) readback(ctx context.Context, a *attempt, p *plan.Plan, recovere
 		}
 		return Result{Operation: r.ID, Revision: r.BaselineRevision, Phase: Aborted, Recovered: true}, nil
 	}
-	return Result{}, errors.Join(ErrUncertain, afterErr, e.observe(ctx, a, observed))
+	return Result{}, e.uncertainObserved(ctx, a, observed, afterErr)
 }
 
 func (e Engine) endConfiguration(ctx context.Context, session Session, a *attempt) error {
@@ -466,7 +459,7 @@ func (e Engine) uncertain(ctx context.Context, a *attempt, cause error) error {
 	return errors.Join(ErrUncertain, cause, a.update(ctx, func(r *Record) { r.Phase = Uncertain }))
 }
 
-func (e Engine) uncertainRunning(ctx context.Context, a *attempt, observed *fm.Firewall, cause error) error {
+func (e Engine) uncertainObserved(ctx context.Context, a *attempt, observed *fm.Firewall, cause error) error {
 	if observed == nil {
 		return e.uncertain(ctx, a, cause)
 	}
@@ -475,6 +468,36 @@ func (e Engine) uncertainRunning(ctx context.Context, a *attempt, observed *fm.F
 	evidenceCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	return errors.Join(e.uncertain(evidenceCtx, a, cause), e.observe(evidenceCtx, a, observed))
+}
+
+// abort is valid only before attempting to reserve the device. Terminal results
+// are returned only after the journal has confirmed that no deployment will run.
+func (e Engine) abort(ctx context.Context, a *attempt, cause error) (Result, error) {
+	if err := a.update(ctx, func(r *Record) { r.Phase = Aborted }); err != nil {
+		return Result{}, errors.Join(cause, err)
+	}
+	r := a.get()
+	return Result{Operation: r.ID, Phase: Aborted}, cause
+}
+
+func closeSession(session Session) error {
+	if dependency.Nil(session) {
+		return nil
+	}
+	if err := session.Close(); err != nil {
+		return fmt.Errorf("close deployment session: %w", err)
+	}
+	return nil
+}
+
+func closeLease(lease Lease) error {
+	if dependency.Nil(lease) {
+		return nil
+	}
+	if err := lease.Close(); err != nil {
+		return fmt.Errorf("close deployment journal lease: %w", err)
+	}
+	return nil
 }
 
 func (e Engine) observe(ctx context.Context, a *attempt, fw *fm.Firewall) error {

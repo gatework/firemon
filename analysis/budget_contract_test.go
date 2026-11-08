@@ -23,14 +23,16 @@ func TestRiskBudgetsIncompleteRowsBeforeReturningUnknown(t *testing.T) {
 	}
 	q := request(t, "192.0.2.1", "198.51.100.1")
 	definition := analysis.RiskDefinition{ID: "risk", Version: "1", Mode: analysis.Declared, Relation: analysis.Intersects, Traffic: q.Traffic}
-	for _, limit := range []int{1, 2} {
+	// Evidence is retained with every row, so its indexing and copies also
+	// consume visits. A useful allowance returns unknown, never clean results.
+	for _, limit := range []int{1, 32} {
 		rows, err := (analysis.RiskAnalyzer{Engine: policy.Engine{Limits: policy.Limits{MaxVisits: limit}}}).Analyze(context.Background(), fw, q, definition)
 		if limit == 1 {
 			if rows != nil || !errors.Is(err, policy.ErrBudget) {
 				t.Fatalf("partial over-budget findings: %v, %v", rows, err)
 			}
 		} else if err != nil || len(rows) != 2 || rows[0].Value != analysis.Unknown {
-			t.Fatalf("exact-budget unknown rows: %v, %v", rows, err)
+			t.Fatalf("bounded unknown rows: %v, %v", rows, err)
 		}
 	}
 }

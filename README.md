@@ -4,6 +4,8 @@ Go firewall configuration and policy automation. The approved [specification](do
 
 The [domain refactoring and API migration guide](docs/refactoring.md) records the module audit, Perl responsibility mapping, shared contracts and development conventions.
 
+The [2026-11-07 implementation report](docs/2026-11-07-domain-improvements.md) describes typed weekly schedules, exact request coalescing, scoped object reuse, atomic policy/NAT migration and the removal of development compatibility APIs. [Schedule capabilities](vendors/SCHEDULES.md), [migration capabilities](vendors/MIGRATION.md) and [measured performance](docs/2026-11-07-domain-benchmarks.md) state the verified boundaries.
+
 The [parser design](docs/parser-design.md) maps Perl's content, multi-pass parsing and object catalogs into Go's Content/Builder implementation across all seven vendors. [Rewrite verification](docs/parser-rewrite-verification.md) records actual Perl comparisons, preserved graph/snapshot behavior and local performance checks.
 
 The [business lifecycle](docs/business-lifecycle.md) adds frozen-inventory request batches, partial per-input planning, explicit NAT and finite schedule intent, native usage analysis, and durable selected-device execution/recovery. [Actual Perl evidence](docs/business-oracle.md) and [local verification](docs/business-verification.md) state the supported behavior and limits.
@@ -12,7 +14,7 @@ The firewall graph includes interfaces, routes, zones, addresses and groups, ser
 
 This branch converts the original Ruby gem skeleton to Go while retaining Git history. The Ruby and Perl Algosec implementations are reference implementations, not runtime dependencies.
 
-Run `go test ./...` and `go vet ./...` from this directory. No database or device connection is required for offline tests.
+Requires Go 1.27 or newer. Run `go test ./...` and `go vet ./...` from this directory. No database or device connection is required for offline tests. The [Go 1.27 migration notes](docs/refactoring.md#go-127-business-module-update) describe parser capacity, confirmed completion and CLI exit codes.
 
 The [benchmark matrix](docs/benchmarks.md) includes reproducible synthetic workloads for all seven parsers and queries, plus NAT, packet routing, snapshots, planning and exact traffic algorithms.
 
@@ -47,4 +49,4 @@ The optional [connector adapter](adapter/netconnector/README.md) is a separate m
 
 Snapshot directories contain complete source configurations. Keep them local and trusted; gob is not an untrusted interchange format. Runtime files use private permissions. The optional database projection reads published snapshot files and requires a host-supplied idempotent transactional sink.
 
-Snapshot semantic format 9 adds typed VIP-to-StaticNAT/DynamicNAT and source-map-to-VIP references, while retaining explicit interface-IP selection, scoped PAN routes and inline address/service ownership. An explicit interface NAT selector uses only that configured host; it cannot expand to its prefix or secondary addresses. Unreferenced inline values have no independent native declaration; named objects and values still referenced by groups or NAT remain part of the semantic digest. Older semantic formats, including 8, are rejected explicitly; import the original capture into a new store rather than treating old cached graphs as current evidence.
+Snapshot semantic format 10 persists typed absolute/weekly schedules and calendar evidence together with VIP-to-StaticNAT/DynamicNAT and source-map-to-VIP references. Explicit interface-IP selection, scoped PAN routes and inline address/service ownership remain part of the model. An explicit interface NAT selector uses only that configured host; it cannot expand to its prefix or secondary addresses. Unreferenced inline values have no independent native declaration; named objects and values still referenced by groups or NAT remain part of the semantic digest. Older formats, including 9, are rejected; reimport the original capture into a new store. Reconstruction format 2 replays business inputs against the exact retained snapshots, and approval encoding version 4 binds the intent kind and proof. Historical encodings and convenience parser functions are not supported.

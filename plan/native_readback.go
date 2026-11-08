@@ -3,6 +3,8 @@ package plan
 import (
 	"fmt"
 	"maps"
+	"net/url"
+	"slices"
 
 	fm "github.com/gatework/firemon"
 )
@@ -73,18 +75,20 @@ func (p *Plan) remapNative(actual *fm.Data) (map[NativeIdentity]fm.ID, error) {
 	}); err != nil {
 		return nil, err
 	}
-	if err := mapNativeRecords(NativeDynamicNAT, a.DynamicNATs, actual.DynamicNATs, func(r *fm.DynamicNATRecord) *fm.Object { return &r.Object }, ids, func(r fm.DynamicNATRecord) string {
+	dynamic := a.DynamicNATs
+	if p.after.Metadata().Vendor == "netscreen" {
+		// ScreenOS policy NAT identity derives from its device-allocated owner.
+		// Its native name cannot be matched before that rule is established.
+		dynamic = slices.DeleteFunc(slices.Clone(dynamic), func(r fm.DynamicNATRecord) bool { return r.Rule != "" })
+	}
+	if err := mapNativeRecords(NativeDynamicNAT, dynamic, actual.DynamicNATs, func(r *fm.DynamicNATRecord) *fm.Object { return &r.Object }, ids, func(r fm.DynamicNATRecord) string {
 		return nativeNATKey(p.after.Metadata().Vendor, r.Object, r.Order, false)
 	}); err != nil {
 		return nil, err
 	}
-	reverse := map[NativeIdentity]fm.ID{}
-	for planned, observed := range ids {
-		key := NativeIdentity{planned.Kind, observed}
-		if reverse[key] != "" {
-			return nil, ErrReadback
-		}
-		reverse[key] = planned.ID
+	reverse, err := reverseNativeIDs(ids)
+	if err != nil {
+		return nil, err
 	}
 	remap := func(kind NativeKind, id fm.ID) fm.ID {
 		if v := reverse[NativeIdentity{kind, id}]; v != "" {
@@ -115,8 +119,6 @@ func (p *Plan) remapNative(actual *fm.Data) (map[NativeIdentity]fm.ID, error) {
 		r := &actual.Addresses[i]
 		if r.VIP.Kind == fm.StaticNATObject {
 			r.VIP.ID = remap(NativeStaticNAT, r.VIP.ID)
-		} else if r.VIP.Kind == fm.DynamicNATObject {
-			r.VIP.ID = remap(NativeDynamicNAT, r.VIP.ID)
 		}
 	}
 	for i := range actual.AddressGroups {
@@ -147,4 +149,84 @@ func (p *Plan) remapNative(actual *fm.Data) (map[NativeIdentity]fm.ID, error) {
 		r.DestinationPool = remap(NativePool, r.DestinationPool)
 	}
 	return ids, nil
+}
+
+func reverseNativeIDs(ids map[NativeIdentity]fm.ID) (map[NativeIdentity]fm.ID, error) {
+	reverse := make(map[NativeIdentity]fm.ID, len(ids))
+	for planned, observed := range ids {
+		key := NativeIdentity{planned.Kind, observed}
+		if reverse[key] != "" {
+			return nil, ErrReadback
+		}
+		reverse[key] = planned.ID
+	}
+	return reverse, nil
+}
+
+// remapNativeOwners runs after every created rule has one signature match.
+// Only ScreenOS policy NAT has an owner-derived ID and name; ordinary native
+// names retain the strict scope/name matching performed by remapNative.
+func (p *Plan) remapNativeOwners(actual *fm.Data, ruleIDs map[fm.ID]fm.ID, ids map[NativeIdentity]fm.ID) error {
+	for planned, observed := range ruleIDs {
+		ids[NativeIdentity{NativeRule, planned}] = observed
+	}
+	if p.after.Metadata().Vendor == "netscreen" {
+		type ownerKey struct {
+			scope string
+			rule  fm.ID
+		}
+		index := make(map[ownerKey][]int)
+		for i, r := range actual.DynamicNATs {
+			if r.Rule != "" {
+				key := ownerKey{r.Scope, r.Rule}
+				index[key] = append(index[key], i)
+			}
+		}
+		for _, want := range p.nativeChanges.Additions.DynamicNATs {
+			if want.Rule == "" {
+				continue
+			}
+			owner := p.after.Rule(want.Rule)
+			observed := ruleIDs[want.Rule]
+			if owner == nil || owner.Scope() != want.Scope || p.before.Rule(want.Rule) != nil || observed == "" || !screenOSPolicyIdentity(want) {
+				return fmt.Errorf("%w: invalid policy NAT owner %s", ErrReadback, want.ID)
+			}
+			key := ownerKey{want.Scope, observed}
+			matches := index[key]
+			if len(matches) != 1 {
+				return fmt.Errorf("%w: missing or ambiguous policy NAT for rule %s", ErrReadback, observed)
+			}
+			got := &actual.DynamicNATs[matches[0]]
+			if !screenOSPolicyIdentity(*got) || p.before.DynamicNAT(got.ID) != nil {
+				return fmt.Errorf("%w: invalid native policy NAT identity %s", ErrReadback, got.ID)
+			}
+			ids[NativeIdentity{NativeDynamicNAT, want.ID}] = got.ID
+			got.ID, got.Name = want.ID, want.Name
+			delete(index, key)
+		}
+	}
+	reverse, err := reverseNativeIDs(ids)
+	if err != nil {
+		return err
+	}
+	for i := range actual.DynamicNATs {
+		if planned := reverse[NativeIdentity{NativeRule, actual.DynamicNATs[i].Rule}]; planned != "" {
+			actual.DynamicNATs[i].Rule = planned
+		}
+	}
+	// Delay all dynamic VIP references until both ordinary and policy-owned NAT
+	// identities are known. Each reference is rewritten exactly once.
+	for i := range actual.Addresses {
+		ref := &actual.Addresses[i].VIP
+		if ref.Kind == fm.DynamicNATObject {
+			if planned := reverse[NativeIdentity{NativeDynamicNAT, ref.ID}]; planned != "" {
+				ref.ID = planned
+			}
+		}
+	}
+	return nil
+}
+
+func screenOSPolicyIdentity(r fm.DynamicNATRecord) bool {
+	return r.Rule != "" && r.ID == fm.ID("policy:"+url.PathEscape(string(r.Rule))) && r.Name == string(r.Rule) && r.Order.Stage == 1 && r.Order.Section == "policy"
 }

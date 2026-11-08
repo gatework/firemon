@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/netip"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -23,36 +21,15 @@ import (
 )
 
 func output(w io.Writer, v any) error {
-	encoder := json.NewEncoder(w)
+	encoder := json.NewEncoder(checkedOutput{w})
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(v)
-}
-func execute(ctx context.Context, args []string, out io.Writer) error {
-	if len(args) == 0 {
-		return errors.New("usage: firemon import|inspect|query|nat|plan [flags]")
+	if err := encoder.Encode(v); err != nil {
+		return fmt.Errorf("write JSON: %w", err)
 	}
-	switch args[0] {
-	case "usage-report", "reclamation-report", "reclamation-plan", "migration-report", "migration-plan", "convergence-plan":
-		return lifecycleCommand(ctx, args[0], args[1:], out)
-	case "inspect-address", "risk-report", "convergence-report", "compare-revisions":
-		return analysisCommand(ctx, args[0], args[1:], out)
-	case "request-query", "request-plan":
-		return requestCommand(ctx, args[0], args[1:], out)
-	case "import":
-		return importConfig(ctx, args[1:], out)
-	case "inspect", "query", "nat", "plan":
-		return inspectOrQuery(ctx, args[0], args[1:], out)
-	default:
-		return fmt.Errorf("unknown command %q", args[0])
-	}
-}
-func flags(name string) *flag.FlagSet {
-	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	return fs
+	return nil
 }
 func importConfig(ctx context.Context, args []string, out io.Writer) error {
-	fs := flags("import")
+	fs := flags("import", out)
 	root := fs.String("store", "", "snapshot directory")
 	device := fs.String("device", "", "device identifier")
 	vendor := fs.String("vendor", "", "native vendor")
@@ -66,29 +43,31 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 0 || *root == "" || *device == "" || *file == "" || *publication == "" {
-		return errors.New("store, device, file and publication are required")
+	if fs.NArg() != 0 || *root == "" || *device == "" || *vendor == "" || *file == "" || *publication == "" {
+		return usage(errors.New("store, device, vendor, file and publication are required"))
 	}
 	if *vdom != "" && *vendor != "fortinet" {
-		return errors.New("vdom applies only to Fortinet imports")
+		return usage(errors.New("vdom applies only to Fortinet imports"))
 	}
-	input, err := os.Open(*file)
+	meta, err := vendors.Normalize(fm.Metadata{Device: *device, Vendor: *vendor, Context: *vdom, Software: *software})
+	if err != nil {
+		return usage(err)
+	}
+	input, finish, err := openInput(ctx, *file)
 	if err != nil {
 		return err
 	}
-	defer input.Close()
-	raw, err := io.ReadAll(io.LimitReader(input, (16<<20)+1))
-	if err != nil {
+	raw, readErr := io.ReadAll(io.LimitReader(input, config.DefaultMaxBytes+1))
+	if err := errors.Join(readErr, finish()); err != nil {
 		return err
 	}
-	if len(raw) > 16<<20 {
-		return config.ErrSource
+	if len(raw) > config.DefaultMaxBytes {
+		return usage(config.ErrSource)
 	}
-	meta := fm.Metadata{Device: *device, Vendor: *vendor, Context: *vdom, Software: *software}
 	if *capturedAt != "" {
 		meta.CapturedAt, err = time.Parse(time.RFC3339, *capturedAt)
 		if err != nil {
-			return err
+			return usage(err)
 		}
 	}
 	fw, err := (vendors.Parser{}).Parse(ctx, config.Source{Text: string(raw), Complete: *complete}, meta)
@@ -97,11 +76,11 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 	}
 	store, err := snapshot.Open(*root)
 	if err != nil {
-		return err
+		return snapshotArgumentError(err)
 	}
 	published, err := store.Publish(ctx, fw, snapshot.PublishOptions{Expected: *expected, PublicationID: *publication})
 	if err != nil {
-		return err
+		return snapshotArgumentError(err)
 	}
 	return output(out, struct {
 		Revision    string          `json:"revision"`
@@ -112,7 +91,7 @@ func importConfig(ctx context.Context, args []string, out io.Writer) error {
 	}{published.Revision, published.Generation, fw.Complete(), published.Archived, fw.Diagnostics()})
 }
 func inspectOrQuery(ctx context.Context, command string, args []string, out io.Writer) error {
-	fs := flags(command)
+	fs := flags(command, out)
 	root := fs.String("store", "", "snapshot directory")
 	device := fs.String("device", "", "device identifier")
 	revision := fs.String("revision", "", "historical revision (inspect only)")
@@ -128,14 +107,14 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 		return err
 	}
 	if fs.NArg() != 0 || *root == "" || (*device == "" && *revision == "") {
-		return errors.New("store and device are required")
+		return usage(errors.New("store and device are required"))
 	}
 	if *revision != "" && command != "inspect" {
-		return errors.New("historical revisions are inspect-only")
+		return usage(errors.New("historical revisions are inspect-only"))
 	}
 	store, err := snapshot.Open(*root)
 	if err != nil {
-		return err
+		return snapshotArgumentError(err)
 	}
 	var fw *fm.Firewall
 	var head snapshot.Head
@@ -146,7 +125,7 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 		fw, head, err = store.Current(ctx, *device)
 	}
 	if err != nil {
-		return err
+		return snapshotArgumentError(err)
 	}
 	if command == "inspect" {
 		return output(out, struct {
@@ -160,11 +139,11 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 			StaticNATs  int             `json:"static_nats"`
 			DynamicNATs int             `json:"dynamic_nats"`
 			Diagnostics []fm.Diagnostic `json:"diagnostics"`
-		}{fw.Metadata().Device, fw.Metadata().Context, head.Revision, fw.Complete(), len(fw.Interfaces()), len(fw.Routes()), len(fw.Rules()), len(fw.StaticNATs()), len(fw.DynamicNATs()), fw.Diagnostics()})
+		}{fw.Metadata().Device, fw.Metadata().Context, head.Revision, fw.Complete(), len(fw.Interfaces()), len(fw.Routes()), fw.RuleCount(), len(fw.StaticNATs()), len(fw.DynamicNATs()), fw.Diagnostics()})
 	}
 	traffic, err := requestTraffic(*source, *destination, *service)
 	if err != nil {
-		return err
+		return usage(err)
 	}
 	q := policy.Request{Traffic: traffic, Scope: *scope, RuleSet: *ruleset, FromZone: fm.ID(*from), ToZone: fm.ID(*to)}
 	if q.Scope == "" {
@@ -173,7 +152,7 @@ func inspectOrQuery(ctx context.Context, command string, args []string, out io.W
 	if *at != "" {
 		q.At, err = time.Parse(time.RFC3339, *at)
 		if err != nil {
-			return err
+			return usage(err)
 		}
 	}
 	switch command {
@@ -251,5 +230,5 @@ func requestTraffic(source, destination, service string) (flow.Traffic, error) {
 	}
 	a, _ := flow.PrefixRange(src)
 	b, _ := flow.PrefixRange(dst)
-	return flow.NewTraffic(4096, flow.TrafficRegion{Source: a, Destination: b, Protocol: flow.Interval{Low: protocol, High: protocol}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: uint16(port), High: uint16(port)}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
+	return flow.NewTraffic(cliLimits.MaxRegions, flow.TrafficRegion{Source: a, Destination: b, Protocol: flow.Interval{Low: protocol, High: protocol}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: uint16(port), High: uint16(port)}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
 }

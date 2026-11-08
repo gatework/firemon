@@ -39,12 +39,8 @@ type parser struct {
 
 type Parser struct{ Limits config.Limits }
 
-func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-	return (Parser{}).Parse(ctx, source, metadata)
-}
-
 func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-	metadata.Vendor, metadata.ParserVersion = "netscreen", "screenos-go-3"
+	metadata.Vendor, metadata.ParserVersion = "netscreen", "screenos-go-4"
 	content, err := config.NewContent(ctx, source, native.Limits)
 	if err != nil {
 		return nil, err

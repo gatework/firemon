@@ -52,7 +52,7 @@ func (e Engine) netscreenNAT(ctx context.Context, fw *fm.Firewall, q Request, bu
 			return NATResult{}, ErrNAT
 		}
 	}
-	rules := len(fw.Rules())
+	rules := fw.RuleCount()
 	if rules > *budget {
 		return NATResult{}, ErrBudget
 	}

@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -31,6 +32,7 @@ type NATProof struct {
 
 // ProveNATEffects checks existing declarations/dependencies and proves every
 // requested ordered relation, plus all original traffic outside the intent.
+// Request and window times must support time.Time's JSON representation.
 func (e Engine) ProveNATEffects(ctx context.Context, before, after *fm.Firewall, intents []NATIntent) (NATProof, error) {
 	if err := ctx.Err(); err != nil {
 		return NATProof{}, err
@@ -55,9 +57,6 @@ func (e Engine) ProveNATEffects(ctx context.Context, before, after *fm.Firewall,
 	if len(intents) > limits.MaxCombinations {
 		return NATProof{}, ErrBudget
 	}
-	if err := existingNATCatalog(before, after); err != nil {
-		return NATProof{}, err
-	}
 	from := intents[0].Request.At
 	for _, i := range intents {
 		if err := ctx.Err(); err != nil {
@@ -66,17 +65,31 @@ func (e Engine) ProveNATEffects(ctx context.Context, before, after *fm.Firewall,
 		if i.Request.Traffic.Empty() || len(i.Steps) == 0 {
 			return NATProof{}, ErrInvalid
 		}
+		if _, err := natTimeKey(i.Request.At); err != nil {
+			return NATProof{}, err
+		}
 		if i.Request.At.Before(from) {
 			from = i.Request.At
 		}
 	}
 	for _, i := range intents {
+		if err := ctx.Err(); err != nil {
+			return NATProof{}, err
+		}
 		if i.Window != nil {
 			if i.Window.Start.IsZero() || !i.Window.Start.Before(i.Window.End) {
 				return NATProof{}, ErrInvalid
 			}
+			for _, at := range []time.Time{i.Window.Start, i.Window.End} {
+				if _, err := natTimeKey(at); err != nil {
+					return NATProof{}, err
+				}
+			}
 			from = time.Date(1, 1, 1, 0, 0, 0, 1, time.UTC)
 		}
+	}
+	if err := existingNATCatalog(before, after); err != nil {
+		return NATProof{}, err
 	}
 	contexts, err := e.NATContexts(ctx, from, before, after)
 	if err != nil {
@@ -93,18 +106,28 @@ func (e Engine) ProveNATEffects(ctx context.Context, before, after *fm.Firewall,
 	}
 	if len(boundaries) > 0 {
 		count := len(contexts)
-		seen := make(map[string]bool, count)
+		seen := make(map[natContextIdentity]bool, count)
 		for _, q := range contexts {
-			seen[natContextKey(q)] = true
+			if err := ctx.Err(); err != nil {
+				return NATProof{}, err
+			}
+			key, err := natContextKey(q)
+			if err != nil {
+				return NATProof{}, err
+			}
+			seen[key] = true
 		}
 		for _, at := range boundaries {
-			for j := 0; j < count; j++ {
+			for j := range count {
 				if err := chargeVisits(ctx, &remaining, 1); err != nil {
 					return NATProof{}, err
 				}
 				q := contexts[j]
 				q.At = at
-				key := natContextKey(q)
+				key, err := natContextKey(q)
+				if err != nil {
+					return NATProof{}, err
+				}
 				if seen[key] {
 					continue
 				}
@@ -225,7 +248,14 @@ func natIntentContext(a, b Request) bool {
 
 // NATContexts extends policy contexts with NAT-only scopes and every egress
 // interface. A NAT scope without policy declarations is still part of safety.
+// Requested and derived times must support time.Time's JSON representation.
 func (e Engine) NATContexts(ctx context.Context, from time.Time, firewalls ...*fm.Firewall) ([]Request, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if _, err := natTimeKey(from); err != nil {
+		return nil, err
+	}
 	base, err := e.Contexts(ctx, from, firewalls...)
 	if err != nil {
 		return nil, err
@@ -249,8 +279,12 @@ func (e Engine) NATContexts(ctx context.Context, from time.Time, firewalls ...*f
 	for _, q := range base {
 		scopes[q.Scope] = true
 	}
-	var out []Request
-	keys := map[string]bool{}
+	type orderedContext struct {
+		request Request
+		sortKey string
+	}
+	var ordered []orderedContext
+	keys := map[natContextIdentity]bool{}
 	for _, q := range base {
 		for scope := range scopes {
 			domain := egress
@@ -314,26 +348,62 @@ func (e Engine) NATContexts(ctx context.Context, from time.Time, firewalls ...*f
 					return nil, err
 				}
 				q.Scope, q.EgressInterface = scope, iface
-				key := natContextKey(q)
+				key, err := natContextKey(q)
+				if err != nil {
+					return nil, err
+				}
 				if keys[key] {
 					continue
 				}
 				keys[key] = true
-				if len(out) >= limits.MaxCombinations {
+				if len(ordered) >= limits.MaxCombinations {
 					return nil, ErrBudget
 				}
-				out = append(out, q)
+				// Retain the existing wire order without serializing repeatedly
+				// in the sort comparator. Context count affects approval digests.
+				wire := q
+				wire.Traffic = flow.Traffic{}
+				encoded, err := json.Marshal(wire)
+				if err != nil {
+					return nil, fmt.Errorf("%w: NAT context encoding: %w", ErrInvalid, err)
+				}
+				ordered = append(ordered, orderedContext{q, string(encoded)})
 			}
 		}
 	}
-	slices.SortFunc(out, func(a, b Request) int { return strings.Compare(natContextKey(a), natContextKey(b)) })
+	slices.SortFunc(ordered, func(a, b orderedContext) int { return strings.Compare(a.sortKey, b.sortKey) })
+	out := make([]Request, len(ordered))
+	for i, entry := range ordered {
+		out[i] = entry.request
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
-func natContextKey(q Request) string {
-	q.Traffic = flow.Traffic{}
-	b, _ := json.Marshal(q)
-	return string(b)
+// Raw rule-set names and legal time offsets are distinct wire identities, even
+// when policy matching treats them alike. Keep that distinction in proofs.
+type natContextIdentity struct {
+	scope, ruleSet                    string
+	fromZone, toZone, egressInterface fm.ID
+	at                                string
+}
+
+func natContextKey(q Request) (natContextIdentity, error) {
+	at, err := natTimeKey(q.At)
+	if err != nil {
+		return natContextIdentity{}, err
+	}
+	return natContextIdentity{q.Scope, q.RuleSet, q.FromZone, q.ToZone, q.EgressInterface, at}, nil
+}
+
+func natTimeKey(at time.Time) (string, error) {
+	wire, err := at.MarshalJSON()
+	if err != nil {
+		return "", fmt.Errorf("%w: NAT context time: %w", ErrInvalid, err)
+	}
+	return string(wire), nil
 }
 func existingNATCatalog(before, after *fm.Firewall) error {
 	a, b := before.Export(), after.Export()

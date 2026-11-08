@@ -3,6 +3,7 @@ package hillstone
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"unicode"
 
@@ -34,32 +35,38 @@ func nativeName(o fm.Object) string {
 	return string(o.ID)
 }
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	return renderCommands(ctx, before, after, changes)
-}
-
-func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
-		return nil, err
-	}
-	n, err := nativeCommands(ctx, before, after, changes)
+	batch, err := render.Prepare(ctx, "hillstone", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
+	return renderCommands(ctx, before, after, batch)
+}
+
+func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
+	builder, err := render.NewNativeBuilder(ctx, "hillstone", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+
 	timed, err := render.ScheduleCommands(before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-	n.Commands = append(timed, n.Commands...)
-	return renderCommands(ctx, before, after, changes.Rules, n)
-}
+	builder.AppendCommands(timed...)
 
-func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
-	batch, err := render.Prepare(ctx, "hillstone", before, after, changes, native...)
+	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
+		return nil, err
+	}
+	batch, err := builder.Prepare(ctx)
 	if err != nil {
 		return nil, err
 	}
-	changes = batch.Changes()
-	if len(changes) == 0 && len(native) == 0 {
+	return renderCommands(ctx, before, after, batch)
+}
+
+func renderCommands(ctx context.Context, before, after *fm.Firewall, batch render.Batch) ([]string, error) {
+	changes := batch.Changes()
+	if len(changes) == 0 && !batch.Native() {
 		return nil, nil
 	}
 	commands := []string{"configure"}
@@ -120,12 +127,11 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		}
 		commands = append(commands, "exit")
 	}
-	if len(native) == 1 {
-		commands = append(commands, native[0].Commands...)
+	if batch.Native() {
+		commands = append(commands, batch.NativeCommands()...)
 	}
 	// Native rule top prepends: render newly created rules in reverse desired order.
-	for i := len(changes) - 1; i >= 0; i-- {
-		change := changes[i]
+	for _, change := range slices.Backward(changes) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -156,7 +162,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 			commands = append(commands, "rule id "+string(change.Rule))
 		case plan.CreateRule:
 			action := map[fm.Action]string{fm.Permit: "permit", fm.Deny: "deny"}[r.Action]
-			if action == "" || r.Match.Schedule != "" && len(native) == 0 || r.Match.ZoneRelation != fm.AnyZoneRelation {
+			if action == "" || r.Match.Schedule != "" && !batch.Native() || r.Match.ZoneRelation != fm.AnyZoneRelation {
 				return nil, ErrRender
 			}
 			for _, status := range []fm.Status{r.Log, r.LogStart, r.LogEnd} {
@@ -177,7 +183,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 				}
 			}
 			commands = append(commands, "rule top", "action "+action)
-			if name, err := render.ScheduleReference(after, r.Match.Schedule, native...); err != nil {
+			if name, err := batch.ScheduleReference(after, r.Match.Schedule); err != nil {
 				return nil, err
 			} else if name != "" {
 				commands = append(commands, "schedule "+name)

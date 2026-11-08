@@ -59,10 +59,10 @@ func (c Collector) CollectBatch(ctx context.Context, requests []CollectRequest, 
 					continue
 				}
 				rows[i].Result, rows[i].Err = c.Collect(ctx, rows[i].Request)
-				rows[i].Status = "complete"
-				if rows[i].Err != nil {
-					rows[i].Status = "failed"
-					if rows[i].Result.Revision != "" && !rows[i].Result.Complete {
+				rows[i].Status = "failed"
+				if rows[i].Result.Published() {
+					rows[i].Status = "complete"
+					if !rows[i].Result.Complete {
 						rows[i].Status = "incomplete"
 					}
 				}

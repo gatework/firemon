@@ -44,11 +44,11 @@ func TestUsageIndexMatchesDiscreteCoverageOracle(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	start := at.Add(-4 * time.Hour)
 	rng := rand.New(rand.NewSource(17))
-	for trial := 0; trial < 250; trial++ {
+	for trial := range 250 {
 		req := analysis.ReclamationRequest{At: at, Revision: "current", Window: fm.TimeWindow{Start: start, End: at}}
 		var covered [4]bool
 		positive, uncertain := false, false
-		for j := 0; j < 12; j++ {
+		for range 12 {
 			lo, hi := rng.Intn(8)-2, rng.Intn(8)-2
 			hits := uint64(rng.Intn(4) / 3)
 			reset := rng.Intn(10) == 0
@@ -81,7 +81,7 @@ func TestUsageIndexMatchesDiscreteCoverageOracle(t *testing.T) {
 				uncertain = true
 				continue
 			}
-			for cell := 0; cell < 4; cell++ {
+			for cell := range 4 {
 				if lo <= cell && hi >= cell+1 {
 					covered[cell] = true
 				}

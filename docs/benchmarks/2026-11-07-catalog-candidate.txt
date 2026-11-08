@@ -1,0 +1,24 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/gatework/firemon/plan
+cpu: Apple M5
+BenchmarkCatalogExactReuse/objects=10-10         	    2726	     42734 ns/op	   72051 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=10-10         	    3122	     39503 ns/op	   71958 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=10-10         	    3087	     39531 ns/op	   72048 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=10-10         	    3074	     39756 ns/op	   72158 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=10-10         	    3121	     39492 ns/op	   72022 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=10-10         	    3122	     39742 ns/op	   72073 B/op	     368 allocs/op
+BenchmarkCatalogExactReuse/objects=100-10        	     573	    209724 ns/op	  347465 B/op	    1475 allocs/op
+BenchmarkCatalogExactReuse/objects=100-10        	     572	    210397 ns/op	  347851 B/op	    1475 allocs/op
+BenchmarkCatalogExactReuse/objects=100-10        	     565	    211151 ns/op	  350402 B/op	    1475 allocs/op
+BenchmarkCatalogExactReuse/objects=100-10        	     572	    209518 ns/op	  346737 B/op	    1475 allocs/op
+BenchmarkCatalogExactReuse/objects=100-10        	     570	    210497 ns/op	  345718 B/op	    1475 allocs/op
+BenchmarkCatalogExactReuse/objects=100-10        	     578	    210619 ns/op	  345748 B/op	    1475 allocs/op
+BenchmarkCatalogExactReuse/objects=1000-10       	      49	   2256248 ns/op	 4882670 B/op	   12352 allocs/op
+BenchmarkCatalogExactReuse/objects=1000-10       	      49	   2312320 ns/op	 5245499 B/op	   12358 allocs/op
+BenchmarkCatalogExactReuse/objects=1000-10       	      46	   2286950 ns/op	 5104706 B/op	   12356 allocs/op
+BenchmarkCatalogExactReuse/objects=1000-10       	      49	   2264264 ns/op	 4779161 B/op	   12352 allocs/op
+BenchmarkCatalogExactReuse/objects=1000-10       	      50	   2313863 ns/op	 5153103 B/op	   12356 allocs/op
+BenchmarkCatalogExactReuse/objects=1000-10       	      56	   2310028 ns/op	 5077023 B/op	   12355 allocs/op
+PASS
+ok  	github.com/gatework/firemon/plan	2.340s

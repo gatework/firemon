@@ -15,7 +15,7 @@ func BenchmarkReclaimerUsage(b *testing.B) {
 		for _, samples := range []int{2, 16} {
 			b.Run(fmt.Sprintf("rules=%d/samples=%d", count, samples), func(b *testing.B) {
 				d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}}
-				for i := 0; i < count; i++ {
+				for i := range count {
 					d.Rules = append(d.Rules, fm.RuleRecord{Object: fm.Object{ID: fm.ID(fmt.Sprint(i))}, RuleSet: "security", Position: i, Disabled: true, Action: fm.Permit, Log: fm.Irrelevant, Match: fm.Match{AnySource: true, AnyDestination: true, AnyService: true, AnyFromZone: true, AnyToZone: true}})
 				}
 				fw, err := fm.Seal(d)
@@ -27,7 +27,7 @@ func BenchmarkReclaimerUsage(b *testing.B) {
 				for _, r := range fw.Rules() {
 					identity, _ := analysis.IdentifyRule(fw, r.ID())
 					digest, _ := analysis.RuleDigest(fw, r.ID())
-					for j := 0; j < samples; j++ {
+					for j := range samples {
 						end := at.Add(-time.Duration(j) * time.Hour)
 						req.Observations = append(req.Observations, analysis.UsageObservation{Identity: identity, Revision: req.Revision, RuleDigest: digest, Source: "counter", Start: end.Add(-time.Hour), End: end, Complete: true})
 					}

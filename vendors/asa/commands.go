@@ -42,27 +42,38 @@ func ports(r flow.Interval) string {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	return renderCommands(ctx, before, after, changes)
+	batch, err := render.Prepare(ctx, "asa", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	return renderCommands(ctx, before, after, batch)
 }
 
 func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
-		return nil, err
-	}
-	n, err := nativeCommands(ctx, before, after, changes)
+	builder, err := render.NewNativeBuilder(ctx, "asa", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-	return renderCommands(ctx, before, after, changes.Rules, n)
+
+	timed, err := render.ScheduleCommands(before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	builder.AppendCommands(timed...)
+
+	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
+		return nil, err
+	}
+	batch, err := builder.Prepare(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return renderCommands(ctx, before, after, batch)
 }
 
-func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
-	batch, err := render.Prepare(ctx, "asa", before, after, changes, native...)
-	if err != nil {
-		return nil, err
-	}
-	changes = batch.Changes()
-	if len(changes) == 0 && len(native) == 0 {
+func renderCommands(ctx context.Context, before, after *fm.Firewall, batch render.Batch) ([]string, error) {
+	changes := batch.Changes()
+	if len(changes) == 0 && !batch.Native() {
 		return nil, nil
 	}
 	commands := []string{"configure terminal"}
@@ -110,8 +121,8 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		}
 		commands = append(commands, "object service "+name, "service "+proto+" source "+ports(t.SourcePort)+" destination "+ports(t.DestinationPort), "exit")
 	}
-	if len(native) == 1 {
-		commands = append(commands, native[0].Commands...)
+	if batch.Native() {
+		commands = append(commands, batch.NativeCommands()...)
 	}
 	ordered := after.Rules()
 	slices.SortStableFunc(ordered, func(a, b *fm.Rule) int {
@@ -146,7 +157,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		}
 		r := rule.Record()
 		m := r.Match
-		if r.Scope != "" || r.Action != fm.Permit || r.Disabled || r.Builtin || len(r.Unsupported) > 0 || r.Log != fm.Irrelevant || r.LogStart != fm.Irrelevant || r.LogEnd != fm.Irrelevant || m.Schedule != "" || m.ZoneRelation != fm.AnyZoneRelation || len(m.Unsupported) > 0 || len(m.Applications) > 0 || len(m.Users) > 0 {
+		if r.Scope != "" || r.Action != fm.Permit || r.Disabled || r.Builtin || len(r.Unsupported) > 0 || r.Log != fm.Irrelevant || r.LogStart != fm.Irrelevant || r.LogEnd != fm.Irrelevant || m.Schedule != "" && !batch.Native() || m.ZoneRelation != fm.AnyZoneRelation || len(m.Unsupported) > 0 || len(m.Applications) > 0 || len(m.Users) > 0 {
 			return nil, ErrRender
 		}
 		if !nativeBinding(before, r) {
@@ -215,7 +226,13 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		} else {
 			return nil, ErrRender
 		}
-		commands = append(commands, fmt.Sprintf("access-list %s line %d extended permit %s %s %s", acl, positions[r.ID], svc, src, dst))
+		line := fmt.Sprintf("access-list %s line %d extended permit %s %s %s", acl, positions[r.ID], svc, src, dst)
+		if name, err := batch.ScheduleReference(after, m.Schedule); err != nil {
+			return nil, err
+		} else if name != "" {
+			line += " time-range " + name
+		}
+		commands = append(commands, line)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

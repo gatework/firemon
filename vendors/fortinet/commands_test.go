@@ -98,7 +98,7 @@ func TestFortinetAppendRendersFullGraphMembersWithoutRawReparse(t *testing.T) {
 	// The final policy retains its name and other fields, which a native edit
 	// does not delete. Build that capture independently from the original block.
 	sourceLine := ""
-	for _, line := range strings.Split(text[i:], "\n") {
+	for line := range strings.SplitSeq(text[i:], "\n") {
 		if strings.HasPrefix(line, "set srcaddr ") {
 			sourceLine = line
 		}

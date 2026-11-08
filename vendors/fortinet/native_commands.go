@@ -11,37 +11,36 @@ import (
 	"slices"
 )
 
-func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges) (render.Native, error) {
-	out := render.NewNative(c)
+func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.NativeChanges, out *render.NativeBuilder) error {
 	if err := render.AppendNAT(before, after); err != nil {
-		return out, err
+		return err
 	}
 	if before.Metadata().Context == "" {
-		return out, ErrRender
+		return ErrRender
 	}
 	block := func(section, name string, fields []string) {
-		out.Commands = append(out.Commands, "config "+section, "edit "+name)
-		out.Commands = append(out.Commands, fields...)
-		out.Commands = append(out.Commands, "next", "end")
+		out.AppendCommands("config "+section, "edit "+name)
+		out.AppendCommands(fields...)
+		out.AppendCommands("next", "end")
 	}
 	for _, p := range c.Additions.NATPools {
 		name, e := quoted(p.Name)
 		if e != nil || !render.PlainObject(p.Object) || p.Scope != before.Metadata().Context || p.ID != fm.ID(p.Name) || len(p.Ranges) != 1 || p.Ports != (flow.Interval{High: 65535}) {
-			return out, ErrRender
+			return ErrRender
 		}
 		r := p.Ranges[0]
 		if !r.Valid() || !r.First.Is4() {
-			return out, ErrRender
+			return ErrRender
 		}
 		fields := []string{"set type overload", "set startip " + r.First.String(), "set endip " + r.Last.String()}
 		if p.Interface != "" {
 			i := after.Interface(p.Interface)
 			if i == nil || i.Disabled() || i.HasUnsupported() {
-				return out, ErrRender
+				return ErrRender
 			}
 			v, e := quoted(i.Name())
 			if e != nil {
-				return out, e
+				return e
 			}
 			fields = append(fields, "set associated-interface "+v)
 		}
@@ -97,7 +96,9 @@ func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.Nati
 		if ar.ID != o.ID || ar.Name != o.Name || ar.Scope != o.Scope || ar.Inline || ar.FQDN != "" || len(ar.Unsupported) > 0 || ar.VIP != (fm.NATRef{Kind: kind, ID: o.ID}) || len(ar.Ranges) != 1 || ar.Ranges[0] != mapping[0].Original {
 			return ErrRender
 		}
-		out.Addresses[ar.ID] = true
+		if err := out.ClaimAddress(render.NATOwner(fm.NATRef{Kind: kind, ID: o.ID}), fm.AddressRef{Kind: fm.AddressObject, ID: ar.ID}); err != nil {
+			return err
+		}
 		active := false
 		for _, r := range c.Additions.Rules {
 			if slices.Contains(r.Match.Destinations, fm.AddressRef{Kind: fm.AddressObject, ID: ar.ID}) {
@@ -128,7 +129,9 @@ func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.Nati
 			}
 			want.AnyService = false
 			want.Services = []fm.ServiceRef{{Kind: fm.ServiceObject, ID: sr.ID}}
-			out.Services[sr.ID] = true
+			if err := out.ClaimService(render.NATOwner(fm.NATRef{Kind: kind, ID: o.ID}), m.Services[0]); err != nil {
+				return err
+			}
 			port := func(p flow.Interval) string {
 				if p.Low == p.High {
 					return fmt.Sprint(p.Low)
@@ -165,47 +168,47 @@ func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.Nati
 			continue
 		}
 		if r.Disabled || r.Bidirectional || len(r.Source) != 0 || len(r.SourcePorts) != 0 || len(r.DestinationPorts) != 0 {
-			return out, ErrRender
+			return ErrRender
 		}
 		if err := vip(r.Object, r.Match, r.Order, r.Interface, r.Destination, nil, fm.StaticNATObject); err != nil {
-			return out, err
+			return err
 		}
 		consumed[r.ID] = true
 	}
 	for _, r := range c.Additions.StaticNATs {
 		if !consumed[r.ID] {
-			return out, ErrRender
+			return ErrRender
 		}
 	}
 	for _, r := range c.Additions.DynamicNATs {
 		if err := ctx.Err(); err != nil {
-			return out, err
+			return err
 		}
 		if r.Rule == "" {
 			if r.Disabled || r.SourceMode != fm.NoTranslation || r.DestinationMode != fm.StaticIP || r.SourcePool != "" || r.DestinationPool != "" || r.InterfaceAddress.IsValid() || len(r.SourcePorts) != 0 {
-				return out, ErrRender
+				return ErrRender
 			}
 			if err := vip(r.Object, r.Match, r.Order, r.Interface, r.Destination, r.DestinationPorts, fm.DynamicNATObject); err != nil {
-				return out, err
+				return err
 			}
 			continue
 		}
 		owner := after.Rule(r.Rule)
 		if owner == nil || before.Rule(r.Rule) != nil || owner.Action() != fm.Permit {
-			return out, ErrRender
+			return ErrRender
 		}
 		rule := owner.Record()
 		if !render.PlainObject(r.Object) || r.ID != fm.ID("policy:"+string(r.Rule)) || r.Name != rule.Name || r.Scope != rule.Scope || r.Order.Stage != 1 || r.Order.Section != "policy" || r.Disabled || !reflect.DeepEqual(r.Match, rule.Match) || r.DestinationMode != fm.NoTranslation || r.DestinationPool != "" || len(r.Destination) != 0 || len(r.SourcePorts) != 0 || len(r.DestinationPorts) != 0 || r.InterfaceAddress.IsValid() {
-			return out, ErrRender
+			return ErrRender
 		}
 		fields := []string{"set nat enable"}
 		if r.SourceMode == fm.InterfaceIP {
 			if r.SourcePool != "" {
-				return out, ErrRender
+				return ErrRender
 			}
 			i := after.Interface(r.Interface)
 			if i == nil || i.Disabled() || i.HasUnsupported() || len(i.Record().Addresses) != 1 || i.Zone() == nil || !slices.Contains(rule.Match.ToZones, i.Zone().ID()) {
-				return out, ErrRender
+				return ErrRender
 			}
 			count := 0
 			for _, other := range after.Interfaces() {
@@ -214,26 +217,25 @@ func nativeCommands(ctx context.Context, before, after *fm.Firewall, c plan.Nati
 				}
 			}
 			if count != 1 {
-				return out, ErrRender
+				return ErrRender
 			}
 		} else {
 			if r.SourceMode != fm.DynamicIPPort || r.Interface != "" {
-				return out, ErrRender
+				return ErrRender
 			}
 			p := after.NATPool(r.SourcePool)
 			if p == nil {
-				return out, ErrRender
+				return ErrRender
 			}
 			name, e := quoted(p.Name())
 			if e != nil {
-				return out, e
+				return e
 			}
 			fields = append(fields, "set ippool enable", "set poolname "+name)
 		}
-		if out.Policy[r.Rule] != nil {
-			return out, ErrRender
+		if err := out.AttachPolicy(fm.NATRef{Kind: fm.DynamicNATObject, ID: r.ID}, r.Rule, fields); err != nil {
+			return err
 		}
-		out.Policy[r.Rule] = fields
 	}
-	return out, nil
+	return nil
 }

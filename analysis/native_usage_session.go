@@ -46,7 +46,7 @@ func parseSession(vendor, raw string) (nativeSession, string) {
 		out.key = usageRuleKey(m[6], m[7], m[8])
 	} else {
 		fields := map[string]string{}
-		for _, word := range strings.Fields(raw) {
+		for word := range strings.FieldsSeq(raw) {
 			if k, v, ok := strings.Cut(word, "="); ok {
 				if _, exists := fields[k]; exists {
 					return out, "repeated_field"

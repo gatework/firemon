@@ -261,7 +261,7 @@ func TestPlanBatchCombinedRefusalRetainsSameContextSibling(t *testing.T) {
 
 func TestPlanBatchIndependentNativeReadbackAcrossZones(t *testing.T) {
 	raw := "zone a\nexit\nzone b\nexit\nzone outside\nexit\naddress dst\nip 198.51.100.1/32\nexit\nservice https\ntcp dst-port 443 443\nexit\n"
-	fw, err := hillstone.Parse(t.Context(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "fw"})
+	fw, err := (hillstone.Parser{}).Parse(t.Context(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "fw"})
 	if err != nil || !fw.Complete() {
 		t.Fatal(fw, err)
 	}
@@ -279,7 +279,7 @@ func TestPlanBatchIndependentNativeReadbackAcrossZones(t *testing.T) {
 	for i, z := range []string{"b", "a"} {
 		readback += fmt.Sprintf("rule id %d\nsrc-zone %s\ndst-zone outside\nsrc-addr %s\ndst-addr dst\nservice https\naction permit\nexit\n", 100+i, z, source)
 	}
-	observed, err := hillstone.Parse(t.Context(), config.Source{Text: readback, Complete: true}, fw.Metadata())
+	observed, err := (hillstone.Parser{}).Parse(t.Context(), config.Source{Text: readback, Complete: true}, fw.Metadata())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -26,7 +26,7 @@ func fixture(t *testing.T, name string) string {
 }
 func parse(t *testing.T, raw string) *fm.Firewall {
 	t.Helper()
-	fw, err := fortinet.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic-fgt", Software: "7.4.0"})
+	fw, err := (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic-fgt", Software: "7.4.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ end
 next
 end
 `
-	fw, err := fortinet.ParseVDOM(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"}, "blue")
+	fw, err := (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic", Context: "blue"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ end
 		t.Fatal(fw.Diagnostics(), fw.Export())
 	}
 	raw = "config unsupported\n" + raw + "end\n"
-	fw, err = fortinet.ParseVDOM(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"}, "blue")
+	fw, err = (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic", Context: "blue"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ end
 }
 func TestMalformedHierarchyAndUnknownConditionsCannotAuthorize(t *testing.T) {
 	for _, raw := range []string{"config firewall address\nedit x\nend\n", "config firewall address\nedit x\nnext\n", "next\n"} {
-		if _, err := fortinet.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{}); err == nil {
+		if _, err := (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{}); err == nil {
 			t.Fatal("accepted malformed hierarchy", raw)
 		}
 	}

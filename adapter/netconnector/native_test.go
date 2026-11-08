@@ -41,13 +41,13 @@ type nativeCase struct {
 
 func nativeCases() []nativeCase {
 	return []nativeCase{
-		{vendor: "hillstone", prompt: "fw(M)", from: "inside", to: "outside", parser: hillstone.Parse, renderer: hillstone.Renderer{}, raw: "zone inside\nexit\nzone outside\nexit\ninterface eth0\nzone inside\nip address 192.0.2.1 255.255.255.0\nexit\ninterface eth1\nzone outside\nip address 198.51.100.1 255.255.255.0\nexit"},
-		{vendor: "paloalto", prompt: "audit@fw>", from: "inside", to: "outside", parser: paloalto.Parse, renderer: paloalto.Renderer{}, raw: "set network interface ethernet eth1 layer3 ip 192.0.2.1/24\nset network interface ethernet eth2 layer3 ip 198.51.100.1/24\nset zone inside network layer3 eth1\nset zone outside network layer3 eth2"},
-		{vendor: "srx", prompt: "audit@fw>", from: "inside", to: "outside", parser: srx.Parse, renderer: srx.Renderer{}, raw: "set interfaces ge-0/0/0 unit 0 family inet address 192.0.2.1/24\nset interfaces ge-0/0/1 unit 0 family inet address 198.51.100.1/24\nset security zones security-zone inside interfaces ge-0/0/0.0\nset security zones security-zone outside interfaces ge-0/0/1.0"},
-		{vendor: "netscreen", prompt: "fw->", from: "Trust", to: "Untrust", parser: netscreen.Parse, renderer: netscreen.Renderer{}, raw: "set interface ethernet0/1 zone Trust\nset interface ethernet0/1 ip 192.0.2.1/24\nset interface ethernet0/2 zone Untrust\nset interface ethernet0/2 ip 198.51.100.1/24"},
-		{vendor: "huawei", prompt: "<fw>", from: "trust", to: "untrust", parser: huawei.Parse, renderer: huawei.Renderer{}, raw: "firewall zone trust\n add interface GigabitEthernet1/0/1\n#\nfirewall zone untrust\n add interface GigabitEthernet1/0/2\n#\ninterface GigabitEthernet1/0/1\n ip address 192.0.2.1 24\n#\ninterface GigabitEthernet1/0/2\n ip address 198.51.100.1 24\n#"},
+		{vendor: "hillstone", prompt: "fw(M)", from: "inside", to: "outside", parser: (hillstone.Parser{}).Parse, renderer: hillstone.Renderer{}, raw: "zone inside\nexit\nzone outside\nexit\ninterface eth0\nzone inside\nip address 192.0.2.1 255.255.255.0\nexit\ninterface eth1\nzone outside\nip address 198.51.100.1 255.255.255.0\nexit"},
+		{vendor: "paloalto", prompt: "audit@fw>", from: "inside", to: "outside", parser: (paloalto.Parser{}).Parse, renderer: paloalto.Renderer{}, raw: "set network interface ethernet eth1 layer3 ip 192.0.2.1/24\nset network interface ethernet eth2 layer3 ip 198.51.100.1/24\nset zone inside network layer3 eth1\nset zone outside network layer3 eth2"},
+		{vendor: "srx", prompt: "audit@fw>", from: "inside", to: "outside", parser: (srx.Parser{}).Parse, renderer: srx.Renderer{}, raw: "set interfaces ge-0/0/0 unit 0 family inet address 192.0.2.1/24\nset interfaces ge-0/0/1 unit 0 family inet address 198.51.100.1/24\nset security zones security-zone inside interfaces ge-0/0/0.0\nset security zones security-zone outside interfaces ge-0/0/1.0"},
+		{vendor: "netscreen", prompt: "fw->", from: "Trust", to: "Untrust", parser: (netscreen.Parser{}).Parse, renderer: netscreen.Renderer{}, raw: "set interface ethernet0/1 zone Trust\nset interface ethernet0/1 ip 192.0.2.1/24\nset interface ethernet0/2 zone Untrust\nset interface ethernet0/2 ip 198.51.100.1/24"},
+		{vendor: "huawei", prompt: "<fw>", from: "trust", to: "untrust", parser: (huawei.Parser{}).Parse, renderer: huawei.Renderer{}, raw: "firewall zone trust\n add interface GigabitEthernet1/0/1\n#\nfirewall zone untrust\n add interface GigabitEthernet1/0/2\n#\ninterface GigabitEthernet1/0/1\n ip address 192.0.2.1 24\n#\ninterface GigabitEthernet1/0/2\n ip address 198.51.100.1 24\n#"},
 		{vendor: "fortinet", prompt: "FGT (root) #", from: "lan1", to: "wan1", domain: "blue", renderer: fortinet.Renderer{}, parser: func(ctx context.Context, s config.Source, m fm.Metadata) (*fm.Firewall, error) {
-			return fortinet.ParseVDOM(ctx, s, m, m.Context)
+			return (fortinet.Parser{}).Parse(ctx, s, m)
 		}, raw: "config system interface\nedit \"lan1\"\nset vdom \"blue\"\nset ip 192.0.2.1 255.255.255.0\nset type physical\nnext\nedit \"wan1\"\nset vdom \"blue\"\nset ip 198.51.100.1 255.255.255.0\nset type physical\nnext\nend"},
 	}
 }
@@ -102,7 +102,7 @@ func nativePANXML(t *testing.T, raw string) string {
 	// The simulated device must not depend on the parser's construction API.
 	// These fixtures contain one native command per line and Go-quoted names.
 	var statements [][]string
-	for _, line := range strings.Split(raw, "\n") {
+	for line := range strings.SplitSeq(raw, "\n") {
 		var input scanner.Scanner
 		input.Init(strings.NewReader(line))
 		input.Mode = scanner.ScanIdents | scanner.ScanStrings
@@ -283,9 +283,7 @@ func TestNativeVendorsApplyAndRecoverLostSaveWithoutReplay(t *testing.T) {
 						client := &observedConnection{Conn: a}
 						connections = append(connections, client)
 						opens++
-						peers.Add(1)
-						go func() {
-							defer peers.Done()
+						peers.Go(func() {
 							defer b.Close()
 							prompt := tc.prompt
 							domain := "root"
@@ -450,7 +448,7 @@ func TestNativeVendorsApplyAndRecoverLostSaveWithoutReplay(t *testing.T) {
 									return
 								}
 							}
-						}()
+						})
 						return client, nil
 					})}}, nil
 				}}

@@ -100,8 +100,20 @@ func Seal(data Data) (*Firewall, error) {
 		}
 	}
 	f.schedules = make(map[ID]*Schedule)
-	for _, r := range f.data.Schedules {
-		if err := add(f.schedules, r.Object, &Schedule{record: r}); err != nil {
+	for i := range f.data.Schedules {
+		r := &f.data.Schedules[i]
+		if err := r.validateShape(); err != nil {
+			return nil, fmt.Errorf("%w: schedule interval", ErrGraph)
+		}
+		r.Weekly = normalizeWeeklyPeriods(r.Weekly)
+		s := &Schedule{record: *r, known: r.Validate() == nil}
+		for _, period := range r.Weekly {
+			s.weeklyWindows += len(period.Windows)
+		}
+		if s.known && r.HasRecurrence() {
+			s.location, _ = scheduleLocation(r.Timezone)
+		}
+		if err := add(f.schedules, r.Object, s); err != nil {
 			return nil, err
 		}
 		for _, reason := range r.Unsupported {
@@ -202,13 +214,8 @@ func Seal(data Data) (*Firewall, error) {
 		}
 	}
 	for _, s := range f.Schedules() {
-		for _, w := range s.record.Windows {
-			if w.Start.IsZero() || !w.Start.Before(w.End) {
-				return nil, fmt.Errorf("%w: schedule window", ErrGraph)
-			}
-		}
-		if len(s.record.Recurring) > 0 {
-			f.issue(s.record.ID, "recurring-schedule", "native recurrence requires evaluation")
+		if !s.known && len(s.record.Unsupported) == 0 {
+			f.issue(s.record.ID, "unknown-schedule", "schedule intervals or civil calendar evidence are missing")
 		}
 	}
 	for _, r := range f.Rules() {
@@ -336,5 +343,6 @@ func Seal(data Data) (*Firewall, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: canonical declaration: %v", ErrGraph, err)
 	}
+	f.declarationSize = declarationSize(f.data)
 	return f, nil
 }

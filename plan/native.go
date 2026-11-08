@@ -480,7 +480,7 @@ func (p Planner) nativeCandidate(ctx context.Context, fw *fm.Firewall, input Nat
 		return nil, err
 	}
 	if !gap.Empty() {
-		candidate, _, _, err = createCandidate(ctx, candidate, q, gap, visits)
+		candidate, _, _, err = p.createCandidate(ctx, candidate, q, gap, visits)
 		if err != nil {
 			return nil, err
 		}

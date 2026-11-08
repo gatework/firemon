@@ -50,3 +50,23 @@ The persisted review and explicit ordered device/revision/plan choices bound to
 one execution identity and checksum. It includes reconstruction material while
 retaining unresolved inputs for review.
 _Avoid_: batch script, report approval
+
+**Target provenance**:
+The stable association between an original business input and one discovered
+target outcome. It survives refusal and partial planning. A device's planning
+index is a separate projection; business and topology sources retain their
+own meaning, order and repeated entries.
+_Avoid_: deduplicated request ID, report array offset
+
+**Native declaration ownership**:
+The relationship between a newly created native policy or NAT declaration and
+the address or service values its syntax generates. Shared literal values may
+have multiple owners. Generated values must not also be emitted as independent
+declarations; a matching object ID alone does not establish ownership.
+_Avoid_: suppressed object, same-name NAT object
+
+**Confirmed completion**:
+A publication or deployment terminal state established by durable evidence.
+An error while closing a session or journal lease remains reportable without
+undoing that state. An unconfirmed write still requires independent recovery.
+_Avoid_: no error, successful transport close

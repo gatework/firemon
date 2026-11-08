@@ -175,7 +175,7 @@ func (e Engine) huaweiPacket(ctx context.Context, fw *fm.Firewall, q PacketReque
 	budget := e.Limits.WithDefaults().MaxVisits
 	limit := e.Limits.WithDefaults().MaxRegions
 	queryPolicy := func(request Request) (Result, error) {
-		cost := len(fw.Rules())
+		cost := fw.RuleCount()
 		if cost > budget {
 			return Result{}, ErrBudget
 		}

@@ -323,7 +323,7 @@ next
 end
 config firewall policy
 edit 20`, 1)
-	fw, err := fortinet.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"})
+	fw, err := (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"})
 	if err != nil {
 		t.Fatal(err)
 	}

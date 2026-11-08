@@ -16,7 +16,7 @@ const interfaces = "interface i\n nameif inside\n ip address 192.0.2.1 255.255.2
 
 func parseASA(t *testing.T, raw string) *fm.Firewall {
 	t.Helper()
-	fw, err := asa.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "asa", Software: "9.12"})
+	fw, err := (asa.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "asa", Software: "9.12"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestASAUnsupportedStaticCardinalityAndDynamicSubnetRemainEvidence(t *testin
 		interfaces + "object network real\n subnet 192.0.2.0 255.255.255.0\n nat (inside,outside) static 203.0.113.10\n",
 		interfaces + "object network pool\n subnet 203.0.113.0 255.255.255.0\nobject network real\n host 192.0.2.10\n nat (inside,outside) dynamic pool\n",
 	} {
-		fw, err := asa.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "asa", Software: "9.12"})
+		fw, err := (asa.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "asa", Software: "9.12"})
 		if err != nil {
 			t.Fatal("unmodeled native mapping must remain inspectable", err)
 		}

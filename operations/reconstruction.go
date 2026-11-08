@@ -21,16 +21,6 @@ type RevisionLoader interface {
 	Load(context.Context, string) (*fm.Firewall, error)
 }
 
-// ErrReconstruction retains the existing operations error identity for callers.
-var ErrReconstruction = plan.ErrReconstruction
-
-// EncodePlan writes bounded reconstruction material for a business batch plan.
-// Retain the exact referenced snapshot and the returned checksum independently.
-// Reports, commands and proof flags are never imported as executable authority.
-func EncodePlan(ctx context.Context, writer io.Writer, revision string, p *plan.Plan) (string, error) {
-	return plan.EncodeReconstruction(ctx, writer, revision, p)
-}
-
 // RestorePlan validates material before loading the exact snapshot, then supplies
 // production renderer selection to the intent-owned reconstruction algorithm.
 func RestorePlan(ctx context.Context, reader io.Reader, expected string, loader RevisionLoader) (*plan.Plan, string, error) {
@@ -38,7 +28,7 @@ func RestorePlan(ctx context.Context, reader io.Reader, expected string, loader 
 		return nil, "", err
 	}
 	if !validChecksum(expected) || dependency.Nil(loader) {
-		return nil, "", ErrReconstruction
+		return nil, "", plan.ErrReconstruction
 	}
 	if dependency.Nil(reader) {
 		return nil, "", ErrInvalid
@@ -51,7 +41,14 @@ func RestorePlan(ctx context.Context, reader io.Reader, expected string, loader 
 	if err != nil {
 		return nil, "", err
 	}
-	p, err := material.Rebuild(ctx, fw, vendors.Renderer)
+	snapshots := plan.ReconstructionSnapshots{Baseline: fw}
+	if revision := material.SourceRevision(); revision != "" {
+		snapshots.Source, err = loader.Load(ctx, revision)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+	p, err := material.Rebuild(ctx, snapshots, vendors.Renderer)
 	if err != nil {
 		return nil, "", err
 	}
@@ -74,11 +71,11 @@ func strictJSON(raw []byte, value any) error {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if err := d.Decode(value); err != nil {
-		return errors.Join(ErrReconstruction, err)
+		return errors.Join(plan.ErrReconstruction, err)
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return ErrReconstruction
+		return plan.ErrReconstruction
 	}
 	return nil
 }
@@ -94,7 +91,7 @@ func readBounded(ctx context.Context, reader io.Reader, limit int) ([]byte, erro
 		return nil, err
 	}
 	if len(raw) > limit {
-		return nil, ErrReconstruction
+		return nil, plan.ErrReconstruction
 	}
 	return raw, ctx.Err()
 }
@@ -110,7 +107,7 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 		return 0, err
 	}
 	if len(p) > b.limit-b.Len() {
-		return 0, ErrReconstruction
+		return 0, plan.ErrReconstruction
 	}
 	return b.Buffer.Write(p)
 }

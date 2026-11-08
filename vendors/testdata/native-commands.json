@@ -1,0 +1,258 @@
+{
+  "asa-object-source-pat": {
+    "commands": [
+      "configure terminal",
+      "object network server",
+      "host 192.0.2.10",
+      "exit",
+      "object network server",
+      "nat (inside,outside) dynamic 203.0.113.10",
+      "exit",
+      "end"
+    ]
+  },
+  "asa-object-static": {
+    "commands": [
+      "configure terminal",
+      "object network server",
+      "host 192.0.2.10",
+      "exit",
+      "object network server",
+      "nat (inside,outside) static 203.0.113.10",
+      "exit",
+      "end"
+    ]
+  },
+  "fortinet-interface-pat": {
+    "commands": [
+      "config firewall policy",
+      "edit 1",
+      "set srcaddr \"all\"",
+      "set dstaddr \"all\"",
+      "set service \"ALL\"",
+      "set srcintf \"lan1\"",
+      "set dstintf \"wan1\"",
+      "set name \"hide\"",
+      "set action accept",
+      "set schedule \"always\"",
+      "set logtraffic disable",
+      "set nat enable",
+      "next",
+      "end"
+    ]
+  },
+  "fortinet-port-forward": {
+    "commands": [
+      "config firewall vip",
+      "edit \"web\"",
+      "set extintf \"wan1\"",
+      "set extip 198.51.100.20",
+      "set mappedip 192.0.2.20",
+      "set portforward enable",
+      "set protocol tcp",
+      "set extport 443",
+      "set mappedport 443",
+      "next",
+      "end",
+      "config firewall policy",
+      "edit 1",
+      "set srcaddr \"all\"",
+      "set dstaddr \"web\"",
+      "set service \"ALL\"",
+      "set srcintf \"wan1\"",
+      "set dstintf \"lan1\"",
+      "set name \"inbound\"",
+      "set action accept",
+      "set schedule \"always\"",
+      "set logtraffic disable",
+      "next",
+      "end"
+    ]
+  },
+  "fortinet-source-pool": {
+    "commands": [
+      "config firewall ippool",
+      "edit \"outbound\"",
+      "set type overload",
+      "set startip 198.51.100.100",
+      "set endip 198.51.100.103",
+      "next",
+      "end",
+      "config firewall policy",
+      "edit 1",
+      "set srcaddr \"all\"",
+      "set dstaddr \"all\"",
+      "set service \"ALL\"",
+      "set srcintf \"lan1\"",
+      "set dstintf \"wan1\"",
+      "set name \"hide\"",
+      "set action accept",
+      "set schedule \"always\"",
+      "set logtraffic disable",
+      "set nat enable",
+      "set ippool enable",
+      "set poolname \"outbound\"",
+      "next",
+      "end"
+    ]
+  },
+  "fortinet-vip": {
+    "commands": [
+      "config firewall vip",
+      "edit \"web\"",
+      "set extintf \"wan1\"",
+      "set extip 198.51.100.20",
+      "set mappedip 192.0.2.20",
+      "next",
+      "end",
+      "config firewall policy",
+      "edit 1",
+      "set srcaddr \"all\"",
+      "set dstaddr \"web\"",
+      "set service \"ALL\"",
+      "set srcintf \"wan1\"",
+      "set dstintf \"lan1\"",
+      "set name \"inbound\"",
+      "set action accept",
+      "set schedule \"always\"",
+      "set logtraffic disable",
+      "next",
+      "end"
+    ]
+  },
+  "hillstone-bnat": {
+    "commands": [
+      "configure",
+      "nat",
+      "bnatrule id 7 virtual ip 203.0.113.10/32 real ip \"192.0.2.10/32\"",
+      "exit",
+      "exit"
+    ]
+  },
+  "hillstone-dnat": {
+    "commands": [
+      "configure",
+      "nat",
+      "dnatrule id 7 from \"any\" to \"203.0.113.10/32\" service \"any\" trans-to 192.0.2.10",
+      "exit",
+      "exit"
+    ]
+  },
+  "hillstone-interface-pat": {
+    "commands": [
+      "configure",
+      "nat",
+      "snatrule id 7 from \"192.0.2.10/32\" to \"any\" service \"any\" trans-to eif-ip mode dynamicport eif \"eth1\"",
+      "exit",
+      "exit"
+    ]
+  },
+  "hillstone-pool-pat": {
+    "commands": [
+      "configure",
+      "nat",
+      "snatrule id 7 from \"192.0.2.10/32\" to \"any\" service \"any\" trans-to 203.0.113.10 mode dynamicport",
+      "exit",
+      "exit"
+    ]
+  },
+  "huawei-destination-pool": {
+    "commands": [
+      "system-view",
+      "destination-nat address-group \"backend\"",
+      "section 0 192.0.2.20 192.0.2.20",
+      "quit",
+      "nat-policy",
+      "rule name \"incoming\"",
+      "source-zone \"untrust\"",
+      "destination-address 198.51.100.70 mask 32",
+      "action destination-nat address-group \"backend\"",
+      "quit",
+      "quit",
+      "return"
+    ]
+  },
+  "huawei-server-map": {
+    "commands": [
+      "system-view",
+      "nat server \"fixed\" zone \"untrust\" global 198.51.100.50 inside 192.0.2.50 no-reverse",
+      "return"
+    ]
+  },
+  "huawei-source-pool": {
+    "commands": [
+      "system-view",
+      "nat address-group \"outbound\"",
+      "mode pat",
+      "section 0 198.51.100.100 198.51.100.103",
+      "quit",
+      "nat-policy",
+      "rule name \"hide\"",
+      "source-zone \"trust\"",
+      "destination-zone \"untrust\"",
+      "source-address 192.0.2.10 mask 32",
+      "action source-nat address-group \"outbound\"",
+      "quit",
+      "quit",
+      "return"
+    ]
+  },
+  "netscreen-dip-owner": {
+    "commands": [
+      "set interface \"ethernet0/2\" dip 4 198.51.100.100 198.51.100.103",
+      "set policy id 1 top from \"Trust\" to \"Untrust\" \"Any\" \"Any\" \"ANY\" nat src dip-id 4 permit",
+      "exit"
+    ]
+  },
+  "netscreen-mip": {
+    "commands": [
+      "set interface \"ethernet0/2\" mip 198.51.100.60 host 192.0.2.60 netmask 255.255.255.255 vrouter \"trust-vr\"",
+      "set policy id 1 top from \"Untrust\" to \"Trust\" \"Any\" \"MIP(198.51.100.60)\" \"ANY\" permit",
+      "exit"
+    ]
+  },
+  "netscreen-policy-dnat": {
+    "commands": [
+      "set address \"Trust\" \"public-web\" 198.51.100.80/32",
+      "set policy id 1 top from \"Untrust\" to \"Trust\" \"Any\" \"public-web\" \"inside-https\" nat dst ip 192.0.2.80 port 443 permit",
+      "exit"
+    ]
+  },
+  "netscreen-vip": {
+    "commands": [
+      "set interface \"ethernet0/2\" vip 198.51.100.70 443 \"inside-https\" 192.0.2.70",
+      "set policy id 1 top from \"Untrust\" to \"Trust\" \"Any\" \"VIP(198.51.100.70)\" \"inside-https\" permit",
+      "exit"
+    ]
+  },
+  "srx-destination-pool": {
+    "commands": [
+      "configure",
+      "set security nat destination pool backend address 192.0.2.10/32",
+      "set security nat destination rule-set inbound from zone outside",
+      "set security nat destination rule-set inbound rule fixed match destination-address 203.0.113.10/32",
+      "set security nat destination rule-set inbound rule fixed then destination-nat pool backend",
+      "exit"
+    ]
+  },
+  "srx-source-pat": {
+    "commands": [
+      "configure",
+      "set security nat source pool outbound address 203.0.113.10/32",
+      "set security nat source rule-set outbound from zone inside",
+      "set security nat source rule-set outbound to zone outside",
+      "set security nat source rule-set outbound rule hide match source-address 192.0.2.10/32",
+      "set security nat source rule-set outbound rule hide then source-nat pool outbound",
+      "exit"
+    ]
+  },
+  "srx-static": {
+    "commands": [
+      "configure",
+      "set security nat static rule-set inbound from zone outside",
+      "set security nat static rule-set inbound rule fixed match destination-address 203.0.113.10/32",
+      "set security nat static rule-set inbound rule fixed then static-nat prefix 192.0.2.10/32",
+      "exit"
+    ]
+  }
+}

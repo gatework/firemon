@@ -9,24 +9,25 @@ import (
 var ErrGraph = errors.New("invalid firewall graph")
 
 type Firewall struct {
-	data          Data
-	orderedRules  []*Rule
-	diagnostics   []Diagnostic
-	sequence      []NATEntry
-	digest        string
-	zones         map[ID]*Zone
-	interfaces    map[ID]*Interface
-	routes        map[ID]*Route
-	addresses     map[ID]*Address
-	addressGroups map[ID]*AddressGroup
-	services      map[ID]*Service
-	serviceGroups map[ID]*ServiceGroup
-	schedules     map[ID]*Schedule
-	rules         map[ID]*Rule
-	ruleBindings  map[ID]*RuleBinding
-	staticNATs    map[ID]*StaticNAT
-	dynamicNATs   map[ID]*DynamicNAT
-	natPools      map[ID]*NATPool
+	data            Data
+	orderedRules    []*Rule
+	diagnostics     []Diagnostic
+	sequence        []NATEntry
+	digest          string
+	declarationSize int
+	zones           map[ID]*Zone
+	interfaces      map[ID]*Interface
+	routes          map[ID]*Route
+	addresses       map[ID]*Address
+	addressGroups   map[ID]*AddressGroup
+	services        map[ID]*Service
+	serviceGroups   map[ID]*ServiceGroup
+	schedules       map[ID]*Schedule
+	rules           map[ID]*Rule
+	ruleBindings    map[ID]*RuleBinding
+	staticNATs      map[ID]*StaticNAT
+	dynamicNATs     map[ID]*DynamicNAT
+	natPools        map[ID]*NATPool
 }
 
 func (f *Firewall) Zone(id ID) *Zone { return f.zones[id] }
@@ -128,6 +129,18 @@ func (f *Firewall) Rules() []*Rule {
 	return out
 }
 
+// DeclaredRules visits immutable rules in source declaration order without
+// copying their view. OrderedRules instead follows native evaluation position.
+func (f *Firewall) DeclaredRules() iter.Seq[*Rule] {
+	return func(yield func(*Rule) bool) {
+		for _, r := range f.data.Rules {
+			if !yield(f.rules[r.ID]) {
+				return
+			}
+		}
+	}
+}
+
 func (f *Firewall) RuleBinding(id ID) *RuleBinding { return f.ruleBindings[id] }
 
 func (f *Firewall) RuleBindings() []*RuleBinding {
@@ -186,11 +199,19 @@ func (f *Firewall) RecordCount() int {
 	return len(d.Zones) + len(d.Interfaces) + len(d.Routes) + len(d.Addresses) + len(d.AddressGroups) + len(d.Services) + len(d.ServiceGroups) + len(d.Schedules) + len(d.Rules) + len(d.RuleBindings) + len(d.StaticNATs) + len(d.DynamicNATs) + len(d.NATPools) + len(d.Evidence) + len(d.Diagnostics)
 }
 
+// DeclarationSize counts records and nested structural elements without
+// exporting or allocating a copy. It is a conservative work estimate for proof
+// preflights; retained raw text and scalar string bytes are not counted.
+func (f *Firewall) DeclarationSize() int { return f.declarationSize }
+
 func (f *Firewall) Export() Data { return f.data.Clone() }
 
 func (f *Firewall) Complete() bool { return len(f.diagnostics) == 0 }
 
 func (f *Firewall) Diagnostics() []Diagnostic { return slices.Clone(f.diagnostics) }
+
+// DiagnosticCount allows bounded consumers to charge before copying evidence.
+func (f *Firewall) DiagnosticCount() int { return len(f.diagnostics) }
 
 func (f *Firewall) NATSequence() []NATEntry { return slices.Clone(f.sequence) }
 

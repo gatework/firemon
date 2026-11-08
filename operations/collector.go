@@ -5,6 +5,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -70,6 +71,10 @@ type CollectResult struct {
 	Complete   bool   `json:"complete"`
 }
 
+// Published reports that the capture has a confirmed durable publication. Its
+// completeness and any accompanying capture or close errors remain independent.
+func (r CollectResult) Published() bool { return r.Revision != "" && r.Generation != 0 }
+
 func operationContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	if timeout <= 0 {
 		timeout = 5 * time.Minute
@@ -115,7 +120,7 @@ func (c Collector) Collect(ctx context.Context, request CollectRequest) (result 
 	session, err := c.sessions.OpenReadOnly(ctx, request.Device)
 	defer func() {
 		if !dependency.Nil(session) {
-			err = errors.Join(err, session.Close())
+			err = errors.Join(err, closeReader(session))
 		}
 	}()
 	if err != nil {
@@ -128,7 +133,7 @@ func (c Collector) Collect(ctx context.Context, request CollectRequest) (result 
 		return CollectResult{}, err
 	}
 	capture, readErr := session.Read(ctx, device.Running)
-	closeErr := session.Close()
+	closeErr := closeReader(session)
 	session = nil
 	readErr = errors.Join(readErr, ctx.Err())
 	if capture.Metadata.Device != request.Device || len(capture.Source.Text) > config.DefaultMaxBytes {
@@ -155,6 +160,13 @@ func (c Collector) Collect(ctx context.Context, request CollectRequest) (result 
 	}
 	result = CollectResult{Revision: published.Revision, Generation: published.Generation, Complete: fw.Complete()}
 	return result, errors.Join(collectionStatus(result), parseErr, readErr, closeErr, ctx.Err())
+}
+
+func closeReader(reader device.Reader) error {
+	if err := reader.Close(); err != nil {
+		return fmt.Errorf("close collection reader: %w", err)
+	}
+	return nil
 }
 
 func collectionStatus(result CollectResult) error {

@@ -36,8 +36,11 @@ func (e *RejectionError) Unwrap() error { return e.Err }
 // representationRejected recognizes only the renderer's native refusal
 // contract. A nested planning rejection belongs to that dependency, not us.
 func representationRejected(err error) bool {
-	var foreign *RejectionError
-	return !computationFailed(err) && !errors.As(err, &foreign) && errors.Is(err, ErrRender)
+	if computationFailed(err) {
+		return false
+	}
+	_, foreign := errors.AsType[*RejectionError](err)
+	return !foreign && errors.Is(err, ErrRender)
 }
 
 func computationFailed(err error) bool {

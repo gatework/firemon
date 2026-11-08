@@ -11,7 +11,7 @@ maxima; this is not a global deadline or a shared whole-operation work quota.
 Candidate and pair-comparison limits are separate from visits.
 
 Graph collection counts are charged before copied views are materialized.
-Context enumeration charges rules, zones, schedules and each absolute window;
+Context enumeration charges rules, zones, schedules, absolute windows and weekly calendar work;
 risk findings remain bounded even when incomplete evidence returns unknown.
 Planning algebra and independent readback use the configured region limit,
 including the two-region IPv4/IPv6 universe. Budget/cancellation failure returns
@@ -36,7 +36,7 @@ baseline view, an expected-result view and an observed-result view. This check
 does not spend current-operation visits and does not guarantee actual readback
 success: changed captures and later proof work still consume runtime budgets.
 Insufficient minimum capacity returns `policy.ErrBudget`; increase `MaxVisits`
-and replan. Snapshot format and public method signatures are unchanged.
+and replan. Current format and API boundaries are described below.
 
 `RequestOptimizer` checks each input's `RegionCount()` before grouping or copying.
 `MaxRegions` bounds input and intermediate traffic, even when fixed-point
@@ -55,7 +55,7 @@ projection. No single vendor interface combines all these responsibilities.
 | Configuration | `config.Parser.Parse(ctx, config.Source, firemon.Metadata)` | A sealed graph; `Complete()` additionally requires complete capture and established semantics |
 | Domain | Concrete immutable objects, scalar behavior, `Record()` copies, typed references | Shared graph identity without mutable container aliases |
 | Policy | `policy.Engine.Query`, `Match`, `QueryNAT`, `QueryPacket`, `ResolveRoutes` | Exact known partitions; unresolved traffic remains `Unknown`, independent of transport success |
-| Design | `plan.Planner.Plan`, `Transfer`, `Preserve` | Renderable target and outside-traffic proof, with preserved translation behavior |
+| Design | `plan.Planner.Plan`, `Transfer`, `Preserve`, `Migrate` | Renderable target and outside-traffic proof, with established translation behavior |
 | Readback | `Plan.VerifyBaseline`, `Plan.Verify` | Independent parsed native configuration establishes the approved baseline/result |
 | Lifecycle | `RiskAnalyzer.Analyze`, `Converger.Candidates`, `PolicyMigrator.Plan`, `Reclaimer.AnalyzeMembers` | Versioned findings or proven plans; findings alone never authorize changes |
 | Collection | `operations.ReadOnlyFactory.OpenReadOnly`, `device.Reader` | Fresh owned reader with `Read` and `Close`, independent of deployment dependencies |
@@ -100,33 +100,44 @@ use their own `ErrInvalid`; malformed stored evidence remains `snapshot.ErrForma
 `AddressRecord.VIP` is a typed `NATRef` to either `StaticNAT` or `DynamicNAT`.
 `StaticNATRecord.SourceVIP` identifies its source VIP address. Scope always means
 the native namespace; names and ID prefixes do not establish relationships.
-Invalid explicit references retain diagnostics. Snapshot semantic format 9
+Invalid explicit references retain diagnostics. Snapshot semantic format 10
 persists these relationships and rejects older formats; reimport the original
 capture into a new store.
 
-Before upgrading an existing store, finish pending device recovery with the
-previous binary and retain its journal/snapshots. Reimporting a capture does not
-transfer an old operation's write receipts or reservation into the new format.
+The project is in development and retains no old-format decoding path. Reimporting
+a capture does not transfer an old operation's receipts or reservations.
 
 Policy-owned SNAT can disappear when an ordinary permit is inserted before its
 owner. `Engine.PreserveNAT` therefore checks existing NAT dependencies, active
 references and effective native translation partitions, including the intended
 target traffic. Disjoint changes can pass. Query and readback invoke the same
-semantics, and readback reruns the proof. Native NAT creation/migration remains
-outside the policy-only migrator's supported contract.
+semantics, and readback reruns the proof. `Planner.Migrate` additionally establishes
+source-to-target packet equivalence for selected NAT dependencies, including
+identity phases, and preserves target NAT outside that exact time/traffic domain.
+The target driver's small `MigrationNATCompiler` interface compiles declarations;
+it cannot approve its own output. [Native creation](native-nat-creation.md) and
+[migration capabilities](../vendors/MIGRATION.md) have distinct support matrices.
 
 ## Lifecycle evidence
 
 Reusable services retain their planner and configured limits. `ReclamationRequest`
 provides the current time, revision, observation window and rule/member evidence
-for each `Reclaimer` call. `MigrationRequest` provides time, zone/chain mappings,
-pairs and selected rules for `PolicyMigrator.Plan`. `Converger.Candidates` and
+for each `Reclaimer` call. `MigrationRequest` provides time, zone/chain/interface/VRF
+mappings, pairs, rules, NAT selection and target clock evidence for
+`PolicyMigrator.Plan`. Its result contains either a plan or structured issues;
+unsupported selected effects cannot produce a partial executable plan.
+`Converger.Candidates` and
 `Plan` receive the proof start time per call. Inputs are read without retention or
 mutation; callers must not mutate them while a call is in progress.
 
-`Schedule.ActiveAt` and `ExpiredAt` return `(value, known)`. Absolute windows are
-half-open; recurrence, unsupported declarations, missing windows or absent time
-remain unknown. Unknown activity stays possibly active; unknown expiry never
+`Schedule.ActiveAt` and `ExpiredAt` return `(value, known)`. Absolute windows and
+typed weekly civil-time windows are half-open. Optional period bounds intersect
+weekly windows; multiple periods and absolute windows form a union. Known native
+inclusive endpoints are normalized only with capture-bound endpoint/tick evidence.
+Unsupported declarations, missing clock/calendar evidence or absent time remain
+unknown. Future proofs partition absolute boundaries and weekly phases across
+timezone transitions without a fixed sampling horizon. Mixed recurrence timezones
+are refused. Unknown activity stays possibly active; unknown expiry never
 authorizes removal. `HasUnsupported` describes local unmodeled declarations,
 not graph completeness or successful reference resolution.
 
@@ -134,7 +145,17 @@ Migration maps `firemon.PolicyChain{Scope, RuleSet}` independently from zones. A
 security chain may be inferred. ACL or ambiguous targets require explicit chain
 mapping. An explicitly empty destination-zone mapping, together with an explicit
 chain mapping, represents an ingress-only target ACL; a missing map key is an
-error. Source action and logging semantics remain part of the proof.
+error. Source action and logging semantics remain part of the proof. Packet/NAT
+migration also requires existing interface and VRF mappings, including an explicit
+mapping for the default VRF. A missing mapping is never inferred from a name.
+Empty NAT selections derive the effective selected-rule dependency closure;
+explicit selections must contain that closure. Unselected rule behavior cannot
+authorize a wider NAT change.
+
+`RiskFinding.Evidence` retains the evaluation time, chain, zones, schedule activity,
+source spans and unknown reasons. Its `native-policy` view is the native ACL
+coordinate system. Wire/real/translated packet risk must be established through
+packet traversal; native findings do not claim those views implicitly.
 
 Compound audit definitions contain typed source, destination and service
 predicates combined with `All` or `Any`. Relations are intersects, contains,
@@ -342,7 +363,8 @@ selected context, and named rules retain their native chain. PAN, SRX and Huawei
 reject creation that aliases an existing rule name even when graph IDs differ.
 Numeric native rule allocation remains renderer-owned. Existing valid cross-scope
 names remain loadable; this change does not add a blanket name restriction to Seal.
-The public DTOs, snapshot v9 format, CLI JSON and Renderer signature are unchanged.
+The subsequent calendar/migration work changes schedule DTOs, snapshot format to
+10 and replay inputs; the small policy `Renderer` interface remains unchanged.
 
 All three planning entries (`Plan`, `Transfer`, `Preserve`) pass detached nested
 change slices to Render and own copies of returned commands. A renderer retaining

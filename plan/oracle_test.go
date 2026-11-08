@@ -34,7 +34,7 @@ func TestPerlOracleCandidateParity(t *testing.T) {
 	if err = json.Unmarshal(raw, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	fw, err := hillstone.Parse(context.Background(), config.Source{Text: fixture.Config, Complete: true}, fm.Metadata{Device: "oracle"})
+	fw, err := (hillstone.Parser{}).Parse(context.Background(), config.Source{Text: fixture.Config, Complete: true}, fm.Metadata{Device: "oracle"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -51,7 +51,7 @@ func BenchmarkParseXML(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(raw.Text)))
 			for b.Loop() {
-				fw, err := paloalto.Parse(context.Background(), raw, fm.Metadata{Device: "synthetic-benchmark", Software: "10.2.0"})
+				fw, err := (paloalto.Parser{}).Parse(context.Background(), raw, fm.Metadata{Device: "synthetic-benchmark", Software: "10.2.0"})
 				if err != nil {
 					b.Fatal(err)
 				}

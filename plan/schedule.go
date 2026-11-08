@@ -57,7 +57,7 @@ func nativeClock(inputs []NativeRequest) (*fm.ScheduleClock, error) {
 	return out, nil
 }
 func validScheduleRecord(r fm.ScheduleRecord, i ScheduleIntent) bool {
-	return r.ID == i.Schedule && !r.Inline && len(r.Unsupported) == 0 && len(r.Recurring) == 0 && len(r.Windows) == 1 && r.Timezone == i.Clock.Timezone && r.Windows[0].Start.Equal(i.Window.Start) && r.Windows[0].End.Equal(i.Window.End)
+	return r.ID == i.Schedule && !r.Inline && r.Validate() == nil && !r.HasRecurrence() && len(r.Windows) == 1 && r.Timezone == i.Clock.Timezone && r.Windows[0].Start.Equal(i.Window.Start) && r.Windows[0].End.Equal(i.Window.End)
 }
 func validateScheduleInput(before *fm.Firewall, input NativeRequest) error {
 	if input.Lifetime == nil {
@@ -129,11 +129,29 @@ func validateScheduleChanges(before, after *fm.Firewall, c NativeChanges) error 
 			return ErrInvalid
 		}
 		r := s.Record()
-		if r.Timezone != c.Clock.Timezone || len(r.Windows) != 1 || len(r.Recurring) != 0 || len(r.Unsupported) != 0 || r.Inline {
+		if r.Timezone != c.Clock.Timezone || r.Validate() != nil || r.Inline {
 			return ErrInvalid
 		}
-		if _, _, err := c.Clock.NativeWindow(r.Windows[0], time.Minute); err != nil {
-			return err
+		for _, window := range r.Windows {
+			if _, _, err := c.Clock.NativeWindow(window, time.Second); err != nil {
+				return err
+			}
+		}
+		if r.HasRecurrence() && r.Calendar != c.Clock.Calendar {
+			return ErrInvalid
+		}
+		for _, period := range r.Weekly {
+			if _, err := c.Clock.NativeBound(period.Start, false, time.Second); err != nil {
+				return err
+			}
+			if _, err := c.Clock.NativeBound(period.End, true, time.Second); err != nil {
+				return err
+			}
+			for _, window := range period.Windows {
+				if _, _, err := c.Clock.NativeWeekly(window, time.Second); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	for _, s := range c.Additions.Schedules {

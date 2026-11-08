@@ -6,7 +6,7 @@ The additive `plan.NativeRenderer` path creates explicit NAT declarations and th
 
 ## Verified native forms
 
-All 20 rows have synthetic native before/independently authored after captures in `vendors/native_commands_test.go`. Each row runs command/dependency-order assertions, a sample original-to-translated relation assertion, snapshot roundtrip, complete intended/outside relation proof, joint `PlanNativeBatch`, independent `Verify`, and deterministic reconstruction. The after capture is not constructed from emitted commands. This proves the supported offline model, not native device execution.
+The original 20 rows below have synthetic native before/independently authored after captures in `vendors/native_commands_test.go`. Each row runs command/dependency-order assertions, a sample original-to-translated relation assertion, snapshot roundtrip, complete intended/outside relation proof, joint `PlanNativeBatch`, independent `Verify`, and deterministic reconstruction. The after capture is not constructed from emitted commands. This proves the supported offline model, not native device execution.
 
 | Fixture name | Captured software | Form and native dependencies |
 |---|---|---|
@@ -43,7 +43,19 @@ ScreenOS creation requires a complete root/device capture for device-wide explic
 
 Huawei creation is gated to V500R005. Bidirectional server-map creation is explicitly refused: established forward/reverse hairpin overlap semantics can remain unknown, so no plan is made executable by excluding that traffic. Larger destination allocation pools, ambiguous Easy-IP and unsupported native modes remain outside the verified forms.
 
-Palo Alto retains its existing query/policy support; this change adds no Palo Alto NAT creation. Other native syntax beyond the matrix may be rejected even when parsing/query supports it. Save/commit, native locking, real-device interoperability and deployment authorization remain separate lifecycle steps.
+The 2026-11-07 continuation adds PAN-OS 10.2 ordered NAT rendering. Six separately
+authored capture cases in `vendors/paloalto_native_test.go` cover fixed source,
+pool PAT, pool no-PAT, captured interface PAT, destination plus port, and identity
+translation. They establish native rendering and refusal of a changed capture
+against the original typed delta. Their test depth is distinct from the original
+20-row `PlanNativeBatch` matrix above. [Migration tests](../vendors/MIGRATION.md)
+add complete source/target packet proof and independent `Verify` for their listed
+PAN migration forms. Bidirectional fixed translation, unsupported selectors,
+nondefault vsys and unrepresentable service or pool forms are refused.
+
+Other native syntax beyond these matrices may be rejected even when parsing/query
+supports it. Save/commit, native locking, real-device interoperability and
+deployment authorization remain separate lifecycle steps.
 
 ## Actual Perl reference and intentional differences
 

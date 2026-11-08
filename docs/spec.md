@@ -53,4 +53,26 @@ typed VIP associations, effective NAT preservation, explicit migration chains,
 compound audit predicates, member usage, candidate discovery and reusable
 capture/design/deployment composition. Device sessions explicitly implement
 configuration begin/end; PAN/SRX isolation is established before baseline capture.
-Snapshot semantic format 9 rejects older graphs lacking typed VIP relationships.
+Snapshot semantic format 10 rejects older graphs lacking the current typed calendar model.
+
+## Typed calendar and migration continuation
+
+The [2026-11-07 plan](plans/2026-11-07-domain-migration.md) keeps absolute windows
+and weekly civil-time periods as typed values. Exact future context partitioning
+includes bounded periods, weekday transitions and IANA timezone offset changes;
+an arbitrary sample horizon cannot establish equivalence. Missing clock/calendar
+evidence remains unknown. Source captures remain the authority for native syntax.
+
+Migration compiles the selected effective rule and NAT dependency closure through
+the target driver. Source packet effects, original traffic, allocation modes,
+target outside behavior and independent native readback must all pass. Unsupported
+selected effects return structured issues without an executable partial plan.
+Explicit zone, chain, interface and VRF mappings describe existing target topology;
+the compiler does not generate that topology. Native rule splitting is outside
+the business-request decomposition contract.
+
+Approval version 4 uses explicit intent kinds. Reconstruction version 2 binds
+both immutable snapshots for migration and reruns the planner, renderer and
+proofs. There are no compatibility decoders or forwarding parser/application APIs.
+The [implementation report](2026-11-07-domain-improvements.md) records current
+capabilities and limitations; earlier verification documents remain historical.
