@@ -22,7 +22,7 @@ func ignoreBlock(tx *config.Transaction, b *config.Block, reason string) {
 func (p *parser) selectContext(ctx context.Context, s *config.Builder, doc config.Document) error {
 	tx := s.Begin()
 	defer tx.Rollback()
-	supported := []string{"system global", "system settings", "system interface", "system zone", "router static", "firewall address", "firewall addrgrp", "firewall service custom", "firewall service group", "firewall vip", "firewall vipgrp", "firewall ippool", "firewall policy", "firewall schedule onetime"}
+	supported := []string{"system global", "system settings", "system interface", "system zone", "router static", "firewall address", "firewall addrgrp", "firewall service custom", "firewall service group", "firewall vip", "firewall vipgrp", "firewall ippool", "firewall policy", "firewall schedule onetime", "firewall schedule recurring"}
 	p.interfaceDomains = make(map[*config.Block]string)
 	add := func(b *config.Block, domain string) {
 		key := strings.TrimPrefix(b.Kind, "config ")

@@ -620,6 +620,27 @@ func TestHuaweiNativeInlineServiceOwnership(t *testing.T) {
 	if _, err = got.Plan.Verify(t.Context(), after); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("shared literals", func(t *testing.T) {
+		_, block, ok := strings.Cut(tc.after, "nat-policy\n")
+		if !ok {
+			t.Fatal("missing NAT policy fixture")
+		}
+		block = strings.Replace(block, "rule name ", "rule name shared-", 1)
+		base := nativeParse(t, tc.vendor, tc.version, tc.before)
+		shared := nativeParse(t, tc.vendor, tc.version, tc.before+tc.after+"nat-policy\n"+block)
+		delta := nativeDelta(base, shared)
+		if len(delta.Additions.DynamicNATs) != 2 || len(delta.Additions.Services) != 1 || !delta.Additions.Services[0].Inline {
+			t.Fatal("fixture must have two owners sharing one inline service")
+		}
+		renderer, _ := vendors.Renderer(tc.vendor)
+		commands, err := renderer.(plan.NativeRenderer).RenderNative(t.Context(), base, shared, delta)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if text := strings.Join(commands, "\n"); strings.Count(text, "service protocol tcp source-port 12345 destination-port 443") != 2 || strings.Contains(text, "ip service-set") {
+			t.Fatalf("shared inline service must be emitted by both owners: %s", text)
+		}
+	})
 	for _, kind := range []string{"identity", "orphan"} {
 		t.Run(kind, func(t *testing.T) {
 			bad := input.Clone()

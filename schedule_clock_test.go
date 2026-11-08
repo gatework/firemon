@@ -47,3 +47,37 @@ func TestScheduleClockBindingAndCivilTime(t *testing.T) {
 		t.Fatal(parsed, err)
 	}
 }
+
+func TestScheduleOptionalBoundsAndSingleInclusiveTick(t *testing.T) {
+	clock := fm.ScheduleClock{Timezone: "UTC", Reference: "synthetic clock", EndBoundary: "inclusive", TickSeconds: 60, Calendar: fm.CalendarCivil}
+	zero, err := clock.ParseBound("2006-01-02 15:04", "", false)
+	if err != nil || !zero.IsZero() {
+		t.Fatal(zero, err)
+	}
+	at, err := clock.ParseBound("2006-01-02 15:04", "2026-11-09 09:00", true)
+	if err != nil || at.Hour() != 9 || at.Minute() != 1 {
+		t.Fatal(at, err)
+	}
+	native, err := clock.NativeBound(at, true, time.Minute)
+	if err != nil || native.Hour() != 9 || native.Minute() != 0 {
+		t.Fatal(native, err)
+	}
+	w := fm.TimeWindow{Start: native, End: at}
+	a, b, err := clock.NativeWindow(w, time.Minute)
+	if err != nil || !a.Equal(b) {
+		t.Fatal("single inclusive tick was not representable", a, b, err)
+	}
+	w.End = w.Start.Add(30 * time.Second)
+	if _, _, err := clock.NativeWindow(w, time.Second); err == nil {
+		t.Fatal("negative native interval was accepted")
+	}
+	windows, err := clock.ParseWeekly([]time.Weekday{time.Monday}, "09:01", "09:00")
+	if err != nil || len(windows) != 2 || windows[0].Start != 9*time.Hour+time.Minute || windows[1].End != 9*time.Hour+time.Minute {
+		t.Fatal("inclusive overnight boundary lost a civil day", windows, err)
+	}
+	for _, value := range []string{"+1:00", "-0:00", "25:00", "09:60"} {
+		if _, err := clock.ParseWeekly([]time.Weekday{time.Monday}, value, "17:00"); err == nil {
+			t.Fatal("malformed canonical wall clock accepted", value)
+		}
+	}
+}

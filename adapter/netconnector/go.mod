@@ -1,6 +1,6 @@
 module github.com/gatework/firemon/adapter/netconnector
 
-go 1.26.0
+go 1.27.0
 
 require (
 	github.com/gatework/firemon v0.0.0-20261107151352-cab273cd76e3

@@ -11,7 +11,7 @@ import (
 // Native namespaces, rather than graph IDs, determine what a CLI edit targets.
 // Existing names seed the index even when a rule is scheduled for removal: a
 // delete/create replacement of the same native identity is not a rule addition.
-func (b batch) validateNames(ctx context.Context, before, after *fm.Firewall) error {
+func (b Batch) validateNames(ctx context.Context, before, after *fm.Firewall) error {
 	vendor := before.Metadata().Vendor
 	key := func(object fm.Object, group bool) nativename.ObjectKey {
 		return nativename.Object(before.Metadata(), object, group)

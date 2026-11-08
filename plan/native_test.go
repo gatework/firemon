@@ -203,7 +203,12 @@ func TestNativePlanNewPolicyOwnerAndTypedReadback(t *testing.T) {
 			in.Additions.Rules = []fm.RuleRecord{{Object: fm.Object{ID: "owner", Name: "owner"}, RuleSet: "security", Position: -1, Action: fm.Permit, Log: fm.Irrelevant, Match: m}}
 			in.Additions.NATPools = []fm.NATPoolRecord{{Object: fm.Object{ID: "pool", Name: "pool"}, Ranges: []flow.AddressRange{addressRange("203.0.113.0/30")}}}
 			in.Additions.DynamicNATs = []fm.DynamicNATRecord{{Object: fm.Object{ID: "nat", Name: "nat"}, Rule: "owner", Match: m, Order: fm.NATOrder{Section: "policy"}, SourceMode: fm.DynamicIP, DestinationMode: fm.NoTranslation, SourcePool: "pool"}}
-			in.NAT[0].Steps = []policy.NATStep{{Kind: fm.DynamicNATObject, ID: "nat"}}
+			if vendor == "netscreen" {
+				in.Additions.DynamicNATs[0].ID = "policy:owner"
+				in.Additions.DynamicNATs[0].Name = "owner"
+				in.Additions.DynamicNATs[0].Order.Stage = 1
+			}
+			in.NAT[0].Steps = []policy.NATStep{{Kind: fm.DynamicNATObject, ID: in.Additions.DynamicNATs[0].ID}}
 			result, err := (plan.Planner{NativeRenderer: nativeRenderer{}}).PlanNativeBatch(context.Background(), base, []plan.NativeRequest{in})
 			if err != nil || result.Plan == nil {
 				t.Fatal(result, err)
@@ -216,6 +221,10 @@ func TestNativePlanNewPolicyOwnerAndTypedReadback(t *testing.T) {
 			}
 			observed.DynamicNATs[0].Rule = "200"
 			observed.DynamicNATs[0].ID = "nat200"
+			if vendor == "netscreen" {
+				observed.DynamicNATs[0].ID = "policy:200"
+				observed.DynamicNATs[0].Name = "200"
+			}
 			observed.NATPools[0].ID = "pool200"
 			observed.DynamicNATs[0].SourcePool = "pool200"
 			fw, err := fm.Seal(observed)
@@ -225,6 +234,67 @@ func TestNativePlanNewPolicyOwnerAndTypedReadback(t *testing.T) {
 			readback, err := result.Plan.Verify(context.Background(), fw)
 			if err != nil || readback.RuleIDs()["owner"] != "200" || readback.CreatedIDs()[plan.NativeIdentity{Kind: plan.NativePool, ID: "pool"}] != "pool200" {
 				t.Fatal(readback, err)
+			}
+			if readback.CreatedIDs()[plan.NativeIdentity{Kind: plan.NativeDynamicNAT, ID: in.Additions.DynamicNATs[0].ID}] != observed.DynamicNATs[0].ID {
+				t.Fatal("missing policy-owned typed identity", readback.CreatedIDs())
+			}
+			renamed := fw.Export()
+			renamed.DynamicNATs[0].Name = "unapproved-native-name"
+			changed, err := fm.Seal(renamed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := result.Plan.Verify(t.Context(), changed); !errors.Is(err, plan.ErrReadback) {
+				t.Fatal("native NAT name validation was relaxed", err)
+			}
+			if vendor != "netscreen" {
+				return
+			}
+			for _, tc := range []struct {
+				name   string
+				change func(*fm.Data)
+			}{
+				{"missing-nat", func(d *fm.Data) { d.DynamicNATs = nil }},
+				{"ambiguous-owner", func(d *fm.Data) {
+					other := d.DynamicNATs[0]
+					other.ID, other.Name = "policy:201", "201"
+					d.DynamicNATs = append(d.DynamicNATs, other)
+				}},
+				{"tampered-derived-id", func(d *fm.Data) { d.DynamicNATs[0].ID = "unrelated" }},
+				{"tampered-derived-name", func(d *fm.Data) { d.DynamicNATs[0].Name = "owner" }},
+				{"missing-owner-reference", func(d *fm.Data) { d.DynamicNATs[0].Rule = "" }},
+				{"baseline-owner-reference", func(d *fm.Data) {
+					old := base.Rule("10").Record()
+					d.DynamicNATs[0].ID, d.DynamicNATs[0].Name, d.DynamicNATs[0].Rule = "policy:10", "10", "10"
+					d.DynamicNATs[0].Match = old.Match
+				}},
+				{"tampered-owner-scope", func(d *fm.Data) {
+					for i := range d.Rules {
+						if d.Rules[i].ID == "200" {
+							d.Rules[i].Scope = "other"
+						}
+					}
+					d.DynamicNATs[0].Scope = "other"
+				}},
+				{"tampered-pool-reference", func(d *fm.Data) {
+					other := d.NATPools[0]
+					other.ID, other.Name = "pool201", "another-pool"
+					other.Ranges = []flow.AddressRange{addressRange("203.0.113.128/30")}
+					d.NATPools = append(d.NATPools, other)
+					d.DynamicNATs[0].SourcePool = other.ID
+				}},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					data := fw.Export()
+					tc.change(&data)
+					changed, err := fm.Seal(data)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := result.Plan.Verify(t.Context(), changed); !errors.Is(err, plan.ErrReadback) {
+						t.Fatal("unestablished policy NAT identity accepted", err)
+					}
+				})
 			}
 		})
 	}

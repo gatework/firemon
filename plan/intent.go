@@ -9,7 +9,6 @@ import (
 	"time"
 
 	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
 )
 
@@ -21,7 +20,10 @@ type planIntent interface {
 	verify(context.Context, *Plan, *fm.Firewall, *fm.Firewall, *visitBudget) error
 }
 
-type accessIntent struct{ target policy.Request }
+type accessIntent struct {
+	target  policy.Request
+	options BatchOptions
+}
 type batchIntent struct {
 	inputs, targets []policy.Request
 	options         BatchOptions
@@ -30,10 +32,14 @@ type nativeIntent struct {
 	inputs, accepted []NativeRequest
 	options          NativeOptions
 }
-type preservationIntent struct{ proof policy.Equivalence }
+type preservationIntent struct {
+	proof   policy.Equivalence
+	options BatchOptions
+}
 type transferIntent struct {
-	inputs []RuleIntent
-	from   time.Time
+	inputs  []RuleIntent
+	from    time.Time
+	options BatchOptions
 }
 
 func (i accessIntent) verify(ctx context.Context, p *Plan, before, after *fm.Firewall, visits *visitBudget) error {
@@ -70,108 +76,62 @@ func (p *Plan) seal() error {
 	return nil
 }
 
+// encodeApproval gives every business intent the same explicit approval boundary.
+// The payload describes that intent; replay material is validated separately and
+// always re-runs its proof before it can produce the same approval digest.
+func encodeApproval[T any](p *Plan, kind string, payload T) ([]byte, error) {
+	return json.Marshal(struct {
+		Version       int
+		Kind          string
+		Before, After string
+		Proof         Proof
+		NATProof      *policy.NATProof
+		Changes       []Change
+		NativeChanges NativeChanges
+		Commands      []string
+		Payload       T
+	}{4, kind, p.before.SemanticDigest(), p.after.SemanticDigest(), p.proof,
+		p.natProof, p.changes, p.nativeChanges, p.commands, payload})
+}
+
+func (p Planner) effectiveOptions() BatchOptions {
+	return BatchOptions{MaxCandidates: newCandidateAttempts(p.MaxCandidates).limit, Limits: p.Engine.Limits.WithDefaults()}
+}
+
 func (i accessIntent) approval(p *Plan) ([]byte, error) {
-	return legacyApproval(p, i.target, nil, nil, time.Time{})
+	return encodeApproval(p, "access", struct {
+		Target  reconstructionPolicy
+		Options BatchOptions
+	}{reconstructionPolicyOf(i.target), i.options})
 }
 func (i preservationIntent) approval(p *Plan) ([]byte, error) {
-	return legacyApproval(p, policy.Request{}, &i.proof, nil, time.Time{})
+	return encodeApproval(p, "preserve", struct {
+		Equivalence policy.Equivalence
+		Options     BatchOptions
+	}{i.proof, i.options})
 }
 func (i transferIntent) approval(p *Plan) ([]byte, error) {
-	return legacyApproval(p, policy.Request{}, nil, i.inputs, i.from)
+	return encodeApproval(p, "transfer", struct {
+		Inputs  []reconstructionTransfer
+		From    time.Time
+		Options BatchOptions
+	}{reconstructionTransfers(i.inputs), i.from, i.options})
 }
-
-// Preserve the historical field order, empty transfer array and zero target for
-// lifecycle plans. This representation is approval material, not a replay input.
-func legacyApproval(p *Plan, target policy.Request, preservation *policy.Equivalence, inputs []RuleIntent, from time.Time) ([]byte, error) {
-	type transfer struct {
-		Intent  RuleIntent
-		Traffic []flow.TrafficRegion
-	}
-	targets := make([]transfer, 0, len(inputs))
-	for _, intent := range inputs {
-		targets = append(targets, transfer{intent, intent.Request.Traffic.Regions()})
-	}
-	return json.Marshal(struct {
-		Proof        Proof
-		Changes      []Change
-		Commands     []string
-		Target       policy.Request
-		Traffic      []flow.TrafficRegion
-		Preservation *policy.Equivalence
-		Transfers    []transfer
-		TransferFrom time.Time
-	}{p.proof, p.changes, p.commands, target, target.Traffic.Regions(), preservation, targets, from})
-}
-
 func (i batchIntent) approval(p *Plan) ([]byte, error) {
-	type target struct {
-		Request policy.Request
-		Traffic []flow.TrafficRegion
-	}
-	targets := make([]target, len(i.targets))
-	for n, q := range i.targets {
-		targets[n] = target{q, q.Traffic.Regions()}
-	}
-	// Effective options and original rejected inputs remain replay-only metadata.
-	return json.Marshal(struct {
-		Version  int
-		Proof    Proof
-		Changes  []Change
-		Commands []string
-		Targets  []target
-	}{1, p.proof, p.changes, p.commands, targets})
+	return encodeApproval(p, "policy", struct {
+		Targets []reconstructionPolicy
+		Options BatchOptions
+	}{reconstructionPolicies(i.targets), i.options})
 }
-
 func (i nativeIntent) approval(p *Plan) ([]byte, error) {
-	type intent struct {
-		Request policy.Request
-		Traffic []flow.TrafficRegion
-		Steps   []policy.NATStep
-		Window  *fm.TimeWindow `json:",omitempty"`
-	}
-	type input struct {
-		Packet        *policy.PacketRequest
-		PacketTraffic []flow.TrafficRegion
-		Request       policy.Request
-		Traffic       []flow.TrafficRegion
-		Additions     NativeAdditions
-		NAT           []intent
-		Sources       []string
-		Lifetime      *ScheduleIntent `json:",omitempty"`
-	}
-	encode := func(in []NativeRequest) []input {
-		out := make([]input, len(in))
-		for n, r := range in {
-			out[n] = input{Packet: r.Packet, Request: normalizedRequest(r.Request), Traffic: nativeTrafficRegions(r.Request.Traffic), Additions: r.Additions, Sources: r.Sources, Lifetime: r.Lifetime}
-			if r.Packet != nil {
-				out[n].PacketTraffic = r.Packet.Traffic.Regions()
-			}
-			for _, nat := range r.NAT {
-				out[n].NAT = append(out[n].NAT, intent{normalizedRequest(nat.Request), nativeTrafficRegions(nat.Request.Traffic), nat.Steps, nat.Window})
-			}
-		}
-		return out
-	}
-	version := 2
-	for _, r := range i.inputs {
-		if r.Lifetime != nil {
-			version = 3
-			break
-		}
-	}
-	return json.Marshal(struct {
-		Version          int
+	return encodeApproval(p, "native", struct {
+		Inputs, Accepted []reconstructionNative
 		Options          NativeOptions
-		Proof            Proof
-		NATProof         *policy.NATProof
-		Changes          NativeChanges
-		Inputs, Accepted []input
-		Commands         []string
-	}{version, i.options, p.proof, p.natProof, p.nativeChanges, encode(i.inputs), encode(i.accepted), p.commands})
+	}{reconstructionNatives(i.inputs), reconstructionNatives(i.accepted), i.options})
 }
 
 // Targets returns the normalized jointly proven batch targets. Single-context
-// legacy plans return their one target; lifecycle plans may have no targets.
+// access plans return their one target; lifecycle plans may have no targets.
 func (p *Plan) Targets() []policy.Request {
 	if p == nil {
 		return nil

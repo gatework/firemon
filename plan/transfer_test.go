@@ -22,7 +22,7 @@ func TestTransferCannotRemoveEffectivePolicyNAT(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := strings.ReplaceAll(string(raw), "set logtraffic all", "set logtraffic disable\n        set nat enable")
-	before, err := fortinet.Parse(context.Background(), config.Source{Text: text, Complete: true}, fm.Metadata{Device: "fg", Context: "root"})
+	before, err := (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: text, Complete: true}, fm.Metadata{Device: "fg", Context: "root"})
 	if err != nil || !before.Complete() {
 		t.Fatal(err)
 	}
@@ -55,14 +55,14 @@ func TestTransferCannotRemoveEffectivePolicyNAT(t *testing.T) {
 	// The native saved configuration contains the resulting rule order, not
 	// the imperative move command. Reparse it independently of the plan graph.
 	created := strings.ReplaceAll(commands, "move 1 before 10\n", "")
-	observed, err := fortinet.Parse(context.Background(), config.Source{Text: created + text, Complete: true}, before.Metadata())
+	observed, err := (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: created + text, Complete: true}, before.Metadata())
 	if err != nil || !observed.Complete() {
 		t.Fatal("native readback is incomplete", err)
 	}
 	if _, err := p.Verify(context.Background(), observed); err != nil {
 		t.Fatal("native readback did not preserve NAT", err)
 	}
-	changed, err := fortinet.Parse(context.Background(), config.Source{Text: created + strings.ReplaceAll(text, "set nat enable", "set nat disable"), Complete: true}, before.Metadata())
+	changed, err := (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: created + strings.ReplaceAll(text, "set nat enable", "set nat disable"), Complete: true}, before.Metadata())
 	if err != nil || !changed.Complete() {
 		t.Fatal("invalid changed-NAT fixture", err)
 	}
@@ -98,7 +98,7 @@ func TestTransferPreservesActionsAndNativeLogEventsThroughReadback(t *testing.T)
 	raw := "set zone inside network layer3 ethernet1/1\nset zone outside network layer3 ethernet1/2\nset network interface ethernet ethernet1/1 layer3 ip 192.0.2.1/24\nset network interface ethernet ethernet1/2 layer3 ip 198.51.100.1/24\n"
 	parse := func(raw string) *fm.Firewall {
 		t.Helper()
-		fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
+		fw, err := (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
 		if err != nil || !fw.Complete() {
 			t.Fatal(err)
 		}

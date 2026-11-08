@@ -22,7 +22,7 @@ type parseFunc func(context.Context, config.Source, fm.Metadata) (*fm.Firewall, 
 var parsers = []struct {
 	name  string
 	parse parseFunc
-}{{"asa", asa.Parse}, {"fortinet", fortinet.Parse}, {"hillstone", hillstone.Parse}, {"huawei", huawei.Parse}, {"netscreen", netscreen.Parse}, {"paloalto", paloalto.Parse}, {"srx", srx.Parse}}
+}{{"asa", (asa.Parser{}).Parse}, {"fortinet", (fortinet.Parser{}).Parse}, {"hillstone", (hillstone.Parser{}).Parse}, {"huawei", (huawei.Parser{}).Parse}, {"netscreen", (netscreen.Parser{}).Parse}, {"paloalto", (paloalto.Parser{}).Parse}, {"srx", (srx.Parser{}).Parse}}
 
 // All addresses are documentation or network-benchmark ranges. Each generated
 // capture has N address objects, N ordered policies and one shared TCP service.
@@ -102,7 +102,7 @@ func nativeConfig(vendor string, n int) string {
 
 func benchmarkFirewall(tb testing.TB, n int) *fm.Firewall {
 	tb.Helper()
-	fw, err := huawei.Parse(context.Background(), config.Source{Text: nativeConfig("huawei", n), Complete: true}, fm.Metadata{Device: "synthetic-benchmark"})
+	fw, err := (huawei.Parser{}).Parse(context.Background(), config.Source{Text: nativeConfig("huawei", n), Complete: true}, fm.Metadata{Device: "synthetic-benchmark"})
 	if err != nil {
 		tb.Fatal(err)
 	}

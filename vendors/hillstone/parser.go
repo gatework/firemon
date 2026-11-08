@@ -8,7 +8,7 @@ import (
 	"github.com/gatework/firemon/config"
 )
 
-const ParserVersion = "hillstone-go-5"
+const ParserVersion = "hillstone-go-6"
 
 type node struct {
 	block           *config.Block
@@ -30,10 +30,6 @@ type parser struct {
 }
 
 type Parser struct{ Limits config.Limits }
-
-func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-	return (Parser{}).Parse(ctx, source, metadata)
-}
 
 func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
 	metadata.Vendor = "hillstone"

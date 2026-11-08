@@ -43,7 +43,7 @@ func TestStaticRoutesKeepVirtualRouterNamespaceThroughSnapshot(t *testing.T) {
 		fmt.Fprintf(&raw, "set network virtual-router %s routing-table ip static-route default destination 0.0.0.0/0\n", vrf)
 		fmt.Fprintf(&raw, "set network virtual-router %s routing-table ip static-route default nexthop ip-address 192.0.2.%d\n", vrf, 254-i)
 	}
-	fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw.String(), Complete: true}, fm.Metadata{Device: "pan"})
+	fw, err := (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: raw.String(), Complete: true}, fm.Metadata{Device: "pan"})
 	if err != nil {
 		t.Fatal(err)
 	}

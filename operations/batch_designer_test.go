@@ -1,7 +1,9 @@
 package operations_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
@@ -10,8 +12,10 @@ import (
 	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
+	"github.com/gatework/firemon/vendors"
 	"net/netip"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -336,6 +340,78 @@ func TestBatchDesignerASARecordsBothACLsWithoutGuessingDesignTarget(t *testing.T
 	if len(native) != 2 || native[0].RuleSet != "IN" || native[1].RuleSet != "OUT" {
 		t.Fatal(native)
 	}
+	// An unplannable outcome still occupies its original position. Device-local
+	// planning indexes must identify later outcomes, including across inputs.
+	for _, device := range []string{"z-policy", "a-policy"} {
+		fw := parseNative(t, strings.ReplaceAll(panBase, "198.51.100", "203.0.113"), fm.Metadata{Device: device, Vendor: "paloalto"})
+		if _, err := store.Publish(ctx, fw, snapshot.PublishOptions{PublicationID: device}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	policyTarget := func(device string) operations.AccessTarget {
+		return operations.AccessTarget{Device: device, Request: policy.Request{FromZone: "inside", ToZone: "outside"}}
+	}
+	requests := []operations.AccessRequest{
+		{
+			ID: "same-ticket", Traffic: requestTraffic(t, "192.0.2.10/32", "203.0.113.10/32", 1024),
+			Sources: []string{"ticket", "ticket", "note"},
+			Targets: []operations.AccessTarget{
+				{Device: "asa", Packet: true, Request: policy.Request{FromZone: "inside"}},
+				policyTarget("z-policy"), policyTarget("a-policy"),
+			},
+		},
+		{
+			ID: "same-ticket", Traffic: requestTraffic(t, "192.0.2.11/32", "203.0.113.11/32", 1024),
+			Sources: []string{"later"}, Targets: []operations.AccessTarget{policyTarget("z-policy")},
+		},
+	}
+	result, err = d.Design(ctx, operations.BatchRequest{Version: 1, Requests: requests})
+	if err != nil || len(result.Devices) != 2 || len(result.Inputs) != 2 || len(result.Inputs[0].Outcomes) != 3 || len(result.Inputs[1].Outcomes) != 1 {
+		t.Fatal(result, err)
+	}
+	if result.Inputs[0].Outcomes[0].Disposition != plan.BatchPending || len(result.Issues) != 1 || !slices.Equal(result.Issues[0].Sources, requests[0].Sources) {
+		t.Fatal("unplannable outcome or source order changed", result)
+	}
+	wantSources := [][]operations.BatchSource{
+		{{Index: 0, Input: 0, Outcome: 2}},
+		{{Index: 0, Input: 0, Outcome: 1}, {Index: 1, Input: 1, Outcome: 0}},
+	}
+	for i, device := range result.Devices {
+		if device.Device != []string{"a-policy", "z-policy"}[i] || !slices.Equal(device.Sources, wantSources[i]) || device.Batch.Plan == nil {
+			t.Fatal("device-local inputs lost provenance", device)
+		}
+		for _, source := range device.Sources {
+			outcome := result.Inputs[source.Input].Outcomes[source.Outcome]
+			if outcome.Device != device.Device || outcome.Disposition != device.Batch.Inputs[source.Index].Disposition {
+				t.Fatal("disposition updated a different outcome", device, outcome)
+			}
+		}
+		var material bytes.Buffer
+		sum, err := plan.EncodeReconstruction(ctx, &material, plan.SnapshotRevisions{Baseline: device.Revision}, device.Batch.Plan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded, err := plan.DecodeReconstruction(ctx, &material, sum)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rebuilt, err := decoded.Rebuild(ctx, plan.ReconstructionSnapshots{Baseline: device.Batch.Plan.Before()}, vendors.Renderer)
+		if err != nil || rebuilt.Digest() != device.Batch.Plan.Digest() {
+			t.Fatal("device-local replay changed", err)
+		}
+	}
+	document, err := json.Marshal(result.Document())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored operations.ReportDocument
+	if err := json.Unmarshal(document, &restored); err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := json.Marshal(restored)
+	if err != nil || !bytes.Equal(document, repeated) {
+		t.Fatal("report provenance roundtrip", err)
+	}
 }
 
 func TestBatchDesignerBoundsIssueExpansion(t *testing.T) {
@@ -344,6 +420,14 @@ func TestBatchDesignerBoundsIssueExpansion(t *testing.T) {
 	result, err := d.Design(context.Background(), operations.BatchRequest{Version: 1, Requests: []operations.AccessRequest{{Traffic: requestTraffic(t, "192.0.2.1/32", "198.51.100.1/32", 1024), Targets: []operations.AccessTarget{{Device: "a"}, {Device: "b"}}}}})
 	if !errors.Is(err, policy.ErrBudget) || len(result.Issues) > 1 || len(result.Devices) > 0 {
 		t.Fatal("unbounded issue expansion", result, err)
+	}
+	d, _ = operations.NewBatchDesigner(operations.BatchDesignerOptions{Store: store, Engine: policy.Engine{Limits: policy.Limits{MaxVisits: 1}}})
+	result, err = d.Design(context.Background(), operations.BatchRequest{Version: 1, Requests: []operations.AccessRequest{
+		{Traffic: requestTraffic(t, "192.0.2.1/32", "198.51.100.1/32", 1024), Targets: []operations.AccessTarget{{Device: "a"}, {Device: "b"}}},
+		{ID: "not visited"},
+	}})
+	if !errors.Is(err, policy.ErrBudget) || len(result.Inputs) != 1 || result.Inputs[0].Index != 0 || len(result.Issues) != 1 {
+		t.Fatal("fatal target resolution must retain only visited inputs", result, err)
 	}
 }
 
@@ -575,12 +659,20 @@ func TestBatchDesignerWireCandidateFailureCoordinates(t *testing.T) {
 					target.Revision = "stale"
 					want = "stale_topology"
 				}
-				result, err := d.Query(ctx, operations.BatchRequest{Version: 1, Requests: []operations.AccessRequest{{Traffic: business, View: view, WireCandidates: []operations.WireCandidate{{Traffic: wire, Target: target}}}}})
+				sources := []string{"ticket", "ticket", "wire"}
+				result, err := d.Query(ctx, operations.BatchRequest{Version: 1, Requests: []operations.AccessRequest{{Traffic: business, View: view, Sources: sources, WireCandidates: []operations.WireCandidate{{Traffic: wire, Target: target}}}}})
 				if err != nil {
 					t.Fatal(err)
 				}
 				foundWire, foundBusiness := false, false
 				for _, issue := range result.Issues {
+					wantSources := sources
+					if issue.Code == want {
+						wantSources = append(slices.Clone(sources), sources...)
+					}
+					if !slices.Equal(issue.Sources, wantSources) {
+						t.Fatal("wire evidence source order or duplicates changed", issue)
+					}
 					if issue.Code == want {
 						foundWire = true
 						same, err := issue.Traffic.Equal(wire, 4096)

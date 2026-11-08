@@ -13,6 +13,7 @@ import (
 	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/firemon/internal/dependency"
 	"github.com/gatework/firemon/internal/durablefile"
+	"github.com/gatework/firemon/plan"
 )
 
 const maxSelectionBytes = 16 << 20
@@ -22,9 +23,10 @@ var ErrSelectionConflict = errors.New("batch selection identity conflicts with p
 // Selection explicitly names an approved candidate. Prepare is not write
 // authorization: deploy.Engine still authorizes each exact operation separately.
 type Selection struct {
-	Device     string `json:"device"`
-	Revision   string `json:"revision"`
-	PlanDigest string `json:"plan_digest"`
+	SourceRevision string `json:"source_revision,omitempty"`
+	Device         string `json:"device"`
+	Revision       string `json:"revision"`
+	PlanDigest     string `json:"plan_digest"`
 }
 
 type PreparedBatch struct {
@@ -106,7 +108,7 @@ func (e *BatchExecutor) path(id string) string {
 func selectedOperation(id string, s Selection) string {
 	// Length-prefixed original bytes avoid both separator and text-encoding aliases.
 	var raw []byte
-	for _, value := range []string{id, s.Device, s.Revision, s.PlanDigest} {
+	for _, value := range []string{id, s.Device, s.Revision, s.SourceRevision, s.PlanDigest} {
 		raw = binary.BigEndian.AppendUint64(raw, uint64(len(value)))
 		raw = append(raw, value...)
 	}
@@ -133,7 +135,7 @@ func (e *BatchExecutor) Prepare(ctx context.Context, id string, report BatchRepo
 		if err := ctx.Err(); err != nil {
 			return out, err
 		}
-		if s.Device == "" || len(s.Device) > 512 || !utf8.ValidString(s.Device) || !validChecksum(s.Revision) || !validChecksum(s.PlanDigest) || seen[s.Device] {
+		if s.Device == "" || len(s.Device) > 512 || !utf8.ValidString(s.Device) || !validChecksum(s.Revision) || s.SourceRevision != "" && !validChecksum(s.SourceRevision) || !validChecksum(s.PlanDigest) || seen[s.Device] {
 			return out, ErrInvalid
 		}
 		seen[s.Device] = true
@@ -155,12 +157,12 @@ func (e *BatchExecutor) Prepare(ctx context.Context, id string, report BatchRepo
 			return out, ErrInvalid
 		}
 		var material bytes.Buffer
-		sum, err := EncodePlan(ctx, &material, s.Revision, p)
+		sum, err := plan.EncodeReconstruction(ctx, &material, plan.SnapshotRevisions{Baseline: s.Revision, Source: s.SourceRevision}, p)
 		if err != nil {
 			return out, err
 		}
 		if material.Len() > remaining {
-			return out, ErrReconstruction
+			return out, plan.ErrReconstruction
 		}
 		remaining -= material.Len()
 		if _, _, err := RestorePlan(ctx, bytes.NewReader(material.Bytes()), sum, e.loader); err != nil {
@@ -227,12 +229,12 @@ func (e *BatchExecutor) load(ctx context.Context, id, expected string) (batchSel
 		return d, err
 	}
 	if d.Version != 1 || d.ID != id || len(d.Plans) < 1 || len(d.Plans) > 100 {
-		return d, ErrReconstruction
+		return d, plan.ErrReconstruction
 	}
 	seen := make(map[string]bool, len(d.Plans))
 	for _, p := range d.Plans {
-		if p.Device == "" || len(p.Device) > 512 || seen[p.Device] || !validChecksum(p.Revision) || !validChecksum(p.PlanDigest) || p.Operation != selectedOperation(id, p.Selection) || checksum(p.Material) != p.Checksum {
-			return d, ErrReconstruction
+		if p.Device == "" || len(p.Device) > 512 || seen[p.Device] || !validChecksum(p.Revision) || p.SourceRevision != "" && !validChecksum(p.SourceRevision) || !validChecksum(p.PlanDigest) || p.Operation != selectedOperation(id, p.Selection) || checksum(p.Material) != p.Checksum {
+			return d, plan.ErrReconstruction
 		}
 		seen[p.Device] = true
 	}
@@ -266,7 +268,7 @@ func (e *BatchExecutor) run(ctx context.Context, id, expected string, recover bo
 		}
 		p, revision, err := RestorePlan(ctx, bytes.NewReader(selected.Material), selected.Checksum, e.loader)
 		if err == nil && (revision != selected.Revision || p.Digest() != selected.PlanDigest || p.Before().Metadata().Device != selected.Device) {
-			err = ErrReconstruction
+			err = plan.ErrReconstruction
 		}
 		if err != nil {
 			r.Status, r.Code, r.Error = ExecutionFailed, "reconstruction_failed", err
@@ -280,10 +282,11 @@ func (e *BatchExecutor) run(ctx context.Context, id, expected string, recover bo
 		}
 		r.Error = err
 		switch {
-		case r.Result.Phase == deploy.Aborted:
-			r.Status = ExecutionAborted
-		case err == nil && r.Result.Phase == deploy.Published:
+		case r.Result.Terminal():
 			r.Status = ExecutionApplied
+			if r.Result.Phase == deploy.Aborted {
+				r.Status = ExecutionAborted
+			}
 		case recover && errors.Is(err, deploy.ErrJournalNotFound):
 			r.Status, r.Code = ExecutionUnstarted, "operation_not_started"
 		case errors.Is(err, deploy.ErrUncertain) || errors.Is(err, deploy.ErrPending) || r.Result.Phase != 0:

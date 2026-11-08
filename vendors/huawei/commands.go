@@ -111,32 +111,38 @@ func serviceText(fw *fm.Firewall, ref fm.ServiceRef) ([]string, error) {
 	return []string{name}, err
 }
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	return renderCommands(ctx, before, after, changes)
-}
-
-func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
-		return nil, err
-	}
-	n, err := nativeCommands(ctx, before, after, changes)
+	batch, err := render.Prepare(ctx, "huawei", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
+	return renderCommands(ctx, before, after, batch)
+}
+
+func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
+	builder, err := render.NewNativeBuilder(ctx, "huawei", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+
 	timed, err := render.ScheduleCommands(before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-	n.Commands = append(timed, n.Commands...)
-	return renderCommands(ctx, before, after, changes.Rules, n)
-}
+	builder.AppendCommands(timed...)
 
-func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
-	batch, err := render.Prepare(ctx, "huawei", before, after, changes, native...)
+	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
+		return nil, err
+	}
+	batch, err := builder.Prepare(ctx)
 	if err != nil {
 		return nil, err
 	}
-	changes = batch.Changes()
-	if len(changes) == 0 && len(native) == 0 {
+	return renderCommands(ctx, before, after, batch)
+}
+
+func renderCommands(ctx context.Context, before, after *fm.Firewall, batch render.Batch) ([]string, error) {
+	changes := batch.Changes()
+	if len(changes) == 0 && !batch.Native() {
 		return nil, nil
 	}
 	commands := []string{"system-view"}
@@ -184,8 +190,8 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		}
 		commands = append(commands, "quit")
 	}
-	if len(native) == 1 {
-		commands = append(commands, native[0].Commands...)
+	if batch.Native() {
+		commands = append(commands, batch.NativeCommands()...)
 	}
 	ordered := slices.Clone(changes)
 	for _, c := range ordered {
@@ -236,7 +242,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		r := after.Rule(c.Rule).Record()
 		m := r.Match
 		name, err := quoted(r.Name)
-		if err != nil || r.Scope != "" || r.ID != fm.ID(r.Name) || r.RuleSet != "security" || r.Disabled || r.Builtin || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || m.Schedule != "" && len(native) == 0 || len(m.Applications) > 0 || len(m.Users) > 0 || m.ZoneRelation != fm.AnyZoneRelation {
+		if err != nil || r.Scope != "" || r.ID != fm.ID(r.Name) || r.RuleSet != "security" || r.Disabled || r.Builtin || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || m.Schedule != "" && !batch.Native() || len(m.Applications) > 0 || len(m.Users) > 0 || m.ZoneRelation != fm.AnyZoneRelation {
 			return nil, ErrRender
 		}
 		commands = append(commands, "security-policy", "rule name "+name)
@@ -315,7 +321,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 			if action == "" || r.LogStart != fm.Irrelevant || r.Log != r.LogEnd || (r.Log != fm.Known && r.Log != fm.Irrelevant) {
 				return nil, ErrRender
 			}
-			if name, err := render.ScheduleReference(after, m.Schedule, native...); err != nil {
+			if name, err := batch.ScheduleReference(after, m.Schedule); err != nil {
 				return nil, err
 			} else if name != "" {
 				commands = append(commands, "time-range "+name)
@@ -338,7 +344,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		}
 		commands = append(commands, "quit")
 	}
-	if len(commands) == 1 || len(changes) == 0 && len(native) == 0 {
+	if len(commands) == 1 || len(changes) == 0 && !batch.Native() {
 		return nil, ErrRender
 	}
 	if err := ctx.Err(); err != nil {

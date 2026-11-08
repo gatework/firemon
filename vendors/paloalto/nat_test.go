@@ -9,11 +9,9 @@ import (
 	"testing"
 
 	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
-	"github.com/gatework/firemon/vendors/paloalto"
 )
 
 func outboundRequest(t *testing.T) policy.Request {
@@ -37,7 +35,7 @@ func TestInterfaceNATRetainsSelectedHostThroughSnapshot(t *testing.T) {
 		t.Run(selector, func(t *testing.T) {
 			raw := strings.Replace(string(base), "interface-address ip uplink", "interface-address ip "+selector, 1)
 			raw += "set network interface ethernet ethernet1/2 layer3 ip 203.0.113.10/24\n"
-			fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
+			fw, err := parseObserved(context.Background(), raw)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -78,7 +76,7 @@ func TestInterfaceNATRetainsSelectedHostThroughSnapshot(t *testing.T) {
 
 func TestXMLInterfaceNATUsesTheSelectedAddressObjectHost(t *testing.T) {
 	raw := `<config><devices><entry name="localhost.localdomain"><network><interface><ethernet><entry name="ethernet1/2"><layer3><ip><entry name="uplink"/><entry name="203.0.113.10/24"/></ip></layer3></entry></ethernet></interface></network><vsys><entry name="vsys1"><address><entry name="uplink"><ip-netmask>203.0.113.9/24</ip-netmask></entry></address><rulebase><nat><rules><entry name="outbound"><from><member>any</member></from><to><member>any</member></to><source><member>any</member></source><destination><member>any</member></destination><service>any</service><source-translation><dynamic-ip-and-port><interface-address><interface>ethernet1/2</interface><ip>uplink</ip></interface-address></dynamic-ip-and-port></source-translation></entry></rules></nat></rulebase></entry></vsys></entry></devices></config>`
-	fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
+	fw, err := parseObserved(context.Background(), raw)
 	if err != nil || !fw.Complete() {
 		t.Fatal(fw, err)
 	}
@@ -102,7 +100,7 @@ func TestInterfaceNATRejectsUnassignedOrAmbiguousSelection(t *testing.T) {
 		strings.Replace(string(base), "interface-address ip uplink", "interface-address ip office", 1),
 		strings.Replace(string(base), "set rulebase nat rules outbound source-translation dynamic-ip-and-port interface-address ip uplink\n", "", 1) + "set network interface ethernet ethernet1/2 layer3 ip 203.0.113.10/24\n",
 	} {
-		fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
+		fw, err := parseObserved(context.Background(), raw)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -2,6 +2,7 @@ package paloalto
 
 import (
 	"context"
+	"errors"
 	"net/netip"
 	"slices"
 	"strings"
@@ -430,7 +431,10 @@ func (p *parser) nat(ctx context.Context, s *config.Builder) error {
 		}
 		var portMappings []fm.PortMapping
 		if r.destinationPort != "" {
-			target, err := ports(r.destinationPort)
+			target, err := ports(ctx, r.destinationPort)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
 			if err != nil || len(target) != 1 || target[0].Low != target[0].High {
 				r.object.Unsupported = append(r.object.Unsupported, "unknown destination port relation")
 			} else {

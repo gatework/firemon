@@ -110,7 +110,7 @@ func TestRuleVisitBudgetReturnsErrorNotPartialCoverage(t *testing.T) {
 func TestSharedGroupDAGIsResolvedOnceAndTraversalBudgetAppliesBeforeExpansion(t *testing.T) {
 	d := fm.Data{Metadata: fm.Metadata{Device: "fw", Vendor: "hillstone"}, Services: []fm.ServiceRecord{{Object: fm.Object{ID: "leaf"}, Terms: []fm.ServiceTerm{{Protocol: flow.Interval{Low: 6, High: 6}, SourcePort: flow.Interval{Low: 0, High: 65535}, DestinationPort: flow.Interval{Low: 443, High: 443}, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}}}}}}
 	ref := fm.ServiceRef{Kind: fm.ServiceObject, ID: "leaf"}
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		id := fm.ID(fmt.Sprintf("group-%d", i))
 		d.ServiceGroups = append(d.ServiceGroups, fm.ServiceGroupRecord{Object: fm.Object{ID: id}, Members: []fm.ServiceRef{ref, ref}})
 		ref = fm.ServiceRef{Kind: fm.ServiceGroupObject, ID: id}

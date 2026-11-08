@@ -11,40 +11,51 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-// batch owns validated emission order and newly referenced declarations.
-type batch struct {
-	changes   []plan.Change
-	addresses map[fm.ID]bool
-	services  map[fm.ID]bool
+// Batch owns validated emission order and newly referenced declarations.
+type Batch struct {
+	changes            []plan.Change
+	addresses          map[fm.ID]bool
+	services           map[fm.ID]bool
+	generatedAddresses map[fm.ID]bool
+	commands           []string
+	policy             map[fm.ID][]string
+	clock              *fm.ScheduleClock
+	native             bool
 }
 
-func (b batch) Changes() []plan.Change        { return slices.Clone(b.changes) }
-func (b batch) DeclaresAddress(id fm.ID) bool { return b.addresses[id] }
-func (b batch) DeclaresService(id fm.ID) bool { return b.services[id] }
+func (b Batch) Changes() []plan.Change        { return cloneChanges(b.changes) }
+func (b Batch) DeclaresAddress(id fm.ID) bool { return b.addresses[id] }
+func (b Batch) DeclaresService(id fm.ID) bool { return b.services[id] }
+
+func (b Batch) Native() bool                     { return b.native }
+func (b Batch) NativeCommands() []string         { return slices.Clone(b.commands) }
+func (b Batch) PolicyCommands(id fm.ID) []string { return slices.Clone(b.policy[id]) }
+func (b Batch) GeneratedAddress(id fm.ID) bool   { return b.generatedAddresses[id] }
 
 // Prepare returns an owned change order. Most native emitters support creation
 // before surviving explicit rules; ASA can select an exact ACL line instead.
-func Prepare(ctx context.Context, vendor string, before, after *fm.Firewall, changes []plan.Change, native ...Native) (batch, error) {
-	if len(native) > 1 {
-		return batch{}, plan.ErrInvalid
+func Prepare(ctx context.Context, vendor string, before, after *fm.Firewall, changes []plan.Change) (Batch, error) {
+	if err := plan.ValidateChanges(ctx, before, after, changes); err != nil {
+		return Batch{}, err
 	}
-	var err error
-	if len(native) == 1 {
-		err = plan.ValidateNativeChanges(ctx, before, after, native[0].Changes)
-		changes = native[0].Changes.Rules
-	} else {
-		err = plan.ValidateChanges(ctx, before, after, changes)
-	}
+	prepared, err := prepare(ctx, vendor, before, after, changes)
 	if err != nil {
-		return batch{}, err
+		return Batch{}, err
 	}
+	if err := prepared.validateNames(ctx, before, after); err != nil {
+		return Batch{}, err
+	}
+	return prepared, ctx.Err()
+}
+
+func prepare(ctx context.Context, vendor string, before, after *fm.Firewall, changes []plan.Change) (Batch, error) {
 	if before.Metadata().Vendor != vendor || vendor == "fortinet" && before.Metadata().Context == "" {
-		return batch{}, plan.ErrInvalid
+		return Batch{}, plan.ErrInvalid
 	}
-	prepared := batch{addresses: make(map[fm.ID]bool), services: make(map[fm.ID]bool)}
+	prepared := Batch{addresses: make(map[fm.ID]bool), services: make(map[fm.ID]bool)}
 	for _, c := range changes {
 		if err := ctx.Err(); err != nil {
-			return batch{}, err
+			return Batch{}, err
 		}
 		for _, refs := range [][]fm.AddressRef{c.Sources, c.Destinations} {
 			for _, ref := range refs {
@@ -71,18 +82,18 @@ func Prepare(ctx context.Context, vendor string, before, after *fm.Firewall, cha
 			{m.AnyFromZone, len(m.FromZones)}, {m.AnyToZone, len(m.ToZones)},
 		} {
 			if !dimension.any && dimension.count == 0 || dimension.any && dimension.count != 0 {
-				return batch{}, plan.ErrRender
+				return Batch{}, plan.ErrRender
 			}
 		}
 		if r.Description != "" || r.Disabled || (r.Log == fm.Known) != (r.LogStart == fm.Known || r.LogEnd == fm.Known) {
-			return batch{}, plan.ErrRender
+			return Batch{}, plan.ErrRender
 		}
 	}
 	if vendor != "asa" {
 		seen := make(map[policy.RuleChain]bool)
 		for r := range after.OrderedRules() {
 			if err := ctx.Err(); err != nil {
-				return batch{}, err
+				return Batch{}, err
 			}
 			order := policy.NativeRuleOrder(vendor, r.Record())
 			if r.Builtin() {
@@ -91,11 +102,11 @@ func Prepare(ctx context.Context, vendor string, before, after *fm.Firewall, cha
 			if before.Rule(r.ID()) != nil {
 				seen[order.Chain] = true
 			} else if seen[order.Chain] {
-				return batch{}, plan.ErrRender
+				return Batch{}, plan.ErrRender
 			}
 		}
 	}
-	result := slices.Clone(changes)
+	result := cloneChanges(changes)
 	slices.SortStableFunc(result, func(a, b plan.Change) int {
 		if a.Kind == plan.RemoveRule {
 			if b.Kind == plan.RemoveRule {
@@ -112,34 +123,5 @@ func Prepare(ctx context.Context, vendor string, before, after *fm.Firewall, cha
 		return cmp.Compare(a.Rule, b.Rule)
 	})
 	prepared.changes = result
-	if len(native) == 1 {
-		for _, a := range native[0].Changes.Additions.Addresses {
-			if a.Inline && !native[0].Addresses[a.ID] {
-				return batch{}, plan.ErrRender
-			}
-			if !a.Inline && !native[0].Addresses[a.ID] {
-				prepared.addresses[a.ID] = true
-			}
-		}
-		for _, s := range native[0].Changes.Additions.Services {
-			if s.Inline && !native[0].Services[s.ID] {
-				return batch{}, plan.ErrRender
-			}
-			if !s.Inline && !native[0].Services[s.ID] {
-				prepared.services[s.ID] = true
-			}
-		}
-	}
-	if len(native) == 1 {
-		for id := range native[0].Addresses {
-			delete(prepared.addresses, id)
-		}
-		for id := range native[0].Services {
-			delete(prepared.services, id)
-		}
-	}
-	if err := prepared.validateNames(ctx, before, after); err != nil {
-		return batch{}, err
-	}
 	return prepared, ctx.Err()
 }

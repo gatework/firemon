@@ -59,6 +59,7 @@ type batchFixture struct {
 	authorizations []deploy.Authorization
 	deny           string
 	onAuthorize    func()
+	closeErr       error
 }
 
 func newBatchFixture(t *testing.T) *batchFixture {
@@ -103,7 +104,11 @@ func newBatchFixture(t *testing.T) *batchFixture {
 }
 func (b *batchFixture) executor(t *testing.T) *operations.BatchExecutor {
 	t.Helper()
-	e, err := deploy.New(deploy.Options{Store: b.store, Journal: b.journal, Sessions: b.devices, Parser: vendors.Parser{}, Authorizer: deploy.AuthorizeFunc(func(_ context.Context, a deploy.Authorization) error {
+	var journal deploy.Journal = b.journal
+	if b.closeErr != nil {
+		journal = batchClosingJournal{Journal: journal, err: b.closeErr}
+	}
+	e, err := deploy.New(deploy.Options{Store: b.store, Journal: journal, Sessions: b.devices, Parser: vendors.Parser{}, Authorizer: deploy.AuthorizeFunc(func(_ context.Context, a deploy.Authorization) error {
 		b.authorizations = append(b.authorizations, a)
 		if b.onAuthorize != nil {
 			b.onAuthorize()
@@ -121,6 +126,51 @@ func (b *batchFixture) executor(t *testing.T) *operations.BatchExecutor {
 		t.Fatal(err)
 	}
 	return executor
+}
+
+type batchClosingJournal struct {
+	deploy.Journal
+	err error
+}
+type batchClosingLease struct {
+	deploy.Lease
+	err error
+}
+
+func (j batchClosingJournal) Acquire(ctx context.Context, id string) (deploy.Lease, error) {
+	l, err := j.Journal.Acquire(ctx, id)
+	if err != nil {
+		return l, err
+	}
+	return batchClosingLease{Lease: l, err: j.err}, nil
+}
+func (l batchClosingLease) Close() error { return errors.Join(l.Lease.Close(), l.err) }
+
+func TestBatchExecutionKeepsConfirmedTerminalWhenLeaseCloseFails(t *testing.T) {
+	b := newBatchFixture(t)
+	b.closeErr = errors.New("lease close failed")
+	e := b.executor(t)
+	p, err := e.Prepare(t.Context(), "cleanup", b.report, b.selections)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := e.Apply(t.Context(), p.ID, p.Digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range r.Devices {
+		if row.Status != operations.ExecutionApplied || !row.Result.Terminal() || row.Result.Phase != deploy.Published || !errors.Is(row.Error, b.closeErr) || row.Code == "recovery_required" {
+			t.Fatalf("confirmed publication requires recovery: %+v", row)
+		}
+	}
+	if _, err := e.Apply(t.Context(), p.ID, p.Digest); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range b.devices.devices {
+		if d.executes > 1 || d.saves > 1 {
+			t.Fatal("terminal retry replayed writes")
+		}
+	}
 }
 func TestBatchExecutionDurableSelectionRestartAndIndependentUncertainty(t *testing.T) {
 	b := newBatchFixture(t)
@@ -205,7 +255,7 @@ func TestBatchExecutionAbortedDriftAndCancellation(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || r.Devices[0].Status != operations.ExecutionFailed || r.Devices[1].Status != operations.ExecutionApplied || b.devices.devices["one"].opens != 0 {
+			if err != nil || r.Devices[0].Status != operations.ExecutionAborted || r.Devices[0].Error == nil || r.Devices[1].Status != operations.ExecutionApplied || b.devices.devices["one"].opens != 0 {
 				t.Fatal(r, err)
 			}
 			r, err = e.Apply(t.Context(), mode, p.Digest)

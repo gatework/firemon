@@ -47,6 +47,27 @@ func semanticDigest(d Data) (string, error) {
 	slices.SortFunc(d.ServiceGroups, func(a, b ServiceGroupRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
 	for i := range d.Schedules {
 		d.Schedules[i].Spans = nil
+		windows := d.Schedules[i].Windows
+		for j := range windows {
+			windows[j].Start, windows[j].End = windows[j].Start.UTC(), windows[j].End.UTC()
+		}
+		slices.SortFunc(windows, func(a, b TimeWindow) int {
+			if c := a.Start.Compare(b.Start); c != 0 {
+				return c
+			}
+			return a.End.Compare(b.End)
+		})
+		merged := windows[:0]
+		for _, window := range windows {
+			if n := len(merged); n != 0 && !window.Start.After(merged[n-1].End) {
+				if window.End.After(merged[n-1].End) {
+					merged[n-1].End = window.End
+				}
+			} else {
+				merged = append(merged, window)
+			}
+		}
+		d.Schedules[i].Windows = merged
 	}
 	slices.SortFunc(d.Schedules, func(a, b ScheduleRecord) int { return strings.Compare(string(a.ID), string(b.ID)) })
 	for i := range d.Rules {

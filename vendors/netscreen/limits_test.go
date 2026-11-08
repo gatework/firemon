@@ -23,7 +23,7 @@ func TestNATAndPacketShareBudgetsAndRespectCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := netscreen.Parse(ctx, config.Source{Text: fixture(t, "nat"), Complete: true}, fm.Metadata{}); !errors.Is(err, context.Canceled) {
+	if _, err := (netscreen.Parser{}).Parse(ctx, config.Source{Text: fixture(t, "nat"), Complete: true}, fm.Metadata{}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if _, err := e.QueryPacket(ctx, fw, policy.PacketRequest{Request: q}); !errors.Is(err, context.Canceled) {
@@ -40,7 +40,7 @@ func FuzzScopedCapture(f *testing.F) {
 		if len(raw) > 8192 {
 			t.Skip()
 		}
-		fw, err := netscreen.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "fuzz"})
+		fw, err := (netscreen.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "fuzz"})
 		if err != nil {
 			return
 		}

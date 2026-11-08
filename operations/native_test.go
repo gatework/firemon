@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"runtime"
+	"slices"
 	"testing"
 
 	fm "github.com/gatework/firemon"
@@ -31,6 +32,7 @@ func TestBusinessNativeJSONProducesJointPlan(t *testing.T) {
 	adds := plan.NativeAdditions{Addresses: []fm.AddressRecord{{Object: fm.Object{ID: "original"}, Ranges: []flow.AddressRange{box.Source}}, {Object: fm.Object{ID: "target"}, Ranges: []flow.AddressRange{box.Destination}}}, Services: []fm.ServiceRecord{{Object: fm.Object{ID: "service"}, Terms: []fm.ServiceTerm{{Protocol: box.Protocol, SourcePort: box.SourcePort, DestinationPort: box.DestinationPort, ICMPType: box.ICMPType, ICMPCode: box.ICMPCode}}}}, StaticNATs: []fm.StaticNATRecord{{Object: fm.Object{ID: "fixed"}, Match: m, Source: []fm.Mapping{{Original: box.Source, Translated: box.Destination, Mode: fm.Constant}}}}}
 	target := operations.TargetDocument{Device: req.Device, Policy: operations.PolicyDocument{FromZone: "inside", ToZone: "outside"}, Packet: true, VRF: ""}
 	document := operations.RequestDocument{Version: 1, Requests: []operations.AccessDocument{{Traffic: traffic.Regions(), Targets: []operations.TargetDocument{target}, Native: &operations.NativeDocument{Additions: adds, NAT: []operations.NATIntentDocument{{Request: operations.PolicyDocument{Traffic: traffic.Regions(), FromZone: "inside", ToZone: "outside"}, Steps: []policy.NATStep{{Kind: fm.StaticNATObject, ID: "fixed"}}}}}}}}
+	document.Requests[0].Sources = []string{"ticket", "ticket", "native"}
 	raw, _ := json.Marshal(document)
 	input, err := operations.DecodeBatchRequest(bytes.NewReader(raw))
 	if err != nil {
@@ -47,6 +49,9 @@ func TestBusinessNativeJSONProducesJointPlan(t *testing.T) {
 	p := result.Devices[0].Batch.Plan
 	if p.NATProof() == nil || p.After().StaticNAT("fixed") == nil || len(p.NativeInputs()) != 1 || len(p.PacketProofs()) != 1 {
 		t.Fatal("native intent lost")
+	}
+	if !slices.Equal(p.NativeInputs()[0].Sources, document.Requests[0].Sources) || len(result.Inputs[0].Outcomes[0].Sources) != 0 {
+		t.Fatal("native business sources changed or leaked into target sources", result)
 	}
 	if _, err := p.Verify(context.Background(), p.After()); err != nil {
 		t.Fatal(err)

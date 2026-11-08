@@ -2,9 +2,12 @@ package paloalto_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
@@ -19,7 +22,7 @@ func TestPANRejectAndDropActionsRemainDistinctDeclarations(t *testing.T) {
 			for _, field := range []string{"from any", "to any", "source any", "destination any", "service any", "application any", "action " + action} {
 				raw.WriteString("set rulebase security rules rule " + field + "\n")
 			}
-			fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw.String(), Complete: true}, fm.Metadata{Device: "pan"})
+			fw, err := (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: raw.String(), Complete: true}, fm.Metadata{Device: "pan"})
 			if err != nil || !fw.Complete() {
 				t.Fatal(err)
 			}
@@ -36,7 +39,7 @@ func TestSetConfigurationRestoresHostAliasAndNativeNATKinds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fw, err := paloalto.Parse(context.Background(), config.Source{Text: string(raw), Complete: true}, fm.Metadata{Device: "pan"})
+	fw, err := parseObserved(context.Background(), string(raw))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +61,7 @@ func TestSetConfigurationRestoresHostAliasAndNativeNATKinds(t *testing.T) {
 }
 func TestStaticIPNATUsesConcreteStaticCatalogAndUnsupportedApplicationsStayUnknown(t *testing.T) {
 	raw := "set address real ip-netmask 192.0.2.0/24\nset address mapped ip-netmask 203.0.113.0/24\nset rulebase nat rules fixed from any\nset rulebase nat rules fixed to any\nset rulebase nat rules fixed source real\nset rulebase nat rules fixed destination any\nset rulebase nat rules fixed service any\nset rulebase nat rules fixed source-translation static-ip translated-address mapped\n"
-	fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
+	fw, err := (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,11 +69,21 @@ func TestStaticIPNATUsesConcreteStaticCatalogAndUnsupportedApplicationsStayUnkno
 		t.Fatal("static translation collapsed into dynamic/generic rule", fw.Diagnostics())
 	}
 	raw += "set rulebase security rules app from any\nset rulebase security rules app to any\nset rulebase security rules app source any\nset rulebase security rules app destination any\nset rulebase security rules app application ssl\nset rulebase security rules app service application-default\nset rulebase security rules app action allow\n"
-	fw, err = paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
+	fw, err = (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if fw.Complete() {
 		t.Fatal("app-default became port allow")
 	}
+}
+
+// Fixture clocks represent independently observed source evidence. A timezone
+// declaration in the configuration alone is not this evidence.
+func parseObserved(ctx context.Context, raw string) (*fm.Firewall, error) {
+	m := fm.Metadata{Device: "pan", Vendor: "paloalto", Software: "10.2.7", CapturedAt: time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC)}
+	digest := sha256.Sum256([]byte(raw))
+	m.SourceDigest = hex.EncodeToString(digest[:])
+	clock := fm.ScheduleClock{Device: m.Device, Vendor: m.Vendor, Software: m.Software, CapturedAt: m.CapturedAt, SourceDigest: m.SourceDigest, Timezone: "Asia/Shanghai", Reference: "synthetic independent capture clock", EndBoundary: "exclusive", TickSeconds: 1, Calendar: fm.CalendarCivil}
+	return (paloalto.Parser{}).Parse(ctx, config.Source{Text: raw, Complete: true, ScheduleClock: &clock}, m)
 }

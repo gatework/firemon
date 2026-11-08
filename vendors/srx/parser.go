@@ -35,12 +35,8 @@ type parser struct {
 
 type Parser struct{ Limits config.Limits }
 
-func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-	return (Parser{}).Parse(ctx, source, metadata)
-}
-
 func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-	metadata.Vendor, metadata.ParserVersion = "srx", "srx-go-2"
+	metadata.Vendor, metadata.ParserVersion = "srx", "srx-go-3"
 	content, err := config.NewContent(ctx, source, native.Limits)
 	if err != nil {
 		return nil, err
@@ -62,6 +58,9 @@ func (native Parser) Parse(ctx context.Context, source config.Source, metadata f
 		return nil, err
 	}
 	if err := s.Phase(ctx, "objects", p.objects); err != nil {
+		return nil, err
+	}
+	if err := s.Phase(ctx, "schedules", p.schedules); err != nil {
 		return nil, err
 	}
 	if err := s.Phase(ctx, "policies", p.policies); err != nil {

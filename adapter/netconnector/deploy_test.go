@@ -37,7 +37,7 @@ func TestNativeASADeployAndLostSaveRecoveryUseIndependentReadback(t *testing.T) 
 			ctx := context.Background()
 			const raw = "interface inside0\n nameif inside\n security-level 100\n ip address 192.0.2.1 255.255.255.0\n!\ninterface outside0\n nameif outside\n security-level 0\n ip address 198.51.100.1 255.255.255.0\n!\naccess-list IN extended deny ip any4 any4\naccess-group IN in interface inside\n"
 			metadata := fm.Metadata{Device: "fw", Vendor: "asa", Software: "9.12"}
-			before, err := asa.Parse(ctx, config.Source{Text: raw, Complete: true}, metadata)
+			before, err := (asa.Parser{}).Parse(ctx, config.Source{Text: raw, Complete: true}, metadata)
 			if err != nil || !before.Complete() {
 				t.Fatal(before, err)
 			}
@@ -89,9 +89,7 @@ func TestNativeASADeployAndLostSaveRecoveryUseIndependentReadback(t *testing.T) 
 						a, b := net.Pipe()
 						client := &observedConnection{Conn: a}
 						connections = append(connections, client)
-						peers.Add(1)
-						go func() {
-							defer peers.Done()
+						peers.Go(func() {
 							defer b.Close()
 							_, _ = io.WriteString(b, "fw#")
 							scanner := bufio.NewScanner(b)
@@ -131,7 +129,7 @@ func TestNativeASADeployAndLostSaveRecoveryUseIndependentReadback(t *testing.T) 
 									return
 								}
 							}
-						}()
+						})
 						return client, nil
 					})},
 				}, nil
@@ -154,7 +152,7 @@ func TestNativeASADeployAndLostSaveRecoveryUseIndependentReadback(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			engine := configuredEngine{Options: deploy.Options{Store: store, Journal: journal, Sessions: factory, Parser: config.ParseFunc(asa.Parse), Authorizer: deploy.AuthorizeFunc(func(_ context.Context, a deploy.Authorization) error {
+			engine := configuredEngine{Options: deploy.Options{Store: store, Journal: journal, Sessions: factory, Parser: config.ParseFunc((asa.Parser{}).Parse), Authorizer: deploy.AuthorizeFunc(func(_ context.Context, a deploy.Authorization) error {
 				if a.Device != "fw" || a.PlanDigest != p.Digest() || a.BaselineRevision != base.Revision {
 					return errors.New("wrong authorization")
 				}

@@ -25,8 +25,20 @@ type definition struct {
 	name           string
 	aliases        []string
 	parser         func(config.Limits) config.Parser
-	renderer       plan.Renderer
+	renderer       nativeEmitter
 	defaultContext string
+}
+
+// The registry composes independent capabilities once; native adapters only own
+// parsing and emission, while migration has one shared compilation boundary.
+type nativeEmitter interface {
+	plan.Renderer
+	plan.NativeRenderer
+}
+
+type driver struct {
+	nativeEmitter
+	MigrationCompiler
 }
 
 var definitions = []definition{
@@ -109,5 +121,5 @@ func Renderer(vendor string) (plan.Renderer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return d.renderer, nil
+	return driver{nativeEmitter: d.renderer}, nil
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
 	"io"
-	"os"
 	"time"
 )
 
@@ -28,6 +27,12 @@ type migrationDocument struct {
 	Chains         []struct{ From, To fm.PolicyChain } `json:"chains"`
 	Pairs          []analysis.ZonePair                 `json:"pairs"`
 	Rules          []fm.ID                             `json:"rules"`
+	StaticNATs     []fm.ID                             `json:"static_nats"`
+	DynamicNATs    []fm.ID                             `json:"dynamic_nats"`
+	Interfaces     []struct{ From, To fm.ID }          `json:"interfaces"`
+	VRFs           []struct{ From, To string }         `json:"vrfs"`
+	VRF            string                              `json:"vrf"`
+	Clock          *fm.ScheduleClock                   `json:"clock,omitempty"`
 }
 
 func lifecyclePlan(p *plan.Plan) *operations.PlanDocument {
@@ -37,7 +42,7 @@ func lifecyclePlan(p *plan.Plan) *operations.PlanDocument {
 	return &operations.PlanDocument{Digest: p.Digest(), Proof: p.Proof(), Changes: p.Changes(), Commands: p.Commands(), Cost: p.Cost()}
 }
 func lifecycleCommand(ctx context.Context, command string, args []string, out io.Writer) error {
-	fs := flags(command)
+	fs := flags(command, out)
 	root := fs.String("store", "", "snapshot directory")
 	revision := fs.String("revision", "", "explicit immutable source revision")
 	file := fs.String("file", "", "version-1 lifecycle JSON")
@@ -45,15 +50,15 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 		return err
 	}
 	if fs.NArg() != 0 || *root == "" || *revision == "" || *file == "" {
-		return analysis.ErrInvalid
+		return usage(analysis.ErrInvalid)
 	}
 	store, err := snapshot.Open(*root)
 	if err != nil {
-		return err
+		return snapshotArgumentError(err)
 	}
 	fw, err := store.Load(ctx, *revision)
 	if err != nil {
-		return err
+		return snapshotArgumentError(err)
 	}
 	renderer, err := vendors.Renderer(fw.Metadata().Vendor)
 	if err != nil {
@@ -65,11 +70,11 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 	switch command {
 	case "reclamation-report", "reclamation-plan":
 		var d reclamationDocument
-		if err = readAnalysisDocument(*file, &d); err != nil {
+		if err = readAnalysisDocument(ctx, *file, &d); err != nil {
 			return err
 		}
 		if d.Version != 1 || len(d.Rules) > 100 || d.Request.Revision != "" && d.Request.Revision != *revision {
-			return analysis.ErrInvalid
+			return usage(analysis.ErrInvalid)
 		}
 		d.Request.Revision = *revision
 		reclaimer := analysis.Reclaimer{Planner: planner}
@@ -95,31 +100,43 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 		}
 	case "migration-report", "migration-plan":
 		var d migrationDocument
-		if err = readAnalysisDocument(*file, &d); err != nil {
+		if err = readAnalysisDocument(ctx, *file, &d); err != nil {
 			return err
 		}
-		if d.Version != 1 || d.TargetRevision == "" || len(d.Zones) > 100 || len(d.Chains) > 100 || len(d.Rules) > 100 || len(d.Pairs) > 100 {
-			return analysis.ErrInvalid
+		if d.Version != 1 || d.TargetRevision == "" || len(d.Zones) > 100 || len(d.Chains) > 100 || len(d.Rules) > 100 || len(d.Pairs) > 100 || len(d.Interfaces) > 100 || len(d.VRFs) > 100 || len(d.StaticNATs) > 100 || len(d.DynamicNATs) > 100 {
+			return usage(analysis.ErrInvalid)
 		}
 		target, e := store.Load(ctx, d.TargetRevision)
 		if e != nil {
-			return e
+			return snapshotArgumentError(e)
 		}
 		targetRevision = d.TargetRevision
 		targetRenderer, e := vendors.Renderer(target.Metadata().Vendor)
 		if e != nil {
 			return e
 		}
-		q := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{}, Chains: map[fm.PolicyChain]fm.PolicyChain{}, At: d.At, Pairs: d.Pairs, Rules: d.Rules}
+		q := analysis.MigrationRequest{Zones: map[fm.ID]fm.ID{}, Chains: map[fm.PolicyChain]fm.PolicyChain{}, At: d.At, Pairs: d.Pairs, Rules: d.Rules, StaticNATs: d.StaticNATs, DynamicNATs: d.DynamicNATs, Interfaces: map[fm.ID]fm.ID{}, VRFs: map[string]string{}, VRF: d.VRF, Clock: d.Clock}
+		for _, pair := range d.Interfaces {
+			if _, ok := q.Interfaces[pair.From]; ok {
+				return usage(analysis.ErrInvalid)
+			}
+			q.Interfaces[pair.From] = pair.To
+		}
+		for _, pair := range d.VRFs {
+			if _, ok := q.VRFs[pair.From]; ok {
+				return usage(analysis.ErrInvalid)
+			}
+			q.VRFs[pair.From] = pair.To
+		}
 		for _, z := range d.Zones {
 			if _, ok := q.Zones[z.From]; ok {
-				return analysis.ErrInvalid
+				return usage(analysis.ErrInvalid)
 			}
 			q.Zones[z.From] = z.To
 		}
 		for _, c := range d.Chains {
 			if _, ok := q.Chains[c.From]; ok {
-				return analysis.ErrInvalid
+				return usage(analysis.ErrInvalid)
 			}
 			q.Chains[c.From] = c.To
 		}
@@ -127,18 +144,21 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 		if e != nil {
 			return e
 		}
-		report = lifecyclePlan(p)
+		report = struct {
+			Plan   *operations.PlanDocument `json:"plan,omitempty"`
+			Issues []plan.MigrationIssue    `json:"issues,omitempty"`
+		}{lifecyclePlan(p.Plan), p.Issues}
 	case "convergence-plan":
 		var d struct {
 			Version int       `json:"version"`
 			At      time.Time `json:"at"`
 			Rules   []fm.ID   `json:"rules"`
 		}
-		if err = readAnalysisDocument(*file, &d); err != nil {
+		if err = readAnalysisDocument(ctx, *file, &d); err != nil {
 			return err
 		}
 		if d.Version != 1 || len(d.Rules) > 100 {
-			return analysis.ErrInvalid
+			return usage(analysis.ErrInvalid)
 		}
 		p, e := (analysis.Converger{Planner: planner}).Plan(ctx, fw, d.Rules, d.At)
 		if e != nil {
@@ -151,7 +171,7 @@ func lifecycleCommand(ctx context.Context, command string, args []string, out io
 			return err
 		}
 	default:
-		return analysis.ErrInvalid
+		return usage(analysis.ErrInvalid)
 	}
 	return analysisOutput(out, struct {
 		Version     int    `json:"version"`
@@ -172,7 +192,7 @@ type counterDocument struct {
 	Complete    bool      `json:"complete"`
 }
 
-func readUsageDocument(ctx context.Context, path, revision string, fw *fm.Firewall) (analysis.UsageReport, error) {
+func readUsageDocument(ctx context.Context, path, revision string, fw *fm.Firewall) (report analysis.UsageReport, err error) {
 	var d struct {
 		Version     int               `json:"version"`
 		File        string            `json:"file"`
@@ -184,41 +204,41 @@ func readUsageDocument(ctx context.Context, path, revision string, fw *fm.Firewa
 		Complete    bool              `json:"complete"`
 		Samples     []counterDocument `json:"samples"`
 	}
-	if err := readAnalysisDocument(path, &d); err != nil {
+	if err := readAnalysisDocument(ctx, path, &d); err != nil {
 		return analysis.UsageReport{}, err
 	}
 	if d.Version != 1 {
-		return analysis.UsageReport{}, analysis.ErrInvalid
+		return analysis.UsageReport{}, usage(analysis.ErrInvalid)
 	}
 	ingest := analysis.NativeUsage{Engine: policy.Engine{}}
 	if fw.Metadata().Vendor == "asa" {
 		if len(d.Samples) != 2 || d.File != "" {
-			return analysis.UsageReport{}, analysis.ErrInvalid
+			return analysis.UsageReport{}, usage(analysis.ErrInvalid)
 		}
 		var samples [2]analysis.CounterSample
-		var files []*os.File
+		var finishes []func() error
 		defer func() {
-			for _, f := range files {
-				_ = f.Close()
+			for _, finish := range finishes {
+				err = errors.Join(err, finish())
 			}
 		}()
 		for i, s := range d.Samples {
-			f, err := os.Open(s.File)
+			f, finish, err := openInput(ctx, s.File)
 			if err != nil {
 				return analysis.UsageReport{}, err
 			}
-			files = append(files, f)
+			finishes = append(finishes, finish)
 			samples[i] = analysis.CounterSample{Reader: f, At: s.At, Revision: s.Revision, GraphDigest: s.GraphDigest, Source: s.Source, Epoch: s.Epoch, Complete: s.Complete}
 		}
 		return ingest.ReadASACounters(ctx, fw, revision, samples[0], samples[1])
 	}
 	if len(d.Samples) > 0 || d.File == "" {
-		return analysis.UsageReport{}, analysis.ErrInvalid
+		return analysis.UsageReport{}, usage(analysis.ErrInvalid)
 	}
-	f, err := os.Open(d.File)
+	f, finish, err := openInput(ctx, d.File)
 	if err != nil {
 		return analysis.UsageReport{}, err
 	}
-	report, err := ingest.ReadSessions(ctx, fw, revision, analysis.SessionLog{Reader: f, Revision: d.Revision, GraphDigest: d.GraphDigest, Source: d.Source, Scope: d.Scope, Window: d.Window, Complete: d.Complete})
-	return report, errors.Join(err, f.Close())
+	report, err = ingest.ReadSessions(ctx, fw, revision, analysis.SessionLog{Reader: f, Revision: d.Revision, GraphDigest: d.GraphDigest, Source: d.Source, Scope: d.Scope, Window: d.Window, Complete: d.Complete})
+	return report, errors.Join(err, finish())
 }

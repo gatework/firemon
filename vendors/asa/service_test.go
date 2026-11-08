@@ -33,7 +33,7 @@ func TestASAServiceGroupsPreserveProtocolAndBothPortAxes(t *testing.T) {
 
 func TestASAUnknownServiceSuffixCannotBecomeUnrestricted(t *testing.T) {
 	for _, declaration := range []string{"object service x\n service tcp opaque value\n", "object-group service x tcp\n port-object eq 443 opaque\n", "object-group network x\n network-object host 192.0.2.1 opaque\n"} {
-		fw, err := asa.Parse(context.Background(), config.Source{Text: declaration, Complete: true}, fm.Metadata{Device: "asa"})
+		fw, err := (asa.Parser{}).Parse(context.Background(), config.Source{Text: declaration, Complete: true}, fm.Metadata{Device: "asa"})
 		if err != nil {
 			t.Fatal(err)
 		}

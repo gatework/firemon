@@ -6,10 +6,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon/vendors/internal/schedule"
 )
 
 func literal(value string) (flow.AddressRange, error) {
@@ -236,13 +238,28 @@ func (p *parser) parseSchedule(ctx context.Context, s *config.Builder, n node) e
 	r := fm.ScheduleRecord{Object: object(n)}
 	tx := begin(s, n.block)
 	defer tx.Rollback()
+	absolute := false
+	var openStart time.Time
 	for _, l := range n.block.Members {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		w := l.Words
 		ok := ancillary(w)
+		if len(w) == 4 && w[0] == "absolute" && w[1] == "start" {
+			if absolute {
+				r.Unsupported = append(r.Unsupported, "repeated absolute schedule")
+			}
+			absolute = true
+			var err error
+			openStart, r.Timezone, err = s.ScheduleBound("01/02/2006 15:04", w[2]+" "+w[3], false)
+			ok = err == nil
+		}
 		if len(w) == 7 && w[0] == "absolute" && w[1] == "start" && w[4] == "end" {
+			if absolute {
+				r.Unsupported = append(r.Unsupported, "repeated absolute schedule")
+			}
+			absolute = true
 			for _, layout := range []string{"01/02/2006 15:04", "01/02/2006 15:04:05"} {
 				window, zone, err := s.ScheduleWindow(layout, w[2]+" "+w[3], w[5]+" "+w[6])
 				if err == nil {
@@ -255,9 +272,26 @@ func (p *parser) parseSchedule(ctx context.Context, s *config.Builder, n node) e
 			if !ok {
 				r.Unsupported = append(r.Unsupported, "native schedule clock or window not established")
 			}
-
+		}
+		if len(w) > 1 && w[0] == "periodic" {
+			windows, zone, err := schedule.Periodic(s, w[1:])
+			if err == nil {
+				schedule.AddWeekly(&r, windows, zone)
+				ok = true
+			}
 		}
 		consume(tx, l, ok, &r.Object)
+	}
+	schedule.Restrict(&r)
+	if !openStart.IsZero() {
+		if len(r.Weekly) > 0 {
+			r.Weekly[0].Start = openStart
+		} else {
+			r.Unsupported = append(r.Unsupported, "unbounded absolute schedule")
+		}
+	}
+	if len(r.Windows) == 0 && len(r.Weekly) == 0 {
+		r.Unsupported = append(r.Unsupported, "native schedule clock or window not established")
 	}
 	if err := ctx.Err(); err != nil {
 		return err

@@ -120,6 +120,12 @@ func (p *parser) policies(ctx context.Context, s *config.Builder) error {
 			case len(rest) == 2 && rest[0] == "description":
 				r.Description = rest[1]
 				valid = true
+			case len(rest) == 2 && rest[0] == "scheduler-name":
+				if r.Match.Schedule != "" && r.Match.Schedule != fm.ID(rest[1]) {
+					r.Unsupported = append(r.Unsupported, "conflicting scheduler names")
+				}
+				r.Match.Schedule = fm.ID(rest[1])
+				valid = true
 			}
 		}
 		if valid {

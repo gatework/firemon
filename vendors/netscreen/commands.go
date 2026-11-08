@@ -113,32 +113,38 @@ func ownsNAT(fw *fm.Firewall, id fm.ID) bool {
 // Render produces configuration commands only. Persisting configuration belongs
 // to the deployment session's independently verified save operation.
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	return renderCommands(ctx, before, after, changes)
-}
-
-func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
-		return nil, err
-	}
-	n, err := nativeCommands(ctx, before, after, changes)
+	batch, err := render.Prepare(ctx, "netscreen", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
+	return renderCommands(ctx, before, after, batch)
+}
+
+func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
+	builder, err := render.NewNativeBuilder(ctx, "netscreen", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+
 	timed, err := render.ScheduleCommands(before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-	n.Commands = append(timed, n.Commands...)
-	return renderCommands(ctx, before, after, changes.Rules, n)
-}
+	builder.AppendCommands(timed...)
 
-func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
-	batch, err := render.Prepare(ctx, "netscreen", before, after, changes, native...)
+	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
+		return nil, err
+	}
+	batch, err := builder.Prepare(ctx)
 	if err != nil {
 		return nil, err
 	}
-	changes = batch.Changes()
-	if len(changes) == 0 && len(native) == 0 {
+	return renderCommands(ctx, before, after, batch)
+}
+
+func renderCommands(ctx context.Context, before, after *fm.Firewall, batch render.Batch) ([]string, error) {
+	changes := batch.Changes()
+	if len(changes) == 0 && !batch.Native() {
 		return nil, nil
 	}
 	var commands []string
@@ -194,8 +200,8 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 			commands = append(commands, fmt.Sprintf("set service %s %s %d src-port %s dst-port %s", name, verb, term.Protocol.Low, portText(term.SourcePort), portText(term.DestinationPort)))
 		}
 	}
-	if len(native) == 1 {
-		commands = append(commands, native[0].Commands...)
+	if batch.Native() {
+		commands = append(commands, batch.NativeCommands()...)
 	}
 	used := make(map[fm.ID]bool)
 	for _, r := range before.Rules() {
@@ -247,7 +253,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if ownsNAT(before, c.Rule) || ownsNAT(after, c.Rule) && len(native) == 0 {
+		if ownsNAT(before, c.Rule) || ownsNAT(after, c.Rule) && !batch.Native() {
 			return nil, ErrRender
 		}
 		if c.Kind == plan.RemoveRule {
@@ -265,7 +271,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		}
 		r := rule.Record()
 		m := r.Match
-		if r.Scope != "" || r.RuleSet != "security" || r.Builtin || r.Disabled || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || len(m.Applications) > 0 || len(m.Users) > 0 || m.Schedule != "" && len(native) == 0 || m.ZoneRelation != fm.AnyZoneRelation || m.AnyFromZone || m.AnyToZone || len(m.FromZones) != 1 || len(m.ToZones) != 1 || r.Description != "" {
+		if r.Scope != "" || r.RuleSet != "security" || r.Builtin || r.Disabled || len(r.Unsupported) > 0 || len(m.Unsupported) > 0 || len(m.Applications) > 0 || len(m.Users) > 0 || m.Schedule != "" && !batch.Native() || m.ZoneRelation != fm.AnyZoneRelation || m.AnyFromZone || m.AnyToZone || len(m.FromZones) != 1 || len(m.ToZones) != 1 || r.Description != "" {
 			return nil, ErrRender
 		}
 		id := c.Rule
@@ -317,11 +323,11 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 			if e1 != nil || e2 != nil || action == "" {
 				return nil, ErrRender
 			}
-			if len(native) == 1 && len(native[0].Policy[c.Rule]) > 0 {
-				action = strings.Join(native[0].Policy[c.Rule], " ") + " " + action
+			if attachment := batch.PolicyCommands(c.Rule); len(attachment) > 0 {
+				action = strings.Join(attachment, " ") + " " + action
 			}
 			line := fmt.Sprintf("set policy id %s top from %s to %s %s %s %s %s", id, from, to, sources[0], destinations[0], services[0], action)
-			if name, err := render.ScheduleReference(after, m.Schedule, native...); err != nil {
+			if name, err := batch.ScheduleReference(after, m.Schedule); err != nil {
 				return nil, err
 			} else if name != "" {
 				line += " schedule " + name

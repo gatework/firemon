@@ -2,10 +2,8 @@ package paloalto
 
 import (
 	"context"
-
+	"errors"
 	"slices"
-
-	"strings"
 	"time"
 
 	fm "github.com/gatework/firemon"
@@ -16,11 +14,14 @@ import (
 func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 	d := fm.Data{}
 	tx := s.Begin()
+	defer tx.Rollback()
+	remaining := s.Content().Limits().MaxServiceTerms
 	addresses := make(map[string]fm.AddressRecord)
 	groups := make(map[string]fm.AddressGroupRecord)
 	services := make(map[string]fm.ServiceRecord)
 	serviceGroups := make(map[string]fm.ServiceGroupRecord)
 	schedules := make(map[string]fm.ScheduleRecord)
+	scheduleKinds := make(map[string]string)
 	local := make(map[string]bool)
 	type serviceDraft struct {
 		protocol string
@@ -28,18 +29,23 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 	}
 	serviceParts := make(map[string]serviceDraft)
 	for _, r := range p.rows {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		w := r.words
 		if len(w) > 1 && !r.shared && slices.Contains([]string{"address", "address-group", "service", "service-group", "schedule"}, w[0]) {
 			local[w[0]+"/"+w[1]] = true
 		}
 		if len(w) == 4 && slices.Equal(w[:3], []string{"deviceconfig", "system", "timezone"}) {
-			if location, err := time.LoadLocation(w[3]); err == nil {
-				p.location = location
+			if _, err := time.LoadLocation(w[3]); err == nil {
 				tx.Parse(r.source.Lines()...)
 			}
 		}
 	}
 	for _, r := range p.rows {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		w := r.words
 		if len(w) == 0 {
 			tx.Ignore("blank line", r.source.Lines()...)
@@ -94,6 +100,9 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 			switch field {
 			case "static":
 				for _, member := range rest {
+					if err := ctx.Err(); err != nil {
+						return err
+					}
 					g.Members = append(g.Members, fm.AddressRef{ID: fm.ID(member)})
 				}
 				ok = true
@@ -112,7 +121,10 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 			draft := serviceParts[name]
 			if field == "protocol" && len(rest) == 3 && (rest[0] == "tcp" || rest[0] == "udp") {
 				draft.protocol = rest[0]
-				parsed, err := ports(rest[2])
+				parsed, err := ports(ctx, rest[2])
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return err
+				}
 				if err == nil {
 					switch rest[1] {
 					case "port":
@@ -138,6 +150,9 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 			}
 			if field == "members" {
 				for _, member := range rest {
+					if err := ctx.Err(); err != nil {
+						return err
+					}
 					g.Members = append(g.Members, fm.ServiceRef{ID: fm.ID(member)})
 				}
 				ok = true
@@ -153,26 +168,18 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 			if !exists {
 				a.Object = object(name, r)
 			}
-			if field == "schedule-type" && len(rest) >= 2 && rest[0] == "non-recurring" && p.location != nil {
-				ok = true
-				for _, value := range rest[1:] {
-					parts := strings.Split(value, "-")
-					if len(parts) != 2 {
-						ok = false
-						break
-					}
-					start, e := time.ParseInLocation("2006/01/02@15:04", parts[0], p.location)
-					end, e2 := time.ParseInLocation("2006/01/02@15:04", parts[1], p.location)
-					if e != nil || e2 != nil || !start.Before(end) {
-						ok = false
-						break
-					}
-					a.Windows = append(a.Windows, fm.TimeWindow{Start: start.UTC(), End: end.UTC()})
+			if field == "schedule-type" && len(rest) >= 2 {
+				kind := rest[0]
+				if kind == "recurring" {
+					kind += "/" + rest[1]
 				}
-				a.Timezone = p.location.String()
+				if previous := scheduleKinds[name]; previous == "" || previous == kind {
+					ok = parseSchedule(s, &a, rest) == nil
+					scheduleKinds[name] = kind
+				}
 			}
 			if !ok {
-				a.Unsupported = append(a.Unsupported, "unsupported schedule or missing timezone")
+				a.Unsupported = append(a.Unsupported, "unsupported schedule or missing capture clock")
 			}
 			schedules[name] = a
 		default:
@@ -183,11 +190,20 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 		}
 	}
 	for _, name := range keys(addresses) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		d.Addresses = append(d.Addresses, addresses[name])
 	}
 	for _, name := range keys(groups) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		g := groups[name]
 		for i := range g.Members {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			g.Members[i].Kind = fm.AddressObject
 			if _, ok := groups[string(g.Members[i].ID)]; ok {
 				g.Members[i].Kind = fm.AddressGroupObject
@@ -205,19 +221,33 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 		if len(part.dst) == 0 || part.protocol == "" {
 			r.Unsupported = append(r.Unsupported, "incomplete service")
 		}
-		r.Terms = serviceTerms(part.protocol, part.src, part.dst)
+		var err error
+		r.Terms, err = serviceTerms(ctx, part.protocol, part.src, part.dst, &remaining)
+		if err != nil {
+			return err
+		}
 		d.Services = append(d.Services, r)
 	}
 	builtins := map[string][]flow.Interval{"service-http": {{Low: 80, High: 80}, {Low: 8080, High: 8080}}, "service-https": {{Low: 443, High: 443}}}
 	for _, name := range keys(builtins) {
 		ports := builtins[name]
 		if _, ok := services[name]; !ok {
-			d.Services = append(d.Services, fm.ServiceRecord{Object: fm.Object{ID: fm.ID(name), Name: name}, Terms: serviceTerms("tcp", full, ports)})
+			terms, err := serviceTerms(ctx, "tcp", full, ports, &remaining)
+			if err != nil {
+				return err
+			}
+			d.Services = append(d.Services, fm.ServiceRecord{Object: fm.Object{ID: fm.ID(name), Name: name}, Terms: terms})
 		}
 	}
 	for _, name := range keys(serviceGroups) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		g := serviceGroups[name]
 		for i := range g.Members {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			g.Members[i].Kind = fm.ServiceObject
 			if _, ok := serviceGroups[string(g.Members[i].ID)]; ok {
 				g.Members[i].Kind = fm.ServiceGroupObject
@@ -226,7 +256,13 @@ func (p *parser) objects(ctx context.Context, s *config.Builder) error {
 		d.ServiceGroups = append(d.ServiceGroups, g)
 	}
 	for _, name := range keys(schedules) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		d.Schedules = append(d.Schedules, schedules[name])
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	tx.Emit(d)
 	return s.Commit(tx)

@@ -43,9 +43,7 @@ func interruptedFactory(t *testing.T, fault readFault) (adapter.Factory, *atomic
 			a, b := net.Pipe()
 			connections = append(connections, a)
 			opens.Add(1)
-			peers.Add(1)
-			go func() {
-				defer peers.Done()
+			peers.Go(func() {
 				defer b.Close()
 				prompt := map[string]string{"asa": "fw#", "hillstone": "fw(M)", "paloalto": "audit@fw>", "srx": "audit@fw>", "huawei": "<fw>", "netscreen": "fw->", "fortinet": "FGT #"}[fault.vendor]
 				_, _ = io.WriteString(b, prompt)
@@ -112,7 +110,7 @@ func interruptedFactory(t *testing.T, fault readFault) (adapter.Factory, *atomic
 						return
 					}
 				}
-			}()
+			})
 			return a, nil
 		})}}, nil
 	}}

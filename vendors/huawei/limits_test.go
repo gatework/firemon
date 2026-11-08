@@ -16,7 +16,7 @@ import (
 func TestCancellationAndCumulativeBudget(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := huawei.Parse(ctx, config.Source{Text: basic, Complete: true}, fm.Metadata{Device: "synthetic"}); !errors.Is(err, context.Canceled) {
+	if _, err := (huawei.Parser{}).Parse(ctx, config.Source{Text: basic, Complete: true}, fm.Metadata{Device: "synthetic"}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	fw := parse(t, strings.Replace(basic, "return\n", nativeNAT, 1))
@@ -66,7 +66,7 @@ firewall zone trust
 }
 func TestMalformedCaptureAndConflictingObjectTypesFail(t *testing.T) {
 	for _, raw := range []string{"interface eth0\n ip address 192.0.2.1 24\n", "ip address-set x\n#\n", "ip address-set x type object\n#\nip address-set x type group\n#\n", "security-policy\n rule name\n#\n"} {
-		if _, err := huawei.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{}); !errors.Is(err, config.ErrSource) {
+		if _, err := (huawei.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{}); !errors.Is(err, config.ErrSource) {
 			t.Fatal(raw, err)
 		}
 	}
@@ -79,7 +79,7 @@ func FuzzScopedCapture(f *testing.F) {
 		if len(raw) > 1<<16 {
 			t.Skip()
 		}
-		fw, err := huawei.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"})
+		fw, err := (huawei.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"})
 		if err != nil {
 			return
 		}

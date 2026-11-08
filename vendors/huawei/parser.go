@@ -20,12 +20,8 @@ type parser struct {
 // stay opaque until their # boundary, including text resembling supported commands.
 type Parser struct{ Limits config.Limits }
 
-func Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-	return (Parser{}).Parse(ctx, source, metadata)
-}
-
 func (native Parser) Parse(ctx context.Context, source config.Source, metadata fm.Metadata) (*fm.Firewall, error) {
-	metadata.Vendor, metadata.ParserVersion = "huawei", "huawei-go-3"
+	metadata.Vendor, metadata.ParserVersion = "huawei", "huawei-go-4"
 	content, err := config.NewContent(ctx, source, native.Limits)
 	if err != nil {
 		return nil, err

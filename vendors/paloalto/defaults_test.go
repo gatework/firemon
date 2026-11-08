@@ -16,7 +16,7 @@ const zones = "set network interface ethernet eth1 layer3 ip 192.0.2.1/24\nset n
 
 func pan(t *testing.T, raw string) *fm.Firewall {
 	t.Helper()
-	fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
+	fw, err := (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
 	if err != nil {
 		t.Fatal(err)
 	}

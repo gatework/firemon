@@ -1,6 +1,7 @@
 package paloalto
 
 import (
+	"context"
 	"fmt"
 	"net/netip"
 	"slices"
@@ -8,7 +9,7 @@ import (
 	"strings"
 
 	fm "github.com/gatework/firemon"
-
+	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/flow"
 )
 
@@ -50,9 +51,12 @@ func hostPrefix(value string) (netip.Prefix, error) {
 	}
 	return netip.PrefixFrom(a, a.BitLen()), nil
 }
-func ports(value string) ([]flow.Interval, error) {
+func ports(ctx context.Context, value string) ([]flow.Interval, error) {
 	var out []flow.Interval
-	for _, part := range strings.Split(value, ",") {
+	for part := range strings.SplitSeq(value, ",") {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		ends := strings.Split(part, "-")
 		if len(ends) > 2 {
 			return nil, fmt.Errorf("invalid ports")
@@ -75,15 +79,36 @@ func ports(value string) ([]flow.Interval, error) {
 	}
 	return out, nil
 }
-func serviceTerms(protocol string, src, dst []flow.Interval) []fm.ServiceTerm {
-	var terms []fm.ServiceTerm
+func serviceTerms(ctx context.Context, protocol string, src, dst []flow.Interval, remaining *int) ([]fm.ServiceTerm, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(src) == 0 || len(dst) == 0 {
+		return nil, nil
+	}
+	// Check before multiplication and allocation: short port lists can still
+	// generate a product far beyond the accepted catalog's capacity.
+	if len(src) > *remaining/len(dst) {
+		return nil, fmt.Errorf("%w: service expansion exceeds remaining capacity %d", config.ErrSource, *remaining)
+	}
+	count := len(src) * len(dst)
+	*remaining -= count
+	terms := make([]fm.ServiceTerm, 0, count)
 	n := map[string]uint16{"tcp": 6, "udp": 17}[protocol]
 	for _, a := range src {
 		for _, b := range dst {
+			if len(terms)%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
 			terms = append(terms, fm.ServiceTerm{Protocol: flow.Interval{Low: n, High: n}, SourcePort: a, DestinationPort: b, ICMPType: flow.Interval{Low: 0, High: 255}, ICMPCode: flow.Interval{Low: 0, High: 255}})
 		}
 	}
-	return terms
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return terms, nil
 }
 func keys[T any](m map[string]T) []string {
 	out := make([]string, 0, len(m))

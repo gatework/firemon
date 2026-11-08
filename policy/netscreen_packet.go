@@ -154,10 +154,10 @@ func (e Engine) netscreenPacket(ctx context.Context, fw *fm.Firewall, q PacketRe
 			}
 			for _, n := range natParts(nat) {
 				request.Traffic = n.Original
-				if len(fw.Rules()) > budget {
+				if fw.RuleCount() > budget {
 					return PacketResult{}, ErrBudget
 				}
-				budget -= len(fw.Rules())
+				budget -= fw.RuleCount()
 				evaluated, err := e.Query(ctx, fw, request)
 				if err != nil {
 					return PacketResult{}, err

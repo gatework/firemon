@@ -9,21 +9,22 @@ import (
 
 // A native policy proof alone is insufficient when permitting the packet enables
 // post-policy NAT. Re-evaluate wire paths on the complete final device graph.
-func (r *batchRun) recheck(ctx context.Context, fw *fm.Firewall, work []batchWork, batch plan.BatchResult) (bool, error) {
+func (r *targetBatch) recheck(ctx context.Context, fw *fm.Firewall, work []*targetEntry, batch plan.BatchResult) (bool, error) {
 	limit := r.designer.options.Engine.Limits.WithDefaults().MaxRegions
 	for i, w := range work {
-		if w.packet == nil || i >= len(batch.Inputs) || batch.Inputs[i].Disposition == plan.BatchRejected {
+		if w.proof == nil || i >= len(batch.Inputs) || batch.Inputs[i].Disposition == plan.BatchRejected {
 			continue
 		}
 		if err := r.charge(ctx); err != nil {
 			return false, err
 		}
-		packet := *w.packet
-		if w.native != nil && w.native.Lifetime != nil {
+		proof := w.proof
+		packet := proof.packet
+		if w.planning.native != nil && w.planning.native.Lifetime != nil {
 			// The native planner proves every active interval. This final business
 			// view check must sample admission inside the window too, while keeping
 			// original input times intact for review and reconstruction.
-			packet.At = w.native.Lifetime.Window.Start
+			packet.At = w.planning.native.Lifetime.Window.Start
 		}
 		result, err := r.designer.options.Engine.QueryPacket(ctx, fw, packet)
 		if err != nil {
@@ -44,8 +45,8 @@ func (r *batchRun) recheck(ctx context.Context, fw *fm.Firewall, work []batchWor
 			if err != nil {
 				return false, err
 			}
-			if w.viewTraffic != nil {
-				actual, known := p.View(w.view)
+			if proof.expected != nil {
+				actual, known := p.View(proof.expected.view)
 				if !known {
 					return false, nil
 				}
@@ -62,15 +63,15 @@ func (r *batchRun) recheck(ctx context.Context, fw *fm.Firewall, work []batchWor
 				}
 			}
 		}
-		same, err := wire.Equal(w.packet.Traffic, limit)
+		same, err := wire.Equal(proof.packet.Traffic, limit)
 		if err != nil {
 			return false, err
 		}
 		if !same {
 			return false, nil
 		}
-		if w.viewTraffic != nil {
-			same, err = translated.Equal(*w.viewTraffic, limit)
+		if proof.expected != nil {
+			same, err = translated.Equal(proof.expected.traffic, limit)
 			if err != nil {
 				return false, err
 			}

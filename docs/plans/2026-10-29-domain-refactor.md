@@ -1,5 +1,8 @@
 # Domain contracts and module refactoring
 
+Historical plan. The [2026-11-07 continuation](2026-11-07-domain-migration.md)
+supersedes the format-9 and convenience-parser compatibility statements below.
+
 Approved scope: quality refactoring and corrections to existing behavior, with
 controlled Go API changes. Perl Firewall modules are read-only business references.
 Specifications: `docs/spec.md`, `docs/contracts.md`, `AGENTS.md`. Keep seven vendors,

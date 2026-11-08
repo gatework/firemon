@@ -1,7 +1,9 @@
 package firemon
 
 import (
+	"iter"
 	"slices"
+	"time"
 
 	"github.com/gatework/firemon/flow"
 )
@@ -42,6 +44,12 @@ type Address struct {
 func (o *Address) Record() AddressRecord { return o.record.clone() }
 func (o *Address) Set() flow.AddressSet  { return o.set }
 
+// FQDN returns the declared unresolved hostname without copying address ranges.
+func (o *Address) FQDN() string { return o.record.FQDN }
+
+// VIP returns the declared translation reference, including unresolved targets.
+func (o *Address) VIP() NATRef { return o.record.VIP }
+
 // VIPStaticNAT and VIPDynamicNAT expose the declared VIP's concrete target.
 // Both are nil for an ordinary address or an unresolved VIP reference.
 func (o *Address) VIPStaticNAT() *StaticNAT   { return o.vipStaticNAT }
@@ -57,9 +65,31 @@ func (o *AddressGroup) Record() AddressGroupRecord { return o.record.clone() }
 func (o *AddressGroup) Addresses() []*Address      { return slices.Clone(o.addresses) }
 func (o *AddressGroup) Groups() []*AddressGroup    { return slices.Clone(o.groups) }
 
+// Members visits declared references as values, retaining unresolved members.
+func (o *AddressGroup) Members() iter.Seq[AddressRef] {
+	return func(yield func(AddressRef) bool) {
+		for _, member := range o.record.Members {
+			if !yield(member) {
+				return
+			}
+		}
+	}
+}
+
 type Service struct{ record ServiceRecord }
 
 func (o *Service) Record() ServiceRecord { return o.record.clone() }
+
+// Terms visits complete service tuples without copying the declaration container.
+func (o *Service) Terms() iter.Seq[ServiceTerm] {
+	return func(yield func(ServiceTerm) bool) {
+		for _, term := range o.record.Terms {
+			if !yield(term) {
+				return
+			}
+		}
+	}
+}
 
 type ServiceGroup struct {
 	record   ServiceGroupRecord
@@ -71,7 +101,23 @@ func (o *ServiceGroup) Record() ServiceGroupRecord { return o.record.clone() }
 func (o *ServiceGroup) Services() []*Service       { return slices.Clone(o.services) }
 func (o *ServiceGroup) Groups() []*ServiceGroup    { return slices.Clone(o.groups) }
 
-type Schedule struct{ record ScheduleRecord }
+// Members visits declared references as values, retaining unresolved members.
+func (o *ServiceGroup) Members() iter.Seq[ServiceRef] {
+	return func(yield func(ServiceRef) bool) {
+		for _, member := range o.record.Members {
+			if !yield(member) {
+				return
+			}
+		}
+	}
+}
+
+type Schedule struct {
+	record        ScheduleRecord
+	location      *time.Location
+	known         bool
+	weeklyWindows int
+}
 
 func (o *Schedule) Record() ScheduleRecord { return o.record.clone() }
 

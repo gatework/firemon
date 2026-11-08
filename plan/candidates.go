@@ -10,7 +10,6 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/flow"
-	"github.com/gatework/firemon/internal/nativename"
 	"github.com/gatework/firemon/internal/servicecoverage"
 	"github.com/gatework/firemon/policy"
 )
@@ -27,178 +26,12 @@ func generatedID(prefix string, value any) fm.ID {
 	return fm.ID(prefix + hex.EncodeToString(sum[:8]))
 }
 
-func addressVisible(ctx context.Context, d *fm.Data, a fm.AddressRecord, zones []fm.ID, visits *visitBudget) (bool, error) {
-	name := nativename.Name(a.Object)
-	contexts := zones
-	if len(contexts) == 0 {
-		if err := visits.take(ctx, len(d.Zones)); err != nil {
-			return false, err
-		}
-		for _, z := range d.Zones {
-			contexts = append(contexts, z.ID)
-		}
-	}
-	if len(contexts) == 0 {
-		return a.Scope == "", nil
-	}
-	for _, id := range contexts {
-		if err := visits.take(ctx, 1); err != nil {
-			return false, err
-		}
-		scope, found := "", false
-		for _, z := range d.Zones {
-			if err := visits.take(ctx, 1); err != nil {
-				return false, err
-			}
-			if z.ID == id {
-				scope, found = z.AddressScope, true
-				break
-			}
-		}
-		if !found || a.Scope != "" && a.Scope != scope {
-			return false, nil
-		}
-		if a.Scope != "" || scope == "" {
-			continue
-		}
-		// Local objects or groups can shadow a globally available address name.
-		for _, other := range d.Addresses {
-			if err := visits.take(ctx, 1); err != nil {
-				return false, err
-			}
-			if other.Scope == scope && (other.Name == name || other.Name == "" && string(other.ID) == name) {
-				return false, nil
-			}
-		}
-		for _, other := range d.AddressGroups {
-			if err := visits.take(ctx, 1); err != nil {
-				return false, err
-			}
-			if other.Scope == scope && (other.Name == name || other.Name == "" && string(other.ID) == name) {
-				return false, nil
-			}
-		}
-	}
-	return true, nil
-}
-
-// objectCatalog indexes one owned candidate draft in declaration order.
-// It shares the parent planner's visits across indexing and scoped reuse.
-type objectCatalog struct {
-	data      *fm.Data
-	visits    *visitBudget
-	names     *nameAllocator
-	addresses map[flow.AddressRange][]fm.AddressRecord
-	services  map[fm.ServiceTerm]fm.ServiceRef
-}
-
-func newObjectCatalog(ctx context.Context, data *fm.Data, visits *visitBudget) (*objectCatalog, error) {
-	if err := visits.take(ctx, len(data.Addresses)+len(data.Services)); err != nil {
-		return nil, err
-	}
-	names, err := newNameAllocator(ctx, data, visits)
-	if err != nil {
-		return nil, err
-	}
-	c := &objectCatalog{data: data, visits: visits, names: names, addresses: make(map[flow.AddressRange][]fm.AddressRecord), services: make(map[fm.ServiceTerm]fm.ServiceRef)}
-	for _, a := range data.Addresses {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if len(a.Ranges) == 1 && a.FQDN == "" && a.VIP == (fm.NATRef{}) && len(a.Unsupported) == 0 {
-			c.addresses[a.Ranges[0]] = append(c.addresses[a.Ranges[0]], a)
-		}
-	}
-	for _, s := range data.Services {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if s.Scope == "" && len(s.Terms) == 1 && len(s.Unsupported) == 0 {
-			if _, found := c.services[s.Terms[0]]; !found {
-				c.services[s.Terms[0]] = fm.ServiceRef{Kind: fm.ServiceObject, ID: s.ID}
-			}
-		}
-	}
-	return c, nil
-}
-
-func (c *objectCatalog) ensureAddress(ctx context.Context, r flow.AddressRange, zones []fm.ID) (fm.AddressRef, error) {
-	d := c.data
-	for _, a := range c.addresses[r] {
-		if err := c.visits.take(ctx, 1); err != nil {
-			return fm.AddressRef{}, err
-		}
-		visible, err := addressVisible(ctx, d, a, zones, c.visits)
-		if err != nil {
-			return fm.AddressRef{}, err
-		}
-		if visible {
-			return fm.AddressRef{Kind: fm.AddressObject, ID: a.ID}, nil
-		}
-	}
-	id, err := c.names.object(ctx, generatedID("fm-a-", r), c.names.addresses)
-	if err != nil {
-		return fm.AddressRef{}, err
-	}
-	a := fm.AddressRecord{Object: fm.Object{ID: id, Name: string(id)}, Ranges: []flow.AddressRange{r}}
-	d.Addresses = append(d.Addresses, a)
-	c.addresses[r] = append(c.addresses[r], a)
-	return fm.AddressRef{Kind: fm.AddressObject, ID: id}, nil
-}
-
-func serviceTermFromRegion(b flow.TrafficRegion) fm.ServiceTerm {
-	return fm.ServiceTerm{Protocol: b.Protocol, SourcePort: b.SourcePort, DestinationPort: b.DestinationPort, ICMPType: b.ICMPType, ICMPCode: b.ICMPCode}
-}
-
-func (c *objectCatalog) ensureService(ctx context.Context, term fm.ServiceTerm) (fm.ServiceRef, error) {
-	if err := c.visits.take(ctx, 1); err != nil {
-		return fm.ServiceRef{}, err
-	}
-	if ref, found := c.services[term]; found {
-		return ref, nil
-	}
-	id, err := c.names.object(ctx, generatedID("fm-s-", term), c.names.services)
-	if err != nil {
-		return fm.ServiceRef{}, err
-	}
-	c.data.Services = append(c.data.Services, fm.ServiceRecord{Object: fm.Object{ID: id, Name: string(id)}, Terms: []fm.ServiceTerm{term}})
-	ref := fm.ServiceRef{Kind: fm.ServiceObject, ID: id}
-	c.services[term] = ref
-	return ref, nil
-}
-
-func (c *objectCatalog) match(ctx context.Context, box flow.TrafficRegion, q policy.Request) (fm.Match, error) {
-	m := fm.Match{AnyFromZone: q.FromZone == "", AnyToZone: q.ToZone == ""}
-	if !m.AnyFromZone {
-		m.FromZones = []fm.ID{q.FromZone}
-	}
-	if !m.AnyToZone {
-		m.ToZones = []fm.ID{q.ToZone}
-	}
-	source, err := c.ensureAddress(ctx, box.Source, m.FromZones)
-	if err != nil {
-		return fm.Match{}, err
-	}
-	destination, err := c.ensureAddress(ctx, box.Destination, m.ToZones)
-	if err != nil {
-		return fm.Match{}, err
-	}
-	service, err := c.ensureService(ctx, serviceTermFromRegion(box))
-	if err != nil {
-		return fm.Match{}, err
-	}
-	m.Sources = []fm.AddressRef{source}
-	m.Destinations = []fm.AddressRef{destination}
-	m.Services = []fm.ServiceRef{service}
-	return m, nil
-}
-
 func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.RuleRecord, gap flow.Traffic, visits *visitBudget) (*fm.Firewall, []Change, Cost, error) {
 	if err := visits.take(ctx, fw.RecordCount()); err != nil {
 		return nil, nil, Cost{}, err
 	}
 	d := fw.Export()
-	catalog, err := newObjectCatalog(ctx, &d, visits)
+	catalog, err := newObjectCatalog(ctx, fw, &d, p.Engine.Limits.WithDefaults(), visits)
 	if err != nil {
 		return nil, nil, Cost{}, err
 	}
@@ -242,7 +75,7 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 		}
 		addresses, _ := flow.NewAddressSet(region.Source)
 		if !sourceAddresses.Contains(addresses) {
-			ref, err := catalog.ensureAddress(ctx, region.Source, rule.Match.FromZones)
+			ref, err := catalog.ensureAddress(ctx, region.Source, rule.Match.FromZones, rule.Scope)
 			if err != nil {
 				return nil, nil, Cost{}, err
 			}
@@ -254,7 +87,7 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 		}
 		addresses, _ = flow.NewAddressSet(region.Destination)
 		if !destinationAddresses.Contains(addresses) {
-			ref, err := catalog.ensureAddress(ctx, region.Destination, rule.Match.ToZones)
+			ref, err := catalog.ensureAddress(ctx, region.Destination, rule.Match.ToZones, rule.Scope)
 			if err != nil {
 				return nil, nil, Cost{}, err
 			}
@@ -274,7 +107,7 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 			return nil, nil, Cost{}, err
 		}
 		if !covered {
-			ref, err := catalog.ensureService(ctx, term)
+			ref, err := catalog.ensureService(ctx, term, rule.Scope)
 			if err != nil {
 				return nil, nil, Cost{}, err
 			}
@@ -308,12 +141,12 @@ func (p Planner) appendCandidate(ctx context.Context, fw *fm.Firewall, rule fm.R
 	return next, []Change{change}, cost, err
 }
 
-func createCandidate(ctx context.Context, fw *fm.Firewall, q policy.Request, gap flow.Traffic, visits *visitBudget) (*fm.Firewall, []Change, Cost, error) {
+func (p Planner) createCandidate(ctx context.Context, fw *fm.Firewall, q policy.Request, gap flow.Traffic, visits *visitBudget) (*fm.Firewall, []Change, Cost, error) {
 	if err := visits.take(ctx, fw.RecordCount()); err != nil {
 		return nil, nil, Cost{}, err
 	}
 	d := fw.Export()
-	catalog, err := newObjectCatalog(ctx, &d, visits)
+	catalog, err := newObjectCatalog(ctx, fw, &d, p.Engine.Limits.WithDefaults(), visits)
 	if err != nil {
 		return nil, nil, Cost{}, err
 	}

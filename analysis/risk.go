@@ -69,6 +69,7 @@ type RiskFinding struct {
 	Mode                                 RiskMode
 	Value                                Truth
 	Traffic                              flow.Traffic
+	Evidence                             RiskEvidence
 }
 type RiskAnalyzer struct{ Engine policy.Engine }
 
@@ -178,13 +179,31 @@ func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q po
 	if err := budget.take(ctx, fw.RuleCount()); err != nil {
 		return nil, err
 	}
+	if err := budget.take(ctx, fw.DiagnosticCount()); err != nil {
+		return nil, err
+	}
+	diagnostics := make(map[fm.ID][]string)
+	for _, diagnostic := range fw.Diagnostics() {
+		diagnostics[diagnostic.Object] = append(diagnostics[diagnostic.Object], "diagnostic:"+diagnostic.Code)
+	}
 	var rows []RiskFinding
 	for _, rule := range fw.Rules() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		if rule.Chain() == q.Chain() {
-			rows = append(rows, RiskFinding{PolicyID: definition.ID, PolicyVersion: definition.Version, GraphDigest: fw.SemanticDigest(), Rule: rule.ID(), Mode: definition.Mode})
+			var schedule fm.ID
+			if s := rule.Schedule(); s != nil {
+				schedule = s.ID()
+			}
+			count := len(diagnostics[""]) + len(diagnostics[rule.ID()])
+			if schedule != "" {
+				count += len(diagnostics[schedule])
+			}
+			if err := budget.take(ctx, count); err != nil {
+				return nil, err
+			}
+			rows = append(rows, RiskFinding{PolicyID: definition.ID, PolicyVersion: definition.Version, GraphDigest: fw.SemanticDigest(), Rule: rule.ID(), Mode: definition.Mode, Evidence: riskEvidence(fw, rule, q, definition.Mode, diagnostics)})
 		}
 	}
 	if !fw.Complete() && (definition.Expression == nil || definition.Mode == Effective) {
@@ -200,6 +219,9 @@ func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q po
 			return nil, err
 		}
 		if !r.Complete || !r.Unknown.Empty() {
+			for i := range rows {
+				rows[i].Evidence.Reasons = append(rows[i].Evidence.Reasons, "effective-partition-unknown")
+			}
 			return rows, nil
 		}
 		for _, decision := range r.Decisions {
@@ -231,6 +253,7 @@ func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q po
 				return nil, err
 			}
 			if !known && definition.Expression == nil {
+				rows[i].Evidence.Reasons = append(rows[i].Evidence.Reasons, "unresolved-match")
 				continue
 			}
 		}
@@ -243,6 +266,7 @@ func (a RiskAnalyzer) analyzePrepared(ctx context.Context, fw *fm.Firewall, q po
 		}
 		if known && actual.Empty() {
 			rows[i].Value = False
+			rows[i].Evidence.Reasons = append(rows[i].Evidence.Reasons, "no-exposure-in-context")
 			continue
 		}
 		if definition.Expression != nil {

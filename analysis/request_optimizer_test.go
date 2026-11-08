@@ -3,9 +3,12 @@ package analysis_test
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 	"net/netip"
 	"runtime"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/gatework/firemon/analysis"
 	"github.com/gatework/firemon/flow"
@@ -114,5 +117,86 @@ func TestOptimizerKeepsContextsAndFailsAtComparisonBudget(t *testing.T) {
 	cancel()
 	if _, err := (analysis.RequestOptimizer{}).Optimize(ctx, []policy.Request{a}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+}
+
+func TestOptimizerIndexesSemanticContexts(t *testing.T) {
+	base := request(t, "192.0.2.1", "198.51.100.1")
+	base.RuleSet = ""
+	base.At = time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
+	same := base
+	same.RuleSet, same.At = "security", base.At.In(time.FixedZone("capture", 8*3600))
+	inputs := []policy.Request{base, same}
+	for _, change := range []func(*policy.Request){
+		func(q *policy.Request) { q.Scope = "tenant" },
+		func(q *policy.Request) { q.RuleSet = "acl" },
+		func(q *policy.Request) { q.FromZone = "inside" },
+		func(q *policy.Request) { q.ToZone = "outside" },
+		func(q *policy.Request) { q.EgressInterface = "eth1" },
+		func(q *policy.Request) { q.At = q.At.Add(time.Second) },
+	} {
+		q := base
+		change(&q)
+		inputs = append(inputs, q)
+	}
+	groups, err := (analysis.RequestOptimizer{}).Optimize(t.Context(), inputs)
+	if err != nil || len(groups) != len(inputs)-1 || !slices.Equal(groups[0].Inputs, []int{0, 1}) {
+		t.Fatal("context index changed evaluation coordinates", groups, err)
+	}
+	for index, group := range groups[1:] {
+		if !slices.Equal(group.Inputs, []int{index + 2}) {
+			t.Fatal("context provenance order changed")
+		}
+	}
+}
+
+func TestOptimizerOverlappingBoxesAgainstTinyDomain(t *testing.T) {
+	// Independent point membership covers all seven axes, including zero protocol,
+	// overlapping boxes and both address families. No set operation computes want.
+	for _, ipv6 := range []bool{false, true} {
+		start := netip.MustParseAddr("192.0.2.0")
+		if ipv6 {
+			start = netip.MustParseAddr("2001:db8::")
+		}
+		addresses := []netip.Addr{start, start.Next(), start.Next().Next()}
+		for seed := range uint64(8) {
+			random := rand.New(rand.NewPCG(seed, 7))
+			var declared []flow.TrafficRegion
+			var inputs []policy.Request
+			for range 12 {
+				var low, high [7]uint16
+				for axis := range 7 {
+					a, b := uint16(random.IntN(3)), uint16(random.IntN(3))
+					low[axis], high[axis] = min(a, b), max(a, b)
+				}
+				region := flow.TrafficRegion{Source: flow.AddressRange{First: addresses[low[0]], Last: addresses[high[0]]}, Destination: flow.AddressRange{First: addresses[low[1]], Last: addresses[high[1]]}, Protocol: flow.Interval{Low: low[2], High: high[2]}, SourcePort: flow.Interval{Low: low[3], High: high[3]}, DestinationPort: flow.Interval{Low: low[4], High: high[4]}, ICMPType: flow.Interval{Low: low[5], High: high[5]}, ICMPCode: flow.Interval{Low: low[6], High: high[6]}}
+				declared = append(declared, region)
+				inputs = append(inputs, policy.Request{Traffic: oracleMakeTraffic(t, region)})
+			}
+			groups, err := (analysis.RequestOptimizer{MaxComparisons: 1000000}).Optimize(t.Context(), inputs)
+			if err != nil || len(groups) != 1 || len(groups[0].Inputs) != len(inputs) {
+				t.Fatal(groups, err)
+			}
+			for point := range 2187 {
+				var axes [7]uint16
+				value := point
+				for axis := range 7 {
+					axes[axis] = uint16(value % 3)
+					value /= 3
+				}
+				packet := oraclePacket{source: addresses[axes[0]], destination: addresses[axes[1]], protocol: axes[2], sourcePort: axes[3], destinationPort: axes[4], icmpType: axes[5], icmpCode: axes[6]}
+				want := false
+				for _, region := range declared {
+					want = want || oracleRegion(region, packet)
+				}
+				if got := oracleTraffic(groups[0].Request.Traffic, packet); got != want {
+					t.Fatalf("ipv6=%v seed=%d packet=%+v got=%v want=%v", ipv6, seed, packet, got, want)
+				}
+			}
+			repeated, err := (analysis.RequestOptimizer{MaxComparisons: 1000000}).Optimize(t.Context(), []policy.Request{groups[0].Request})
+			if err != nil || !slices.Equal(repeated[0].Request.Traffic.Regions(), groups[0].Request.Traffic.Regions()) {
+				t.Fatal("optimizer did not reach deterministic fixed point", err)
+			}
+		}
 	}
 }

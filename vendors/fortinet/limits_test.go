@@ -16,7 +16,7 @@ import (
 func TestFortinetCancellationAndCumulativeNATBudget(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := fortinet.Parse(ctx, config.Source{Text: fixture(t, "basic"), Complete: true}, fm.Metadata{Device: "synthetic"}); !errors.Is(err, context.Canceled) {
+	if _, err := (fortinet.Parser{}).Parse(ctx, config.Source{Text: fixture(t, "basic"), Complete: true}, fm.Metadata{Device: "synthetic"}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	fw := parse(t, fixture(t, "basic")+nativeNAT)
@@ -31,7 +31,7 @@ func TestFortinetCancellationAndCumulativeNATBudget(t *testing.T) {
 
 func TestFortinetScopeCannotBeInferredAcrossExplicitVDOMBoundaries(t *testing.T) {
 	raw := "config vdom\nedit blue\nnext\nend\nconfig firewall address\nedit outside\nset subnet 192.0.2.1 255.255.255.255\nnext\nend\n"
-	fw, err := fortinet.ParseVDOM(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"}, "blue")
+	fw, err := (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic", Context: "blue"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,11 +39,11 @@ func TestFortinetScopeCannotBeInferredAcrossExplicitVDOMBoundaries(t *testing.T)
 		t.Fatal("root object was assumed to belong to selected VDOM")
 	}
 	raw = "config vdom\nedit blue\nconfig system interface\nedit port1\nset ip 192.0.2.1 255.255.255.0\nnext\nend\nnext\nend\n"
-	fw, err = fortinet.ParseVDOM(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"}, "blue")
+	fw, err = (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic", Context: "blue"})
 	if err != nil || fw.Interface("port1") == nil || fw.Interface("port1").Scope() != "blue" {
 		t.Fatal("local interface context", err)
 	}
-	fw, err = fortinet.ParseVDOM(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"}, "absent")
+	fw, err = (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic", Context: "absent"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func FuzzScopedCapture(f *testing.F) {
 		if len(raw) > 1<<16 {
 			t.Skip()
 		}
-		fw, err := fortinet.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"})
+		fw, err := (fortinet.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic"})
 		if err != nil {
 			return
 		}

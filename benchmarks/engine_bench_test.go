@@ -74,7 +74,7 @@ func natFirewall(tb testing.TB, n int) *fm.Firewall {
 		fmt.Fprintf(&raw, " rule name source-%d\n  source-zone inside\n  destination-zone outside\n  source-address address-set host-%d\n  action source-nat address-group outbound\n", i, i)
 	}
 	raw.WriteString("#\n")
-	fw, err := huawei.Parse(context.Background(), config.Source{Text: raw.String(), Complete: true}, fm.Metadata{Device: "synthetic-benchmark"})
+	fw, err := (huawei.Parser{}).Parse(context.Background(), config.Source{Text: raw.String(), Complete: true}, fm.Metadata{Device: "synthetic-benchmark"})
 	if err != nil {
 		tb.Fatal(err)
 	}

@@ -29,9 +29,7 @@ func TestFactoryCreatesIndependentDevicesAndASANativeProfile(t *testing.T) {
 				}
 				a, b := net.Pipe()
 				opened.Add(1)
-				peers.Add(1)
-				go func() {
-					defer peers.Done()
+				peers.Go(func() {
 					defer b.Close()
 					_, _ = io.WriteString(b, "fw#")
 					scanner := bufio.NewScanner(b)
@@ -48,7 +46,7 @@ func TestFactoryCreatesIndependentDevicesAndASANativeProfile(t *testing.T) {
 						}
 						_, _ = io.WriteString(b, cmd+"\r\n"+body+"\r\nfw#")
 					}
-				}()
+				})
 				return a, nil
 			}),
 		}}, nil

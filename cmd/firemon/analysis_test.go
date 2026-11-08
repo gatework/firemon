@@ -91,7 +91,7 @@ func TestAnalysisDocumentRejectsTrailingAndOversizedInput(t *testing.T) {
 			t.Fatal(err)
 		}
 		var d inspectionDocument
-		if err := readAnalysisDocument(file, &d); err == nil {
+		if err := readAnalysisDocument(t.Context(), file, &d); err == nil {
 			t.Fatal("unbounded or trailing document accepted")
 		}
 	}

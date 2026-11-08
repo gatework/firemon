@@ -125,8 +125,13 @@ func (b *visitBudget) nativeAdditions(ctx context.Context, a NativeAdditions) er
 		if err := b.nativeObject(ctx, r.Object); err != nil {
 			return err
 		}
-		if err := b.nativeCounts(ctx, len(r.Windows), len(r.Recurring)); err != nil {
+		if err := b.nativeCounts(ctx, len(r.Windows), len(r.Weekly)); err != nil {
 			return err
+		}
+		for _, period := range r.Weekly {
+			if err := b.take(ctx, len(period.Windows)); err != nil {
+				return err
+			}
 		}
 	}
 	for _, r := range a.NATPools {

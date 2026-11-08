@@ -5,8 +5,10 @@ request. The immutable schedule's UTC `[Start, End)` must match that intent
 exactly. Supply it through `NativeAdditions.Schedules`, or reuse an identical
 existing declaration. `ScheduleName(window, timezone)` provides a deterministic
 28-character name which distinguishes different expiry times on the same day.
-Existing policies and schedules are never edited. Recurring schedule creation
-and ASA/SRX/Palo Alto schedule creation are unsupported.
+Existing policies and schedules are never edited. `Lifetime` remains a finite
+grant. General typed weekly schedules and ASA/SRX/Palo Alto creation are covered
+by the subsequent [seven-vendor calendar contract](../vendors/SCHEDULES.md) and
+migration path; a recurring declaration is not a finite lifetime.
 
 `config.Source.ScheduleClock` is an explicit **trusted integration boundary**.
 The capturing integration must independently verify the device timezone and
@@ -19,11 +21,13 @@ from a default timezone, the host clock, or a planned schedule. Without it nativ
 schedules remain unresolved. Readback needs a **new independently established**
 clock bound to the observed capture. Reusing the baseline digest is refused.
 
-Parsing stores UTC windows and timezone in the existing schedule record;
-snapshot format remains 9. Loading snapshots never reparses native text. New
-parser versions are Hillstone 5, Fortinet 3, Huawei 3 and ScreenOS 3.
+Parsing stores absolute instants, typed weekly periods, timezone and calendar
+evidence in the schedule record. Snapshot semantic format is 10; loading never
+reparses native text. The immutable graph and independent readback retain this
+evidence separately from the intended schedule.
 
-The supported creation subset is minute-aligned absolute civil times:
+The original finite-window examples use minute-aligned absolute civil times;
+the linked calendar contract lists the additional three native drivers:
 
 | Vendor family | Declaration | Policy reference |
 | --- | --- | --- |
@@ -42,7 +46,7 @@ whose native civil spelling would be ambiguous. Creation is limited to years
 1970–2099. StoneOS parsing also retains supported seconds syntax when verified;
 creation deliberately uses the narrower minute subset.
 
-The version-3 native approval digest binds the finite intent and clock contract.
+The version-4 native approval digest binds the finite intent and clock contract.
 The joint proof evaluates every existing and new schedule transition, including
 before start and after end, and requires exact targets throughout their active
 intervals. Policy ownership outside the finite target is preserved at every

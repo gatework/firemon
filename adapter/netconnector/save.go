@@ -299,8 +299,8 @@ func panJob(text, job string) (bool, error) {
 			if result != "PEND" || status == "ACT" && !hasDequeue {
 				return false, ErrPersistence
 			}
-			if strings.HasSuffix(progress, "%") {
-				n, err := strconv.ParseUint(strings.TrimSuffix(progress, "%"), 10, 8)
+			if before, ok := strings.CutSuffix(progress, "%"); ok {
+				n, err := strconv.ParseUint(before, 10, 8)
 				if err != nil || n > 100 {
 					return false, ErrPersistence
 				}

@@ -27,7 +27,7 @@ func BenchmarkFortinetTopology(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(raw.Text)))
 	for b.Loop() {
-		fw, err := fortinet.Parse(context.Background(), raw, fm.Metadata{Device: "synthetic-topology", Software: "7.4.0"})
+		fw, err := (fortinet.Parser{}).Parse(context.Background(), raw, fm.Metadata{Device: "synthetic-topology", Software: "7.4.0"})
 		if err != nil {
 			b.Fatal(err)
 		}

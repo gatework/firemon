@@ -108,7 +108,7 @@ func TestReopenedObjectRetainsUnsupportedSource(t *testing.T) {
 
 func TestDifferentScopesDoNotMergeNamedObjects(t *testing.T) {
 	text := "ip vrouter blue\naddress a\nip 192.0.2.10/32\nexit\nexit\nip vrouter red\naddress a\nip 192.0.2.20/32\nexit\nexit\n"
-	fw, err := hillstone.Parse(context.Background(), config.Source{Text: text, Complete: true}, fm.Metadata{Device: "synthetic"})
+	fw, err := (hillstone.Parser{}).Parse(context.Background(), config.Source{Text: text, Complete: true}, fm.Metadata{Device: "synthetic"})
 	if err == nil && fw.Complete() {
 		t.Fatal("same name in separate scopes silently merged")
 	}

@@ -26,10 +26,27 @@ func TestOrderedRulesKeepDeclarationOrderAndOwnedContainers(t *testing.T) {
 		t.Fatal(ids)
 	}
 	declarations := fw.Rules()
+	if got := slices.Collect(fw.DeclaredRules()); !slices.Equal(got, declarations) {
+		t.Fatal("iterator changed source order or shared rule identity")
+	}
+	visited := 0
+	for rule := range fw.DeclaredRules() {
+		visited++
+		if rule != declarations[0] {
+			t.Fatal("declaration iterator changed first rule")
+		}
+		break
+	}
+	if visited != 1 {
+		t.Fatal("declaration iterator ignored early stop")
+	}
 	if declarations[0].ID() != "last" {
 		t.Fatal("declaration order changed")
 	}
 	declarations[0] = nil
+	if got := slices.Collect(fw.DeclaredRules()); got[0] == nil {
+		t.Fatal("declaration view mutated the graph")
+	}
 	for rule := range fw.OrderedRules() {
 		if rule == nil {
 			t.Fatal("ordered index mutated")

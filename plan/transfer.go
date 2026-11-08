@@ -39,7 +39,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	}
 	d := before.Export()
 	objects := len(d.Addresses) + len(d.Services)
-	catalog, err := newObjectCatalog(ctx, &d, &visits)
+	catalog, err := newObjectCatalog(ctx, before, &d, limits, &visits)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (p Planner) Transfer(ctx context.Context, before *fm.Firewall, intents []Ru
 	if len(commands) == 0 {
 		return nil, ErrUnsafe
 	}
-	result := &Plan{before: before, after: after, changes: changes, commands: commands, proof: proof, engine: p.Engine, intent: transferIntent{inputs: slices.Clone(intents), from: from}, cost: Cost{NewRules: len(rules), NewObjects: len(d.Addresses) + len(d.Services) - objects}}
+	result := &Plan{before: before, after: after, changes: changes, commands: commands, proof: proof, engine: p.Engine, intent: transferIntent{inputs: slices.Clone(intents), from: from, options: p.effectiveOptions()}, cost: Cost{NewRules: len(rules), NewObjects: len(d.Addresses) + len(d.Services) - objects}}
 	if err := result.seal(); err != nil {
 		return nil, err
 	}

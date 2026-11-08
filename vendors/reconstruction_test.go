@@ -26,7 +26,7 @@ func TestNativeCreationDurableReconstruction(t *testing.T) {
 				t.Fatal(err)
 			}
 			var b bytes.Buffer
-			sum, err := operations.EncodePlan(t.Context(), &b, revision, result.Plan)
+			sum, err := plan.EncodeReconstruction(t.Context(), &b, plan.SnapshotRevisions{Baseline: revision}, result.Plan)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -47,7 +47,7 @@ func (s *batchState) add(ctx context.Context, q policy.Request, targets []policy
 	if err := s.visits.take(ctx, s.after.RuleCount()); err != nil {
 		return false, nil, err
 	}
-	for _, rule := range s.after.Rules() {
+	for rule := range s.after.DeclaredRules() {
 		m := rule.Record().Match
 		if m.Schedule != "" || len(m.Applications) > 0 || len(m.Users) > 0 {
 			return false, []BatchAttempt{{Stage: PreservationRejection, Reason: "permanent change has unmodeled condition transitions"}}, nil
@@ -79,7 +79,7 @@ type batchSearchAdapter struct {
 
 func (a *batchSearchAdapter) rules(ctx context.Context) iter.Seq2[*fm.Rule, error] {
 	return func(yield func(*fm.Rule, error) bool) {
-		for _, rule := range a.state.after.Rules() {
+		for rule := range a.state.after.DeclaredRules() {
 			if err := a.state.visits.take(ctx, 1); err != nil {
 				yield(nil, err)
 				return

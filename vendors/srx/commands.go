@@ -128,27 +128,38 @@ func applicationName(fw *fm.Firewall, ref fm.ServiceRef) (string, error) {
 }
 
 func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes []plan.Change) ([]string, error) {
-	return renderCommands(ctx, before, after, changes)
+	batch, err := render.Prepare(ctx, "srx", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	return renderCommands(ctx, before, after, batch)
 }
 
 func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
-	if err := plan.ValidateNativeChanges(ctx, before, after, changes); err != nil {
-		return nil, err
-	}
-	n, err := nativeCommands(ctx, before, after, changes)
+	builder, err := render.NewNativeBuilder(ctx, "srx", before, after, changes)
 	if err != nil {
 		return nil, err
 	}
-	return renderCommands(ctx, before, after, changes.Rules, n)
+
+	timed, err := render.ScheduleCommands(before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	builder.AppendCommands(timed...)
+
+	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
+		return nil, err
+	}
+	batch, err := builder.Prepare(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return renderCommands(ctx, before, after, batch)
 }
 
-func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []plan.Change, native ...render.Native) ([]string, error) {
-	batch, err := render.Prepare(ctx, "srx", before, after, changes, native...)
-	if err != nil {
-		return nil, err
-	}
-	changes = batch.Changes()
-	if len(changes) == 0 && len(native) == 0 {
+func renderCommands(ctx context.Context, before, after *fm.Firewall, batch render.Batch) ([]string, error) {
+	changes := batch.Changes()
+	if len(changes) == 0 && !batch.Native() {
 		return nil, nil
 	}
 	commands := []string{"configure"}
@@ -209,8 +220,8 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		}
 	}
 	ordered := slices.Collect(before.OrderedRules())
-	if len(native) == 1 {
-		commands = append(commands, native[0].Commands...)
+	if batch.Native() {
+		commands = append(commands, batch.NativeCommands()...)
 	}
 	for _, change := range changes {
 		if err := ctx.Err(); err != nil {
@@ -237,7 +248,7 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 		if err != nil {
 			return nil, err
 		}
-		if r.Disabled || len(r.Unsupported) > 0 || len(r.Match.Unsupported) > 0 || len(r.Match.Users) > 0 || len(r.Match.Applications) > 0 || r.Match.Schedule != "" || r.Match.ZoneRelation != fm.AnyZoneRelation {
+		if r.Disabled || len(r.Unsupported) > 0 || len(r.Match.Unsupported) > 0 || len(r.Match.Users) > 0 || len(r.Match.Applications) > 0 || r.Match.Schedule != "" && !batch.Native() || r.Match.ZoneRelation != fm.AnyZoneRelation {
 			return nil, ErrRender
 		}
 		var source, destination []fm.AddressRef
@@ -287,6 +298,11 @@ func renderCommands(ctx context.Context, before, after *fm.Firewall, changes []p
 			return nil, ErrRender
 		}
 		commands = append(commands, "set "+path+" then "+action)
+		if name, err := batch.ScheduleReference(after, r.Match.Schedule); err != nil {
+			return nil, err
+		} else if name != "" {
+			commands = append(commands, "set "+path+" scheduler-name "+name)
+		}
 		for _, log := range []struct {
 			field  string
 			status fm.Status

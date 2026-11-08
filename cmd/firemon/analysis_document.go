@@ -2,10 +2,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"time"
 
 	fm "github.com/gatework/firemon"
@@ -172,27 +172,27 @@ func (d riskDocument) request(limits policy.Limits) ([]policy.Request, []analysi
 	}
 	return contexts, definitions, nil
 }
-func readAnalysisDocument(path string, value any) error {
-	input, err := os.Open(path)
+func readAnalysisDocument(ctx context.Context, path string, value any) (err error) {
+	input, finish, err := openInput(ctx, path)
 	if err != nil {
 		return err
 	}
-	defer input.Close()
+	defer func() { err = errors.Join(err, finish()) }()
 	raw, err := io.ReadAll(io.LimitReader(input, maxAnalysisInput+1))
 	if err != nil {
 		return err
 	}
 	if len(raw) > maxAnalysisInput {
-		return errors.New("analysis request exceeds byte limit")
+		return usage(errors.New("analysis request exceeds byte limit"))
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(value); err != nil {
-		return err
+		return usage(err)
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
-		return errors.New("trailing analysis JSON")
+		return usage(errors.New("trailing analysis JSON"))
 	}
 	return nil
 }
@@ -204,8 +204,7 @@ func analysisOutput(out io.Writer, v any) error {
 	if err := output(&boundedAnalysisWriter{writer: &buf, remaining: maxAnalysisOutput}, v); err != nil {
 		return err
 	}
-	_, err := out.Write(buf.Bytes())
-	return err
+	return writeOutput(out, buf.Bytes())
 }
 
 type boundedAnalysisWriter struct {

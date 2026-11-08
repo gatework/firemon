@@ -2,6 +2,9 @@ package analysis
 
 import (
 	"context"
+	"errors"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,28 +28,39 @@ type MigrationRequest struct {
 	Zones map[fm.ID]fm.ID
 	// Chains maps native source chains to target chains. When omitted, only a
 	// unique selected security chain may be inferred. ASA ACLs require mapping.
-	Chains map[fm.PolicyChain]fm.PolicyChain
-	At     time.Time
-	Pairs  []ZonePair
-	Rules  []fm.ID
+	Chains                  map[fm.PolicyChain]fm.PolicyChain
+	At                      time.Time
+	Pairs                   []ZonePair
+	Rules                   []fm.ID
+	StaticNATs, DynamicNATs []fm.ID
+	Interfaces              map[fm.ID]fm.ID
+	VRFs                    map[string]string
+	VRF                     string
+	Clock                   *fm.ScheduleClock
+}
+
+// MigrationResult is atomic: Issues always implies Plan is nil.
+type MigrationResult struct {
+	Plan   *plan.Plan            `json:"-"`
+	Issues []plan.MigrationIssue `json:"issues,omitempty"`
 }
 
 // Plan translates effective user-rule partitions in explicit zone pairs. Source
-// terminal/default rules stay baseline behavior. Unsupported or changing-time
-// declarations reject the batch; selecting a subset is always explicit.
-func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, request MigrationRequest) (*plan.Plan, error) {
+// terminal/default rules stay baseline behavior. Unknown or unrepresentable
+// selected effects yield issues and no executable plan.
+func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, request MigrationRequest) (*MigrationResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if source == nil || target == nil || !source.Complete() || !target.Complete() || len(request.Pairs) == 0 || len(request.Pairs) > 100 {
+	if source == nil || target == nil || len(request.Pairs) == 0 || len(request.Pairs) > 100 {
 		return nil, ErrInvalid
 	}
-	if len(source.StaticNATs())+len(source.DynamicNATs())+len(target.StaticNATs())+len(target.DynamicNATs()) > 0 {
-		return nil, plan.ErrUnsafe
+	if !source.Complete() || !target.Complete() {
+		return &MigrationResult{Issues: []plan.MigrationIssue{{Code: "incomplete-snapshot", Reason: "source and target must retain complete evidence"}}}, nil
 	}
 	limits := t.Planner.Engine.Limits.WithDefaults()
 	visits := visitBudget(limits.MaxVisits)
-	for _, count := range []int{len(request.Zones), len(request.Pairs), len(request.Rules), source.RuleCount(), len(request.Chains)} {
+	for _, count := range []int{len(request.Zones), len(request.Pairs), len(request.Rules), source.RuleCount(), len(request.Chains), len(request.StaticNATs), len(request.DynamicNATs), len(request.Interfaces), len(request.VRFs)} {
 		if err := visits.take(ctx, count); err != nil {
 			return nil, err
 		}
@@ -75,10 +89,9 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 		}
 		selected[id] = true
 	}
-	rules := source.Rules()
 	contexts, err := t.Planner.Engine.Contexts(ctx, request.At, source)
 	if err != nil {
-		return nil, err
+		return migrationResult(nil, err)
 	}
 	for from, to := range request.Chains {
 		found := false
@@ -96,81 +109,56 @@ func (t PolicyMigrator) Plan(ctx context.Context, source, target *fm.Firewall, r
 			return nil, ErrInvalid
 		}
 	}
-	var intents []plan.RuleIntent
+	input := plan.MigrationInput{From: request.At, Rules: slices.Clone(request.Rules), StaticNATs: slices.Clone(request.StaticNATs), DynamicNATs: slices.Clone(request.DynamicNATs), Clock: request.Clock}
+	for _, from := range slices.Sorted(maps.Keys(request.Interfaces)) {
+		input.Interfaces = append(input.Interfaces, plan.MigrationInterfaceMapping{Source: from, Target: request.Interfaces[from]})
+	}
+	for _, from := range slices.Sorted(maps.Keys(request.VRFs)) {
+		input.VRFs = append(input.VRFs, plan.MigrationVRFMapping{Source: from, Target: request.VRFs[from]})
+	}
+	selectedChains := make(map[fm.PolicyChain]bool)
+	for rule := range source.DeclaredRules() {
+		if !rule.Builtin() && (len(request.Rules) == 0 || selected[rule.ID()]) {
+			selectedChains[rule.Chain()] = true
+		}
+	}
+	seenContexts := make(map[plan.MigrationContext]bool)
 	for _, q := range contexts {
 		if err := visits.take(ctx, 1); err != nil {
 			return nil, err
 		}
-		if !q.At.Equal(request.At) || !seenPairs[ZonePair{q.FromZone, q.ToZone}] {
+		if !seenPairs[ZonePair{q.FromZone, q.ToZone}] || !selectedChains[q.Chain()] {
 			continue
 		}
-		if err := visits.take(ctx, len(rules)); err != nil {
-			return nil, err
+		sourceContext := plan.MigrationContext{Chain: q.Chain(), FromZone: q.FromZone, ToZone: q.ToZone, VRF: request.VRF}
+		if seenContexts[sourceContext] {
+			continue
 		}
-		// Time-varying shadowing also changes a selected rule's future effective
-		// partitions, so reject any schedule in this source chain for now.
-		for _, rule := range rules {
-			if rule.Chain() == q.Chain() && rule.Schedule() != nil {
-				return nil, plan.ErrUnsafe
-			}
-		}
-		result, err := t.Planner.Engine.Query(ctx, source, q)
+		seenContexts[sourceContext] = true
+		chain, err := targetChain(ctx, target, q.Chain(), request.Chains, &visits)
 		if err != nil {
 			return nil, err
 		}
-		if !result.Complete || !result.Unknown.Empty() {
-			return nil, plan.ErrUnsafe
-		}
-		if err := visits.take(ctx, len(result.Decisions)); err != nil {
-			return nil, err
-		}
-		for _, decision := range result.Decisions {
-			r := source.Rule(decision.Rule).Record()
-			if r.Builtin || len(request.Rules) > 0 && !selected[r.ID] {
-				continue
-			}
-			if len(intents) >= 100 {
-				return nil, policy.ErrBudget
-			}
-			// A vendor's generic deny/reject can have application-dependent side
-			// effects. Keep those within a vendor; explicit drop/reset stays typed.
-			if source.Metadata().Vendor != target.Metadata().Vendor && (r.Action == fm.Deny || r.Action == fm.Reject) {
-				return nil, plan.ErrUnsafe
-			}
-			if r.Disabled || r.Log == fm.Unknown || r.LogStart == fm.Unknown || r.LogEnd == fm.Unknown {
-				return nil, plan.ErrUnsafe
-			}
-			chain, err := targetChain(ctx, target, q.Chain(), request.Chains, &visits)
-			if err != nil {
-				return nil, err
-			}
-			intentRequest := policy.Request{Scope: chain.Scope, RuleSet: chain.RuleSet, FromZone: request.Zones[q.FromZone], ToZone: request.Zones[q.ToZone], Traffic: decision.Traffic, At: request.At}
-			intents = append(intents, plan.RuleIntent{Request: intentRequest, Action: r.Action, Log: r.Log, LogStart: r.LogStart, LogEnd: r.LogEnd})
-		}
+		input.Contexts = append(input.Contexts, plan.MigrationContextMapping{Source: sourceContext, Target: plan.MigrationContext{Chain: chain, FromZone: request.Zones[q.FromZone], ToZone: request.Zones[q.ToZone], VRF: request.VRFs[request.VRF]}})
 	}
-	if len(intents) == 0 {
-		return nil, plan.ErrUnsafe
-	}
-	// Different source chains can overlap the same target context. Preserve
-	// only a single unambiguous effect; do not invent a cross-chain precedence.
-	for i, a := range intents {
-		for _, b := range intents[:i] {
-			if err := visits.take(ctx, 1); err != nil {
-				return nil, err
-			}
-			if !a.Request.SameContext(b.Request) {
-				continue
-			}
-			hit, err := a.Request.Traffic.Intersection(b.Request.Traffic, limits.MaxRegions)
-			if err != nil {
-				return nil, err
-			}
-			if !hit.Empty() {
-				return nil, plan.ErrUnsafe
-			}
+	p, err := t.Planner.Migrate(ctx, source, target, input)
+	return migrationResult(p, err)
+}
+
+// Classify semantic refusals consistently during both context discovery and
+// compilation. Execution failures must not become ordinary migration findings.
+func migrationResult(p *plan.Plan, err error) (*MigrationResult, error) {
+	if err != nil {
+		var rejection *plan.MigrationError
+		if errors.As(err, &rejection) {
+			return &MigrationResult{Issues: []plan.MigrationIssue{rejection.Issue}}, nil
 		}
+		if errors.Is(err, plan.ErrUnsafe) || errors.Is(err, plan.ErrRender) || errors.Is(err, policy.ErrNotEquivalent) || errors.Is(err, policy.ErrNAT) {
+			return &MigrationResult{Issues: []plan.MigrationIssue{{Code: "unproven-selection", Reason: err.Error()}}}, nil
+		}
+		return nil, err
 	}
-	return t.Planner.Transfer(ctx, target, intents, request.At)
+	return &MigrationResult{Plan: p}, nil
 }
 
 func targetChainExists(ctx context.Context, target *fm.Firewall, chain fm.PolicyChain, visits *visitBudget) (bool, error) {

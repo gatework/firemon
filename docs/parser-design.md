@@ -103,9 +103,11 @@ The business boundary remains:
 Parse(context.Context, config.Source, firemon.Metadata) (*firemon.Firewall, error)
 ```
 
-Parser, ParseFunc, Source, Limits, native Parse/ParseVDOM, XML node navigation,
-concrete graph records and snapshot semantic format 9 remain. Low-level changes
-are intentional and have no compatibility aliases:
+Parser, ParseFunc, Source, Limits and XML node navigation retain their roles.
+The subsequent calendar work uses concrete typed graph records and snapshot
+semantic format 10; package-level native Parse/ParseVDOM have been removed in
+favor of `Parser.Parse` and `Metadata.Context`. Low-level changes are intentional
+and have no compatibility aliases:
 
 | Previous | Current |
 | --- | --- |

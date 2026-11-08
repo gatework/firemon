@@ -26,24 +26,25 @@ func cloneNativeEffects(n *NativeEffects) *NativeEffects {
 	copy := plan.NativeRequest{Additions: n.Additions, NAT: n.NAT, Lifetime: n.Lifetime}.Clone()
 	return &NativeEffects{PolicyTraffic: n.PolicyTraffic, Additions: copy.Additions, NAT: copy.NAT, Lifetime: copy.Lifetime}
 }
-func (r *batchRun) nativeTarget(input int, traffic flow.Traffic, target AccessTarget, q policy.Request, sources []string) error {
-	n := r.report.Inputs[input].Request.Native
+func (r *targetBatch) nativeTarget(input int, traffic flow.Traffic, target AccessTarget, q policy.Request, sources []string) (*targetEntry, error) {
+	n := r.inputs[input].request.Native
 	wire := policy.PacketRequest{Request: q, VRF: target.VRF}
 	if !n.PolicyTraffic.Empty() {
 		q.Traffic = n.PolicyTraffic
 	}
-	native := plan.NativeRequest{Request: q, Additions: n.Additions, NAT: n.NAT, Lifetime: n.Lifetime, Sources: slices.Clone(r.report.Inputs[input].Request.Sources)}.Clone()
+	native := plan.NativeRequest{Request: q, Additions: n.Additions, NAT: n.NAT, Lifetime: n.Lifetime, Sources: slices.Clone(r.inputs[input].request.Sources)}.Clone()
+	var proof *targetPacketProof
 	if target.Packet {
 		native.Packet = &wire
+		proof = &targetPacketProof{packet: wire}
 	}
-	index := len(r.report.Inputs[input].Outcomes)
 	outcome := TargetOutcome{Device: target.Device, Revision: r.manifest.Devices[target.Device].Revision, Wire: traffic, NativeRequests: []policy.Request{q}, Sources: slices.Clone(sources), Disposition: plan.BatchPending}
-	if err := r.emit(max(1, traffic.RegionCount())); err != nil {
-		return err
+	entry, err := r.record(input, outcome, "policy")
+	if err != nil {
+		return nil, err
 	}
-	r.report.Inputs[input].Outcomes = append(r.report.Inputs[input].Outcomes, outcome)
-	r.work[target.Device] = append(r.work[target.Device], batchWork{input: input, outcome: index, request: q, packet: native.Packet, trafficView: "policy", native: &native})
-	return nil
+	r.queue(entry, targetPlanning{request: q, native: &native}, proof)
+	return entry, nil
 }
 
 // Native business ingress runs before topology cloning and snapshot reads. The

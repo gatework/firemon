@@ -15,6 +15,7 @@ import (
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
+	"maps"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestPlanReconstructionPinsOriginalInputsAndOptions(t *testing.T) {
 		t.Fatal("options lost")
 	}
 	var data bytes.Buffer
-	checksum, err := operations.EncodePlan(t.Context(), &data, req.Expected, result.Plan)
+	checksum, err := plan.EncodeReconstruction(t.Context(), &data, plan.SnapshotRevisions{Baseline: req.Expected}, result.Plan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,9 +55,7 @@ func TestPlanReconstructionPinsOriginalInputsAndOptions(t *testing.T) {
 	}
 	for _, key := range []string{"version", "algorithm", "plan_digest", "baseline_revision"} {
 		copy := map[string]any{}
-		for k, v := range document {
-			copy[k] = v
-		}
+		maps.Copy(copy, document)
 		copy[key] = "tampered"
 		raw, _ := json.Marshal(copy)
 		if _, _, e := operations.RestorePlan(t.Context(), bytes.NewReader(raw), checksum, store); e == nil {
@@ -87,6 +86,7 @@ func TestFiniteBusinessPacketPlanReconstruction(t *testing.T) {
 	}
 	w := fm.TimeWindow{Start: m.CapturedAt.Add(2 * time.Hour), End: m.CapturedAt.Add(3 * time.Hour)}
 	input := operations.AccessRequest{ID: "temporary", Traffic: requestTraffic(t, "192.0.2.10/32", "198.51.100.10/32", 443), Targets: []operations.AccessTarget{{Device: m.Device, Packet: true, Request: policy.Request{FromZone: "inside", ToZone: "outside"}}}, Native: &operations.NativeEffects{Lifetime: &plan.ScheduleIntent{Schedule: "temporary", Window: w, Clock: clock}, Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{{Object: fm.Object{ID: "temporary", Name: "temporary"}, Windows: []fm.TimeWindow{w}, Timezone: clock.Timezone}}}}}
+	input.At = m.CapturedAt
 	d, err := operations.NewBatchDesigner(operations.BatchDesignerOptions{Store: store})
 	if err != nil {
 		t.Fatal(err)
@@ -96,17 +96,21 @@ func TestFiniteBusinessPacketPlanReconstruction(t *testing.T) {
 		t.Fatalf("finite business packet plan: %+v %v", report, err)
 	}
 	p := report.Devices[0].Batch.Plan
-	if !report.Inputs[0].Request.At.IsZero() {
+	native := p.NativeInputs()
+	if report.Inputs[0].Request.At != input.At || len(native) != 1 || native[0].Packet == nil || native[0].Packet.At != input.At {
 		t.Fatal("original input time changed")
 	}
 	var b bytes.Buffer
-	checksum, err := operations.EncodePlan(t.Context(), &b, pub.Revision, p)
+	checksum, err := plan.EncodeReconstruction(t.Context(), &b, plan.SnapshotRevisions{Baseline: pub.Revision}, p)
 	if err != nil {
 		t.Fatal(err)
 	}
 	restored, _, err := operations.RestorePlan(t.Context(), &b, checksum, store)
 	if err != nil || restored.Digest() != p.Digest() || len(restored.NativeInputs()) != 1 || restored.NativeInputs()[0].Lifetime == nil || len(restored.PacketProofs()) != 1 {
 		t.Fatal("native reconstruction lost lifetime/packet", err)
+	}
+	if restored.NativeInputs()[0].Packet == nil || restored.NativeInputs()[0].Packet.At != input.At {
+		t.Fatal("reconstruction substituted the finite proof time for the original packet time")
 	}
 }
 
@@ -128,7 +132,7 @@ func TestReconstructionStrictAndBudgetChecksBeforeSnapshotLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	var b bytes.Buffer
-	_, err = operations.EncodePlan(t.Context(), &b, req.Expected, r.Plan)
+	_, err = plan.EncodeReconstruction(t.Context(), &b, plan.SnapshotRevisions{Baseline: req.Expected}, r.Plan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,19 +182,19 @@ func TestReconstructionStrictAndBudgetChecksBeforeSnapshotLoad(t *testing.T) {
 }
 func TestBusinessReportDocumentOwnsNestedContainers(t *testing.T) {
 	scope, vrf := "s", "v"
-	r := operations.BatchReport{Topology: &inventory.Topology{Version: 1, Bindings: []inventory.Binding{{Sources: []string{"origin"}}}}, Inputs: []operations.RequestOutcome{{Request: operations.AccessRequest{Scope: &scope, VRF: &vrf, Sources: []string{"ticket"}, Native: &operations.NativeEffects{Lifetime: &plan.ScheduleIntent{Schedule: "temporary"}, Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{{Object: fm.Object{ID: "temporary"}, Recurring: []string{"opaque"}}}}}}, Outcomes: []operations.TargetOutcome{{Sources: []string{"path"}, NAT: policy.NATRelation{Steps: []policy.NATStep{{ID: "n"}}}}}}}, Issues: []operations.Issue{{Sources: []string{"issue"}}}, Devices: []operations.DevicePlan{{Batch: plan.BatchResult{Inputs: []plan.BatchInput{{Attempts: []plan.BatchAttempt{{Reason: "reject"}}}}}}}}
+	r := operations.BatchReport{Topology: &inventory.Topology{Version: 1, Bindings: []inventory.Binding{{Sources: []string{"origin"}}}}, Inputs: []operations.RequestOutcome{{Request: operations.AccessRequest{Scope: &scope, VRF: &vrf, Sources: []string{"ticket"}, Native: &operations.NativeEffects{Lifetime: &plan.ScheduleIntent{Schedule: "temporary"}, Additions: plan.NativeAdditions{Schedules: []fm.ScheduleRecord{{Object: fm.Object{ID: "temporary"}, Weekly: []fm.WeeklyPeriod{{Windows: []fm.WeeklyWindow{{Day: time.Monday, Start: time.Hour, End: 2 * time.Hour}}}}}}}}}, Outcomes: []operations.TargetOutcome{{Sources: []string{"path"}, NAT: policy.NATRelation{Steps: []policy.NATStep{{ID: "n"}}}}}}}, Issues: []operations.Issue{{Sources: []string{"issue"}}}, Devices: []operations.DevicePlan{{Batch: plan.BatchResult{Inputs: []plan.BatchInput{{Attempts: []plan.BatchAttempt{{Reason: "reject"}}}}}}}}
 	doc := r.Document()
 	doc.Topology.Bindings[0].Sources[0] = "changed"
 	*doc.Inputs[0].Request.Scope = "changed"
 	*doc.Inputs[0].Request.VRF = "changed"
 	doc.Inputs[0].Request.Sources[0] = "changed"
 	doc.Inputs[0].Request.Native.Lifetime.Schedule = "changed"
-	doc.Inputs[0].Request.Native.Additions.Schedules[0].Recurring[0] = "changed"
+	doc.Inputs[0].Request.Native.Additions.Schedules[0].Weekly[0].Windows[0].Day = time.Tuesday
 	doc.Inputs[0].Outcomes[0].Sources[0] = "changed"
 	doc.Inputs[0].Outcomes[0].NAT.Steps[0].ID = "changed"
 	doc.Issues[0].Sources[0] = "changed"
 	doc.Devices[0].Inputs[0].Attempts[0].Reason = "changed"
-	if r.Topology.Bindings[0].Sources[0] != "origin" || scope != "s" || vrf != "v" || r.Inputs[0].Request.Sources[0] != "ticket" || r.Inputs[0].Request.Native.Lifetime.Schedule != "temporary" || r.Inputs[0].Request.Native.Additions.Schedules[0].Recurring[0] != "opaque" || r.Inputs[0].Outcomes[0].Sources[0] != "path" || r.Inputs[0].Outcomes[0].NAT.Steps[0].ID != "n" || r.Issues[0].Sources[0] != "issue" || r.Devices[0].Batch.Inputs[0].Attempts[0].Reason != "reject" {
+	if r.Topology.Bindings[0].Sources[0] != "origin" || scope != "s" || vrf != "v" || r.Inputs[0].Request.Sources[0] != "ticket" || r.Inputs[0].Request.Native.Lifetime.Schedule != "temporary" || r.Inputs[0].Request.Native.Additions.Schedules[0].Weekly[0].Windows[0].Day != time.Monday || r.Inputs[0].Outcomes[0].Sources[0] != "path" || r.Inputs[0].Outcomes[0].NAT.Steps[0].ID != "n" || r.Issues[0].Sources[0] != "issue" || r.Devices[0].Batch.Inputs[0].Attempts[0].Reason != "reject" {
 		t.Fatal("report alias escaped")
 	}
 }

@@ -132,10 +132,14 @@ func TestMigrationRequestsAreIndependent(t *testing.T) {
 		before := migration
 		before.Zones, before.Chains = maps.Clone(migration.Zones), maps.Clone(migration.Chains)
 		before.Pairs, before.Rules = slices.Clone(migration.Pairs), slices.Clone(migration.Rules)
-		p, err := x.Plan(context.Background(), source, target, migration)
+		result, err := x.Plan(context.Background(), source, target, migration)
 		if err != nil {
 			t.Fatal(err)
 		}
+		if result.Plan == nil {
+			t.Fatalf("migration rejected: %+v", result.Issues)
+		}
+		p := result.Plan
 		if !reflect.DeepEqual(migration, before) {
 			t.Fatal("migration modified request inputs")
 		}

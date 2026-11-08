@@ -48,7 +48,6 @@ type BatchResult struct {
 }
 
 // BatchOptions retains the effective search and proof budgets for reconstruction.
-// It does not change the existing policy-batch approval digest format.
 type BatchOptions struct {
 	MaxCandidates int
 	Limits        policy.Limits

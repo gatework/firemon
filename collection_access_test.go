@@ -15,7 +15,7 @@ func TestGraphCountsAndScheduleWindowsPreserveImmutableDeclarationOrder(t *testi
 		Metadata:  fm.Metadata{Device: "test", Vendor: "huawei"},
 		Zones:     []fm.ZoneRecord{{Object: fm.Object{ID: "z"}}},
 		Rules:     []fm.RuleRecord{{Object: fm.Object{ID: "r"}}},
-		Schedules: []fm.ScheduleRecord{{Object: fm.Object{ID: "s"}, Windows: windows}, {Object: fm.Object{ID: "recurring"}, Recurring: []string{"unsupported recurrence"}}},
+		Schedules: []fm.ScheduleRecord{{Object: fm.Object{ID: "s"}, Windows: windows}, {Object: fm.Object{ID: "recurring"}, Weekly: []fm.WeeklyPeriod{{Windows: []fm.WeeklyWindow{{Day: time.Monday, End: time.Hour}}}}}},
 	})
 	if err != nil {
 		t.Fatal(err)

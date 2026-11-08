@@ -38,7 +38,7 @@ func (p Planner) Preserve(ctx context.Context, before, after *fm.Firewall, chang
 		}
 		return nil, err
 	}
-	result := &Plan{before: before, after: after, changes: changes, intent: preservationIntent{proof: proof}, engine: p.Engine,
+	result := &Plan{before: before, after: after, changes: changes, intent: preservationIntent{proof: proof, options: p.effectiveOptions()}, engine: p.Engine,
 		proof: Proof{BaseDigest: before.SemanticDigest(), ResultDigest: after.SemanticDigest(), OutsidePreserved: true, NATUnchanged: true}}
 	result.changes = result.Changes()
 	if len(changes) > 0 {

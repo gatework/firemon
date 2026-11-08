@@ -59,7 +59,11 @@ func xmlStatements(ctx context.Context, source config.Source, limits config.Limi
 				return fmt.Errorf("%w: PAN XML entry has no name", config.ErrSource)
 			}
 			allowed = attributes(n, "name")
-			if slices.Equal(path, []string{"vsys", "vsys1", "rulebase", "security", "rules"}) || slices.Equal(path, []string{"vsys", "vsys1", "rulebase", "nat", "rules"}) || slices.Equal(path, []string{"rulebase", "security", "rules"}) || slices.Equal(path, []string{"rulebase", "nat", "rules"}) {
+			rulePath := path
+			if len(rulePath) > 1 && rulePath[0] == "vsys" {
+				rulePath = rulePath[2:]
+			}
+			if slices.Equal(rulePath, []string{"rulebase", "security", "rules"}) || slices.Equal(rulePath, []string{"rulebase", "nat", "rules"}) {
 				allowed = attributes(n, "name", "uuid")
 			}
 			name = attribute(n, "name")
@@ -133,7 +137,7 @@ func emptyContainer(path []string) bool {
 	if len(path) > 0 && path[0] == "shared" {
 		path = path[1:]
 	}
-	if len(path) > 1 && path[0] == "vsys" && path[1] == "vsys1" {
+	if len(path) > 1 && path[0] == "vsys" {
 		path = path[2:]
 	}
 	switch strings.Join(path, "/") {

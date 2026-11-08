@@ -111,7 +111,7 @@ func (s *candidateSearch) run(ctx context.Context, adapter candidateSearchAdapte
 	if !s.attempts.available() {
 		return false, policy.ErrBudget
 	}
-	next, changes, cost, err := createCandidate(ctx, s.before, s.request, s.gap, s.visits)
+	next, changes, cost, err := s.planner.createCandidate(ctx, s.before, s.request, s.gap, s.visits)
 	if err != nil {
 		return false, err
 	}
@@ -196,7 +196,7 @@ func (p Planner) tryCandidate(
 	}
 	result := &Plan{
 		before: before, after: draft.after, changes: draft.changes, cost: draft.cost,
-		proof: proof, commands: commands, intent: accessIntent{target: request}, engine: p.Engine,
+		proof: proof, commands: commands, intent: accessIntent{target: request, options: p.effectiveOptions()}, engine: p.Engine,
 	}
 	if err := result.seal(); err != nil {
 		return nil, err

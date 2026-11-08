@@ -1,5 +1,9 @@
 # Planning intent lifecycle
 
+Historical plan. The [2026-11-07 continuation](2026-11-07-domain-migration.md)
+supersedes its compatibility and reconstruction limits with explicit intent
+kinds, approval 4, reconstruction 2 and both-snapshot migration binding.
+
 Approved scope: concentrate the five existing planning intent families in `plan`:
 access, policy batch, native batch, preservation and transfer. Preserve public
 entry points, behavior, approval digests, report/reconstruction/selection bytes.

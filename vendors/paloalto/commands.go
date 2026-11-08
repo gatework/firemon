@@ -49,9 +49,36 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 	if err != nil {
 		return nil, err
 	}
-	changes = batch.Changes()
-	if len(changes) == 0 {
+	return renderCommands(ctx, before, after, batch)
+}
+
+func (Renderer) RenderNative(ctx context.Context, before, after *fm.Firewall, changes plan.NativeChanges) ([]string, error) {
+	builder, err := render.NewNativeBuilder(ctx, "paloalto", before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	timed, err := render.ScheduleCommands(before, after, changes)
+	if err != nil {
+		return nil, err
+	}
+	builder.AppendCommands(timed...)
+	if err := nativeCommands(ctx, before, after, changes, builder); err != nil {
+		return nil, err
+	}
+	batch, err := builder.Prepare(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return renderCommands(ctx, before, after, batch)
+}
+
+func renderCommands(ctx context.Context, before, after *fm.Firewall, batch render.Batch) ([]string, error) {
+	changes := batch.Changes()
+	if len(changes) == 0 && !batch.Native() {
 		return nil, nil
+	}
+	if before.Metadata().Context != "" && before.Metadata().Context != "vsys1" {
+		return nil, ErrRender
 	}
 	commands := []string{"configure"}
 	for _, a := range after.Addresses() {
@@ -102,6 +129,9 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 		}
 		prefix := "set service " + name + " protocol " + protocol
 		commands = append(commands, prefix+" port "+portText(t.DestinationPort), prefix+" source-port "+portText(t.SourcePort))
+	}
+	if batch.Native() {
+		commands = append(commands, batch.NativeCommands()...)
 	}
 	ordered := before.Rules()
 	slices.SortStableFunc(ordered, func(a, b *fm.Rule) int {
@@ -166,7 +196,7 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 				}
 			}
 			action := map[fm.Action]string{fm.Permit: "allow", fm.Deny: "deny", fm.Drop: "drop", fm.ResetClient: "reset-client", fm.ResetServer: "reset-server", fm.ResetBoth: "reset-both"}[r.Action]
-			if action == "" || r.Disabled || r.Match.Schedule != "" || len(r.Match.Applications) > 0 || len(r.Match.Users) > 0 || len(r.Match.Unsupported) > 0 || r.Match.ZoneRelation != fm.AnyZoneRelation {
+			if action == "" || r.Disabled || r.Match.Schedule != "" && !batch.Native() || len(r.Match.Applications) > 0 || len(r.Match.Users) > 0 || len(r.Match.Unsupported) > 0 || r.Match.ZoneRelation != fm.AnyZoneRelation {
 				return nil, ErrRender
 			}
 			for _, status := range []fm.Status{r.Log, r.LogStart, r.LogEnd} {
@@ -206,6 +236,11 @@ func (Renderer) Render(ctx context.Context, before, after *fm.Firewall, changes 
 				end = "yes"
 			}
 			commands = append(commands, prefix+" application any", prefix+" action "+action, prefix+" rule-type universal", prefix+" log-start "+start, prefix+" log-end "+end)
+			if name, err := batch.ScheduleReference(after, r.Match.Schedule); err != nil {
+				return nil, err
+			} else if name != "" {
+				commands = append(commands, prefix+" schedule "+name)
+			}
 		case plan.AppendMembers:
 			if before.Rule(r.ID) == nil {
 				return nil, ErrRender

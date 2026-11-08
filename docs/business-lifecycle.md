@@ -77,28 +77,29 @@ are bounded explanations; a non-nil final Plan is the executable boundary.
 
 ## Capability and evidence boundaries
 
-- [Native NAT creation](native-nat-creation.md) lists the 20 supported creation
-  forms across six vendors. PAN retains its existing policy planning; new PAN NAT
-  creation is outside this matrix. Existing NAT and NAT-owner edits remain refused.
+- [Native NAT creation](native-nat-creation.md) lists verified creation forms,
+  including the subsequent PAN addition. Existing NAT and NAT-owner edits remain refused.
 - [Temporary policies](temporary-policies.md) support narrow absolute-window
   forms on Hillstone, Fortinet, Huawei and ScreenOS. Capture-bound clock and native
   endpoint evidence are required. Existing session termination is not modeled.
 - [Analysis reports](analysis-reports.md) cover address paths, risk, revision
   comparison, convergence and batch collection. [Native usage](native-usage.md)
   covers bounded session/counter input and offline reclamation/migration commands.
-  Usage absence is not deletion authority; no NAT/schedule migration is promised.
+  Usage absence is not deletion authority. The subsequent
+  [migration implementation](../vendors/MIGRATION.md) adds selected NAT dependencies
+  and [typed schedules](../vendors/SCHEDULES.md) with complete-plan proofs.
 - [Selected execution](batch-execution.md) covers the persistence and recovery API.
   The host supplies sessions and per-device authorization; the offline CLI has no
   credential or online execution mode.
 
-Existing single-plan APIs and legacy approval digest bytes remain available.
-Policy batches retain effective options; native approval v2 adds explicit effects
-and v3 adds finite lifetime. Reconstruction format v1 is separate. Snapshot
-semantic format remains 9. Current parser versions are Hillstone 5, Fortinet 3,
-Huawei 3, ScreenOS 3, ASA 3, SRX 2 and PAN 4 (vendor `*-go-N` identifiers).
-Old v9 snapshots keep their stored interpretation; reimport original captures
-with independently verified clock evidence to obtain newly understood schedules.
-Restoration never reparses old snapshots or retroactively upgrades evidence.
+The 2026-11-07 development cleanup replaces legacy approval encodings with version
+4 and explicit intent kinds. Reconstruction format 2 replays business inputs and
+requires both retained snapshots for migration. Snapshot semantic format 10
+persists the typed calendar model and rejects older formats. Reimport original
+captures with independently verified clock evidence into a new store; restoration
+never reparses or retroactively upgrades evidence. See the
+[implementation report](2026-11-07-domain-improvements.md) for current APIs and
+validation. The earlier approval byte fixtures are intentionally removed.
 
 Local tests use synthetic native captures, isolated Perl sources and simulated
 sessions. [Verification and measurements](business-verification.md) separate

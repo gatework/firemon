@@ -8,7 +8,7 @@ import (
 	"github.com/gatework/firemon/policy"
 )
 
-func (r *batchRun) locate(ctx context.Context, input int, a AccessRequest, topology inventory.Topology, design bool) error {
+func (r *targetBatch) locate(ctx context.Context, input int, a AccessRequest, topology inventory.Topology) error {
 	view := a.View
 	if view == "" {
 		view = inventory.Original
@@ -133,12 +133,12 @@ func (r *batchRun) locate(ctx context.Context, input int, a AccessRequest, topol
 									continue
 								}
 								if view != inventory.Original {
-									if err := r.aliases(ctx, input, sub, target, refs, design, view); err != nil {
+									if err := r.aliases(ctx, input, sub, target, refs, view); err != nil {
 										return err
 									}
 									continue
 								}
-								if err := r.target(ctx, input, sub, target, refs, design); err != nil {
+								if _, err := r.evaluate(ctx, input, targetProposal{traffic: sub, target: target, sources: refs}); err != nil {
 									return err
 								}
 							}
@@ -151,19 +151,22 @@ func (r *batchRun) locate(ctx context.Context, input int, a AccessRequest, topol
 	return nil
 }
 
-func (r *batchRun) candidates(ctx context.Context, input int, a AccessRequest, design bool) error {
+func (r *targetBatch) candidates(ctx context.Context, input int, a AccessRequest) error {
 	limit := r.designer.options.Engine.Limits.WithDefaults().MaxRegions
 	var validated flow.Traffic
 	for _, candidate := range a.WireCandidates {
 		target := candidate.Target
 		target.Packet = true
-		start := len(r.report.Inputs[input].Outcomes)
-		if err := r.targetWithProof(ctx, input, candidate.Traffic, target, a.Sources, design, &a.Traffic); err != nil {
+		entries, err := r.evaluate(ctx, input, targetProposal{
+			traffic: candidate.Traffic, target: target, sources: a.Sources,
+			expected: &targetView{view: policy.AliasView(a.View), traffic: a.Traffic},
+		})
+		if err != nil {
 			return err
 		}
-		for _, outcome := range r.report.Inputs[input].Outcomes[start:] {
+		for _, entry := range entries {
 			var err error
-			validated, err = validated.Union(aliasOutcomeTraffic(outcome, a.View), limit)
+			validated, err = validated.Union(aliasOutcomeTraffic(entry.outcome, a.View), limit)
 			if err != nil {
 				return err
 			}
@@ -185,7 +188,7 @@ func aliasOutcomeTraffic(outcome TargetOutcome, view inventory.View) flow.Traffi
 	}
 	return outcome.NAT.Translated
 }
-func (r *batchRun) aliases(ctx context.Context, input int, business flow.Traffic, target AccessTarget, sources []string, design bool, view inventory.View) error {
+func (r *targetBatch) aliases(ctx context.Context, input int, business flow.Traffic, target AccessTarget, sources []string, view inventory.View) error {
 	fw, err := r.load(ctx, input, business, string(view), target, sources)
 	if err != nil || fw == nil {
 		return err
@@ -218,7 +221,10 @@ func (r *batchRun) aliases(ctx context.Context, input int, business flow.Traffic
 		if err := r.charge(ctx); err != nil {
 			return err
 		}
-		if err := r.targetWithProof(ctx, input, candidate.Wire, target, sources, design, &candidate.Business); err != nil {
+		if _, err := r.evaluate(ctx, input, targetProposal{
+			traffic: candidate.Wire, target: target, sources: sources,
+			expected: &targetView{view: policy.AliasView(view), traffic: candidate.Business},
+		}); err != nil {
 			return err
 		}
 	}

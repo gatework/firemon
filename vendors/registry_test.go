@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/config"
+	"github.com/gatework/firemon/plan"
 	"github.com/gatework/firemon/vendors"
 	"github.com/gatework/firemon/vendors/asa"
 	"github.com/gatework/firemon/vendors/fortinet"
@@ -89,7 +89,13 @@ func TestNativeRegistryParsesSevenVendorsAndExistingAliases(t *testing.T) {
 				raw = string(b)
 			}
 			var parser config.Parser = vendors.Parser{}
-			fw, err := parser.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "synthetic", Vendor: tc.name})
+			metadata := fm.Metadata{Device: "synthetic", Vendor: tc.name}
+			source := config.Source{Text: raw, Complete: true}
+			if tc.vendor == "paloalto" {
+				metadata.Vendor, metadata.Software = tc.vendor, "10.2.7"
+				source, metadata = observedScheduleSource(raw, metadata, true)
+			}
+			fw, err := parser.Parse(context.Background(), source, metadata)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,8 +106,11 @@ func TestNativeRegistryParsesSevenVendorsAndExistingAliases(t *testing.T) {
 			if err != nil || r == nil {
 				t.Fatal("native renderer missing", err)
 			}
-			if reflect.TypeOf(r).PkgPath() != "github.com/gatework/firemon/vendors/"+tc.vendor {
-				t.Fatalf("registry selected another vendor's renderer: %T", r)
+			if _, ok := r.(plan.NativeRenderer); !ok {
+				t.Fatalf("registry omitted native creation: %T", r)
+			}
+			if _, ok := r.(plan.MigrationNATCompiler); !ok {
+				t.Fatalf("registry omitted native migration: %T", r)
 			}
 		})
 	}

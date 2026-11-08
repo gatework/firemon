@@ -20,7 +20,7 @@ func TestScheduleOwnsActivityAndExpiryEvidence(t *testing.T) {
 		{name: "start", at: start, active: true, known: true},
 		{name: "end", at: end, expired: true, known: true},
 		{name: "unknown time", active: true},
-		{name: "recurring", at: start, record: fm.ScheduleRecord{Recurring: []string{"weekly"}}, active: true},
+		{name: "unknown recurring calendar", at: start, record: fm.ScheduleRecord{Weekly: []fm.WeeklyPeriod{{Windows: []fm.WeeklyWindow{{Day: time.Monday, End: time.Hour}}}}}, active: true},
 		{name: "unsupported", at: start, record: fm.ScheduleRecord{Object: fm.Object{Unsupported: []string{"unmodeled"}}}, active: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

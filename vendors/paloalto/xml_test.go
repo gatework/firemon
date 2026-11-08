@@ -17,7 +17,7 @@ func TestNativeXMLAndSetHaveSameGraphAndRetainOriginalXMLEvidence(t *testing.T) 
 	set := "set shared address client ip-netmask 192.0.2.100/32\nset address client ip-netmask 192.0.2.10/32\nset zone outside network layer3 ethernet1/1\nset network virtual-router default interface ethernet1/1\nset network virtual-router default routing-table ip static-route default destination 0.0.0.0/0\nset network virtual-router default routing-table ip static-route default nexthop ip-address 203.0.113.1\nset network interface ethernet ethernet1/1 layer3 ip 203.0.113.9/24\nset rulebase security rules allow-web from any\nset rulebase security rules allow-web to outside\nset rulebase security rules allow-web source client\nset rulebase security rules allow-web destination any\nset rulebase security rules allow-web service service-https\nset rulebase security rules allow-web application any\nset rulebase security rules allow-web action allow\n"
 	parse := func(raw string) *fm.Firewall {
 		t.Helper()
-		fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
+		fw, err := (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -50,7 +50,7 @@ func TestNativeXMLAndSetHaveSameGraphAndRetainOriginalXMLEvidence(t *testing.T) 
 func TestUnknownXMLOnSameLineAndUnknownAttributesRemainPending(t *testing.T) {
 	for _, unknown := range []string{`<opaque><address><entry name="fake"><ip-netmask>198.51.100.1/32</ip-netmask></entry></address></opaque>`, `<address><entry name="hidden" negate="yes"><ip-netmask>198.51.100.1/32</ip-netmask></entry></address>`} {
 		raw := `<config><shared><address><entry name="safe"><ip-netmask>192.0.2.1/32</ip-netmask></entry></address>` + unknown + `</shared></config>`
-		fw, err := paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
+		fw, err := (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,8 +71,23 @@ func TestUnknownXMLOnSameLineAndUnknownAttributesRemainPending(t *testing.T) {
 
 func TestXMLRejectsWrongRootFailedResponseAndAmbiguousDeviceContainers(t *testing.T) {
 	for _, raw := range []string{`<response status="error"><result><config/></result></response>`, `<wrapper><config/></wrapper>`, `<config><devices><entry name="one"/><entry name="two"/></devices></config>`, `<config><shared><address><entry><ip-netmask>192.0.2.1</ip-netmask></entry></address></shared></config>`, `<config xmlns="urn:unknown"><shared/></config>`} {
-		if _, err := paloalto.Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"}); err == nil {
+		if _, err := (paloalto.Parser{}).Parse(context.Background(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan"}); err == nil {
 			t.Fatal("invalid native XML accepted", raw)
+		}
+	}
+}
+
+func TestSelectedVirtualSystemUsesMetadataForSetAndXML(t *testing.T) {
+	for _, raw := range []string{
+		"set vsys vsys1 address first ip-netmask 192.0.2.1/32\nset vsys vsys2 address second ip-netmask 198.51.100.1/32\n",
+		`<config><devices><entry name="localhost.localdomain"><vsys><entry name="vsys1"><address><entry name="first"><ip-netmask>192.0.2.1/32</ip-netmask></entry></address></entry><entry name="vsys2"><address><entry name="second"><ip-netmask>198.51.100.1/32</ip-netmask></entry></address></entry></vsys></entry></devices></config>`,
+	} {
+		fw, err := (paloalto.Parser{}).Parse(t.Context(), config.Source{Text: raw, Complete: true}, fm.Metadata{Device: "pan", Context: "vsys2"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !fw.Complete() || fw.Address("second") == nil || fw.Address("first") != nil || fw.Metadata().Context != "vsys2" {
+			t.Fatal("virtual system selection lost", fw.Diagnostics())
 		}
 	}
 }
