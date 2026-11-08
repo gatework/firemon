@@ -201,8 +201,8 @@ func (m MatchObjects) ServiceGroups() []*ServiceGroup     { return slices.Clone(
 func (m MatchObjects) FromZones() []*Zone                 { return slices.Clone(m.fromZones) }
 func (m MatchObjects) ToZones() []*Zone                   { return slices.Clone(m.toZones) }
 func (m MatchObjects) Schedule() *Schedule                { return m.schedule }
-func (n *StaticNAT) Match() MatchObjects                  { return n.match }
-func (n *DynamicNAT) Match() MatchObjects                 { return n.match }
+func (o *StaticNAT) Match() MatchObjects                  { return o.match }
+func (o *DynamicNAT) Match() MatchObjects                 { return o.match }
 
 func (o *Zone) ID() ID        { return o.record.ID }
 func (o *Zone) Name() string  { return o.record.Name }

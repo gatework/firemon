@@ -1,6 +1,7 @@
 package firemon
 
 import (
+	"cmp"
 	"iter"
 	"slices"
 	"strings"
@@ -93,16 +94,7 @@ func scheduleLocation(name string) (*time.Location, error) {
 // The caller owns the slice. It never joins across a midnight boundary.
 func normalizeWeekly(windows []WeeklyWindow) []WeeklyWindow {
 	slices.SortFunc(windows, func(a, b WeeklyWindow) int {
-		if a.Day != b.Day {
-			return int(a.Day - b.Day)
-		}
-		if a.Start < b.Start {
-			return -1
-		}
-		if a.Start > b.Start {
-			return 1
-		}
-		return 0
+		return cmp.Or(cmp.Compare(a.Day, b.Day), cmp.Compare(a.Start, b.Start))
 	})
 	result := windows[:0]
 	for _, w := range windows {

@@ -139,43 +139,35 @@ func (f *Firewall) bindGroups() {
 	for _, g := range f.ServiceGroups() {
 		g.services, g.groups = f.serviceRefs(g.record.ID, g.record.Members)
 	}
+	reportGroupCycles(f, f.AddressGroups(), func(g *AddressGroup) []*AddressGroup { return g.groups }, "cyclic address group")
+	reportGroupCycles(f, f.ServiceGroups(), func(g *ServiceGroup) []*ServiceGroup { return g.groups }, "cyclic service group")
+}
+
+// reportGroupCycles reports each group reached again while its own members are
+// being visited. Groups are visited in declaration order.
+func reportGroupCycles[G interface{ ID() ID }](f *Firewall, groups []G, children func(G) []G, message string) {
+	const (
+		visiting = iota + 1
+		visited
+	)
 	states := make(map[ID]uint8)
-	var visit func(*AddressGroup)
-	visit = func(g *AddressGroup) {
-		if states[g.record.ID] == 1 {
-			f.issue(g.record.ID, "group-cycle", "cyclic address group")
+	var visit func(G)
+	visit = func(g G) {
+		switch states[g.ID()] {
+		case visiting:
+			f.issue(g.ID(), "group-cycle", message)
+			return
+		case visited:
 			return
 		}
-		if states[g.record.ID] == 2 {
-			return
-		}
-		states[g.record.ID] = 1
-		for _, child := range g.groups {
+		states[g.ID()] = visiting
+		for _, child := range children(g) {
 			visit(child)
 		}
-		states[g.record.ID] = 2
+		states[g.ID()] = visited
 	}
-	for _, g := range f.AddressGroups() {
+	for _, g := range groups {
 		visit(g)
-	}
-	states = make(map[ID]uint8)
-	var serviceVisit func(*ServiceGroup)
-	serviceVisit = func(g *ServiceGroup) {
-		if states[g.record.ID] == 1 {
-			f.issue(g.record.ID, "group-cycle", "cyclic service group")
-			return
-		}
-		if states[g.record.ID] == 2 {
-			return
-		}
-		states[g.record.ID] = 1
-		for _, child := range g.groups {
-			serviceVisit(child)
-		}
-		states[g.record.ID] = 2
-	}
-	for _, g := range f.ServiceGroups() {
-		serviceVisit(g)
 	}
 }
 

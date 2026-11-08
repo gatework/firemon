@@ -30,12 +30,19 @@ func (f *Firewall) validateMatch(owner ID, m Match) {
 }
 
 func validateService(t ServiceTerm) error {
-	for i, r := range []flow.Interval{t.Protocol, t.SourcePort, t.DestinationPort, t.ICMPType, t.ICMPCode} {
-		max := uint16(65535)
-		if i == 0 || i > 2 {
-			max = 255
-		}
-		if r.Low > r.High || r.High > max {
+	const octet, port = 255, 65535
+	bounded := []struct {
+		interval flow.Interval
+		limit    uint16
+	}{
+		{t.Protocol, octet},
+		{t.SourcePort, port},
+		{t.DestinationPort, port},
+		{t.ICMPType, octet},
+		{t.ICMPCode, octet},
+	}
+	for _, b := range bounded {
+		if b.interval.Low > b.interval.High || b.interval.High > b.limit {
 			return fmt.Errorf("%w: invalid service interval", ErrGraph)
 		}
 	}
