@@ -2,16 +2,16 @@
 
 This separate module implements `operations.ReadOnlyFactory`, `device.Reader`, `deploy.Factory` and `deploy.Session` contracts for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA using published `github.com/gatework/go-net-connector v0.2.0` and `github.com/gatework/go-expect v0.4.0`. The root module remains independent of the connector. No dependency source or local `replace` directive is included.
 
-Version v0.2.0 requires Go 1.27 or newer and pins Firemon core v0.2.0 in
+Version v0.2.1 requires Go 1.27 or newer and pins Firemon core v0.2.1 in
 [go.mod](go.mod). Install it from an application without a local workspace or
 replace directive:
 
 ```sh
-go get github.com/gatework/firemon/adapter/netconnector@v0.2.0
+go get github.com/gatework/firemon/adapter/netconnector@v0.2.1
 ```
 
-This nested module uses the repository tag `adapter/netconnector/v0.2.0`;
-the root module uses `v0.2.0`. See the
+This nested module uses the repository tag `adapter/netconnector/v0.2.1`;
+the root module uses `v0.2.1`. See the
 [migration guide](../../docs/refactoring.md#connector-v020) and
 [integration verification](../../docs/integration-verification.md) for connector
 contracts and standalone/current-core evidence. Releases contain source modules,

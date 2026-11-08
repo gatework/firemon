@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.1 - 2026-11-08
+
+- Pin published Firemon core v0.2.1 for graph sealing improvements and exact NAT
+  mapping arithmetic; preserve the existing connector interfaces and native
+  lifecycle contracts.
+- Retain go-net-connector v0.2.0 and go-expect v0.4.0 without replacements.
+
 ## v0.2.0 - 2026-11-08
 
 Requires Go 1.27 or newer. This development release removes vendor aliases;
