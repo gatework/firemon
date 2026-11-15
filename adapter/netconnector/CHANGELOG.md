@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.0 - 2026-11-15
+
+- Upgrade to published net-connector v0.9.0 and go-expect v0.6.0 while retaining
+  the published Firemon core v0.2.1.
+- Replace `Profile(vendor)` with `Driver(vendor)` returning `connector.Driver`.
+  Customize terminal grammar with `connector.WithTerminal`; native driver hooks,
+  collection strategies and affirmative save validation remain attached.
+- Preserve canonical vendor selection, isolated configuration sessions, bounded
+  receipts and uncertain-result recovery without replaying writes.
+
+This is a breaking Go API change. No real-device verification is claimed.
+
 ## v0.2.1 - 2026-11-08
 
 - Pin published Firemon core v0.2.1 for graph sealing improvements and exact NAT

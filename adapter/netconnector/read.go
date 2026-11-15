@@ -11,7 +11,7 @@ import (
 
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/device"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 // Read captures running or persistent configuration independently. Complete

@@ -12,7 +12,7 @@ import (
 
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/deploy"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 var (
@@ -61,7 +61,7 @@ func New(device *connector.Device, metadata fm.Metadata, options Options) (*Sess
 		return nil, ErrInvalid
 	}
 	name := profileName(metadata.Vendor)
-	if name == "" || device.ProfileName() != metadata.Vendor && device.ProfileName() != name {
+	if name == "" || device.PlatformName() != metadata.Vendor && device.PlatformName() != name {
 		return nil, ErrInvalid
 	}
 	options, err := options.normalized()

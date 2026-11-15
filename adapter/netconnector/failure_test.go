@@ -16,7 +16,7 @@ import (
 	adapter "github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/firemon/device"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 func controlled(t *testing.T, vendor string, serve func(net.Conn)) *adapter.Session {
@@ -27,12 +27,12 @@ func controlled(t *testing.T, vendor string, serve func(net.Conn)) *adapter.Sess
 
 func controlledDevice(t *testing.T, vendor string, serve func(net.Conn)) (*adapter.Session, *connector.Device) {
 	t.Helper()
-	profile := connector.Profile{Name: vendor, LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`)}
+	profile := connector.StaticDriver{Grammar: connector.Terminal{Name: vendor, LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`)}}
 	prompt := "fw#"
 	if vendor == "paloalto" {
 		prompt = "audit@fw>"
-		profile.LoginPrompt = textPattern(`(?m)^(?:audit@fw>|fw#)\s*$`)
-		profile.CommandPrompt = profile.LoginPrompt
+		profile.Grammar.LoginPrompt = textPattern(`(?m)^(?:audit@fw>|fw#)\s*$`)
+		profile.Grammar.CommandPrompt = profile.Grammar.LoginPrompt
 	}
 	var peers sync.WaitGroup
 	d, err := connector.New(profile, connector.ConnectionConfig{Host: "synthetic", CommandTimeout: time.Second}, connector.WithTransportFactory(func(context.Context, connector.ConnectionConfig) (io.ReadWriteCloser, error) {
@@ -87,7 +87,7 @@ func TestPartialWriteRetainsUncertainReceiptAndCannotReplay(t *testing.T) {
 }
 
 func TestDeviceRejectionWithPromptIsNotAConfirmedCommand(t *testing.T) {
-	profile := connector.Profile{Name: "asa", LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`), CommandErrors: []*regexp.Regexp{regexp.MustCompile(`(?m)^ERROR:`)}}
+	profile := connector.StaticDriver{Grammar: connector.Terminal{Name: "asa", LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`), CommandErrors: []*regexp.Regexp{regexp.MustCompile(`(?m)^ERROR:`)}}}
 	s := sessionWith(t, "asa", profile, []exchange{{"bad command", "ERROR: denied"}}, adapter.Options{})
 	var receipts []deploy.Receipt
 	out, err := s.Execute(context.Background(), []string{"bad command", "next"}, func(_ context.Context, r deploy.Receipt) error { receipts = append(receipts, r); return nil })
@@ -278,7 +278,7 @@ func TestCommitPollAndOutputBudgetsStopTheConversation(t *testing.T) {
 		{"poll-count", 2, 0}, {"cumulative-output", 3, 2048},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			profile := connector.Profile{Name: "paloalto", LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`)}
+			profile := connector.StaticDriver{Grammar: connector.Terminal{Name: "paloalto", LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`)}}
 			pending := "2026/01/01 00:00:00 00:00:00 42 Commit ACT PEND 00:00:01"
 			if tc.bytes > 0 {
 				pending += "\n" + strings.Repeat("synthetic detail ", 80)

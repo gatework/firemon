@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gatework/firemon/config"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 var vdomName = regexp.MustCompile(`\A[A-Za-z0-9_.-]{1,79}\z`)

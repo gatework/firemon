@@ -15,7 +15,7 @@ import (
 	adapter "github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/firemon/device"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 func TestFactoryCreatesIndependentDevicesAndASANativeProfile(t *testing.T) {
@@ -86,7 +86,7 @@ func TestFactoryRejectsWrongIdentityBeforeConnecting(t *testing.T) {
 }
 
 func TestHillstoneUsesConnectorPersistenceValidation(t *testing.T) {
-	profile, err := adapter.Profile("hillstone")
+	profile, err := adapter.Driver("hillstone")
 	if err != nil {
 		t.Fatal(err)
 	}

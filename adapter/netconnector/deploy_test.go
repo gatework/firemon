@@ -21,7 +21,7 @@ import (
 	"github.com/gatework/firemon/policy"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors/asa"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 type observedConnection struct {

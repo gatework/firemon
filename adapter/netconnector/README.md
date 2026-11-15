@@ -1,25 +1,25 @@
 # Optional device connector adapter
 
-This separate module implements `operations.ReadOnlyFactory`, `device.Reader`, `deploy.Factory` and `deploy.Session` contracts for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA using published `github.com/gatework/go-net-connector v0.2.0` and `github.com/gatework/go-expect v0.4.0`. The root module remains independent of the connector. No dependency source or local `replace` directive is included.
+This separate module implements `operations.ReadOnlyFactory`, `device.Reader`, `deploy.Factory` and `deploy.Session` contracts for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA using published `github.com/gatework/net-connector v0.9.0` and `github.com/gatework/go-expect v0.6.0`. The root module remains independent of the connector. No dependency source or local `replace` directive is included.
 
-Version v0.2.1 requires Go 1.27 or newer and pins Firemon core v0.2.1 in
+Version v0.3.0 requires Go 1.27 or newer and pins Firemon core v0.2.1 in
 [go.mod](go.mod). Install it from an application without a local workspace or
 replace directive:
 
 ```sh
-go get github.com/gatework/firemon/adapter/netconnector@v0.2.1
+go get github.com/gatework/firemon/adapter/netconnector@v0.3.0
 ```
 
-This nested module uses the repository tag `adapter/netconnector/v0.2.1`;
+This nested module uses the repository tag `adapter/netconnector/v0.3.0`;
 the root module uses `v0.2.1`. See the
 [migration guide](../../docs/refactoring.md#connector-v020) and
 [integration verification](../../docs/integration-verification.md) for connector
 contracts and standalone/current-core evidence. Releases contain source modules,
 without precompiled CLI binaries.
 
-The host supplies identity, credentials and transport options through `Factory.Resolve`. `Factory.Open` creates a fresh device for each initial connection, independent readback and recovery. `Profile(vendor)` exposes the supported native profile; SRX, Huawei, Hillstone, Fortinet and PAN reuse the pinned connector profiles with narrowly scoped adapter adjustments. ASA and ScreenOS profiles are provided here. `New` transfers ownership of an already constructed device on success; its caller must set bounded transport limits and a validated profile.
+The host supplies identity, credentials and transport options through `Factory.Resolve`. `Factory.Open` creates a fresh device for each initial connection, independent readback and recovery. `Driver(vendor)` returns the supported `connector.Driver`; SRX, Huawei, Hillstone, Fortinet and PAN reuse the pinned connector profiles with narrowly scoped adapter adjustments. ASA and ScreenOS profiles are provided here. `New` transfers ownership of an already constructed device on success; its caller must set bounded transport limits and a validated profile.
 
-Starting with v0.2.0, `Profile` and `Metadata.Vendor` accept
+Starting with v0.2.0, `Driver` and `Metadata.Vendor` accept
 only `paloalto`, `srx`, `huawei`, `hillstone`, `fortinet`, `netscreen` and `asa`.
 The adapter maps `paloalto` to the connector's `palo_alto` profile and `srx` to
 `juniper` internally. `New` accepts a device profile with its canonical name or
@@ -94,3 +94,11 @@ controlled writes. Neither method reuses an earlier session. Capture/view types
 live in `device`, and parser contracts live in `config`. Application composition
 uses `operations.New` or the checked `NewCollector`, `NewDesigner` and
 `deploy.New` constructors; see the core [migration guide](../../docs/refactoring.md).
+
+## Connector v0.9 migration
+
+Version v0.3.0 replaces `Profile(vendor)` with `Driver(vendor)`. Pass the returned
+driver directly to `connector.New`. To customize prompts or commands, clone its
+`Terminal()` grammar and pass `connector.WithTerminal(driver, grammar)` to
+`connector.New`; this keeps the native collection and save behavior attached.
+There is no compatibility wrapper for the removed connector Profile API.
