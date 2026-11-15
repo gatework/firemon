@@ -14,7 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gatework/firemon/deploy"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
 

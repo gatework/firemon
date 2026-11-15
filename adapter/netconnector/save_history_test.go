@@ -14,13 +14,13 @@ import (
 	fm "github.com/gatework/firemon"
 	adapter "github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/deploy"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 // Native profiles determine command acceptance; the peer only supplies wire evidence.
 func saveSession(t *testing.T, vendor, prompt string, echoPrompt bool, dialogue []exchange) *adapter.Session {
 	t.Helper()
-	profile, err := adapter.Profile(vendor)
+	profile, err := adapter.Driver(vendor)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,8 +4,8 @@ go 1.27.0
 
 require (
 	github.com/gatework/firemon v0.2.1
-	github.com/gatework/go-expect v0.4.0
-	github.com/gatework/go-net-connector v0.2.0
+	github.com/gatework/go-expect v0.6.0
+	github.com/gatework/net-connector v0.9.0
 	golang.org/x/text v0.43.0
 )
 

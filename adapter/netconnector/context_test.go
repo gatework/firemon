@@ -11,7 +11,7 @@ import (
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/operations"
 	"github.com/gatework/firemon/snapshot"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 func TestNativeContextSelectionIsValidatedBeforeDialAndCapture(t *testing.T) {
@@ -20,7 +20,7 @@ func TestNativeContextSelectionIsValidatedBeforeDialAndCapture(t *testing.T) {
 			t.Run(vendor+"/"+domain, func(t *testing.T) {
 				valid := vendor == "fortinet" && domain == "blue" || vendor != "fortinet" && domain == ""
 				metadata := fm.Metadata{Device: "fw", Vendor: vendor, Context: domain}
-				profile, err := adapter.Profile(vendor)
+				profile, err := adapter.Driver(vendor)
 				if err != nil {
 					t.Fatal(err)
 				}

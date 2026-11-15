@@ -8,7 +8,7 @@ import (
 	fm "github.com/gatework/firemon"
 	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/firemon/device"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 // Target is supplied by the host's credential/inventory boundary. Credentials
@@ -69,7 +69,7 @@ func (f Factory) open(ctx context.Context, device string) (*Session, error) {
 	if target.Metadata.Device != device {
 		return nil, ErrInvalid
 	}
-	profile, err := Profile(target.Metadata.Vendor)
+	profile, err := Driver(target.Metadata.Vendor)
 	if err != nil {
 		return nil, err
 	}

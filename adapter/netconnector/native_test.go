@@ -30,7 +30,7 @@ import (
 	"github.com/gatework/firemon/vendors/netscreen"
 	"github.com/gatework/firemon/vendors/paloalto"
 	"github.com/gatework/firemon/vendors/srx"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 type nativeCase struct {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/gatework/firemon/config"
 	"github.com/gatework/firemon/deploy"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 var _ deploy.ConfigurationSession = (*Session)(nil)

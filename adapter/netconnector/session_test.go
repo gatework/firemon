@@ -16,7 +16,7 @@ import (
 	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/firemon/device"
 	expect "github.com/gatework/go-expect"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 type exchange struct{ command, response string }
@@ -40,18 +40,20 @@ func panLockCheck() []exchange {
 
 func session(t *testing.T, vendor string, dialogue []exchange) *adapter.Session {
 	t.Helper()
-	profile := connector.Profile{Name: vendor, LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`), CommandTimeout: time.Second}
+	profile := connector.StaticDriver{Grammar: connector.Terminal{Name: vendor, LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`), CommandTimeout: time.Second}}
 	return sessionWith(t, vendor, profile, dialogue, adapter.Options{PollInterval: time.Millisecond, MaxPolls: 3})
 }
 
-func sessionWith(t *testing.T, vendor string, profile connector.Profile, dialogue []exchange, options adapter.Options) *adapter.Session {
+func sessionWith(t *testing.T, vendor string, profile connector.Driver, dialogue []exchange, options adapter.Options) *adapter.Session {
 	t.Helper()
 	prompt := "fw#"
 	beginPAN := vendor == "paloalto" && len(dialogue) > 0 && dialogue[0].command == "configure"
 	if vendor == "paloalto" {
 		prompt = "audit@fw>"
-		profile.LoginPrompt = textPattern(`(?m)^audit@fw[>#]\s*$`)
-		profile.CommandPrompt = profile.LoginPrompt
+		grammar := profile.Terminal()
+		grammar.LoginPrompt = textPattern(`(?m)^audit@fw[>#]\s*$`)
+		grammar.CommandPrompt = grammar.LoginPrompt
+		profile = connector.WithTerminal(profile, grammar)
 		if beginPAN {
 			options.ExclusivePANAdmin = true
 			dialogue = append(append(panLockDialogue(), panLockCheck()...), dialogue...)
@@ -107,7 +109,7 @@ func TestReadKeepsRunningAndSavedViewsDistinct(t *testing.T) {
 		{"paloalto", "set cli pager off", "show config saved running-config.xml", `<config version="11.1"><shared/></config>`},
 	} {
 		t.Run(tc.vendor, func(t *testing.T) {
-			profile := connector.Profile{Name: tc.vendor, LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`), ConfigCommands: []string{"show current"}}
+			profile := connector.StaticDriver{Grammar: connector.Terminal{Name: tc.vendor, LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`), ConfigCommands: []string{"show current"}}}
 			s := sessionWith(t, tc.vendor, profile, []exchange{{"show current", "hostname current"}, {tc.pager, ""}, {tc.saved, tc.text}}, adapter.Options{})
 			running, err := s.Read(context.Background(), device.Running)
 			if err != nil || !running.Source.Complete || running.Source.Text != "hostname current" || running.Metadata.Device != "fw" || running.Metadata.CapturedAt.IsZero() {
@@ -143,10 +145,10 @@ func TestReadKeepsConfigurationBody(t *testing.T) {
 		{"prompt-prefix", "hostname captured\nfw# description"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			profile := connector.Profile{
+			profile := connector.StaticDriver{Grammar: connector.Terminal{
 				Name: "asa", LoginPrompt: textPattern(`(?m)^fw#\s*$`), CommandPrompt: textPattern(`(?m)^fw#\s*$`),
 				ConfigCommands: []string{"show current"},
-			}
+			}}
 			s := sessionWith(t, "asa", profile, []exchange{{"show current", tc.text}}, adapter.Options{})
 			capture, err := s.Read(t.Context(), device.Running)
 			if tc.text == "" {
@@ -220,7 +222,7 @@ func TestPANConfigLockOwnershipAndCrashCleanup(t *testing.T) {
 			if tc.release {
 				dialogue = append(dialogue, exchange{"request config-lock remove", ""}, exchange{"set cli op-command-xml-output on", ""}, exchange{"show config-locks vsys all", emptyPANLocks}, exchange{"set cli op-command-xml-output off", ""})
 			}
-			p, err := adapter.Profile("paloalto")
+			p, err := adapter.Driver("paloalto")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -239,7 +241,7 @@ func TestPANAcquisitionRejectsExistingLockAndRequiresExclusiveAdmin(t *testing.T
 			if exclusive {
 				dialogue = []exchange{{"set cli op-command-xml-output on", ""}, {"show config-locks vsys all", ownedPANLock}, {"set cli op-command-xml-output off", ""}}
 			}
-			p, err := adapter.Profile("paloalto")
+			p, err := adapter.Driver("paloalto")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -17,7 +17,7 @@ import (
 	"github.com/gatework/firemon/operations"
 	"github.com/gatework/firemon/snapshot"
 	"github.com/gatework/firemon/vendors"
-	"github.com/gatework/go-net-connector/connector"
+	"github.com/gatework/net-connector/connector"
 )
 
 type readFault struct {
