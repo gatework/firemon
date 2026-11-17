@@ -1,4 +1,4 @@
 github.com/gatework/parser v0.1.0 h1:Vs/yS3RirjI/tCzaHhpIEGhh2fmLdb9/ZWd9e7TfW44=
 github.com/gatework/parser v0.1.0/go.mod h1:OsmQl2b6ftdgzG04SUfs0SCA3bPg57BycfzJrMXyjXQ=
-github.com/gatework/set v0.1.0 h1:3UQ8R+mLAhhbgs8MblLlWN0D02XYo5fQ0ZM+65WTEtM=
-github.com/gatework/set v0.1.0/go.mod h1:r5bOr0sAHmiA35HP4NSggRvRUnfVgwDGU6Hw8mQLUTg=
+github.com/gatework/set v0.1.1 h1:Z5C4OvTwMNWv9SN8isY5uMFTPIKCm+o900PFmCmC/Yw=
+github.com/gatework/set v0.1.1/go.mod h1:1Jb0Ptbr7c4patfsohd3WuyIaK/5XCC5giAxipzYxRg=
