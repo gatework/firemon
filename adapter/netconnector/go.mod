@@ -6,7 +6,7 @@ require (
 	github.com/gatework/firemon v0.2.1
 	github.com/gatework/go-expect v0.6.0
 	github.com/gatework/net-connector v0.9.0
-	golang.org/x/text v0.43.0
+	golang.org/x/text v0.44.0
 )
 
 require (
