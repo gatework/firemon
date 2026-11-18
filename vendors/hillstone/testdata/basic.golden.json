@@ -7,6 +7,8 @@
     "intrazone_action": "deny",
     "interzone_action": "deny",
     "default_virtual_router": "trust-vr",
+    "nat_order": "separate",
+    "static_nat_first": true,
     "numeric_rule_ids": true
   },
   "time_zone": "UTC",
@@ -1275,7 +1277,7 @@
             5
           ],
           "start": 28800000000000,
-          "end": 66600000000000
+          "end": 66601000000000
         }
       ]
     }
@@ -1455,7 +1457,6 @@
   "dynamic_nats": [
     {
       "id": "1",
-      "kind": "source",
       "virtual_router": "trust-vr",
       "egress": "ethernet0/0",
       "source": [
@@ -1471,7 +1472,7 @@
       "services": [
         "Any"
       ],
-      "translated": {
+      "translated_source": {
         "mode": "interface",
         "interface": "ethernet0/0",
         "port_translation": true
@@ -1479,7 +1480,6 @@
     },
     {
       "id": "2",
-      "kind": "source",
       "virtual_router": "trust-vr",
       "egress": "ethernet0/0",
       "source": [
@@ -1498,7 +1498,7 @@
       "services": [
         "Any"
       ],
-      "translated": {
+      "translated_source": {
         "mode": "address",
         "addresses": [
           {
@@ -1514,7 +1514,6 @@
     },
     {
       "id": "1",
-      "kind": "destination",
       "virtual_router": "trust-vr",
       "source": [
         {
@@ -1532,7 +1531,7 @@
       "services": [
         "HTTP"
       ],
-      "translated": {
+      "translated_destination": {
         "mode": "address",
         "addresses": [
           {

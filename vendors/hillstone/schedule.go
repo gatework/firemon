@@ -114,7 +114,11 @@ func periodic(w *words) (firemon.Recurrence, bool) {
 	if !ok || !w.done() {
 		return firemon.Recurrence{}, false
 	}
-	r.Start, r.End = start, end
+	// StoneOS end times are inclusive to the second.
+	r.Start, r.End = start, end+time.Second
+	if end >= 24*time.Hour-time.Second {
+		r.End = 24 * time.Hour
+	}
 	return r, true
 }
 
@@ -130,6 +134,9 @@ func weekday(text string) (time.Weekday, bool) {
 func clockOffset(text string) (time.Duration, bool) {
 	if strings.Count(text, ":") == 1 {
 		text += ":00"
+	}
+	if text == "24:00:00" || text == "24:0:0" {
+		return 24 * time.Hour, true
 	}
 	t, err := time.Parse("15:4:5", text)
 	if err != nil {

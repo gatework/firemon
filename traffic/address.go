@@ -35,7 +35,7 @@ func NewAddressSet(prefixes ...netip.Prefix) AddressSet {
 	var b netipx.IPSetBuilder
 	for _, p := range prefixes {
 		if p.IsValid() {
-			b.AddPrefix(p.Masked())
+			b.AddPrefix(unmapPrefix(p).Masked())
 		}
 	}
 	return build(&b)
@@ -44,7 +44,7 @@ func NewAddressSet(prefixes ...netip.Prefix) AddressSet {
 // AddressRange returns the inclusive range from..to. It returns the empty set
 // when the endpoints are invalid, of different families, or reversed.
 func AddressRange(from, to netip.Addr) AddressSet {
-	r := netipx.IPRangeFrom(from, to)
+	r := netipx.IPRangeFrom(from.Unmap(), to.Unmap())
 	if !r.IsValid() {
 		return AddressSet{}
 	}
@@ -116,8 +116,11 @@ func (s AddressSet) Equal(o AddressSet) bool {
 	return s.ips.Equal(o.ips)
 }
 
-// Contains reports whether addr is in s.
-func (s AddressSet) Contains(addr netip.Addr) bool { return s.ips != nil && s.ips.Contains(addr) }
+// Contains reports whether addr is in s. IPv4-mapped IPv6 addresses are
+// treated as IPv4.
+func (s AddressSet) Contains(addr netip.Addr) bool {
+	return s.ips != nil && s.ips.Contains(addr.Unmap())
+}
 
 // ContainsSet reports whether every address of o is in s.
 func (s AddressSet) ContainsSet(o AddressSet) bool { return o.Subtract(s).IsEmpty() }
@@ -204,7 +207,7 @@ func addAddressText(b *netipx.IPSetBuilder, item string) error {
 		if err != nil {
 			return fmt.Errorf("%w: %q", ErrInvalidAddress, item)
 		}
-		b.AddRange(r)
+		b.AddRange(netipx.IPRangeFrom(r.From().Unmap(), r.To().Unmap()))
 		return nil
 	}
 	if strings.Contains(item, "/") {
@@ -212,7 +215,7 @@ func addAddressText(b *netipx.IPSetBuilder, item string) error {
 		if err != nil {
 			return fmt.Errorf("%w: %q", ErrInvalidAddress, item)
 		}
-		b.AddPrefix(p.Masked())
+		b.AddPrefix(unmapPrefix(p).Masked())
 		return nil
 	}
 	a, err := netip.ParseAddr(item)
@@ -234,4 +237,13 @@ func build(b *netipx.IPSetBuilder) AddressSet {
 		return AddressSet{}
 	}
 	return AddressSet{ips: ips}
+}
+
+// unmapPrefix turns an IPv4-mapped IPv6 prefix (::ffff:a.b.c.d/96+n) into
+// the IPv4 prefix a.b.c.d/n.
+func unmapPrefix(p netip.Prefix) netip.Prefix {
+	if !p.Addr().Is4In6() || p.Bits() < 96 {
+		return p
+	}
+	return netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
 }

@@ -80,14 +80,15 @@ func (c *Config) Clone() *Config {
 	out.Rules = cloneEach(c.Rules, cloneRule)
 	out.RuleGroups = slices.Clone(c.RuleGroups)
 	out.StaticNATs = cloneEach(c.StaticNATs, func(n StaticNAT) StaticNAT {
-		n.Zones = slices.Clone(n.Zones)
+		n.Zones, n.From = slices.Clone(n.Zones), slices.Clone(n.From)
 		return n
 	})
 	out.DynamicNATs = cloneEach(c.DynamicNATs, func(n DynamicNAT) DynamicNAT {
 		n.From, n.To = slices.Clone(n.From), slices.Clone(n.To)
 		n.Source, n.Destination = slices.Clone(n.Source), slices.Clone(n.Destination)
 		n.Services = slices.Clone(n.Services)
-		n.Translated.Addresses = slices.Clone(n.Translated.Addresses)
+		n.TranslatedSource.Addresses = slices.Clone(n.TranslatedSource.Addresses)
+		n.TranslatedDestination.Addresses = slices.Clone(n.TranslatedDestination.Addresses)
 		return n
 	})
 	out.Diagnostics = slices.Clone(c.Diagnostics)

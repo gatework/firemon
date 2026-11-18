@@ -88,7 +88,7 @@ func TestParse_Semantics(t *testing.T) {
 	if z, _ := fw.Zone("l2-trust"); z.Mode != firemon.ZoneModeLayer2 {
 		t.Errorf("l2 zone mode: %s", z.Mode)
 	}
-	if len(fw.NATRules(firemon.NATKindSource)) != 2 || len(fw.NATRules(firemon.NATKindDestination)) != 1 || len(fw.StaticNATs()) != 1 {
+	if len(fw.NATRulesFor(firemon.NATKindSource)) != 2 || len(fw.NATRulesFor(firemon.NATKindDestination)) != 1 || len(fw.StaticNATs()) != 1 {
 		t.Error("NAT rules missing")
 	}
 }

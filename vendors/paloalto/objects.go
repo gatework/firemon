@@ -232,7 +232,8 @@ func (s *state) windows(sch *firemon.Schedule, values []string) bool {
 		if !ok || err1 != nil || err2 != nil {
 			return false
 		}
-		sch.Windows = append(sch.Windows, firemon.TimeWindow{Start: start, End: end})
+		// PAN-OS end times are inclusive to the minute.
+		sch.Windows = append(sch.Windows, firemon.TimeWindow{Start: start, End: end.Add(time.Minute)})
 	}
 	return len(values) > 0
 }
@@ -258,7 +259,7 @@ func recurring(sch *firemon.Schedule, p *path) bool {
 		if !ok || !ok1 || !ok2 {
 			return false
 		}
-		sch.Recurrences = append(sch.Recurrences, firemon.Recurrence{Days: days, Start: start, End: end})
+		sch.Recurrences = append(sch.Recurrences, firemon.Recurrence{Days: days, Start: start, End: min(end+time.Minute, 24*time.Hour)})
 	}
 	return len(values) > 0
 }

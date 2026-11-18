@@ -73,13 +73,14 @@ type Translation struct {
 	PortTranslation bool `json:"port_translation,omitempty"`
 }
 
-// DynamicNAT is an ordered source or destination NAT rule (Hillstone
-// snatrule and dnatrule, PAN-OS NAT rulebase). Empty lists mean "any".
+// DynamicNAT is an ordered NAT rule (Hillstone snatrule and dnatrule,
+// PAN-OS NAT rulebase). It may translate the source, the destination or
+// both; a rule whose translations are TranslationModeNone exempts traffic
+// from later NAT rules. Empty lists mean "any".
 type DynamicNAT struct {
 	ID            string       `json:"id"`
 	Name          string       `json:"name,omitempty"`
 	Description   string       `json:"description,omitempty"`
-	Kind          NATKind      `json:"kind"`
 	VirtualRouter string       `json:"virtual_router,omitempty"`
 	From          []string     `json:"from,omitempty"`
 	To            []string     `json:"to,omitempty"`
@@ -87,20 +88,35 @@ type DynamicNAT struct {
 	Source        []AddressRef `json:"source,omitempty"`
 	Destination   []AddressRef `json:"destination,omitempty"`
 	Services      []string     `json:"services,omitempty"`
-	Translated    Translation  `json:"translated"`
-	Disabled      bool         `json:"disabled,omitempty"`
+	// TranslatedSource and TranslatedDestination describe the rewritten
+	// sides; TranslationModeUnset leaves that side to other rules.
+	TranslatedSource      Translation `json:"translated_source,omitzero"`
+	TranslatedDestination Translation `json:"translated_destination,omitzero"`
+	Disabled              bool        `json:"disabled,omitempty"`
+	// Precedence orders the rule among all NAT entries, static mappings
+	// included, on vendors with one NAT rulebase (Semantics.NATOrder).
+	Precedence int `json:"precedence,omitempty"`
 }
 
 // StaticNAT is a one-to-one bidirectional mapping between real (internal)
 // and mapped (public) addresses (Hillstone bnatrule, PAN-OS static-ip
 // bi-directional). Both sides must hold the same number of addresses.
+// Outbound traffic from Real gets the Mapped source; inbound traffic to
+// Mapped gets the Real destination.
 type StaticNAT struct {
 	ID            string     `json:"id"`
 	Name          string     `json:"name,omitempty"`
 	VirtualRouter string     `json:"virtual_router,omitempty"`
 	Real          AddressRef `json:"real"`
 	Mapped        AddressRef `json:"mapped"`
-	// Zones restricts where the mapped address is visible; empty means any.
-	Zones    []string `json:"zones,omitempty"`
-	Disabled bool     `json:"disabled,omitempty"`
+	// From restricts the zones outbound traffic comes from; empty means any.
+	From []string `json:"from,omitempty"`
+	// Zones restricts where the mapped address is visible: the egress zone
+	// of outbound traffic and the ingress zone of inbound traffic.
+	Zones      []string `json:"zones,omitempty"`
+	Disabled   bool     `json:"disabled,omitempty"`
+	Precedence int      `json:"precedence,omitempty"`
+	// InboundOnly marks the reverse half of a rule whose outbound half is a
+	// DynamicNAT (PAN-OS bi-directional static-ip).
+	InboundOnly bool `json:"inbound_only,omitempty"`
 }

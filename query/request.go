@@ -38,7 +38,12 @@ type Options struct {
 	Now func() time.Time
 	// MaxSpaces bounds the number of disjoint spaces tracked per path.
 	MaxSpaces int
+	// MaxPaths bounds the number of paths one query evaluates.
+	MaxPaths int
 }
 
-// DefaultMaxSpaces is the default evaluation budget per path.
-const DefaultMaxSpaces = 20000
+// Default evaluation budgets.
+const (
+	DefaultMaxSpaces = 20000
+	DefaultMaxPaths  = 4096
+)

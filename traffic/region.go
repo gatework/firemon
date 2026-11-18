@@ -39,6 +39,16 @@ func (r Region) Add(s Space) Region {
 	return Region{spaces: out}
 }
 
+// AppendDisjoint returns r plus s without checking overlap. The caller
+// guarantees that s is disjoint from every space of r; evaluation uses it
+// for pieces split from one partition, where Add's subtraction is wasted.
+func (r Region) AppendDisjoint(s Space) Region {
+	if s.IsEmpty() {
+		return r
+	}
+	return Region{spaces: append(slices.Clip(r.spaces), s)}
+}
+
 // Union returns the packets in r or o.
 func (r Region) Union(o Region) Region {
 	for _, s := range o.spaces {

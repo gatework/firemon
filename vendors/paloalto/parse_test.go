@@ -82,7 +82,7 @@ func TestParse_Semantics(t *testing.T) {
 	if i, _ := fw.Interface("ethernet1/1"); len(i.Addresses) != 1 || i.Zone != "untrust" || i.VirtualRouter != "default" {
 		t.Errorf("interface bound by object name: %+v", i)
 	}
-	if len(fw.StaticNATs()) != 1 || len(fw.NATRules(firemon.NATKindDestination)) != 1 || len(fw.NATRules(firemon.NATKindSource)) != 1 {
+	if len(fw.StaticNATs()) != 1 || len(fw.NATRulesFor(firemon.NATKindDestination)) != 1 || len(fw.NATRulesFor(firemon.NATKindSource)) != 2 || len(fw.NATRules()) != 3 {
 		t.Error("NAT rules missing")
 	}
 	if len(cfg.Diagnostics) != 1 {

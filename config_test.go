@@ -13,7 +13,7 @@ import (
 func TestConfig_JSONRoundTrip(t *testing.T) {
 	t.Parallel()
 	cfg := sampleConfig()
-	cfg.DynamicNATs = []firemon.DynamicNAT{{ID: "1", Kind: firemon.NATKindSource, Translated: firemon.Translation{Mode: firemon.TranslationModeInterface, Interface: "eth0/0"}}}
+	cfg.DynamicNATs = []firemon.DynamicNAT{{ID: "1", TranslatedSource: firemon.Translation{Mode: firemon.TranslationModeInterface, Interface: "eth0/0"}}}
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)

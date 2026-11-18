@@ -97,42 +97,71 @@ func (s *state) vrouter(b block, head *words) {
 	}
 }
 
-// route parses: ip route PREFIX [NEXTHOP] ["INTERFACE"] [NEXTHOP]
-// [distance N] [weight N] [description "TEXT"]. The interface is quoted.
+// route parses: ip route PREFIX|ADDR MASK [NEXTHOP] ["INTERFACE"|INTERFACE]
+// [vrouter "VR"] [distance N] [weight N] [description "TEXT"].
 func (s *state) route(vr string, w *words) bool {
-	dst, ok := parsePrefix(w.next(), "")
+	dstText := w.next()
+	mask := ""
+	if !strings.Contains(dstText, "/") {
+		if _, ok := maskBits(w.peek()); ok {
+			mask = w.next()
+		}
+	}
+	dst, ok := parsePrefix(dstText, mask)
 	if !ok {
 		return false
 	}
 	r := firemon.Route{VirtualRouter: vr, Destination: dst, Distance: 1}
 	for !w.done() {
-		t := w.toks[w.pos]
-		w.next()
-		switch {
-		case t.quoted:
-			r.Interface = t.text
-		case t.text == "description":
-			r.Description = w.next()
-		case t.text == "distance" || t.text == "weight":
-			n, err := strconv.ParseUint(w.next(), 10, 32)
-			if err != nil {
-				return false
-			}
-			if t.text == "distance" {
-				r.Distance = uint32(n)
-			} else {
-				r.Metric = uint32(n)
-			}
-		default:
-			hop, err := netip.ParseAddr(t.text)
-			if err != nil {
-				return false
-			}
-			r.NextHop = hop
+		if !routeClause(&r, w) {
+			return false
 		}
 	}
 	s.cfg.Routes = append(s.cfg.Routes, r)
 	return true
+}
+
+func routeClause(r *firemon.Route, w *words) bool {
+	t := w.toks[w.pos]
+	w.next()
+	switch {
+	case t.quoted:
+		r.Interface = t.text
+	case t.text == "description":
+		r.Description = w.next()
+	case t.text == "vrouter":
+		r.NextVirtualRouter = w.next()
+	case t.text == "distance" || t.text == "weight":
+		n, err := strconv.ParseUint(w.next(), 10, 32)
+		if err != nil {
+			return false
+		}
+		if t.text == "distance" {
+			r.Distance = uint32(n)
+		} else {
+			r.Metric = uint32(n)
+		}
+	default:
+		if hop, err := netip.ParseAddr(t.text); err == nil {
+			r.NextHop = hop
+			return true
+		}
+		if !looksLikeInterface(t.text) {
+			return false
+		}
+		r.Interface = t.text
+	}
+	return true
+}
+
+// looksLikeInterface accepts StoneOS interface names such as ethernet0/1,
+// xethernet0/24.401, tunnel3, aggregate1 and null0.
+func looksLikeInterface(name string) bool {
+	if name == "" || strings.ContainsAny(name, " \"") {
+		return false
+	}
+	last := name[len(name)-1]
+	return last >= '0' && last <= '9'
 }
 
 // dynamicNAT parses:
@@ -145,23 +174,26 @@ func (s *state) route(vr string, w *words) bool {
 //
 // OPERAND is address-book "X", ip PREFIX or range A B.
 func (s *state) dynamicNAT(vr, kw string, w *words) bool {
-	n := firemon.DynamicNAT{VirtualRouter: vr, Kind: firemon.NATKindSource}
-	if kw == "dnatrule" {
-		n.Kind = firemon.NATKindDestination
-	}
+	n := firemon.DynamicNAT{VirtualRouter: vr}
+	var t firemon.Translation
 	for !w.done() {
-		if !s.natClause(&n, w) {
+		if !s.natClause(&n, &t, w) {
 			return false
 		}
 	}
-	if n.ID == "" || n.Translated.Mode == firemon.TranslationModeUnset {
+	if n.ID == "" || t.Mode == firemon.TranslationModeUnset {
 		return false
+	}
+	if kw == "dnatrule" {
+		n.TranslatedDestination = t
+	} else {
+		n.TranslatedSource = t
 	}
 	s.cfg.DynamicNATs = append(s.cfg.DynamicNATs, n)
 	return true
 }
 
-func (s *state) natClause(n *firemon.DynamicNAT, w *words) bool {
+func (s *state) natClause(n *firemon.DynamicNAT, t *firemon.Translation, w *words) bool {
 	switch kw := w.next(); kw {
 	case "id":
 		n.ID = w.next()
@@ -180,13 +212,13 @@ func (s *state) natClause(n *firemon.DynamicNAT, w *words) bool {
 	case "eif":
 		n.Egress = w.next()
 	case "trans-to":
-		return translation(n, w)
+		return translation(n, t, w)
 	case "port":
 		p, ok := portNumber(w.next())
-		n.Translated.Port = p
+		t.Port = p
 		return ok
 	case "mode":
-		n.Translated.PortTranslation = w.next() == "dynamicport"
+		t.PortTranslation = w.next() == "dynamicport"
 	case "disable":
 		n.Disabled = true
 	case "sticky", "log", "load-balance", "track-ping", "track-tcp", "description":
@@ -199,17 +231,18 @@ func (s *state) natClause(n *firemon.DynamicNAT, w *words) bool {
 	return true
 }
 
-func translation(n *firemon.DynamicNAT, w *words) bool {
+func translation(n *firemon.DynamicNAT, t *firemon.Translation, w *words) bool {
+	port, pat := t.Port, t.PortTranslation
 	if w.peek() == "eif-ip" {
 		w.next()
-		n.Translated = firemon.Translation{Mode: firemon.TranslationModeInterface, Interface: n.Egress}
+		*t = firemon.Translation{Mode: firemon.TranslationModeInterface, Interface: n.Egress, Port: port, PortTranslation: pat}
 		return true
 	}
 	ref, ok := natOperand(w)
 	if !ok {
 		return false
 	}
-	n.Translated = firemon.Translation{Mode: firemon.TranslationModeAddress, Addresses: []firemon.AddressRef{ref}}
+	*t = firemon.Translation{Mode: firemon.TranslationModeAddress, Addresses: []firemon.AddressRef{ref}, Port: port, PortTranslation: pat}
 	return true
 }
 

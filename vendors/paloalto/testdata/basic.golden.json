@@ -5,7 +5,8 @@
     "policy_destination": "original",
     "intrazone_action": "deny",
     "interzone_action": "deny",
-    "default_virtual_router": "default"
+    "default_virtual_router": "default",
+    "nat_order": "single"
   },
   "time_zone": "UTC",
   "virtual_routers": [
@@ -315,7 +316,7 @@
       "windows": [
         {
           "start": "2026-11-01T00:00:00Z",
-          "end": "2026-12-01T00:00:00Z"
+          "end": "2026-12-01T00:01:00Z"
         }
       ]
     },
@@ -327,7 +328,7 @@
             1
           ],
           "start": 28800000000000,
-          "end": 64800000000000
+          "end": 64860000000000
         }
       ]
     }
@@ -452,14 +453,15 @@
       },
       "zones": [
         "untrust"
-      ]
+      ],
+      "precedence": 3,
+      "inbound_only": true
     }
   ],
   "dynamic_nats": [
     {
       "id": "dnat-web",
       "name": "dnat-web",
-      "kind": "destination",
       "from": [
         "untrust"
       ],
@@ -474,7 +476,7 @@
       "services": [
         "service-http"
       ],
-      "translated": {
+      "translated_destination": {
         "mode": "address",
         "addresses": [
           {
@@ -482,12 +484,12 @@
           }
         ],
         "port": 8080
-      }
+      },
+      "precedence": 1
     },
     {
       "id": "snat-out",
       "name": "snat-out",
-      "kind": "source",
       "from": [
         "trust",
         "dmz"
@@ -496,11 +498,39 @@
         "untrust"
       ],
       "egress": "ethernet1/1",
-      "translated": {
+      "translated_source": {
         "mode": "interface",
         "interface": "ethernet1/1",
         "port_translation": true
-      }
+      },
+      "precedence": 2
+    },
+    {
+      "id": "static-web",
+      "name": "static-web",
+      "from": [
+        "dmz"
+      ],
+      "to": [
+        "untrust"
+      ],
+      "source": [
+        {
+          "name": "web-02"
+        }
+      ],
+      "translated_source": {
+        "mode": "address",
+        "addresses": [
+          {
+            "entry": {
+              "kind": "prefix",
+              "prefix": "198.51.100.11/32"
+            }
+          }
+        ]
+      },
+      "precedence": 3
     }
   ],
   "diagnostics": [

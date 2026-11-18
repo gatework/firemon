@@ -101,6 +101,8 @@ type Decision struct {
 type NATHit struct {
 	Rule   *firemon.NATRule       // nil for static NAT
 	Static *firemon.StaticMapping // nil for dynamic NAT
+	// Side is the rewritten side: source or destination.
+	Side firemon.NATKind
 	// Translated is the rewritten address set.
 	Translated traffic.AddressSet
 }
@@ -124,8 +126,12 @@ type Path struct {
 	// DestinationNAT and SourceNAT are the translations applied, if any.
 	DestinationNAT *NATHit
 	SourceNAT      []NATHit
-	Decisions      []Decision
-	Verdict        Verdict
+	// NATUncertain names NAT rules that may apply to this path but cannot
+	// be decided (unknown zones or unresolvable objects); the path's
+	// decisions are then unknown.
+	NATUncertain []string
+	Decisions    []Decision
+	Verdict      Verdict
 	// Incomplete reports that the evaluation budget was exhausted.
 	Incomplete bool
 }
@@ -148,6 +154,9 @@ type Result struct {
 	// Unrouted is the destination part no route forwards.
 	Unrouted traffic.AddressSet
 	Verdict  Verdict
+	// Incomplete reports that the path or evaluation budget was exhausted;
+	// the verdict then covers only the evaluated part.
+	Incomplete bool
 }
 
 // verdictOf combines outcomes into a verdict.

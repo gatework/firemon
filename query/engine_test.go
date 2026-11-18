@@ -211,9 +211,9 @@ func TestEngine_ShadowedPieces(t *testing.T) {
 func TestEngine_DestinationNAT(t *testing.T) {
 	t.Parallel()
 	dnat := firemon.DynamicNAT{
-		ID: "1", Kind: firemon.NATKindDestination,
+		ID:          "1",
 		Destination: []firemon.AddressRef{inline("198.51.100.80/32")}, Services: []string{"http"},
-		Translated: firemon.Translation{Mode: firemon.TranslationModeAddress, Addresses: []firemon.AddressRef{inline("172.16.0.10/32")}, Port: 8080},
+		TranslatedDestination: firemon.Translation{Mode: firemon.TranslationModeAddress, Addresses: []firemon.AddressRef{inline("172.16.0.10/32")}, Port: 8080},
 	}
 	tests := []struct {
 		name  string

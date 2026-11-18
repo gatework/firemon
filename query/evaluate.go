@@ -57,6 +57,12 @@ func (e *Engine) evaluate(p *Path, at time.Time) {
 		}
 	}
 	ev.finish(e.defaultOutcome(p))
+	if len(p.NATUncertain) > 0 {
+		// Translation may differ from the evaluated packets: nothing is certain.
+		for i := range p.Decisions {
+			p.Decisions[i].Outcome = OutcomeUnknown
+		}
+	}
 	outcomes := map[Outcome]bool{}
 	for _, d := range p.Decisions {
 		outcomes[d.Outcome] = true
@@ -129,7 +135,7 @@ func (ev *evaluator) record(r *firemon.Rule, final Outcome, possible []*firemon.
 	for i := range ev.decisions {
 		d := &ev.decisions[i]
 		if d.Rule == r && d.Outcome == o && d.Final == final && slices.Equal(d.Possible, possible) {
-			d.Space = d.Space.Add(s)
+			d.Space = d.Space.AppendDisjoint(s) // pieces of one partition never overlap
 			return
 		}
 	}
@@ -170,8 +176,14 @@ func (e *Engine) defaultOutcome(p *Path) Outcome {
 
 func zoneApplicability(r *firemon.Rule, from, to string) applicability {
 	spec := r.Spec()
-	fromOK, fromMaybe := zoneFits(spec.From, from)
-	toOK, toMaybe := zoneFits(spec.To, to)
+	return zoneApplies(spec.From, spec.To, from, to)
+}
+
+// zoneApplies reports whether zone lists certainly cover a zone pair, might
+// cover it because a zone is unknown, or do not.
+func zoneApplies(fromZones, toZones []string, from, to string) applicability {
+	fromOK, fromMaybe := zoneFits(fromZones, from)
+	toOK, toMaybe := zoneFits(toZones, to)
 	switch {
 	case fromOK && toOK:
 		return appliesYes

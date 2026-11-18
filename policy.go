@@ -102,30 +102,51 @@ func (r *Rule) ExpiredAt(t time.Time) bool {
 
 // NATRule is a compiled dynamic NAT rule.
 type NATRule struct {
-	position   int
-	spec       DynamicNAT
-	match      traffic.Space
-	translated traffic.AddressSet
-	issues     []string
+	position int
+	spec     DynamicNAT
+	match    traffic.Space
+	bound    traffic.Space
+	src, dst traffic.AddressSet // translated addresses per side
+	issues   []string
 }
 
-// Position returns the zero-based evaluation order among rules of its kind.
+// Position returns the zero-based position in the NAT rule list.
 func (n *NATRule) Position() int { return n.position }
 
 // Spec returns the declarative rule. Its slices are shared and read-only.
 func (n *NATRule) Spec() DynamicNAT { return n.spec }
 
-// Kind returns whether the rule rewrites the source or the destination.
-func (n *NATRule) Kind() NATKind { return n.spec.Kind }
-
 // Match returns the original packets the rule applies to.
 func (n *NATRule) Match() traffic.Space { return n.match }
 
-// Translated returns the addresses the rewritten side is translated to. It
-// is empty for TranslationModeNone and for interface-address translation
-// without a named interface, where the egress interface of each packet
-// supplies the address.
-func (n *NATRule) Translated() traffic.AddressSet { return n.translated }
+// Bound returns a space certainly containing every packet the rule can
+// match, widening unresolvable dimensions to any.
+func (n *NATRule) Bound() traffic.Space { return n.bound }
+
+// Translates reports whether the rule rewrites the given side; an
+// exemption (TranslationModeNone) counts as a decision on that side.
+func (n *NATRule) Translates(side NATKind) bool {
+	return n.translation(side).Mode != TranslationModeUnset
+}
+
+// Exempts reports whether the rule matches without translating anything.
+func (n *NATRule) Exempts() bool {
+	src, dst := n.spec.TranslatedSource.Mode, n.spec.TranslatedDestination.Mode
+	return (src == TranslationModeNone || src == TranslationModeUnset) && (dst == TranslationModeNone || dst == TranslationModeUnset)
+}
+
+// Translation returns the declarative translation of one side.
+func (n *NATRule) Translation(side NATKind) Translation { return n.translation(side) }
+
+// Translated returns the addresses one side is translated to. It is empty
+// for TranslationModeNone, and for interface-address translation without a
+// named interface, where the egress interface supplies the address.
+func (n *NATRule) Translated(side NATKind) traffic.AddressSet {
+	if side == NATKindSource {
+		return n.src
+	}
+	return n.dst
+}
 
 // Issues returns why the match or translation is not exact.
 func (n *NATRule) Issues() []string { return slices.Clone(n.issues) }
@@ -133,10 +154,28 @@ func (n *NATRule) Issues() []string { return slices.Clone(n.issues) }
 // Decidable reports whether match and translation are exact.
 func (n *NATRule) Decidable() bool { return len(n.issues) == 0 }
 
+// InVirtualRouter reports whether the rule applies in routing context vr.
+func (n *NATRule) InVirtualRouter(vr string) bool {
+	return n.spec.VirtualRouter == "" || vr == "" || n.spec.VirtualRouter == vr
+}
+
+// AppliesFrom reports whether the rule is enabled for traffic entering
+// from zone from.
+func (n *NATRule) AppliesFrom(from string) bool {
+	return !n.spec.Disabled && zoneMatches(n.spec.From, from)
+}
+
 // Applies reports whether the rule is written for traffic from zone from to
 // zone to.
 func (n *NATRule) Applies(from, to string) bool {
-	return !n.spec.Disabled && zoneMatches(n.spec.From, from) && zoneMatches(n.spec.To, to)
+	return n.AppliesFrom(from) && zoneMatches(n.spec.To, to)
+}
+
+func (n *NATRule) translation(side NATKind) Translation {
+	if side == NATKindSource {
+		return n.spec.TranslatedSource
+	}
+	return n.spec.TranslatedDestination
 }
 
 // StaticMapping is a compiled one-to-one static NAT.
@@ -164,6 +203,23 @@ func (m *StaticMapping) Decidable() bool { return len(m.issues) == 0 }
 
 // Enabled reports whether the mapping is in effect.
 func (m *StaticMapping) Enabled() bool { return !m.spec.Disabled && len(m.issues) == 0 }
+
+// InVirtualRouter reports whether the mapping applies in routing context vr.
+func (m *StaticMapping) InVirtualRouter(vr string) bool {
+	return m.spec.VirtualRouter == "" || vr == "" || m.spec.VirtualRouter == vr
+}
+
+// AppliesInbound reports whether traffic entering from zone from to the
+// mapped addresses is translated.
+func (m *StaticMapping) AppliesInbound(from string) bool {
+	return m.Enabled() && zoneMatches(m.spec.Zones, from)
+}
+
+// AppliesOutbound reports whether traffic from the real addresses entering
+// from zone from and leaving to zone to is translated.
+func (m *StaticMapping) AppliesOutbound(from, to string) bool {
+	return m.Enabled() && zoneMatches(m.spec.From, from) && zoneMatches(m.spec.Zones, to)
+}
 
 // ToMapped translates the real addresses in s to their mapped counterparts.
 // Addresses of s outside Real are dropped.

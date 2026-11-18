@@ -12,10 +12,11 @@ import (
 // Engine evaluates requests against one firewall. It is immutable and safe
 // for concurrent use.
 type Engine struct {
-	fw    *firemon.Firewall
-	rules []*firemon.Rule
-	now   func() time.Time
-	max   int
+	fw       *firemon.Firewall
+	rules    []*firemon.Rule
+	now      func() time.Time
+	max      int
+	maxPaths int
 }
 
 // New returns an engine for fw.
@@ -24,7 +25,10 @@ func New(fw *firemon.Firewall, opts Options) *Engine {
 	if now == nil {
 		now = time.Now
 	}
-	return &Engine{fw: fw, rules: fw.Rules(), now: now, max: cmp.Or(opts.MaxSpaces, DefaultMaxSpaces)}
+	return &Engine{
+		fw: fw, rules: fw.Rules(), now: now,
+		max: cmp.Or(opts.MaxSpaces, DefaultMaxSpaces), maxPaths: cmp.Or(opts.MaxPaths, DefaultMaxPaths),
+	}
 }
 
 // Firewall returns the evaluated firewall.
@@ -47,10 +51,14 @@ func (e *Engine) Query(req Request) (*Result, error) {
 		return nil, fmt.Errorf("query: unknown virtual router %q", vr)
 	}
 	res := &Result{Request: req}
-	res.Paths, res.Unrouted = e.discover(req, table)
+	res.Paths, res.Unrouted, res.Incomplete = e.discover(req, table)
 	outcomes := map[Outcome]bool{}
+	if res.Incomplete {
+		outcomes[OutcomeUnknown] = true
+	}
 	for i := range res.Paths {
 		e.evaluate(&res.Paths[i], at)
+		res.Incomplete = res.Incomplete || res.Paths[i].Incomplete
 		for _, d := range res.Paths[i].Decisions {
 			outcomes[d.Outcome] = true
 		}

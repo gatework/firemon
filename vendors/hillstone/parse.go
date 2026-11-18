@@ -97,6 +97,8 @@ func newState(content *parser.Content, loc *time.Location) *state {
 				InterzoneAction:      firemon.ActionDeny,
 				DefaultVirtualRouter: DefaultVirtualRouter,
 				NumericRuleIDs:       true,
+				NATOrder:             firemon.NATOrderSeparate,
+				StaticNATFirst:       true,
 			},
 		},
 		cursor:    content.Cursor(),

@@ -100,6 +100,7 @@ func newState(loc *time.Location) *state {
 				IntrazoneAction:      firemon.ActionPermit,
 				InterzoneAction:      firemon.ActionDeny,
 				DefaultVirtualRouter: DefaultVirtualRouter,
+				NATOrder:             firemon.NATOrderSingle,
 			},
 		},
 		loc:       loc,

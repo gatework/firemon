@@ -103,9 +103,9 @@ func viewPath(p query.Path) pathView {
 func natLabel(h query.NATHit) string {
 	switch {
 	case h.Rule != nil:
-		return h.Rule.Spec().Kind.String() + " nat " + h.Rule.Spec().ID + " -> " + h.Translated.String()
+		return h.Side.String() + " nat " + h.Rule.Spec().ID + " -> " + h.Translated.String()
 	case h.Static != nil:
-		return "static nat " + h.Static.Spec().ID + " -> " + h.Translated.String()
+		return h.Side.String() + " static nat " + h.Static.Spec().ID + " -> " + h.Translated.String()
 	default:
 		return h.Translated.String()
 	}

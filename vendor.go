@@ -85,6 +85,43 @@ func (s AddressStage) MarshalText() ([]byte, error) {
 	return []byte(s.String()), nil
 }
 
+// NATOrder tells how NAT rules are ordered and applied.
+type NATOrder uint8
+
+// NAT orders.
+const (
+	NATOrderUnset NATOrder = iota
+	// NATOrderSeparate applies destination NAT before routing and source NAT
+	// after the policy, each from its own ordered list (Hillstone).
+	NATOrderSeparate
+	// NATOrderSingle applies the first matching rule of one list, which
+	// decides both translations, matching the original packet and the
+	// pre-NAT zones (PAN-OS).
+	NATOrderSingle
+)
+
+// String returns the order name.
+func (o NATOrder) String() string {
+	switch o {
+	case NATOrderUnset:
+		return "unset"
+	case NATOrderSeparate:
+		return "separate"
+	case NATOrderSingle:
+		return "single"
+	default:
+		return "invalid"
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (o NATOrder) MarshalText() ([]byte, error) { return []byte(o.String()), nil }
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (o *NATOrder) UnmarshalText(text []byte) error {
+	return unmarshalEnum(o, text, "NAT order", NATOrderUnset, NATOrderSeparate, NATOrderSingle)
+}
+
 // Semantics records the vendor behaviour policy evaluation depends on. The
 // vendor parser fills it in; the query engine never switches on Vendor.
 type Semantics struct {
@@ -101,6 +138,11 @@ type Semantics struct {
 	// DefaultVirtualRouter is the routing context used when a request does
 	// not name one.
 	DefaultVirtualRouter string `json:"default_virtual_router,omitempty"`
+	// NATOrder selects how NAT rules apply; unset behaves as separate.
+	NATOrder NATOrder `json:"nat_order,omitempty"`
+	// StaticNATFirst applies static mappings before dynamic destination NAT
+	// on separate-order vendors.
+	StaticNATFirst bool `json:"static_nat_first,omitempty"`
 	// NumericRuleIDs reports that rule IDs are device-assigned numbers
 	// (Hillstone) rather than rule names (PAN-OS).
 	NumericRuleIDs bool `json:"numeric_rule_ids,omitempty"`

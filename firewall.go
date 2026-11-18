@@ -103,11 +103,14 @@ func (fw *Firewall) Rule(id string) (*Rule, bool) {
 // RuleGroups returns the rule groups in declaration order.
 func (fw *Firewall) RuleGroups() []RuleGroup { return slices.Clone(fw.cfg.RuleGroups) }
 
-// NATRules returns the dynamic NAT rules of one kind in evaluation order.
-func (fw *Firewall) NATRules(kind NATKind) []*NATRule {
+// NATRules returns the dynamic NAT rules in declaration order.
+func (fw *Firewall) NATRules() []*NATRule { return slices.Clone(fw.nat) }
+
+// NATRulesFor returns the rules that decide one side, in order.
+func (fw *Firewall) NATRulesFor(side NATKind) []*NATRule {
 	var out []*NATRule
 	for _, n := range fw.nat {
-		if n.spec.Kind == kind {
+		if n.Translates(side) {
 			out = append(out, n)
 		}
 	}
@@ -280,17 +283,26 @@ func (fw *Firewall) ruleSemanticIssues(spec SecurityRule) []string {
 }
 
 func (fw *Firewall) compileNAT(res *resolver) {
-	positions := map[NATKind]int{}
-	for _, spec := range fw.cfg.DynamicNATs {
-		n := &NATRule{position: positions[spec.Kind], spec: spec}
-		positions[spec.Kind]++
+	for i, spec := range fw.cfg.DynamicNATs {
+		n := &NATRule{position: i, spec: spec}
 		src, dst := res.operands(spec.Source), res.operands(spec.Destination)
 		svc := res.serviceList(spec.Services)
 		n.match = traffic.Space{Src: src.set, Dst: dst.set, Service: svc.set}
+		n.bound = n.match
+		if !src.exact() {
+			n.bound.Src = traffic.AnyAddress()
+		}
+		if !dst.exact() {
+			n.bound.Dst = traffic.AnyAddress()
+		}
+		if !svc.exact() {
+			n.bound.Service = traffic.AnyService()
+		}
 		n.issues = slices.Concat(src.problems, dst.problems, svc.problems)
-		n.translated, n.issues = fw.translation(res, spec.Translated, n.issues)
-		if spec.Kind != NATKindSource && spec.Kind != NATKindDestination {
-			n.issues = append(n.issues, "unknown NAT kind")
+		n.src, n.issues = fw.translation(res, spec.TranslatedSource, n.issues)
+		n.dst, n.issues = fw.translation(res, spec.TranslatedDestination, n.issues)
+		if spec.TranslatedSource.Mode == TranslationModeUnset && spec.TranslatedDestination.Mode == TranslationModeUnset {
+			n.issues = append(n.issues, "no translation")
 		}
 		for _, reason := range n.issues {
 			fw.issue("nat "+spec.ID, reason)
@@ -330,7 +342,7 @@ func (fw *Firewall) translation(res *resolver, t Translation, issues []string) (
 		}
 		return out, issues
 	case TranslationModeUnset:
-		return traffic.AddressSet{}, append(issues, "translation mode unset")
+		return traffic.AddressSet{}, issues
 	default:
 		return traffic.AddressSet{}, append(issues, "unknown translation mode")
 	}

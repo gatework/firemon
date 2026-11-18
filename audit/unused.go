@@ -78,7 +78,8 @@ func references(cfg *firemon.Config) (addrs, svcs map[string]bool) {
 	for _, n := range cfg.DynamicNATs {
 		named(n.Source)
 		named(n.Destination)
-		named(n.Translated.Addresses)
+		named(n.TranslatedSource.Addresses)
+		named(n.TranslatedDestination.Addresses)
 		for _, s := range n.Services {
 			svcs[s] = true
 		}

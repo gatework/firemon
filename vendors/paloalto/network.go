@@ -145,7 +145,7 @@ func (s *state) staticRoute(vr string, p *path, st statement) {
 		case "next-vr":
 			r.NextVirtualRouter = p.scalar()
 		case "discard":
-			r.Description = "discard"
+			r.Discard = true
 		}
 	case "interface":
 		r.Interface = p.scalar()

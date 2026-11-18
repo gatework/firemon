@@ -18,7 +18,8 @@ func (w TimeWindow) Contains(t time.Time) bool {
 }
 
 // Recurrence is a daily time-of-day interval on selected weekdays. Start and
-// End are offsets from local midnight; End before Start wraps past midnight.
+// End are offsets from local midnight and End is exclusive; End before Start
+// wraps past midnight, and End equal to Start covers the whole day.
 type Recurrence struct {
 	// Days lists the weekdays the interval starts on; empty means every day.
 	Days  []time.Weekday `json:"days,omitempty"`
@@ -31,7 +32,10 @@ type Recurrence struct {
 func (r Recurrence) Contains(t time.Time) bool {
 	offset := time.Duration(t.Hour())*time.Hour + time.Duration(t.Minute())*time.Minute + time.Duration(t.Second())*time.Second
 	onDay := func(d time.Weekday) bool { return len(r.Days) == 0 || slices.Contains(r.Days, d) }
-	if r.Start <= r.End {
+	if r.Start == r.End {
+		return onDay(t.Weekday())
+	}
+	if r.Start < r.End {
 		return onDay(t.Weekday()) && offset >= r.Start && offset < r.End
 	}
 	// Wrapping interval: the evening part belongs to today, the morning part

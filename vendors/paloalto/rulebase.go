@@ -102,8 +102,8 @@ func (s *state) securityAttribute(r *firemon.SecurityRule, attr []string) {
 // marked bi-directional becomes a static NAT; every other rule becomes an
 // ordered dynamic NAT, one per translated side.
 func (s *state) buildNATRules() {
-	for _, d := range s.nat.drafts {
-		n := firemon.DynamicNAT{ID: d.name, Name: d.name}
+	for i, d := range s.nat.drafts {
+		n := firemon.DynamicNAT{ID: d.name, Name: d.name, Precedence: i + 1}
 		var src, dst firemon.Translation
 		bidirectional := false
 		for _, attr := range d.attrs {
@@ -132,7 +132,7 @@ func (s *state) buildNATRules() {
 				n.Description = strings.Join(values, " ")
 			case "source-translation":
 				bidirectional = s.sourceTranslation(&src, values) || bidirectional
-			case "destination-translation":
+			case "destination-translation", "dynamic-destination-translation":
 				s.destinationTranslation(&dst, values)
 			}
 		}
@@ -140,27 +140,21 @@ func (s *state) buildNATRules() {
 	}
 }
 
+// emitNAT records one PAN-OS NAT rule. The rulebase is a single
+// first-match list, so the rule keeps both translations; a rule without
+// translation exempts traffic. A bi-directional static-ip rule also adds
+// its reverse half as an inbound-only static mapping at the same precedence.
 func (s *state) emitNAT(n firemon.DynamicNAT, src, dst firemon.Translation, bidirectional bool) {
+	if src.Mode == firemon.TranslationModeUnset && dst.Mode == firemon.TranslationModeUnset {
+		src.Mode, dst.Mode = firemon.TranslationModeNone, firemon.TranslationModeNone
+	}
+	n.TranslatedSource, n.TranslatedDestination = src, dst
+	s.cfg.DynamicNATs = append(s.cfg.DynamicNATs, n)
 	if bidirectional && len(n.Source) == 1 && len(src.Addresses) == 1 {
 		s.cfg.StaticNATs = append(s.cfg.StaticNATs, firemon.StaticNAT{
-			ID: n.ID, Name: n.Name, Real: n.Source[0], Mapped: src.Addresses[0], Zones: slices.Clone(n.To), Disabled: n.Disabled,
+			ID: n.ID, Name: n.Name, Real: n.Source[0], Mapped: src.Addresses[0], Zones: slices.Clone(n.To),
+			Disabled: n.Disabled, Precedence: n.Precedence, InboundOnly: true,
 		})
-		return
-	}
-	if src.Mode != firemon.TranslationModeUnset {
-		sn := n
-		sn.Kind, sn.Translated = firemon.NATKindSource, src
-		s.cfg.DynamicNATs = append(s.cfg.DynamicNATs, sn)
-	}
-	if dst.Mode != firemon.TranslationModeUnset {
-		dn := n
-		dn.Kind, dn.Translated = firemon.NATKindDestination, dst
-		s.cfg.DynamicNATs = append(s.cfg.DynamicNATs, dn)
-	}
-	if src.Mode == firemon.TranslationModeUnset && dst.Mode == firemon.TranslationModeUnset {
-		n.Kind = firemon.NATKindSource
-		n.Translated = firemon.Translation{Mode: firemon.TranslationModeNone}
-		s.cfg.DynamicNATs = append(s.cfg.DynamicNATs, n)
 	}
 }
 

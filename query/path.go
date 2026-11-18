@@ -1,7 +1,6 @@
 package query
 
 import (
-	"net/netip"
 	"slices"
 
 	"github.com/gatework/firemon"
@@ -13,61 +12,91 @@ const maxNextVR = 4
 
 // hop is the part of an address set one interface reaches.
 type hop struct {
+	vr          string // routing context of the interface
 	zone, iface string
-	prefixLen   int // shortest route prefix reaching the addresses; -1 for a given zone
+	prefixLen   int // shortest route prefix reaching the addresses; -1 when unknown or given
 	addrs       traffic.AddressSet
 }
 
-// natPiece is part of a request with its destination translation.
-type natPiece struct {
-	original   traffic.Space
-	translated traffic.Space
-	hit        *NATHit
-}
-
-// discover splits req into paths by ingress route, destination NAT and
-// egress route.
-func (e *Engine) discover(req Request, table *firemon.RoutingTable) (paths []Path, unrouted traffic.AddressSet) {
-	for _, in := range e.ingress(req, table) {
-		base := traffic.Space{Src: in.addrs, Dst: req.Dst, Service: req.Service}
-		for _, piece := range e.destinationNAT(base, in.zone, table) {
-			outs, lost := e.egress(req, table, piece.translated.Dst)
-			unrouted = unrouted.Union(lost)
-			for _, out := range outs {
-				paths = append(paths, e.path(in, out, piece))
+// discover splits req into paths: by address family, by the interface
+// that routes back to the sources, by NAT, and by the egress interface of
+// the (translated) destinations. It stops adding paths at the budget.
+func (e *Engine) discover(req Request, table *firemon.RoutingTable) (paths []Path, unrouted traffic.AddressSet, incomplete bool) {
+	for _, fam := range families(req) {
+		for _, in := range e.ingress(fam, table) {
+			inTable := e.tableOf(in.vr, table)
+			base := traffic.Space{Src: in.addrs, Dst: fam.Dst, Service: fam.Service}
+			for _, pc := range e.translate(base, in, inTable, fam) {
+				outs, lost := e.egress(fam, inTable, pc.translated.Dst)
+				unrouted = unrouted.Union(lost)
+				for _, out := range outs {
+					if len(paths) >= e.maxPaths {
+						return paths, unrouted, true
+					}
+					paths = append(paths, e.path(in, out, pc))
+				}
 			}
 		}
 	}
-	return paths, unrouted
+	return paths, unrouted, false
 }
 
-func (e *Engine) path(in, out hop, piece natPiece) Path {
-	original := piece.original
-	translated := piece.translated
-	translated.Dst = out.addrs
-	if piece.hit == nil {
-		original.Dst = out.addrs
+// families splits a request into its IPv4 and IPv6 parts. Traffic always
+// keeps its family, so an IPv4 source never reaches an IPv6 destination.
+func families(req Request) []Request {
+	var out []Request
+	for _, all := range []traffic.AddressSet{traffic.AnyIPv4(), traffic.AnyIPv6()} {
+		f := req
+		f.Src, f.Dst = req.Src.Intersect(all), req.Dst.Intersect(all)
+		if !f.Src.IsEmpty() && !f.Dst.IsEmpty() {
+			out = append(out, f)
+		}
 	}
+	return out
+}
+
+func (e *Engine) tableOf(vr string, fallback *firemon.RoutingTable) *firemon.RoutingTable {
+	if t, ok := e.fw.RoutingTable(vr); ok {
+		return t
+	}
+	return fallback
+}
+
+func (e *Engine) path(in, out hop, pc natPiece) Path {
+	translated := pc.translated
+	translated.Dst = out.addrs
+	original := pc.original
+	original.Dst = pc.originalDst(out.addrs)
 	policy := translated
 	if e.fw.Semantics().PolicyDestination == firemon.AddressStageOriginal {
 		policy.Dst, policy.Service = original.Dst, original.Service
 	}
 	p := Path{
-		From: in.zone, To: out.zone, Ingress: in.iface, Egress: out.iface, IngressPrefixLen: in.prefixLen, EgressPrefixLen: out.prefixLen,
-		Original: original, Policy: policy, DestinationNAT: piece.hit,
+		From: in.zone, To: out.zone, Ingress: in.iface, Egress: out.iface,
+		IngressPrefixLen: in.prefixLen, EgressPrefixLen: out.prefixLen,
+		Original: original, Policy: policy, DestinationNAT: pc.dstHit, NATUncertain: slices.Clone(pc.uncertain),
 	}
-	p.SourceNAT = e.sourceNAT(translated, in.zone, out)
+	if pc.srcHit != nil {
+		hit := *pc.srcHit
+		if hit.Translated.IsEmpty() && hit.Rule != nil {
+			hit.Translated = e.interfaceAddresses(out.iface)
+		}
+		p.SourceNAT = []NATHit{hit}
+	}
+	if e.fw.Semantics().NATOrder != firemon.NATOrderSingle {
+		e.sourceNAT(&p, translated, in, out)
+	}
 	return p
 }
 
 // ingress partitions the sources by the interface that routes back to them.
 func (e *Engine) ingress(req Request, table *firemon.RoutingTable) []hop {
 	if req.FromZone != "" {
-		return []hop{{zone: req.FromZone, prefixLen: -1, addrs: req.Src}}
+		return []hop{{vr: tableName(table), zone: req.FromZone, prefixLen: -1, addrs: req.Src}}
 	}
 	hops, lost := e.route(table, req.Src, 0)
 	if !lost.IsEmpty() {
-		hops = append(hops, hop{prefixLen: -1, addrs: lost}) // unknown zone
+		hops = append(hops, hop{vr: tableName(table), prefixLen: -1, addrs: lost}) // unknown zone
 	}
 	return hops
 }
@@ -75,12 +104,13 @@ func (e *Engine) ingress(req Request, table *firemon.RoutingTable) []hop {
 // egress partitions translated destinations by outgoing interface.
 func (e *Engine) egress(req Request, table *firemon.RoutingTable, dst traffic.AddressSet) ([]hop, traffic.AddressSet) {
 	if req.ToZone != "" {
-		return []hop{{zone: req.ToZone, prefixLen: -1, addrs: dst}}, traffic.AddressSet{}
+		return []hop{{vr: tableName(table), zone: req.ToZone, prefixLen: -1, addrs: dst}}, traffic.AddressSet{}
 	}
 	return e.route(table, dst, 0)
 }
 
-// route looks dst up in table, following next-vr hops.
+// route looks dst up in table, following next-vr hops. Discarded and
+// unrouted addresses are returned as lost.
 func (e *Engine) route(table *firemon.RoutingTable, dst traffic.AddressSet, depth int) ([]hop, traffic.AddressSet) {
 	if table == nil {
 		return nil, dst
@@ -89,22 +119,23 @@ func (e *Engine) route(table *firemon.RoutingTable, dst traffic.AddressSet, dept
 	var hops []hop
 	for _, g := range egress {
 		next := g.Route.NextVirtualRouter
-		if next == "" {
-			if g.Interface == "" {
+		switch {
+		case g.Route.Discard:
+			lost = lost.Union(g.Addresses)
+		case next == "" && g.Interface == "":
+			lost = lost.Union(g.Addresses)
+		case next == "":
+			hops = append(hops, hop{vr: table.Name(), zone: g.Zone, iface: g.Interface, prefixLen: g.Route.Destination.Bits(), addrs: g.Addresses})
+		default:
+			nextTable, ok := e.fw.RoutingTable(next)
+			if !ok || depth >= maxNextVR {
 				lost = lost.Union(g.Addresses)
 				continue
 			}
-			hops = append(hops, hop{zone: g.Zone, iface: g.Interface, prefixLen: g.Route.Destination.Bits(), addrs: g.Addresses})
-			continue
+			more, moreLost := e.route(nextTable, g.Addresses, depth+1)
+			hops = append(hops, more...)
+			lost = lost.Union(moreLost)
 		}
-		nextTable, ok := e.fw.RoutingTable(next)
-		if !ok || depth >= maxNextVR {
-			lost = lost.Union(g.Addresses)
-			continue
-		}
-		more, moreLost := e.route(nextTable, g.Addresses, depth+1)
-		hops = append(hops, more...)
-		lost = lost.Union(moreLost)
 	}
 	return mergeHops(hops), lost
 }
@@ -113,7 +144,7 @@ func (e *Engine) route(table *firemon.RoutingTable, dst traffic.AddressSet, dept
 func mergeHops(hops []hop) []hop {
 	var out []hop
 	for _, h := range hops {
-		i := slices.IndexFunc(out, func(o hop) bool { return o.iface == h.iface && o.zone == h.zone })
+		i := slices.IndexFunc(out, func(o hop) bool { return o.iface == h.iface && o.zone == h.zone && o.vr == h.vr })
 		if i < 0 {
 			out = append(out, h)
 			continue
@@ -124,106 +155,9 @@ func mergeHops(hops []hop) []hop {
 	return out
 }
 
-// destinationNAT applies the first matching destination NAT rule, then
-// inbound static NAT, to each part of base.
-func (e *Engine) destinationNAT(base traffic.Space, from string, table *firemon.RoutingTable) []natPiece {
-	remaining := traffic.NewRegion(base)
-	var out []natPiece
-	for _, n := range e.fw.NATRules(firemon.NATKindDestination) {
-		if !n.Decidable() || n.Translated().IsEmpty() || !e.natZoneMatches(n, from, table, n.Match().Dst) {
-			continue
-		}
-		for _, s := range remaining.Intersect(n.Match()).Spaces() {
-			translated := s
-			translated.Dst = n.Translated()
-			if port := n.Spec().Translated.Port; port != 0 {
-				translated.Service = withPort(s.Service, port)
-			}
-			out = append(out, natPiece{original: s, translated: translated, hit: &NATHit{Rule: n, Translated: n.Translated()}})
-		}
-		remaining = remaining.Subtract(n.Match())
+func tableName(t *firemon.RoutingTable) string {
+	if t == nil {
+		return ""
 	}
-	for _, m := range e.fw.StaticNATs() {
-		if !m.Enabled() {
-			continue
-		}
-		box := traffic.Space{Src: traffic.AnyAddress(), Dst: m.Mapped(), Service: traffic.AnyService()}
-		for _, s := range remaining.Intersect(box).Spaces() {
-			translated := s
-			translated.Dst = m.ToReal(s.Dst)
-			out = append(out, natPiece{original: s, translated: translated, hit: &NATHit{Static: m, Translated: translated.Dst}})
-		}
-		remaining = remaining.Subtract(box)
-	}
-	for _, s := range remaining.Spaces() {
-		out = append(out, natPiece{original: s, translated: s})
-	}
-	return out
-}
-
-// natZoneMatches checks a NAT rule's zones: the ingress zone against From,
-// and the zones the untranslated destination routes to against To.
-func (e *Engine) natZoneMatches(n *firemon.NATRule, from string, table *firemon.RoutingTable, dst traffic.AddressSet) bool {
-	spec := n.Spec()
-	if spec.Disabled || (len(spec.From) > 0 && !slices.Contains(spec.From, from)) {
-		return false
-	}
-	if len(spec.To) == 0 {
-		return true
-	}
-	hops, _ := e.route(table, dst, 0)
-	return slices.ContainsFunc(hops, func(h hop) bool { return slices.Contains(spec.To, h.zone) })
-}
-
-// sourceNAT reports the source translations of the translated traffic.
-func (e *Engine) sourceNAT(s traffic.Space, from string, out hop) []NATHit {
-	remaining := traffic.NewRegion(s)
-	var hits []NATHit
-	for _, n := range e.fw.NATRules(firemon.NATKindSource) {
-		if remaining.IsEmpty() {
-			break
-		}
-		if !n.Decidable() || !n.Applies(from, out.zone) || (n.Spec().Egress != "" && n.Spec().Egress != out.iface) {
-			continue
-		}
-		if remaining.Intersect(n.Match()).IsEmpty() {
-			continue
-		}
-		hits = append(hits, NATHit{Rule: n, Translated: e.snatAddresses(n, out.iface)})
-		remaining = remaining.Subtract(n.Match())
-	}
-	for _, m := range e.fw.StaticNATs() {
-		if m.Enabled() && !remaining.Intersect(traffic.Space{Src: m.Real(), Dst: traffic.AnyAddress(), Service: traffic.AnyService()}).IsEmpty() {
-			hits = append(hits, NATHit{Static: m, Translated: m.ToMapped(s.Src)})
-		}
-	}
-	return hits
-}
-
-func (e *Engine) snatAddresses(n *firemon.NATRule, egress string) traffic.AddressSet {
-	if t := n.Translated(); !t.IsEmpty() || n.Spec().Translated.Mode != firemon.TranslationModeInterface {
-		return t
-	}
-	ifc, _ := e.fw.Interface(egress)
-	var out traffic.AddressSet
-	for _, p := range ifc.Addresses {
-		out = out.Union(traffic.NewAddressSet(netip.PrefixFrom(p.Addr(), p.Addr().BitLen())))
-	}
-	return out
-}
-
-// withPort rewrites every port-carrying destination range of s to port.
-func withPort(s traffic.ServiceSet, port uint16) traffic.ServiceSet {
-	var out traffic.ServiceSet
-	for r := range s.All() {
-		for p := int(r.ProtocolLow); p <= int(r.ProtocolHigh); p++ {
-			proto := traffic.Protocol(p)
-			if proto.HasPorts() {
-				out = out.Union(traffic.NewService(proto, r.Src, traffic.Port(port)))
-			} else {
-				out = out.Union(traffic.NewService(proto, r.Src, r.Dst))
-			}
-		}
-	}
-	return out
+	return t.Name()
 }
