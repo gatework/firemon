@@ -14,6 +14,7 @@ const maxNextVR = 4
 // hop is the part of an address set one interface reaches.
 type hop struct {
 	zone, iface string
+	prefixLen   int // shortest route prefix reaching the addresses; -1 for a given zone
 	addrs       traffic.AddressSet
 }
 
@@ -52,7 +53,7 @@ func (e *Engine) path(in, out hop, piece natPiece) Path {
 		policy.Dst, policy.Service = original.Dst, original.Service
 	}
 	p := Path{
-		From: in.zone, To: out.zone, Ingress: in.iface, Egress: out.iface,
+		From: in.zone, To: out.zone, Ingress: in.iface, Egress: out.iface, IngressPrefixLen: in.prefixLen, EgressPrefixLen: out.prefixLen,
 		Original: original, Policy: policy, DestinationNAT: piece.hit,
 	}
 	p.SourceNAT = e.sourceNAT(translated, in.zone, out)
@@ -62,11 +63,11 @@ func (e *Engine) path(in, out hop, piece natPiece) Path {
 // ingress partitions the sources by the interface that routes back to them.
 func (e *Engine) ingress(req Request, table *firemon.RoutingTable) []hop {
 	if req.FromZone != "" {
-		return []hop{{zone: req.FromZone, addrs: req.Src}}
+		return []hop{{zone: req.FromZone, prefixLen: -1, addrs: req.Src}}
 	}
 	hops, lost := e.route(table, req.Src, 0)
 	if !lost.IsEmpty() {
-		hops = append(hops, hop{addrs: lost}) // unknown zone
+		hops = append(hops, hop{prefixLen: -1, addrs: lost}) // unknown zone
 	}
 	return hops
 }
@@ -74,7 +75,7 @@ func (e *Engine) ingress(req Request, table *firemon.RoutingTable) []hop {
 // egress partitions translated destinations by outgoing interface.
 func (e *Engine) egress(req Request, table *firemon.RoutingTable, dst traffic.AddressSet) ([]hop, traffic.AddressSet) {
 	if req.ToZone != "" {
-		return []hop{{zone: req.ToZone, addrs: dst}}, traffic.AddressSet{}
+		return []hop{{zone: req.ToZone, prefixLen: -1, addrs: dst}}, traffic.AddressSet{}
 	}
 	return e.route(table, dst, 0)
 }
@@ -93,7 +94,7 @@ func (e *Engine) route(table *firemon.RoutingTable, dst traffic.AddressSet, dept
 				lost = lost.Union(g.Addresses)
 				continue
 			}
-			hops = append(hops, hop{zone: g.Zone, iface: g.Interface, addrs: g.Addresses})
+			hops = append(hops, hop{zone: g.Zone, iface: g.Interface, prefixLen: g.Route.Destination.Bits(), addrs: g.Addresses})
 			continue
 		}
 		nextTable, ok := e.fw.RoutingTable(next)
@@ -118,6 +119,7 @@ func mergeHops(hops []hop) []hop {
 			continue
 		}
 		out[i].addrs = out[i].addrs.Union(h.addrs)
+		out[i].prefixLen = min(out[i].prefixLen, h.prefixLen)
 	}
 	return out
 }

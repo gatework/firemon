@@ -112,6 +112,11 @@ type Path struct {
 	To      string
 	Ingress string
 	Egress  string
+	// IngressPrefixLen and EgressPrefixLen are the shortest prefix lengths
+	// of the routes that reach the sources and the destinations on this
+	// path; 0 means a default route, -1 that a zone was given instead.
+	IngressPrefixLen int
+	EgressPrefixLen  int
 	// Original is the requested traffic on this path before NAT.
 	Original traffic.Space
 	// Policy is the same traffic as the security rules see it.
