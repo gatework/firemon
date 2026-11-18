@@ -13,6 +13,7 @@ import (
 	"github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/hits"
+	"github.com/gatework/firemon/migrate"
 	"github.com/gatework/firemon/vendors/hillstone"
 	"github.com/gatework/firemon/vendors/paloalto"
 )
@@ -32,6 +33,21 @@ type Platform struct {
 	// output.
 	HitCountCommand string
 	ParseHits       func(text, firewall string, taken time.Time) (hits.Snapshot, error)
+	// Capabilities describe what the vendor's configuration expresses.
+	Capabilities firemon.Capabilities
+}
+
+// MigrationTarget describes the platform as the target of a migration:
+// its default semantics (those of an empty configuration), capabilities,
+// name rules and predefined services.
+func MigrationTarget(p Platform) (migrate.Target, error) {
+	empty, err := p.Parse("")
+	if err != nil {
+		return migrate.Target{}, err
+	}
+	return migrate.Target{
+		Vendor: p.Vendor, Semantics: empty.Semantics, Capabilities: p.Capabilities, Sanitize: p.Naming.Sanitize, Services: p.Services,
+	}, nil
 }
 
 // Lookup returns the platform of vendor with schedules in loc. book, when
@@ -43,14 +59,14 @@ func Lookup(vendor firemon.Vendor, loc *time.Location, book firemon.ServiceBook)
 		return Platform{
 			Vendor: vendor, Services: hillstone.DefaultServices().With(book), Applications: hillstone.DefaultApplications(),
 			Parse: p.Parse, Render: hillstone.Renderer{}.Render, DeployCommands: hillstone.DeployCommands,
-			HitCountCommand: hillstone.HitCountCommand, ParseHits: hillstone.ParseHits,
+			HitCountCommand: hillstone.HitCountCommand, ParseHits: hillstone.ParseHits, Capabilities: hillstone.Capabilities(),
 		}, nil
 	case firemon.VendorPaloAlto:
 		p := paloalto.New(paloalto.Options{Location: loc, Services: book})
 		return Platform{
 			Vendor: vendor, Services: paloalto.DefaultServices().With(book), Applications: paloalto.DefaultApplications(), Naming: paloalto.Naming(),
 			Parse: p.Parse, Render: paloalto.Renderer{}.Render, DeployCommands: paloalto.DeployCommands,
-			HitCountCommand: paloalto.HitCountCommand,
+			HitCountCommand: paloalto.HitCountCommand, Capabilities: paloalto.Capabilities(),
 			ParseHits: func(text, firewall string, taken time.Time) (hits.Snapshot, error) {
 				return paloalto.ParseHits(text, firewall, taken, cmp.Or(loc, time.UTC))
 			},

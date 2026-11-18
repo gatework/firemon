@@ -6,6 +6,7 @@ import (
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/intake"
 	"github.com/gatework/firemon/inventory"
+	"github.com/gatework/firemon/migrate"
 	"github.com/gatework/firemon/query"
 	"github.com/gatework/firemon/report"
 	"github.com/gatework/firemon/traffic"
@@ -158,4 +159,25 @@ var fieldText2 = map[design.Field]string{
 	design.FieldSource:      "源地址",
 	design.FieldDestination: "目的地址",
 	design.FieldService:     "服务",
+}
+
+var fidelityText = map[migrate.Fidelity]string{
+	migrate.FidelityExact:          "完全等价",
+	migrate.FidelityApproximate:    "近似（存在说明的差异）",
+	migrate.FidelityUntranslatable: "无法翻译",
+}
+
+var itemKindText = map[migrate.ItemKind]string{
+	migrate.ItemKindVirtualRouter: "虚拟路由器",
+	migrate.ItemKindZone:          "区域",
+	migrate.ItemKindInterface:     "接口",
+	migrate.ItemKindRoute:         "路由",
+	migrate.ItemKindSchedule:      "时间计划",
+	migrate.ItemKindAddress:       "地址",
+	migrate.ItemKindAddressGroup:  "地址组",
+	migrate.ItemKindService:       "服务",
+	migrate.ItemKindServiceGroup:  "服务组",
+	migrate.ItemKindRule:          "策略",
+	migrate.ItemKindNAT:           "NAT",
+	migrate.ItemKindDefault:       "默认动作",
 }

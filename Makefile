@@ -11,6 +11,9 @@ fuzz:
 	$(GO) test -run '^$$' -fuzz '^FuzzDomainSet$$' -fuzztime=10s ./traffic
 	$(GO) test -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=10s ./vendors/hillstone
 	$(GO) test -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=10s ./vendors/paloalto
+	$(GO) test -run '^$$' -fuzz '^FuzzParseHits$$' -fuzztime=10s ./vendors/hillstone
+	$(GO) test -run '^$$' -fuzz '^FuzzParseHits$$' -fuzztime=10s ./vendors/paloalto
+	$(GO) test -run '^$$' -fuzz '^FuzzTranslate$$' -fuzztime=10s ./migrate
 	$(GO) test -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=10s ./intake
 
 # Parses the private configuration corpus named by FIREMON_CORPUS (TST-3).
