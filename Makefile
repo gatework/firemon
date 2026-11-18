@@ -10,6 +10,7 @@ fuzz:
 	$(GO) test -run '^$$' -fuzz '^FuzzRegion$$' -fuzztime=10s ./traffic
 	$(GO) test -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=10s ./vendors/hillstone
 	$(GO) test -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=10s ./vendors/paloalto
+	$(GO) test -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=10s ./intake
 
 # Parses the private configuration corpus named by FIREMON_CORPUS (TST-3).
 corpus:
