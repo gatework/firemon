@@ -93,7 +93,7 @@ func (o *options) loadSnapshot(ctx context.Context) (workflow.Loaded, bootstrap.
 			return workflow.Loaded{}, bootstrap.Platform{}, &usageError{errors.New("--vendor does not match the snapshot vendor " + snap.Vendor.String())}
 		}
 	}
-	p, err := bootstrap.Lookup(snap.Vendor, snap.Config.Location)
+	p, err := bootstrap.Lookup(snap.Vendor, snap.Config.Location, nil)
 	if err != nil {
 		return workflow.Loaded{}, bootstrap.Platform{}, err
 	}

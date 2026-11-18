@@ -136,3 +136,51 @@ func TestParse_GoldenRoundTrip(t *testing.T) {
 		t.Fatal("stored configuration compiles differently")
 	}
 }
+
+func TestParse_ServiceBookOverride(t *testing.T) {
+	t.Parallel()
+	text := "rule id 1\n  action permit\n  service \"HTTP-EXT\"\n  service \"HTTP\"\nexit\n"
+	fw, err := firemon.Compile(mustParse(t, hillstone.Options{}, text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := fw.Rule("1"); r.Decidable() {
+		t.Fatal("HTTP-EXT is not in the default book; the rule must be undecidable")
+	}
+	book, err := firemon.ParseServiceBook([]byte(`{"HTTP-EXT":["tcp/8080"],"HTTP":["tcp/80","tcp/8000"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fw, err = firemon.Compile(mustParse(t, hillstone.Options{Services: book}, text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := fw.Rule("1")
+	if !r.Decidable() || r.Match().Service.String() != "tcp/80,tcp/8000,tcp/8080" {
+		t.Fatalf("with device book: %s %v", r.Match().Service, r.Issues())
+	}
+	if got, _ := fw.Service("SSH"); got.String() != "tcp/22" {
+		t.Fatalf("defaults kept for other names: %s", got)
+	}
+}
+
+func TestParse_DeclaredServiceWinsOverBook(t *testing.T) {
+	t.Parallel()
+	text := "service \"HTTP\"\n  tcp dst-port 8888\nexit\n"
+	fw, err := firemon.Compile(mustParse(t, hillstone.Options{}, text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := fw.Service("HTTP"); got.String() != "tcp/8888" {
+		t.Fatalf("declared HTTP: %s", got)
+	}
+}
+
+func mustParse(t *testing.T, opts hillstone.Options, text string) *firemon.Config {
+	t.Helper()
+	cfg, err := hillstone.New(opts).Parse(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}

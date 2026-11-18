@@ -28,3 +28,4 @@
 | Inventory | 防火墙清单 | Set of firewalls a flow is located across. |
 | Owner | 归属防火墙 | Firewall with the most specific non-default route to an end of a flow. |
 | Crossing | 经过防火墙 | Part of a flow one firewall routes between two of its interfaces. |
+| Predefined service book | 预定义服务表 | Built-in service names and ports of a vendor or device (`firemon.ServiceBook`). |

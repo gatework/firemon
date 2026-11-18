@@ -251,6 +251,40 @@
       ]
     },
     {
+      "name": "AFP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 548,
+            "high": 548
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "AH",
+      "entries": [
+        {
+          "protocol": "51",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 0,
+            "high": 65535
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
       "name": "Any",
       "entries": [
         {
@@ -280,6 +314,23 @@
           "dst": {
             "low": 179,
             "high": 179
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "DHCP",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 67,
+            "high": 68
           }
         }
       ],
@@ -331,6 +382,40 @@
       "predefined": true
     },
     {
+      "name": "ESP",
+      "entries": [
+        {
+          "protocol": "50",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 0,
+            "high": 65535
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "FINGER",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 79,
+            "high": 79
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
       "name": "FTP",
       "entries": [
         {
@@ -342,6 +427,57 @@
           "dst": {
             "low": 21,
             "high": 21
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "GOPHER",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 70,
+            "high": 70
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "GRE",
+      "entries": [
+        {
+          "protocol": "47",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 0,
+            "high": 65535
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "H323",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 1720,
+            "high": 1720
           }
         }
       ],
@@ -416,6 +552,40 @@
       "predefined": true
     },
     {
+      "name": "IGMP",
+      "entries": [
+        {
+          "protocol": "2",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 0,
+            "high": 65535
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "IKE",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 500,
+            "high": 500
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
       "name": "IMAP",
       "entries": [
         {
@@ -433,6 +603,57 @@
       "predefined": true
     },
     {
+      "name": "IMAPS",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 993,
+            "high": 993
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "L2TP",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 1701,
+            "high": 1701
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "LDAP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 389,
+            "high": 389
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
       "name": "MDNS",
       "entries": [
         {
@@ -444,6 +665,23 @@
           "dst": {
             "low": 5353,
             "high": 5353
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "MS-SQL",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 1433,
+            "high": 1433
           }
         }
       ],
@@ -478,6 +716,40 @@
           "dst": {
             "low": 3306,
             "high": 3306
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "NBDS",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 138,
+            "high": 138
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "NBNAME",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 137,
+            "high": 137
           }
         }
       ],
@@ -540,6 +812,23 @@
           "dst": {
             "low": 123,
             "high": 123
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "ORACLE",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 1521,
+            "high": 1521
           }
         }
       ],
@@ -614,6 +903,40 @@
       "predefined": true
     },
     {
+      "name": "POP3S",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 995,
+            "high": 995
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "PPTP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 1723,
+            "high": 1723
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
       "name": "RADIUS",
       "entries": [
         {
@@ -642,6 +965,85 @@
           "dst": {
             "low": 3389,
             "high": 3389
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "RIP",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 520,
+            "high": 520
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "RSH",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 514,
+            "high": 514
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "RTSP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 554,
+            "high": 554
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "SIP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 5060,
+            "high": 5060
+          }
+        },
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 5060,
+            "high": 5060
           }
         }
       ],
@@ -687,6 +1089,23 @@
           "dst": {
             "low": 25,
             "high": 25
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "SMTPS",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 465,
+            "high": 465
           }
         }
       ],
@@ -783,6 +1202,40 @@
           "dst": {
             "low": 23,
             "high": 23
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "TFTP",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 69,
+            "high": 69
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "VNC",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 5900,
+            "high": 5900
           }
         }
       ],

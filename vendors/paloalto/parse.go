@@ -20,6 +20,10 @@ type Options struct {
 	Location *time.Location
 	// Limits bounds the input size.
 	Limits parser.Limits
+	// Services is the predefined service book observed on the device. Its
+	// entries replace those of DefaultServices with the same name; services
+	// declared in the configuration take precedence over both.
+	Services firemon.ServiceBook
 }
 
 // Parser converts PAN-OS set-format configurations to firemon.Config. The
@@ -29,7 +33,10 @@ type Parser struct {
 }
 
 // New returns a parser with the given options.
-func New(opts Options) *Parser { return &Parser{opts: opts} }
+func New(opts Options) *Parser {
+	opts.Services = DefaultServices().With(opts.Services)
+	return &Parser{opts: opts}
+}
 
 // Parse converts the set-format configuration text.
 func (p *Parser) Parse(text string) (*firemon.Config, error) {
@@ -42,6 +49,10 @@ func (p *Parser) Parse(text string) (*firemon.Config, error) {
 		loc = p.opts.Location
 	}
 	s := newState(loc)
+	s.book = DefaultServices()
+	if p != nil && p.opts.Services != nil {
+		s.book = p.opts.Services
+	}
 	stmts, _ := statements(content)
 	for _, st := range stmts {
 		s.dispatch(st)
@@ -75,6 +86,7 @@ type state struct {
 	hostBits  map[string]string   // address object -> unmasked ip-netmask value
 	security  *rulebook
 	nat       *rulebook
+	book      firemon.ServiceBook
 }
 
 func newState(loc *time.Location) *state {
@@ -152,7 +164,11 @@ func (s *state) dispatch(st statement) {
 
 // finish resolves deferred references and assembles the configuration.
 func (s *state) finish() *firemon.Config {
-	s.cfg.Services = append(s.cfg.Services, builtinServices(s.services, s.svcGroups)...)
+	s.cfg.Services = append(s.cfg.Services, s.book.Services(func(name string) bool {
+		_, isService := s.services[name]
+		_, isGroup := s.svcGroups[name]
+		return isService || isGroup
+	})...)
 	s.bindInterfaces()
 	s.flushRoutes()
 	s.buildSecurityRules()

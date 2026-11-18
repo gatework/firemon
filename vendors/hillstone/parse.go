@@ -21,6 +21,10 @@ type Options struct {
 	Location *time.Location
 	// Limits bounds the input size.
 	Limits parser.Limits
+	// Services is the predefined service book observed on the device. Its
+	// entries replace those of DefaultServices with the same name; services
+	// declared in the configuration take precedence over both.
+	Services firemon.ServiceBook
 }
 
 // Parser converts StoneOS running configurations to firemon.Config.
@@ -30,7 +34,10 @@ type Parser struct {
 }
 
 // New returns a parser with the given options.
-func New(opts Options) *Parser { return &Parser{opts: opts} }
+func New(opts Options) *Parser {
+	opts.Services = DefaultServices().With(opts.Services)
+	return &Parser{opts: opts}
+}
 
 // Parse converts the text of "show configuration running".
 func (p *Parser) Parse(text string) (*firemon.Config, error) {
@@ -39,10 +46,19 @@ func (p *Parser) Parse(text string) (*firemon.Config, error) {
 		return nil, fmt.Errorf("hillstone: %w", err)
 	}
 	s := newState(content, p.location())
+	s.book = p.book()
 	for _, b := range segment(content) {
 		s.dispatch(b)
 	}
 	return s.finish(), nil
+}
+
+// book returns the effective service book; the zero Parser uses the default.
+func (p *Parser) book() firemon.ServiceBook {
+	if p == nil || p.opts.Services == nil {
+		return DefaultServices()
+	}
+	return p.opts.Services
 }
 
 func (p *Parser) location() *time.Location {
@@ -66,6 +82,7 @@ type state struct {
 	routers   *catalog[firemon.VirtualRouter]
 	ruleIndex map[string]int
 	ruleGroup map[string]string // aggregate rule id -> group name
+	book      firemon.ServiceBook
 }
 
 func newState(content *parser.Content, loc *time.Location) *state {
@@ -142,7 +159,9 @@ func (s *state) finish() *firemon.Config {
 		}
 	}
 	cfg.Addresses = append(cfg.Addresses, builtinAddresses(s.addresses)...)
-	cfg.Services = append(s.services.items(), builtinServices(s.services, s.groups)...)
+	cfg.Services = append(s.services.items(), s.book.Services(func(name string) bool {
+		return s.services.has(name) || s.groups.has(name)
+	})...)
 	cfg.ServiceGroups = s.groups.items()
 	cfg.Schedules = s.schedules.items()
 	cfg.VirtualRouters = s.routers.items()
@@ -225,13 +244,4 @@ func isPolicySection(keyword string) bool {
 	default:
 		return false
 	}
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
 }

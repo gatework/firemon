@@ -19,4 +19,5 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 - `audit`: redundant, shadowed, disabled, expired, undecidable and permit-any rules; unused objects.
 - `adapter/filestore`: device snapshots used offline by every read command.
 - `inventory`: locating the firewalls a flow crosses (ADR 0006) and planning on each.
+- Predefined service books: embedded per-vendor defaults, device books with `--service-book`, `firemon services` (ADR 0007).
 - `firemon` CLI: parse, query, usage, audit, design, deploy, collect, locate.

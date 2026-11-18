@@ -17,21 +17,31 @@ import (
 
 // Platform bundles one vendor's syntax capabilities.
 type Platform struct {
-	Vendor         firemon.Vendor
+	Vendor firemon.Vendor
+	// Services is the effective predefined service book: the vendor default
+	// overridden by the device book.
+	Services       firemon.ServiceBook
 	Parse          func(text string) (*firemon.Config, error)
 	Render         func(plan *design.Plan) (design.Script, error)
 	DeployCommands func(script design.Script) []string
 }
 
-// Lookup returns the platform of vendor with schedules in loc.
-func Lookup(vendor firemon.Vendor, loc *time.Location) (Platform, error) {
+// Lookup returns the platform of vendor with schedules in loc. book, when
+// not nil, is the predefined service book observed on the device.
+func Lookup(vendor firemon.Vendor, loc *time.Location, book firemon.ServiceBook) (Platform, error) {
 	switch vendor {
 	case firemon.VendorHillstone:
-		p := hillstone.New(hillstone.Options{Location: loc})
-		return Platform{Vendor: vendor, Parse: p.Parse, Render: hillstone.Renderer{}.Render, DeployCommands: hillstone.DeployCommands}, nil
+		p := hillstone.New(hillstone.Options{Location: loc, Services: book})
+		return Platform{
+			Vendor: vendor, Services: hillstone.DefaultServices().With(book),
+			Parse: p.Parse, Render: hillstone.Renderer{}.Render, DeployCommands: hillstone.DeployCommands,
+		}, nil
 	case firemon.VendorPaloAlto:
-		p := paloalto.New(paloalto.Options{Location: loc})
-		return Platform{Vendor: vendor, Parse: p.Parse, Render: paloalto.Renderer{}.Render, DeployCommands: paloalto.DeployCommands}, nil
+		p := paloalto.New(paloalto.Options{Location: loc, Services: book})
+		return Platform{
+			Vendor: vendor, Services: paloalto.DefaultServices().With(book),
+			Parse: p.Parse, Render: paloalto.Renderer{}.Render, DeployCommands: paloalto.DeployCommands,
+		}, nil
 	case firemon.VendorUnset:
 		return Platform{}, fmt.Errorf("bootstrap: vendor required")
 	default:
