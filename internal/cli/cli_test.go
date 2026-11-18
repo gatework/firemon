@@ -138,3 +138,34 @@ func TestRun_ServiceBook(t *testing.T) {
 		t.Fatalf("device book: %d\n%s", code, out)
 	}
 }
+
+func TestRun_Check(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	store := dir + "/snapshots"
+	if code, out, errOut := run(t, "", "collect", "--store", store, "--name", "pa1", "--vendor", "paloalto", "--config", paloaltoConf); code != cli.ExitOK {
+		t.Fatalf("collect: %d %s%s", code, out, errOut)
+	}
+	inv := dir + "/firemon.yaml"
+	yaml := "firewalls:\n  - name: pa1\n    protected:\n      - zone: trust\n        networks: [10.0.0.0/16]\n"
+	if err := os.WriteFile(inv, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := run(t, "", "check", "--store", store, "--inventory", inv,
+		"--src", "10.0.5.0 255.255.255.0，172.31.0.9", "--dst", "8.8.8.8", "--service", "53/udp", "--design", "--name", "REQ-7")
+	for _, want := range []string{"结论：", "■ pa1（受保护网段", "未经过任何防火墙（已剔除）：源 172.31.0.9", "地址+掩码已转换为网段", "变更方案"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q (code %d)\n%s%s", want, code, out, errOut)
+		}
+	}
+	code, out, _ = run(t, "", "check", "--json", "--store", store, "--inventory", inv, "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53")
+	var rep struct {
+		Status    string `json:"status"`
+		Firewalls []struct {
+			Status string `json:"status"`
+		} `json:"firewalls"`
+	}
+	if err := json.Unmarshal([]byte(out), &rep); err != nil || len(rep.Firewalls) != 1 || rep.Status == "" {
+		t.Fatalf("json report (code %d): %v\n%s", code, err, out)
+	}
+}

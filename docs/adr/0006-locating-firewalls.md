@@ -1,6 +1,6 @@
 # 0006 — Locating the firewalls a flow crosses
 
-Status: accepted (2026-11-17)
+Status: superseded by 0008 for ownership (2026-11-18)
 
 ## Context
 

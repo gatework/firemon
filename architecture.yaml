@@ -16,6 +16,7 @@ declared:
   - ./adapter/netconnector
   - ./adapter/filestore
   - ./adapter/yamlfile
+  - ./adapter/dns
   - ./internal/bootstrap
   - ./internal/workflow
   - ./internal/cli
@@ -74,6 +75,10 @@ rules:
   - name: adapters depend only on the domain
     packages: [./adapter/netconnector, ./adapter/filestore]
     only_local: [.]
+
+  - name: the resolver stands alone
+    packages: [./adapter/dns]
+    deny: [./...]
 
   - name: the inventory file adapter feeds the inventory
     packages: [./adapter/yamlfile]

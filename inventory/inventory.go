@@ -97,6 +97,25 @@ func New(members []Member, opts Options) (*Inventory, error) {
 	return inv, nil
 }
 
+// Clusters returns the cluster names in order.
+func (inv *Inventory) Clusters() []string {
+	var out []string
+	for _, m := range inv.members {
+		if !slices.Contains(out, m.cluster) {
+			out = append(out, m.cluster)
+		}
+	}
+	return out
+}
+
+// Firewall returns the firewall a cluster is evaluated on, or nil.
+func (inv *Inventory) Firewall(cluster string) *firemon.Firewall {
+	if m := inv.primary(cluster); m != nil {
+		return m.fw
+	}
+	return nil
+}
+
 // primary returns the member a cluster is evaluated on.
 func (inv *Inventory) primary(cluster string) *member {
 	i := slices.IndexFunc(inv.members, func(m member) bool { return m.cluster == cluster })

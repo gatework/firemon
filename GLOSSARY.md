@@ -29,3 +29,9 @@
 | Owner | 归属防火墙 | Firewall with the most specific non-default route to an end of a flow. |
 | Crossing | 经过防火墙 | Part of a flow one firewall routes between two of its interfaces. |
 | Predefined service book | 预定义服务表 | Built-in service names and ports of a vendor or device (`firemon.ServiceBook`). |
+| Protected network | 受保护网段 | Network a firewall protects behind a zone, declared in the inventory. |
+| Cluster | 集群 | HA members evaluated and planned once. |
+| Excluded traffic | 剔除地址 | Traffic whose ends no firewall owns. |
+| Full match / partial match / need new | 完全命中 / 部分命中 / 需要新增 | Report classification of access control on one firewall. |
+| Candidate rule | 候选修改策略 | Existing permit rule that could carry the remaining traffic. |
+| Domain target / application target | 域名目标 / 应用目标 | Request part matched by domain pattern or application name. |

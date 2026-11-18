@@ -25,11 +25,11 @@ func newLocateCmd(o *options) *cobra.Command {
 		Short: "Find the firewalls among all snapshots a flow crosses, with each verdict (and plans with --design)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			intent, err := in.intent()
+			inv, platforms, err := o.inventory(cmd)
 			if err != nil {
 				return err
 			}
-			inv, platforms, err := o.inventory(cmd)
+			intent, err := in.intent(intakeOptions(platforms).Services)
 			if err != nil {
 				return err
 			}

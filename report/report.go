@@ -2,6 +2,7 @@ package report
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/design"
@@ -71,18 +72,23 @@ type Excluded struct {
 
 // Firewall is the result on one cluster.
 type Firewall struct {
-	Cluster    string              `json:"cluster"`
-	Firewall   string              `json:"firewall"`
-	Members    []string            `json:"members"`
-	Ownership  inventory.Ownership `json:"ownership"`
-	Paths      []Path              `json:"paths"`
-	Status     Status              `json:"status"`
-	Permitted  []Hit               `json:"permitted,omitempty"`
-	Blocked    []Hit               `json:"blocked,omitempty"`
-	Undecided  []Hit               `json:"undecided,omitempty"`
-	Remaining  string              `json:"remaining,omitempty"`
-	Candidates []Candidate         `json:"candidates,omitempty"`
-	Plan       *design.Plan        `json:"plan,omitempty"`
+	Cluster   string              `json:"cluster"`
+	Firewall  string              `json:"firewall"`
+	Members   []string            `json:"members"`
+	Ownership inventory.Ownership `json:"ownership"`
+	Paths     []Path              `json:"paths"`
+	Status    Status              `json:"status"`
+	Permitted []Hit               `json:"permitted,omitempty"`
+	Blocked   []Hit               `json:"blocked,omitempty"`
+	Undecided []Hit               `json:"undecided,omitempty"`
+	// UndecidedTraffic is the traffic the undecided rules may decide.
+	UndecidedTraffic string `json:"undecided_traffic,omitempty"`
+	// Otherwise are the rules (or the default action) that decide the
+	// undecided traffic when the undecided rules do not match.
+	Otherwise  []Hit        `json:"otherwise,omitempty"`
+	Remaining  string       `json:"remaining,omitempty"`
+	Candidates []Candidate  `json:"candidates,omitempty"`
+	Plan       *design.Plan `json:"plan,omitempty"`
 }
 
 // Path summarizes one path through a firewall.
@@ -149,35 +155,140 @@ func planFor(plans []inventory.ClusterPlan, cluster string) *design.Plan {
 func firewallReport(c inventory.Crossing) Firewall {
 	f := Firewall{Cluster: c.Cluster, Firewall: c.Firewall, Members: c.Members, Ownership: c.Ownership}
 	var permitted, blocked, deflt, unknown traffic.Region
+	var acc hitSets
 	for _, p := range c.Paths {
 		f.Paths = append(f.Paths, pathSummary(p))
 		for _, d := range p.Decisions {
 			switch d.Outcome {
 			case query.OutcomePermit:
 				permitted = permitted.Union(d.Space)
-				f.Permitted = addHit(f.Permitted, d.Rule, d.Space, nil)
+				acc.add(&acc.permitted, d.Rule, p, d.Space, nil)
 			case query.OutcomeDeny:
 				blocked = blocked.Union(d.Space)
-				f.Blocked = addHit(f.Blocked, d.Rule, d.Space, nil)
+				acc.add(&acc.blocked, d.Rule, p, d.Space, nil)
 			case query.OutcomeDefault:
 				deflt = deflt.Union(d.Space)
 			case query.OutcomeUnknown:
 				unknown = unknown.Union(d.Space)
+				acc.unknown = append(acc.unknown, labelled{p, d.Space})
 				for _, pr := range d.Possible {
-					f.Undecided = addHit(f.Undecided, pr, d.Space, pr.Issues())
+					acc.add(&acc.undecided, pr, p, traffic.Region{}, summarize(pr.Issues()))
 				}
 				if len(d.Possible) == 0 {
-					f.Undecided = addHit(f.Undecided, nil, d.Space, p.NATUncertain)
+					acc.add(&acc.undecided, nil, p, traffic.Region{}, p.NATUncertain)
 				}
+				acc.add(&acc.otherwise, d.Rule, p, d.Space, []string{d.Final.String()})
 			case query.OutcomeUnset:
 			}
 		}
 	}
+	f.Permitted, f.Blocked = acc.permitted.hits(), acc.blocked.hits()
+	f.Undecided, f.Otherwise = acc.undecided.hits(), acc.otherwise.hits()
+	f.UndecidedTraffic = describeAll(acc.unknown)
 	if rest := blocked.Union(deflt); !rest.IsEmpty() {
 		f.Remaining = rest.String()
 	}
 	f.Status = classify(!permitted.IsEmpty(), !blocked.IsEmpty(), !deflt.IsEmpty(), !unknown.IsEmpty())
 	return f
+}
+
+// labelled is a region decided on one path.
+type labelled struct {
+	path query.Path
+	r    traffic.Region
+}
+
+// hitList accumulates, per rule, the traffic it decides.
+type hitList struct {
+	order   []string
+	names   map[string]string
+	reasons map[string][]string
+	traffic map[string][]labelled
+}
+
+type hitSets struct {
+	permitted, blocked, undecided, otherwise hitList
+	unknown                                  []labelled
+}
+
+func (hitSets) add(l *hitList, r *firemon.Rule, p query.Path, s traffic.Region, reasons []string) {
+	if l.names == nil {
+		l.names, l.reasons, l.traffic = map[string]string{}, map[string][]string{}, map[string][]labelled{}
+	}
+	id, name := "(default)", ""
+	if r != nil {
+		id, name = r.ID(), r.Spec().Name
+	}
+	if _, ok := l.names[id]; !ok {
+		l.order = append(l.order, id)
+		l.names[id] = name
+		l.reasons[id] = reasons
+	}
+	if !s.IsEmpty() {
+		l.traffic[id] = append(l.traffic[id], labelled{p, s})
+	}
+}
+
+func (l hitList) hits() []Hit {
+	out := make([]Hit, 0, len(l.order))
+	for _, id := range l.order {
+		out = append(out, Hit{Rule: id, Name: l.names[id], Traffic: describeAll(l.traffic[id]), Reasons: l.reasons[id]})
+	}
+	return out
+}
+
+// describeAll merges the regions of each path and writes them, using the
+// domain name on unresolved domain paths.
+func describeAll(ls []labelled) string {
+	var parts []string
+	var plain traffic.Region
+	for _, x := range ls {
+		if x.path.Domain != "" && !x.path.DomainResolved {
+			parts = append(parts, describe(x.r, x.path))
+			continue
+		}
+		plain = plain.Union(x.r)
+	}
+	if !plain.IsEmpty() {
+		parts = append([]string{compact(plain)}, parts...)
+	}
+	return strings.Join(slices.Compact(parts), "; ")
+}
+
+// compact writes a region as one box when that box holds exactly the
+// region, which is the common case after merging pieces.
+func compact(r traffic.Region) string {
+	b := box(r)
+	if traffic.NewRegion(b).SubtractRegion(r).IsEmpty() {
+		return b.String()
+	}
+	return r.String()
+}
+
+// summarize shortens a rule's issues into its kinds.
+func summarize(issues []string) []string {
+	var out []string
+	for _, i := range issues {
+		kind := "other"
+		switch {
+		case strings.Contains(i, "fqdn"), strings.HasPrefix(i, "domain-book"):
+			kind = "domain"
+		case strings.HasPrefix(i, "application"):
+			kind = "application"
+		case strings.HasPrefix(i, "source-user"), strings.HasPrefix(i, "user"):
+			kind = "user"
+		case strings.HasPrefix(i, "category"):
+			kind = "url-category"
+		case strings.Contains(i, "schedule"):
+			kind = "schedule"
+		case strings.Contains(i, "unknown"):
+			kind = "unknown-object"
+		}
+		if !slices.Contains(out, kind) {
+			out = append(out, kind)
+		}
+	}
+	return out
 }
 
 func classify(permitted, blocked, deflt, unknown bool) Status {
@@ -220,16 +331,15 @@ func natLine(h query.NATHit) NAT {
 	return n
 }
 
-// addHit merges the space a rule decides into its hit.
-func addHit(hits []Hit, r *firemon.Rule, s traffic.Region, reasons []string) []Hit {
-	id, name := "(default)", ""
-	if r != nil {
-		id, name = r.ID(), r.Spec().Name
+// describe writes a decided region; on an unresolved domain path the
+// destination is the domain name rather than the address share it stands for.
+func describe(r traffic.Region, p query.Path) string {
+	if p.Domain == "" || p.DomainResolved {
+		return r.String()
 	}
-	i := slices.IndexFunc(hits, func(h Hit) bool { return h.Rule == id })
-	if i < 0 {
-		return append(hits, Hit{Rule: id, Name: name, Traffic: s.String(), Reasons: reasons})
+	parts := make([]string, 0, r.Len())
+	for _, s := range r.Spaces() {
+		parts = append(parts, s.Src.String()+" -> "+p.Domain+" "+s.Service.String())
 	}
-	hits[i].Traffic += "; " + s.String()
-	return hits
+	return strings.Join(parts, "; ")
 }

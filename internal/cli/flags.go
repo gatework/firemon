@@ -6,6 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/intake"
 	"github.com/gatework/firemon/traffic"
 )
 
@@ -31,25 +33,24 @@ func (t *trafficFlags) register(cmd *cobra.Command) {
 // parsed is the validated traffic.
 type parsed struct {
 	src, dst traffic.AddressSet
+	domains  []string
+	apps     []string
 	service  traffic.ServiceSet
 	at       time.Time
 }
 
-func (t *trafficFlags) parse() (parsed, error) {
+// parse reads the traffic flags tolerantly (see intake); service names are
+// read with the given book.
+func (t *trafficFlags) parse(book firemon.ServiceBook) (parsed, error) {
 	var p parsed
-	var err error
 	if t.src == "" || t.dst == "" || t.service == "" {
 		return p, &usageError{errors.New("--src, --dst and --service are required")}
 	}
-	if p.src, err = traffic.ParseAddressSet(t.src); err != nil {
+	in, err := intake.Parse(t.src, t.dst, t.service, intake.Options{Services: book})
+	if err != nil {
 		return p, &usageError{err}
 	}
-	if p.dst, err = traffic.ParseAddressSet(t.dst); err != nil {
-		return p, &usageError{err}
-	}
-	if p.service, err = traffic.ParseServiceSet(t.service); err != nil {
-		return p, &usageError{err}
-	}
+	p.src, p.dst, p.domains, p.apps, p.service = in.Src, in.Dst, in.DstDomains, in.Applications, in.Service
 	if t.at != "" {
 		if p.at, err = time.Parse(time.RFC3339, t.at); err != nil {
 			return p, &usageError{err}

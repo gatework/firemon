@@ -29,11 +29,11 @@ func newDeployCmd(o *options) *cobra.Command {
 			if o.file != "" || o.snapshot != "" {
 				return &usageError{errors.New("deploy reads the device; do not set --config or --snapshot")}
 			}
-			intent, err := in.intent()
+			loaded, platform, err := o.load(cmd.Context())
 			if err != nil {
 				return err
 			}
-			loaded, platform, err := o.load(cmd.Context())
+			intent, err := in.intent(platform.Services)
 			if err != nil {
 				return err
 			}

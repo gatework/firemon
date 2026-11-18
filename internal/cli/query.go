@@ -16,17 +16,17 @@ func newQueryCmd(o *options) *cobra.Command {
 		Short: "Show how the firewall treats traffic: paths, NAT, deciding rules and verdict",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			req, err := t.parse()
+			loaded, platform, err := o.load(cmd.Context())
 			if err != nil {
 				return err
 			}
-			loaded, _, err := o.load(cmd.Context())
+			req, err := t.parse(platform.Services)
 			if err != nil {
 				return err
 			}
 			e := query.New(loaded.Firewall, query.Options{Now: o.deps.Now})
 			res, err := e.Query(query.Request{
-				Src: req.src, Dst: req.dst, Service: req.service, At: req.at,
+				Src: req.src, Dst: req.dst, Service: req.service, At: req.at, DstDomains: req.domains, Applications: req.apps,
 				FromZone: t.fromZone, ToZone: t.toZone, VirtualRouter: t.vr,
 			})
 			if err != nil {

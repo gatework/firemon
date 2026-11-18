@@ -69,7 +69,9 @@ func (e *Engine) discoverDomain(req Request, table *firemon.RoutingTable, domain
 			if !ok {
 				continue
 			}
-			pc := natPiece{original: traffic.Space{Src: in.addrs, Dst: fam, Service: r.Service}}
+			// An unresolved name leaves by the default route, so its address
+			// is one the default route forwards: not in any more specific route.
+			pc := natPiece{original: traffic.Space{Src: in.addrs, Dst: out.addrs, Service: r.Service}}
 			pc.translated = pc.original
 			if len(paths) >= e.maxPaths {
 				return paths, true
@@ -86,11 +88,10 @@ func (e *Engine) defaultEgress(req Request, table *firemon.RoutingTable) (hop, b
 	if req.ToZone != "" {
 		return hop{vr: tableName(table), zone: req.ToZone, prefixLen: -1, addrs: req.Dst}, true
 	}
-	hops, _ := e.route(table, traffic.NewAddressSet(netip.PrefixFrom(netip.IPv4Unspecified(), 0)), 0)
-	for _, h := range hops {
-		if h.prefixLen == 0 {
-			h.addrs = req.Dst
-			return h, true
+	egress, _ := table.Lookup(traffic.AnyIPv4())
+	for _, g := range egress {
+		if g.Route.Destination.Bits() == 0 && g.Interface != "" {
+			return hop{vr: table.Name(), zone: g.Zone, iface: g.Interface, prefixLen: 0, addrs: g.Addresses}, true
 		}
 	}
 	return hop{}, false
@@ -140,6 +141,10 @@ func (e *Engine) ruleView(r *firemon.Rule, p *Path) view {
 	case v.match.Dst.ContainsSet(traffic.AnyIPv4()):
 	case v.match.Dst.IsEmpty() && !r.DstDomains().IsEmpty():
 		return view{skip: true} // domain-only rule for other names
+	case !v.match.Dst.Overlaps(p.Policy.Dst) && r.DecidableFor(true, p.Application != ""):
+		// The rule's addresses are all routed elsewhere: the name, which
+		// leaves by the default route, cannot be one of them.
+		return view{skip: true}
 	default:
 		// Addresses only: the unresolved name may or may not be one of them.
 		v.bound.Dst, v.decidable = traffic.AnyAddress(), false

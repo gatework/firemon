@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/internal/workflow"
 )
@@ -25,8 +26,8 @@ func (i *intentFlags) register(cmd *cobra.Command) {
 	f.BoolVar(&i.override, "override", false, "place new rules above specific deny rules instead of reporting conflicts")
 }
 
-func (i *intentFlags) intent() (design.Intent, error) {
-	t, err := i.parse()
+func (i *intentFlags) intent(book firemon.ServiceBook) (design.Intent, error) {
+	t, err := i.parse(book)
 	if err != nil {
 		return design.Intent{}, err
 	}
@@ -44,11 +45,11 @@ func newDesignCmd(o *options) *cobra.Command {
 		Short: "Design and render the change that permits traffic, without touching the device",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			intent, err := in.intent()
+			loaded, platform, err := o.load(cmd.Context())
 			if err != nil {
 				return err
 			}
-			loaded, platform, err := o.load(cmd.Context())
+			intent, err := in.intent(platform.Services)
 			if err != nil {
 				return err
 			}

@@ -21,6 +21,7 @@ type Platform struct {
 	// Services is the effective predefined service book: the vendor default
 	// overridden by the device book.
 	Services       firemon.ServiceBook
+	Applications   firemon.ServiceBook
 	Naming         design.Naming
 	Parse          func(text string) (*firemon.Config, error)
 	Render         func(plan *design.Plan) (design.Script, error)
@@ -34,13 +35,13 @@ func Lookup(vendor firemon.Vendor, loc *time.Location, book firemon.ServiceBook)
 	case firemon.VendorHillstone:
 		p := hillstone.New(hillstone.Options{Location: loc, Services: book})
 		return Platform{
-			Vendor: vendor, Services: hillstone.DefaultServices().With(book),
+			Vendor: vendor, Services: hillstone.DefaultServices().With(book), Applications: hillstone.DefaultApplications(),
 			Parse: p.Parse, Render: hillstone.Renderer{}.Render, DeployCommands: hillstone.DeployCommands,
 		}, nil
 	case firemon.VendorPaloAlto:
 		p := paloalto.New(paloalto.Options{Location: loc, Services: book})
 		return Platform{
-			Vendor: vendor, Services: paloalto.DefaultServices().With(book), Naming: paloalto.Naming(),
+			Vendor: vendor, Services: paloalto.DefaultServices().With(book), Applications: paloalto.DefaultApplications(), Naming: paloalto.Naming(),
 			Parse: p.Parse, Render: paloalto.Renderer{}.Render, DeployCommands: paloalto.DeployCommands,
 		}, nil
 	case firemon.VendorUnset:

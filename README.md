@@ -12,6 +12,27 @@ go install github.com/gatework/firemon/cmd/firemon@latest
 
 ## Command line
 
+The one-shot query for operators:
+
+```sh
+firemon check --inventory firemon.yaml --src "10.250.119.0 255.255.255.0，10.250.120.5-9" \
+  --dst "1.1.1.1、api.example.com" --service "443, udp 53, app:ssh" --design --name REQ-1001
+```
+
+It reads the addresses and services in any common form, locates the firewalls through the protected networks of `firemon.yaml` (falling back to routing), evaluates NAT and access control on each HA cluster, and prints per firewall 完全命中 / 部分命中 / 需要新增 / 被拒绝 / 无法判定, the permitting and blocking rules, the best rules to modify and why the others are not, the traffic no firewall carries, and with `--design` the verified commands and rollback. `--resolve` resolves domains so address-based rules can be decided; `--json` prints the report as data.
+
+```yaml
+# firemon.yaml
+firewalls:
+  - name: SZX9-FW01
+    cluster: SZX9-FW
+    protected:
+      - zone: INSIDE
+        networks: [10.250.0.0/16]
+  - name: SZX9-FW02
+    cluster: SZX9-FW
+```
+
 Every command reads the configuration from `--config FILE`, from a stored snapshot with `--snapshot NAME` (directory `--store`), or from the device with `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output.
 
 ```sh
@@ -55,7 +76,10 @@ Addresses accept `10.0.0.1`, `10.0.0.0/24`, `10.0.0.1-10.0.0.9` and `any`; servi
 | `query` | Ordered first-match evaluation with routing and NAT |
 | `design` | Verified change plans: reuse objects, extend rules, add rules |
 | `audit` | Shadowing, redundancy and hygiene review |
-| `inventory` | Firewalls a flow crosses: longest-prefix ownership plus next-hop chains |
+| `inventory` | Firewalls a flow crosses: protected networks, routing fallback, next-hop chains, HA clusters |
+| `intake` | Tolerant reading of operator input with coded notes |
+| `report` | Per-firewall classification, candidate rules and plans |
+| `adapter/yamlfile`, `adapter/dns` | Operator inventory file; optional domain resolution |
 | `deploy` | Fingerprint-checked, journaled deployment on go-netops `apply` |
 | `vendors/hillstone`, `vendors/paloalto` | Parsing and rendering per vendor |
 | `adapter/netconnector` | Device access through net-connector |
