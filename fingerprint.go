@@ -32,7 +32,12 @@ func fingerprint(cfg *Config) string {
 	slices.SortFunc(c.RuleGroups, func(a, b RuleGroup) int { return byName(a.ID, b.ID) })
 	slices.SortFunc(c.Routes, func(a, b Route) int {
 		return cmp.Or(byName(a.VirtualRouter, b.VirtualRouter), byName(a.Destination.String(), b.Destination.String()),
-			byName(a.NextHop.String(), b.NextHop.String()), byName(a.Interface, b.Interface))
+			byName(a.NextHop.String(), b.NextHop.String()), byName(a.Interface, b.Interface),
+			byName(a.NextVirtualRouter, b.NextVirtualRouter), cmp.Compare(a.Distance, b.Distance),
+			cmp.Compare(a.Metric, b.Metric), compareBool(a.Discard, b.Discard), slices.Compare(a.Objects, b.Objects))
+	})
+	slices.SortFunc(c.PolicyBindings, func(a, b PolicyBinding) int {
+		return cmp.Or(byName(a.Policy, b.Policy), byName(a.Zone, b.Zone), byName(a.Interface, b.Interface))
 	})
 	raw, err := json.Marshal(&c)
 	if err != nil {
@@ -41,4 +46,15 @@ func fingerprint(cfg *Config) string {
 	}
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
+}
+
+func compareBool(a, b bool) int {
+	switch {
+	case a == b:
+		return 0
+	case a:
+		return 1
+	default:
+		return -1
+	}
 }

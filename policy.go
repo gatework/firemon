@@ -42,6 +42,17 @@ func (r *Rule) Spec() SecurityRule { return r.spec }
 // Action returns the rule action.
 func (r *Rule) Action() Action { return r.spec.Action }
 
+// Zones returns the source and destination zones; empty means any. The
+// slices are shared and read-only.
+func (r *Rule) Zones() (from, to []string) { return r.spec.From, r.spec.To }
+
+// Scope returns the zone-pair scope (PAN-OS rule-type).
+func (r *Rule) Scope() ZoneScope { return r.spec.Scope }
+
+// ApplicationDefault reports whether services are the applications'
+// default ports.
+func (r *Rule) ApplicationDefault() bool { return r.spec.ApplicationDefault }
+
 // Match returns the exact match space. When Issues is non-empty it is the
 // part of the match that could be resolved.
 func (r *Rule) Match() traffic.Space { return r.match }

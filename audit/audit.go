@@ -32,12 +32,16 @@ func Run(fw *firemon.Firewall, opts Options) Report {
 	at := now()
 	var r Report
 	rules := fw.Rules()
+	sure := make([]bool, len(rules))
+	for i, rule := range rules {
+		sure[i] = certain(rule, at)
+	}
 	for i, rule := range rules {
 		r.Findings = append(r.Findings, ruleFindings(rule, at)...)
-		if !certain(rule, at) {
+		if !sure[i] {
 			continue
 		}
-		f, complete := shadowing(rule, rules[:i], at, budget)
+		f, complete := shadowing(rule, rules[:i], sure[:i], budget)
 		if !complete {
 			r.Incomplete = append(r.Incomplete, rule.ID())
 		}
@@ -79,15 +83,16 @@ func ruleFindings(r *firemon.Rule, at time.Time) []Finding {
 
 // shadowing finds the earlier rules covering r on every zone pair r applies
 // to. It returns nil when part of r remains reachable.
-func shadowing(r *firemon.Rule, earlier []*firemon.Rule, at time.Time, budget int) (*Finding, bool) {
+// sure tells which earlier rules are certain.
+func shadowing(r *firemon.Rule, earlier []*firemon.Rule, sure []bool, budget int) (*Finding, bool) {
 	remaining := traffic.NewRegion(r.Match())
 	var by []string
 	opposite := false
-	for _, e := range earlier {
+	for i, e := range earlier {
 		if remaining.IsEmpty() {
 			break
 		}
-		if !certain(e, at) || !covers(e.Spec(), r.Spec()) || !overlaps(remaining, e.Match()) {
+		if !sure[i] || !covers(e, r) || !remaining.Overlaps(e.Match()) {
 			continue
 		}
 		by = append(by, e.ID())
@@ -107,13 +112,11 @@ func shadowing(r *firemon.Rule, earlier []*firemon.Rule, at time.Time, budget in
 	return &Finding{Kind: kind, Rule: r.ID(), By: by}, true
 }
 
-func overlaps(r traffic.Region, s traffic.Space) bool {
-	return slices.ContainsFunc(r.Spaces(), s.Overlaps)
-}
-
 // covers reports whether e applies to every zone pair r applies to.
-func covers(e, r firemon.SecurityRule) bool {
-	return zoneSuperset(e.From, r.From) && zoneSuperset(e.To, r.To) && r.Scope.Covers(e.Scope)
+func covers(e, r *firemon.Rule) bool {
+	eFrom, eTo := e.Zones()
+	rFrom, rTo := r.Zones()
+	return zoneSuperset(eFrom, rFrom) && zoneSuperset(eTo, rTo) && r.Scope().Covers(e.Scope())
 }
 
 func zoneSuperset(outer, inner []string) bool {

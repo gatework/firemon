@@ -220,13 +220,18 @@ func catchAll(r *firemon.Rule) bool {
 		len(s.From) == 0 && len(s.To) == 0 && s.Scope == firemon.ZoneScopeAny
 }
 
+// maxTrials bounds the rule extensions verified per zone pair (ALG-2).
+const maxTrials = 8
+
 // open returns the cheapest verified changes that permit n.
 func (p *Planner) open(n need, intent Intent, cat *catalog, at time.Time) ([]Change, error) {
 	if n.from == "" || n.to == "" {
 		return nil, fmt.Errorf("design: zones of %s are unknown; set the from and to zones", n.region)
 	}
 	target := n.region.Bounds()
-	for _, cand := range p.extensions(n, target, cat) {
+	cands := p.extensions(n, target, cat)
+	// Each trial recompiles the firewall; the cheapest few are enough.
+	for _, cand := range cands[:min(len(cands), maxTrials)] {
 		mark := cat.mark()
 		changes := cand.changes(cat)
 		all := append(slices.Clone(cat.created), changes...)

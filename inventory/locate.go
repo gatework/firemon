@@ -137,13 +137,13 @@ func (inv *Inventory) assign(req query.Request, t *Trace) (map[string]*assignmen
 				inv.bridgesMayCarry(t)
 				continue
 			}
-			inv.assignPair(sp, dp, p, add)
+			inv.assignPair(sp, dp, p, req.VirtualRouter, add)
 		}
 	}
 	return work, nil
 }
 
-func (inv *Inventory) assignPair(sp, dp owned, p Part, add func(string, Ownership, Part)) {
+func (inv *Inventory) assignPair(sp, dp owned, p Part, vr string, add func(string, Ownership, Part)) {
 	if sp.cluster != "" {
 		sp1 := p
 		if sp.ownership == OwnershipDeclared {
@@ -153,7 +153,7 @@ func (inv *Inventory) assignPair(sp, dp owned, p Part, add func(string, Ownershi
 			sp1.ToZone = dp.zone
 		}
 		add(sp.cluster, sp.ownership, sp1)
-		for _, transit := range inv.chain(sp.cluster, p) {
+		for _, transit := range inv.chain(sp.cluster, p, vr) {
 			if transit != dp.cluster {
 				add(transit, OwnershipTransit, p)
 			}
@@ -170,7 +170,7 @@ func (inv *Inventory) assignPair(sp, dp owned, p Part, add func(string, Ownershi
 
 // chain follows route next hops from a cluster toward the part's
 // destinations and returns the clusters reached, in order.
-func (inv *Inventory) chain(start string, p Part) []string {
+func (inv *Inventory) chain(start string, p Part, vr string) []string {
 	dst := p.Dst
 	if dst.IsEmpty() {
 		dst = traffic.NewAddressSet(netip.MustParsePrefix("0.0.0.0/0")) // domains leave by default
@@ -181,7 +181,7 @@ func (inv *Inventory) chain(start string, p Part) []string {
 	for len(frontier) > 0 && len(out) < len(inv.members) {
 		m := inv.primary(frontier[0])
 		frontier = frontier[1:]
-		for _, next := range inv.nextHops(m, dst) {
+		for _, next := range inv.nextHops(m, dst, vr) {
 			if !seen[next] {
 				seen[next] = true
 				out = append(out, next)
@@ -194,8 +194,12 @@ func (inv *Inventory) chain(start string, p Part) []string {
 
 // nextHops returns the clusters whose interface addresses are next hops of
 // m's routes toward dst.
-func (inv *Inventory) nextHops(m *member, dst traffic.AddressSet) []string {
-	table, ok := m.fw.RoutingTable(m.fw.Semantics().DefaultVirtualRouter)
+func (inv *Inventory) nextHops(m *member, dst traffic.AddressSet, vr string) []string {
+	table, ok := m.fw.RoutingTable(vr)
+	if !ok {
+		// The requested routing context exists only on some members.
+		table, ok = m.fw.RoutingTable(m.fw.Semantics().DefaultVirtualRouter)
+	}
 	if !ok {
 		return nil
 	}

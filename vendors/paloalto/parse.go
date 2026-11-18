@@ -48,17 +48,20 @@ func (p *Parser) Parse(text string) (*firemon.Config, error) {
 		return nil, fmt.Errorf("paloalto: %w", err)
 	}
 	loc := time.UTC
-	if p != nil && p.opts.Location != nil {
+	if p.opts.Location != nil {
 		loc = p.opts.Location
 	}
 	s := newState(loc)
 	s.book = DefaultServices()
-	if p != nil && p.opts.Services != nil {
+	if p.opts.Services != nil {
 		s.book = p.opts.Services
 	}
-	stmts, _ := statements(content)
+	stmts, strays := statements(content)
 	for _, st := range stmts {
 		s.dispatch(st)
+	}
+	for _, l := range strays {
+		s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Line: l.Number, Text: strings.TrimSpace(l.Text), Reason: "not a set statement"})
 	}
 	cfg := s.finish()
 	cfg.Applications = p.applications()

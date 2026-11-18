@@ -43,13 +43,15 @@ func (e *Engine) evaluate(p *Path, at time.Time) {
 		if e.inactive(r, at) {
 			continue
 		}
+		applies := zoneApplicability(r, p.From, p.To)
+		if applies == appliesNo {
+			continue
+		}
 		v := e.ruleView(r, p)
 		if v.skip {
 			continue
 		}
-		switch applies := zoneApplicability(r, p.From, p.To); {
-		case applies == appliesNo:
-			continue
+		switch {
 		case applies == appliesMaybe:
 			ev.taint(r, v.bound)
 		case !v.decidable:
@@ -83,44 +85,48 @@ func (e *Engine) evaluate(p *Path, at time.Time) {
 
 // taint marks the parts of every piece an undecidable rule might match.
 func (ev *evaluator) taint(r *firemon.Rule, bound traffic.Space) {
-	var next []piece
-	for _, pc := range ev.pieces {
-		if !addressesOverlap(pc.space, bound) {
-			next = append(next, pc)
-			continue
-		}
-		hit := pc.space.Intersect(bound)
-		if hit.IsEmpty() {
-			next = append(next, pc)
-			continue
-		}
-		next = append(next, piece{space: hit, possible: append(slices.Clip(pc.possible), r)})
-		for _, rest := range pc.space.Subtract(bound) {
-			next = append(next, piece{space: rest, possible: pc.possible})
-		}
-	}
-	ev.pieces = next
+	ev.split(bound, func(pc piece, hit traffic.Space) []piece {
+		return []piece{{space: hit, possible: append(slices.Clip(pc.possible), r)}}
+	})
 }
 
 // decide removes the packets r matches from every piece and records them.
 func (ev *evaluator) decide(r *firemon.Rule, match traffic.Space, o Outcome) {
-	var next []piece
-	for _, pc := range ev.pieces {
-		if !addressesOverlap(pc.space, match) {
-			next = append(next, pc)
-			continue
-		}
-		hit := pc.space.Intersect(match)
-		if hit.IsEmpty() {
-			next = append(next, pc)
-			continue
-		}
+	ev.split(match, func(pc piece, hit traffic.Space) []piece {
 		ev.record(r, o, pc.possible, hit)
-		for _, rest := range pc.space.Subtract(match) {
+		return nil
+	})
+}
+
+// split cuts every piece overlapping s into its part in s, which onHit
+// replaces, and the rest. Pieces s does not touch stay where they are; the
+// list is copied only once a piece changes, since most rules touch none.
+func (ev *evaluator) split(s traffic.Space, onHit func(pc piece, hit traffic.Space) []piece) {
+	var next []piece
+	changed := false
+	for i, pc := range ev.pieces {
+		var hit traffic.Space
+		if addressesOverlap(pc.space, s) {
+			hit = pc.space.Intersect(s)
+		}
+		if hit.IsEmpty() {
+			if changed {
+				next = append(next, pc)
+			}
+			continue
+		}
+		if !changed {
+			next = append(make([]piece, 0, len(ev.pieces)+4), ev.pieces[:i]...)
+			changed = true
+		}
+		next = append(next, onHit(pc, hit)...)
+		for _, rest := range pc.space.Subtract(s) {
 			next = append(next, piece{space: rest, possible: pc.possible})
 		}
 	}
-	ev.pieces = next
+	if changed {
+		ev.pieces = next
+	}
 }
 
 // finish assigns the default outcome to every undecided piece.
@@ -198,12 +204,13 @@ func (e *Engine) defaultOutcome(p *Path) Outcome {
 }
 
 func zoneApplicability(r *firemon.Rule, from, to string) applicability {
-	spec := r.Spec()
-	if !spec.Scope.Allows(from, to) {
+	scope := r.Scope()
+	if !scope.Allows(from, to) {
 		return appliesNo
 	}
-	a := zoneApplies(spec.From, spec.To, from, to)
-	if a == appliesYes && spec.Scope != firemon.ZoneScopeAny && (from == "" || to == "") {
+	fromZones, toZones := r.Zones()
+	a := zoneApplies(fromZones, toZones, from, to)
+	if a == appliesYes && scope != firemon.ZoneScopeAny && (from == "" || to == "") {
 		return appliesMaybe
 	}
 	return a

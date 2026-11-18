@@ -38,6 +38,10 @@ func apply(cfg *firemon.Config, ch Change) error {
 			return fmt.Errorf("%w %q", ErrUnknownRule, c.RuleID)
 		}
 		r := &cfg.Rules[i]
+		if extendsAny(r, c.Field) {
+			// An empty list means any: appending names would narrow it.
+			return fmt.Errorf("design: extend rule %q: %s already matches any", c.RuleID, c.Field)
+		}
 		switch c.Field {
 		case FieldSource:
 			for _, n := range c.Names {
@@ -65,4 +69,20 @@ func apply(cfg *firemon.Config, ch Change) error {
 		return fmt.Errorf("design: unsupported change %T", ch)
 	}
 	return nil
+}
+
+// extendsAny reports whether field of r is empty, which means any.
+func extendsAny(r *firemon.SecurityRule, f Field) bool {
+	switch f {
+	case FieldSource:
+		return len(r.Source) == 0
+	case FieldDestination:
+		return len(r.Destination) == 0
+	case FieldService:
+		return len(r.Services) == 0 && len(r.ServiceEntries) == 0
+	case FieldUnset:
+		return false
+	default:
+		return false
+	}
 }

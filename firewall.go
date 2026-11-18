@@ -26,6 +26,7 @@ type Firewall struct {
 	interfaces  map[string]Interface
 	tables      map[string]*RoutingTable
 	rules       []*Rule
+	ruleByID    map[string]*Rule // first rule of each ID
 	nat         []*NATRule
 	statics     []*StaticMapping
 	pbr         []*PBRRule
@@ -85,11 +86,8 @@ func (fw *Firewall) Rules() []*Rule { return slices.Clone(fw.rules) }
 
 // Rule returns the security rule with the given device ID.
 func (fw *Firewall) Rule(id string) (*Rule, bool) {
-	i := slices.IndexFunc(fw.rules, func(r *Rule) bool { return r.spec.ID == id })
-	if i < 0 {
-		return nil, false
-	}
-	return fw.rules[i], true
+	r, ok := fw.ruleByID[id]
+	return r, ok
 }
 
 // ApplicationPorts returns the default ports of an application, ignoring
@@ -222,6 +220,7 @@ func (fw *Firewall) compileRules(res *resolver) {
 		schedules[fw.cfg.Schedules[i].Name] = &fw.cfg.Schedules[i]
 	}
 	fw.rules = make([]*Rule, len(fw.cfg.Rules))
+	fw.ruleByID = make(map[string]*Rule, len(fw.cfg.Rules))
 	seen := make(map[string]bool, len(fw.cfg.Rules))
 	for i, spec := range fw.cfg.Rules {
 		if seen[spec.ID] {
@@ -262,6 +261,9 @@ func (fw *Firewall) compileRules(res *resolver) {
 			fw.issues = append(fw.issues, Issue{Kind: is.Kind, Object: "rule " + spec.ID, Reason: is.Reason})
 		}
 		fw.rules[i] = r
+		if _, dup := fw.ruleByID[spec.ID]; !dup {
+			fw.ruleByID[spec.ID] = r
+		}
 	}
 }
 

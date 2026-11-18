@@ -118,11 +118,14 @@ func (r *resolver) group(g *AddressGroup) resolved[traffic.AddressSet] {
 	for _, bad := range g.Invalid {
 		res.problems = append(res.problems, "invalid entry "+quote(bad)+" in "+quote(g.Name))
 	}
+	parts := make([]traffic.AddressSet, 0, len(g.Members)+1)
+	parts = append(parts, res.set)
 	for _, m := range g.Members {
 		member := r.address(m)
-		res.set = res.set.Union(member.set)
+		parts = append(parts, member.set)
 		res.absorb(member.problems, member.domainProblems, member.domains, member.overstated)
 	}
+	res.set = traffic.UnionAll(parts...)
 	// Excluded entries apply after members are merged.
 	for _, e := range g.Entries {
 		if s, ok := e.Set(); ok && e.Exclude {
@@ -138,6 +141,7 @@ func (r *resolver) operands(refs []AddressRef) resolved[traffic.AddressSet] {
 		return resolved[traffic.AddressSet]{set: traffic.AnyAddress()}
 	}
 	var res resolved[traffic.AddressSet]
+	sets := make([]traffic.AddressSet, 0, len(refs))
 	for _, ref := range refs {
 		var part resolved[traffic.AddressSet]
 		if ref.IsInline() {
@@ -145,9 +149,10 @@ func (r *resolver) operands(refs []AddressRef) resolved[traffic.AddressSet] {
 		} else {
 			part = r.address(ref.Name)
 		}
-		res.set = res.set.Union(part.set)
+		sets = append(sets, part.set)
 		res.absorb(part.problems, part.domainProblems, part.domains, part.overstated)
 	}
+	res.set = traffic.UnionAll(sets...)
 	return res
 }
 
@@ -202,7 +207,7 @@ func (r *resolver) serviceList(names []string) resolved[traffic.ServiceSet] {
 // entriesSet unions the included entries and subtracts the excluded ones.
 func entriesSet(entries []AddressEntry, owner string) resolved[traffic.AddressSet] {
 	var res resolved[traffic.AddressSet]
-	var excluded traffic.AddressSet
+	var included, excluded []traffic.AddressSet
 	for _, e := range entries {
 		s, ok := e.Set()
 		if !ok {
@@ -221,12 +226,12 @@ func entriesSet(entries []AddressEntry, owner string) resolved[traffic.AddressSe
 			continue
 		}
 		if e.Exclude {
-			excluded = excluded.Union(s)
+			excluded = append(excluded, s)
 		} else {
-			res.set = res.set.Union(s)
+			included = append(included, s)
 		}
 	}
-	res.set = res.set.Subtract(excluded)
+	res.set = traffic.UnionAll(included...).Subtract(traffic.UnionAll(excluded...))
 	return res
 }
 

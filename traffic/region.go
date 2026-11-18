@@ -96,6 +96,16 @@ func (r Region) Len() int { return len(r.spaces) }
 // Spaces returns a copy of the disjoint spaces of r.
 func (r Region) Spaces() []Space { return slices.Clone(r.spaces) }
 
+// Overlaps reports whether some packet of the region is in s.
+func (r Region) Overlaps(s Space) bool {
+	for _, x := range r.spaces {
+		if x.Overlaps(s) {
+			return true
+		}
+	}
+	return false
+}
+
 // Bounds returns the smallest space containing the region: the union of
 // its spaces in each dimension.
 func (r Region) Bounds() Space {

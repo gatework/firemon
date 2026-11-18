@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
+	"sync"
 
 	"go4.org/netipx"
 )
@@ -19,15 +20,23 @@ type AddressSet struct {
 }
 
 // AnyAddress returns the set of every IPv4 and IPv6 address.
-func AnyAddress() AddressSet {
-	return NewAddressSet(netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0"))
-}
+func AnyAddress() AddressSet { return anyAddress() }
 
 // AnyIPv4 returns the set of every IPv4 address.
-func AnyIPv4() AddressSet { return NewAddressSet(netip.MustParsePrefix("0.0.0.0/0")) }
+func AnyIPv4() AddressSet { return anyIPv4() }
 
 // AnyIPv6 returns the set of every IPv6 address.
-func AnyIPv6() AddressSet { return NewAddressSet(netip.MustParsePrefix("::/0")) }
+func AnyIPv6() AddressSet { return anyIPv6() }
+
+// The constant sets are built once: AddressSet values are immutable, so
+// sharing them is safe and evaluation loops do not rebuild them.
+var (
+	anyAddress = sync.OnceValue(func() AddressSet {
+		return NewAddressSet(netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0"))
+	})
+	anyIPv4 = sync.OnceValue(func() AddressSet { return NewAddressSet(netip.MustParsePrefix("0.0.0.0/0")) })
+	anyIPv6 = sync.OnceValue(func() AddressSet { return NewAddressSet(netip.MustParsePrefix("::/0")) })
+)
 
 // NewAddressSet returns the union of prefixes. Invalid prefixes are ignored;
 // callers that accept untrusted text use ParseAddressSet instead.
@@ -80,6 +89,15 @@ func (s AddressSet) Union(o AddressSet) AddressSet {
 	var b netipx.IPSetBuilder
 	s.addTo(&b)
 	o.addTo(&b)
+	return build(&b)
+}
+
+// UnionAll returns the union of sets, built once rather than pairwise.
+func UnionAll(sets ...AddressSet) AddressSet {
+	var b netipx.IPSetBuilder
+	for _, s := range sets {
+		s.addTo(&b)
+	}
 	return build(&b)
 }
 
