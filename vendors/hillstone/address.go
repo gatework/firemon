@@ -3,6 +3,7 @@ package hillstone
 import (
 	"net/netip"
 	"slices"
+	"strings"
 
 	"github.com/gatework/firemon"
 )
@@ -15,19 +16,20 @@ type addressDraft struct {
 	description string
 	entries     []firemon.AddressEntry
 	members     []string
+	invalid     []string
 	predefined  bool
 }
 
 func (d *addressDraft) isGroup() bool { return len(d.members) > 0 }
 
 func (d *addressDraft) address() firemon.Address {
-	return firemon.Address{Name: d.name, Description: d.description, Entries: slices.Clone(d.entries), Predefined: d.predefined}
+	return firemon.Address{Name: d.name, Description: d.description, Entries: slices.Clone(d.entries), Predefined: d.predefined, Invalid: slices.Clone(d.invalid)}
 }
 
 func (d *addressDraft) group() firemon.AddressGroup {
 	return firemon.AddressGroup{
 		Name: d.name, Description: d.description, Members: slices.Clone(d.members),
-		Entries: slices.Clone(d.entries), Predefined: d.predefined,
+		Entries: slices.Clone(d.entries), Predefined: d.predefined, Invalid: slices.Clone(d.invalid),
 	}
 }
 
@@ -55,6 +57,7 @@ func (s *state) address(b block, head *words) {
 			e, ok := addressEntry(kw, w)
 			if !ok {
 				s.diagnose(l, "invalid address")
+				d.invalid = append(d.invalid, strings.TrimSpace(l.Text))
 				continue
 			}
 			e.Exclude = exclude
@@ -96,6 +99,13 @@ func parsePrefix(text, mask string) (netip.Prefix, bool) {
 	addr, err := netip.ParseAddr(text)
 	if err != nil {
 		return netip.Prefix{}, false
+	}
+	if m, err := netip.ParseAddr(mask); err == nil && m.Is4() && addr.Is4() {
+		bits, ok := maskBits(mask)
+		if !ok {
+			return netip.Prefix{}, false // non-contiguous mask
+		}
+		return netip.PrefixFrom(addr, bits).Masked(), true
 	}
 	if bits, ok := maskBits(mask); ok && addr.Is4() {
 		return netip.PrefixFrom(addr, bits).Masked(), true

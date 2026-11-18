@@ -2,6 +2,7 @@ package hillstone
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/traffic"
@@ -21,6 +22,7 @@ func (s *state) service(b block, head *words) {
 			e, ok := portEntry(kw, w)
 			if !ok {
 				s.diagnose(l, "invalid service ports")
+				svc.Invalid = append(svc.Invalid, strings.TrimSpace(l.Text))
 				continue
 			}
 			svc.Entries = append(svc.Entries, e)
@@ -28,6 +30,7 @@ func (s *state) service(b block, head *words) {
 			e, ok := icmpEntry(kw, w)
 			if !ok {
 				s.diagnose(l, "invalid icmp service")
+				svc.Invalid = append(svc.Invalid, strings.TrimSpace(l.Text))
 				continue
 			}
 			svc.Entries = append(svc.Entries, e)
@@ -35,6 +38,7 @@ func (s *state) service(b block, head *words) {
 			e, ok := protocolEntry(w.next())
 			if !ok {
 				s.diagnose(l, "invalid protocol")
+				svc.Invalid = append(svc.Invalid, strings.TrimSpace(l.Text))
 				continue
 			}
 			svc.Entries = append(svc.Entries, e)
@@ -78,6 +82,9 @@ func portEntry(proto string, w *words) (firemon.ServiceEntry, bool) {
 			r = &e.Dst
 		case "src-port":
 			r = &e.Src
+		case "timeout", "timeout-day":
+			w.next() // session timeouts do not change matching
+			continue
 		default:
 			return firemon.ServiceEntry{}, false
 		}

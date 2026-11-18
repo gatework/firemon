@@ -14,11 +14,18 @@ import (
 // description D | tag T.
 func (s *state) address(p *path, st statement) {
 	name := p.next()
+	apply, reset := s.claim("address", name)
+	if !apply {
+		return
+	}
 	i, ok := s.addresses[name]
 	if !ok {
 		i = len(s.cfg.Addresses)
 		s.addresses[name] = i
 		s.cfg.Addresses = append(s.cfg.Addresses, firemon.Address{Name: name})
+	}
+	if reset {
+		s.cfg.Addresses[i] = firemon.Address{Name: name}
 	}
 	a := &s.cfg.Addresses[i]
 	switch kind := p.next(); kind {
@@ -27,6 +34,7 @@ func (s *state) address(p *path, st statement) {
 		e, ok := entry(kind, value)
 		if !ok {
 			s.diagnose(st, "invalid address value")
+			a.Invalid = append(a.Invalid, kind+" "+value)
 			return
 		}
 		a.Entries = append(a.Entries, e)
@@ -38,6 +46,7 @@ func (s *state) address(p *path, st statement) {
 	case "tag", "ip-wildcard":
 		if kind == "ip-wildcard" {
 			s.diagnose(st, "wildcard addresses are not supported")
+			a.Invalid = append(a.Invalid, "ip-wildcard "+p.scalar())
 		}
 	default:
 		s.diagnose(st, "unrecognized address attribute")
@@ -78,11 +87,18 @@ func inlineEntry(value string) (firemon.AddressEntry, bool) {
 // dynamic filter EXPR | description D | tag T.
 func (s *state) addressGroup(p *path, st statement) {
 	name := p.next()
+	apply, reset := s.claim("address", name)
+	if !apply {
+		return
+	}
 	i, ok := s.groups[name]
 	if !ok {
 		i = len(s.cfg.AddressGroups)
 		s.groups[name] = i
 		s.cfg.AddressGroups = append(s.cfg.AddressGroups, firemon.AddressGroup{Name: name})
+	}
+	if reset {
+		s.cfg.AddressGroups[i] = firemon.AddressGroup{Name: name}
 	}
 	g := &s.cfg.AddressGroups[i]
 	switch p.next() {
@@ -107,11 +123,18 @@ func (s *state) addressGroup(p *path, st statement) {
 // [source-port P] [override ...] | description D.
 func (s *state) service(p *path, st statement) {
 	name := p.next()
+	apply, reset := s.claim("service", name)
+	if !apply {
+		return
+	}
 	i, ok := s.services[name]
 	if !ok {
 		i = len(s.cfg.Services)
 		s.services[name] = i
 		s.cfg.Services = append(s.cfg.Services, firemon.Service{Name: name})
+	}
+	if reset {
+		s.cfg.Services[i] = firemon.Service{Name: name}
 	}
 	svc := &s.cfg.Services[i]
 	switch p.next() {
@@ -119,6 +142,7 @@ func (s *state) service(p *path, st statement) {
 		entries, ok := protocolEntries(p)
 		if !ok {
 			s.diagnose(st, "invalid service")
+			svc.Invalid = append(svc.Invalid, "protocol")
 			return
 		}
 		svc.Entries = append(svc.Entries, entries...)
@@ -181,11 +205,18 @@ func portList(text string) ([]traffic.PortRange, error) {
 // serviceGroup parses: service-group NAME members [ MEMBERS ].
 func (s *state) serviceGroup(p *path, st statement) {
 	name := p.next()
+	apply, reset := s.claim("service", name)
+	if !apply {
+		return
+	}
 	i, ok := s.svcGroups[name]
 	if !ok {
 		i = len(s.cfg.ServiceGroups)
 		s.svcGroups[name] = i
 		s.cfg.ServiceGroups = append(s.cfg.ServiceGroups, firemon.ServiceGroup{Name: name})
+	}
+	if reset {
+		s.cfg.ServiceGroups[i] = firemon.ServiceGroup{Name: name}
 	}
 	switch p.next() {
 	case "members":

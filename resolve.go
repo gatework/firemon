@@ -70,6 +70,9 @@ func (r *resolver) address(name string) resolved[traffic.AddressSet] {
 	switch {
 	case r.addresses[name] != nil:
 		res = entriesSet(r.addresses[name].Entries, name)
+		for _, bad := range r.addresses[name].Invalid {
+			res.problems = append(res.problems, "invalid entry "+quote(bad)+" in "+quote(name))
+		}
 	case r.addressGroups[name] != nil:
 		res = r.group(r.addressGroups[name])
 	default:
@@ -83,6 +86,9 @@ func (r *resolver) group(g *AddressGroup) resolved[traffic.AddressSet] {
 	res := entriesSet(g.Entries, g.Name)
 	if g.Filter != "" {
 		res.problems = append(res.problems, "dynamic address group "+quote(g.Name))
+	}
+	for _, bad := range g.Invalid {
+		res.problems = append(res.problems, "invalid entry "+quote(bad)+" in "+quote(g.Name))
 	}
 	for _, m := range g.Members {
 		member := r.address(m)
@@ -134,6 +140,9 @@ func (r *resolver) service(name string) resolved[traffic.ServiceSet] {
 	case r.services[name] != nil:
 		for _, e := range r.services[name].Entries {
 			res.set = res.set.Union(e.Set())
+		}
+		for _, bad := range r.services[name].Invalid {
+			res.problems = append(res.problems, "invalid entry "+quote(bad)+" in "+quote(name))
 		}
 	case r.serviceGroups[name] != nil:
 		for _, m := range r.serviceGroups[name].Members {

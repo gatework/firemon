@@ -86,6 +86,9 @@ type state struct {
 	hostBits  map[string]string   // address object -> unmasked ip-netmask value
 	security  *rulebook
 	nat       *rulebook
+	scope     string            // "shared" or "vsys" for the statement being read
+	owners    map[string]string // kind:name -> scope that defined it
+	vsysNames map[string]bool
 	book      firemon.ServiceBook
 }
 
@@ -118,22 +121,54 @@ func newState(loc *time.Location) *state {
 		hostBits:  map[string]string{},
 		security:  newRulebook(),
 		nat:       newRulebook(),
+		owners:    map[string]string{},
+		vsysNames: map[string]bool{},
 	}
 }
 
-// dispatch routes one statement by its leading path. "shared" and
-// "vsys <name>" prefixes are removed: both scopes share one namespace.
+// claim decides whether a statement about object kind:name from the current
+// scope applies. A vsys object shadows a shared object of the same name:
+// the first vsys statement reports that the shared definition must be
+// discarded, and later shared statements are ignored.
+func (s *state) claim(kind, name string) (apply, reset bool) {
+	key := kind + ":" + name
+	owner, ok := s.owners[key]
+	switch {
+	case !ok:
+		s.owners[key] = s.scope
+		return true, false
+	case owner == s.scope:
+		return true, false
+	case owner == "shared": // vsys shadows shared
+		s.owners[key] = s.scope
+		return true, true
+	default: // shared statement for a name the vsys defines
+		return false, false
+	}
+}
+
+// dispatch routes one statement by its leading path. Objects under
+// "shared" are visible to the vsys; a vsys object of the same name shadows
+// the shared one. Configurations with several vsys are merged and reported.
 func (s *state) dispatch(st statement) {
 	if len(st.words) < 3 {
 		return // empty containers such as "set shared service"
 	}
 	p := &path{words: st.words}
 	head := p.next()
+	s.scope = "vsys"
 	switch head {
 	case "shared":
+		s.scope = "shared"
 		head = p.next()
 	case "vsys":
-		p.next()
+		name := p.next()
+		if !s.vsysNames[name] {
+			s.vsysNames[name] = true
+			if len(s.vsysNames) == 2 {
+				s.diagnose(st, "several vsys are merged into one policy")
+			}
+		}
 		head = p.next()
 	}
 	switch head {

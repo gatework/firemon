@@ -59,7 +59,7 @@ func (r *Rule) Scheduled() bool { return r.schedule != nil || r.spec.Window != (
 // Applies reports whether the rule is written for traffic from zone from to
 // zone to. Empty zone lists match every zone.
 func (r *Rule) Applies(from, to string) bool {
-	return zoneMatches(r.spec.From, from) && zoneMatches(r.spec.To, to)
+	return zoneMatches(r.spec.From, from) && zoneMatches(r.spec.To, to) && r.spec.Scope.Allows(from, to)
 }
 
 // ActiveAt reports whether the rule is enabled and its schedule and window

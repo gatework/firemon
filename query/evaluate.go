@@ -176,7 +176,14 @@ func (e *Engine) defaultOutcome(p *Path) Outcome {
 
 func zoneApplicability(r *firemon.Rule, from, to string) applicability {
 	spec := r.Spec()
-	return zoneApplies(spec.From, spec.To, from, to)
+	if !spec.Scope.Allows(from, to) {
+		return appliesNo
+	}
+	a := zoneApplies(spec.From, spec.To, from, to)
+	if a == appliesYes && spec.Scope != firemon.ZoneScopeAny && (from == "" || to == "") {
+		return appliesMaybe
+	}
+	return a
 }
 
 // zoneApplies reports whether zone lists certainly cover a zone pair, might

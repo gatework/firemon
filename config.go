@@ -54,15 +54,15 @@ func (c *Config) Clone() *Config {
 	})
 	out.Routes = slices.Clone(c.Routes)
 	out.Addresses = cloneEach(c.Addresses, func(a Address) Address {
-		a.Entries = slices.Clone(a.Entries)
+		a.Entries, a.Invalid = slices.Clone(a.Entries), slices.Clone(a.Invalid)
 		return a
 	})
 	out.AddressGroups = cloneEach(c.AddressGroups, func(g AddressGroup) AddressGroup {
-		g.Members, g.Entries = slices.Clone(g.Members), slices.Clone(g.Entries)
+		g.Members, g.Entries, g.Invalid = slices.Clone(g.Members), slices.Clone(g.Entries), slices.Clone(g.Invalid)
 		return g
 	})
 	out.Services = cloneEach(c.Services, func(s Service) Service {
-		s.Entries = slices.Clone(s.Entries)
+		s.Entries, s.Invalid = slices.Clone(s.Entries), slices.Clone(s.Invalid)
 		return s
 	})
 	out.ServiceGroups = cloneEach(c.ServiceGroups, func(g ServiceGroup) ServiceGroup {

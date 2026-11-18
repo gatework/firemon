@@ -111,7 +111,7 @@ func overlaps(r traffic.Region, s traffic.Space) bool {
 
 // covers reports whether e applies to every zone pair r applies to.
 func covers(e, r firemon.SecurityRule) bool {
-	return zoneSuperset(e.From, r.From) && zoneSuperset(e.To, r.To)
+	return zoneSuperset(e.From, r.From) && zoneSuperset(e.To, r.To) && r.Scope.Covers(e.Scope)
 }
 
 func zoneSuperset(outer, inner []string) bool {

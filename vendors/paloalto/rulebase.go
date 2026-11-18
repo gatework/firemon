@@ -49,6 +49,9 @@ func (s *state) buildSecurityRules() {
 		for _, attr := range d.attrs {
 			s.securityAttribute(&r, attr)
 		}
+		if r.Scope == firemon.ZoneScopeIntra && len(r.To) == 0 {
+			r.To = slices.Clone(r.From) // intrazone rules leave "to" implied
+		}
 		s.cfg.Rules = append(s.cfg.Rules, r)
 	}
 }
@@ -89,6 +92,13 @@ func (s *state) securityAttribute(r *firemon.SecurityRule, attr []string) {
 		r.Schedule = strings.Join(values, " ")
 	case "description":
 		r.Description = strings.Join(values, " ")
+	case "rule-type":
+		switch strings.Join(values, " ") {
+		case "intrazone":
+			r.Scope = firemon.ZoneScopeIntra
+		case "interzone":
+			r.Scope = firemon.ZoneScopeInter
+		}
 	case "log-start", "log-end":
 		r.Log = r.Log || yes(values)
 	case "source-user", "category", "source-hip", "destination-hip", "source-imei", "source-imsi", "source-nw-slice":

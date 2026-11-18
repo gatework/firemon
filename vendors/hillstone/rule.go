@@ -77,10 +77,14 @@ func (s *state) ruleIn(b block, head *words, from, to []string) {
 			r.Group = w.next()
 		case strings.HasPrefix(kw, "src-") || strings.HasPrefix(kw, "dst-"):
 			if !s.ruleOperand(&r, kw, w) {
+				// An operand the model cannot read narrows the rule on the
+				// device; never let it widen the model.
 				s.diagnose(l, "invalid rule operand")
+				r.Unsupported = append(r.Unsupported, "unparsed "+strings.TrimSpace(l.Text))
 				continue
 			}
 		case !s.ruleAttribute(&r, kw, w):
+			r.Unsupported = append(r.Unsupported, "unrecognized "+strings.TrimSpace(l.Text))
 			continue
 		}
 		s.mark(l)

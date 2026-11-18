@@ -1427,7 +1427,10 @@
       "applications": [
         "HTTPS"
       ],
-      "action": "permit"
+      "action": "permit",
+      "unsupported": [
+        "unrecognized unknown-keyword 42"
+      ]
     }
   ],
   "rule_groups": [

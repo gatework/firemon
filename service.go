@@ -36,6 +36,9 @@ type Service struct {
 	Description string         `json:"description,omitempty"`
 	Entries     []ServiceEntry `json:"entries"`
 	Predefined  bool           `json:"predefined,omitempty"`
+	// Invalid keeps entries the parser could not read; a service with
+	// invalid entries cannot be resolved exactly.
+	Invalid []string `json:"invalid,omitempty"`
 }
 
 // ServiceGroup is a named collection of services and service groups.

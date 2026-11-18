@@ -120,6 +120,9 @@ type Address struct {
 	// Predefined marks objects built into the operating system rather than
 	// declared in the configuration.
 	Predefined bool `json:"predefined,omitempty"`
+	// Invalid keeps entries the parser could not read; an object with
+	// invalid entries cannot be resolved exactly.
+	Invalid []string `json:"invalid,omitempty"`
 }
 
 // AddressGroup is a named collection of address objects and groups. On
@@ -134,6 +137,8 @@ type AddressGroup struct {
 	// cannot be resolved offline.
 	Filter     string `json:"filter,omitempty"`
 	Predefined bool   `json:"predefined,omitempty"`
+	// Invalid keeps inline entries the parser could not read.
+	Invalid []string `json:"invalid,omitempty"`
 }
 
 // AddressRef is an address operand of a rule: either the name of an
