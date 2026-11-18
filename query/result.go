@@ -126,6 +126,12 @@ type Path struct {
 	// DestinationNAT and SourceNAT are the translations applied, if any.
 	DestinationNAT *NATHit
 	SourceNAT      []NATHit
+	// Domain and Application name the target of this path when the request
+	// asked by domain or by application; DomainResolved reports that the
+	// domain's addresses were known.
+	Domain         string
+	DomainResolved bool
+	Application    string
 	// NATUncertain names NAT rules that may apply to this path but cannot
 	// be decided (unknown zones or unresolvable objects); the path's
 	// decisions are then unknown.

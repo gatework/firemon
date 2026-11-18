@@ -1,6 +1,8 @@
 package firemon
 
 import (
+	"slices"
+
 	"github.com/gatework/firemon/traffic"
 )
 
@@ -12,9 +14,18 @@ import (
 type resolved[T any] struct {
 	set      T
 	problems []string
+	// domains are the domain names among the entries; each also leaves a
+	// problem in domainProblems, since IP-based evaluation cannot use it.
+	domains        traffic.DomainSet
+	domainProblems []string
 }
 
-func (r resolved[T]) exact() bool { return len(r.problems) == 0 }
+func (r resolved[T]) exact() bool { return len(r.problems) == 0 && len(r.domainProblems) == 0 }
+
+// allProblems returns every reason the set is inexact, domains included.
+func (r resolved[T]) allProblems() []string {
+	return append(slices.Clip(r.problems), r.domainProblems...)
+}
 
 // resolver turns object names into sets, memoizing results and detecting
 // membership cycles. It is used only while compiling.
@@ -94,6 +105,8 @@ func (r *resolver) group(g *AddressGroup) resolved[traffic.AddressSet] {
 		member := r.address(m)
 		res.set = res.set.Union(member.set)
 		res.problems = append(res.problems, member.problems...)
+		res.domains = res.domains.Union(member.domains)
+		res.domainProblems = append(res.domainProblems, member.domainProblems...)
 	}
 	// Excluded entries apply after members are merged.
 	for _, e := range g.Entries {
@@ -119,6 +132,8 @@ func (r *resolver) operands(refs []AddressRef) resolved[traffic.AddressSet] {
 		}
 		res.set = res.set.Union(part.set)
 		res.problems = append(res.problems, part.problems...)
+		res.domains = res.domains.Union(part.domains)
+		res.domainProblems = append(res.domainProblems, part.domainProblems...)
 	}
 	return res
 }
@@ -182,7 +197,13 @@ func entriesSet(entries []AddressEntry, owner string) resolved[traffic.AddressSe
 			if owner != "" {
 				where = " in " + quote(owner)
 			}
-			res.problems = append(res.problems, "unresolvable "+e.Kind.String()+" "+quote(e.String())+where)
+			reason := "unresolvable " + e.Kind.String() + " " + quote(e.String()) + where
+			if e.Kind == AddressKindFQDN && !e.Exclude {
+				res.domains = res.domains.Union(traffic.NewDomainSet(e.FQDN))
+				res.domainProblems = append(res.domainProblems, reason)
+				continue
+			}
+			res.problems = append(res.problems, reason)
 			continue
 		}
 		if e.Exclude {

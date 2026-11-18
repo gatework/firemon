@@ -2,6 +2,7 @@ package firemon
 
 import (
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/gatework/firemon/traffic"
@@ -15,13 +16,19 @@ import (
 // Rule values are immutable; Spec shares memory with the Firewall and must
 // not be modified.
 type Rule struct {
-	position int
-	spec     SecurityRule
-	match    traffic.Space
-	bound    traffic.Space
-	issues   []string
-	schedule *Schedule
-	loc      *time.Location
+	position   int
+	spec       SecurityRule
+	match      traffic.Space
+	bound      traffic.Space
+	issues     []string // every reason, for reporting
+	dstDomains traffic.DomainSet
+	apps       []string // normalized application names
+	// domainOnly and appOnly count issues that only destination domains or
+	// only application matching cause; a target that carries a domain or an
+	// application decides those dimensions itself.
+	domainIssues, appIssues int
+	schedule                *Schedule
+	loc                     *time.Location
 }
 
 // Position returns the zero-based evaluation order of the rule.
@@ -52,6 +59,32 @@ func (r *Rule) Issues() []string { return slices.Clone(r.issues) }
 
 // Decidable reports whether the match space is exact.
 func (r *Rule) Decidable() bool { return len(r.issues) == 0 }
+
+// DecidableFor reports whether the rule is exact for a target that names
+// its destination domain (domains) or its application (apps): those
+// dimensions are then matched by name instead of being unknown.
+func (r *Rule) DecidableFor(domains, apps bool) bool {
+	rest := len(r.issues)
+	if domains {
+		rest -= r.domainIssues
+	}
+	if apps {
+		rest -= r.appIssues
+	}
+	return rest == 0
+}
+
+// DstDomains returns the destination domain patterns of the rule.
+func (r *Rule) DstDomains() traffic.DomainSet { return r.dstDomains }
+
+// Applications returns the lowercase application names the rule matches;
+// empty means any application.
+func (r *Rule) Applications() []string { return slices.Clone(r.apps) }
+
+// MatchesApplication reports whether the rule admits application app.
+func (r *Rule) MatchesApplication(app string) bool {
+	return len(r.apps) == 0 || slices.Contains(r.apps, strings.ToLower(app))
+}
 
 // Scheduled reports whether a schedule or validity window restricts the rule.
 func (r *Rule) Scheduled() bool { return r.schedule != nil || r.spec.Window != (TimeWindow{}) }

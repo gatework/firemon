@@ -2,6 +2,7 @@ package query
 
 import (
 	"errors"
+	"net/netip"
 	"time"
 
 	"github.com/gatework/firemon/traffic"
@@ -24,11 +25,27 @@ type Request struct {
 	// (layer-2) deployments and for asking about one zone pair.
 	FromZone string
 	ToZone   string
+	// DstDomains are destination domain names. Rules match them by their
+	// domain patterns; rules written with addresses only match them through
+	// Resolved, or are possible matches when the name is not resolved.
+	// Unresolved names leave through the default route.
+	DstDomains []string
+	// Resolved maps a domain name to its addresses, when known.
+	Resolved map[string][]netip.Addr
+	// Applications are application names. Rules restricted to other
+	// applications do not match; with Service any, the application's
+	// default ports are evaluated.
+	Applications []string
 }
 
 // Space returns the request as one traffic space.
 func (r Request) Space() traffic.Space {
 	return traffic.Space{Src: r.Src, Dst: r.Dst, Service: r.Service}
+}
+
+// empty reports whether the request has nothing to evaluate.
+func (r Request) empty() bool {
+	return (r.Src.IsEmpty() || r.Service.IsEmpty()) || (r.Dst.IsEmpty() && len(r.DstDomains) == 0)
 }
 
 // Options configures an Engine. The zero value uses time.Now and a budget

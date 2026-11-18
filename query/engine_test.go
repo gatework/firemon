@@ -279,3 +279,5 @@ func TestEngine_Usage(t *testing.T) {
 		t.Errorf("rules: %+v", u.Rules)
 	}
 }
+
+func portOf(p uint16) traffic.PortRange { return traffic.Port(p) }

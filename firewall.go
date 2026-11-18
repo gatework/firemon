@@ -100,6 +100,12 @@ func (fw *Firewall) Rule(id string) (*Rule, bool) {
 	return fw.rules[i], true
 }
 
+// ApplicationPorts returns the default ports of an application, ignoring
+// case; false when the application book does not know it.
+func (fw *Firewall) ApplicationPorts(app string) (traffic.ServiceSet, bool) {
+	return fw.cfg.Applications.Lookup(app)
+}
+
 // RuleGroups returns the rule groups in declaration order.
 func (fw *Firewall) RuleGroups() []RuleGroup { return slices.Clone(fw.cfg.RuleGroups) }
 
@@ -216,8 +222,14 @@ func (fw *Firewall) compileRules(res *resolver) {
 		}
 		seen[spec.ID] = true
 		r := &Rule{position: i, spec: spec, loc: fw.loc}
-		r.match, r.bound, r.issues = ruleSpace(res, spec)
-		r.issues = append(r.issues, fw.ruleSemanticIssues(spec)...)
+		var dstDomainIssues []string
+		r.match, r.bound, r.issues, r.dstDomains, dstDomainIssues = ruleSpace(res, spec)
+		appIssues := appIssues(spec)
+		r.domainIssues, r.appIssues = len(dstDomainIssues), len(appIssues)
+		r.issues = slices.Concat(r.issues, dstDomainIssues, appIssues, fw.ruleSemanticIssues(spec))
+		for _, a := range spec.Applications {
+			r.apps = append(r.apps, strings.ToLower(a))
+		}
 		if spec.Schedule != "" {
 			r.schedule = schedules[spec.Schedule]
 			switch {
@@ -242,7 +254,7 @@ func (fw *Firewall) compileRules(res *resolver) {
 
 // ruleSpace resolves a rule's operands into its exact match space, an
 // upper bound of what it can match, and the reasons the match is inexact.
-func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, issues []string) {
+func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, issues []string, dstDomains traffic.DomainSet, dstDomainIssues []string) {
 	src, dst := res.operands(spec.Source), res.operands(spec.Destination)
 	svc := res.serviceList(spec.Services)
 	if len(spec.ServiceEntries) > 0 {
@@ -270,19 +282,31 @@ func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, is
 	if !svc.exact() || spec.ApplicationDefault {
 		bound.Service = traffic.AnyService()
 	}
-	return match, bound, slices.Concat(src.problems, dst.problems, svc.problems, spec.Unsupported)
+	issues = slices.Concat(src.problems, src.domainProblems, dst.problems, svc.problems, svc.domainProblems, spec.Unsupported)
+	if spec.NegateDestination && !dst.domains.IsEmpty() {
+		// A negated domain cannot be matched by name either.
+		return match, bound, append(issues, dst.domainProblems...), traffic.DomainSet{}, nil
+	}
+	return match, bound, issues, dst.domains, dst.domainProblems
+}
+
+// appIssues are the reasons application matching makes a rule inexact for
+// targets that do not name an application.
+func appIssues(spec SecurityRule) []string {
+	var out []string
+	if len(spec.Applications) > 0 {
+		out = append(out, "application match "+strings.Join(spec.Applications, ","))
+	}
+	if spec.ApplicationDefault {
+		out = append(out, "application-default service")
+	}
+	return out
 }
 
 func (fw *Firewall) ruleSemanticIssues(spec SecurityRule) []string {
 	var out []string
 	if spec.Action != ActionPermit && spec.Action != ActionDeny {
 		out = append(out, "unknown action")
-	}
-	if len(spec.Applications) > 0 {
-		out = append(out, "application match "+strings.Join(spec.Applications, ","))
-	}
-	if spec.ApplicationDefault {
-		out = append(out, "application-default service")
 	}
 	return out
 }
@@ -303,7 +327,7 @@ func (fw *Firewall) compileNAT(res *resolver) {
 		if !svc.exact() {
 			n.bound.Service = traffic.AnyService()
 		}
-		n.issues = slices.Concat(src.problems, dst.problems, svc.problems)
+		n.issues = slices.Concat(src.allProblems(), dst.allProblems(), svc.allProblems())
 		n.src, n.issues = fw.translation(res, spec.TranslatedSource, n.issues)
 		n.dst, n.issues = fw.translation(res, spec.TranslatedDestination, n.issues)
 		if spec.TranslatedSource.Mode == TranslationModeUnset && spec.TranslatedDestination.Mode == TranslationModeUnset {
@@ -316,7 +340,7 @@ func (fw *Firewall) compileNAT(res *resolver) {
 	}
 	for _, spec := range fw.cfg.StaticNATs {
 		inside, outside := res.operands([]AddressRef{spec.Real}), res.operands([]AddressRef{spec.Mapped})
-		m := &StaticMapping{spec: spec, real: inside.set, mapped: outside.set, issues: slices.Concat(inside.problems, outside.problems)}
+		m := &StaticMapping{spec: spec, real: inside.set, mapped: outside.set, issues: slices.Concat(inside.allProblems(), outside.allProblems())}
 		if m.Decidable() && !sameSize(m.real, m.mapped) {
 			m.issues = append(m.issues, "real and mapped addresses differ in size or are not contiguous")
 		}
@@ -333,7 +357,7 @@ func (fw *Firewall) translation(res *resolver, t Translation, issues []string) (
 		return traffic.AddressSet{}, issues
 	case TranslationModeAddress:
 		r := res.operands(t.Addresses)
-		return r.set, append(issues, r.problems...)
+		return r.set, append(issues, r.allProblems()...)
 	case TranslationModeInterface:
 		if t.Interface == "" {
 			return traffic.AddressSet{}, issues // the egress interface, known only per packet

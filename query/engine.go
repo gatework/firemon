@@ -40,7 +40,7 @@ func (e *Engine) Firewall() *firemon.Firewall { return e.fw }
 // virtual router; everything the engine cannot decide is reported in the
 // result as unknown.
 func (e *Engine) Query(req Request) (*Result, error) {
-	if req.Src.IsEmpty() || req.Dst.IsEmpty() || req.Service.IsEmpty() {
+	if req.empty() {
 		return nil, ErrEmptyRequest
 	}
 	at := req.At
@@ -53,7 +53,7 @@ func (e *Engine) Query(req Request) (*Result, error) {
 		return nil, fmt.Errorf("query: unknown virtual router %q", vr)
 	}
 	res := &Result{Request: req}
-	res.Paths, res.Unrouted, res.Incomplete = e.discover(req, table)
+	res.Paths, res.Unrouted, res.Incomplete = e.discoverTargets(req, table)
 	outcomes := map[Outcome]bool{}
 	if res.Incomplete {
 		outcomes[OutcomeUnknown] = true

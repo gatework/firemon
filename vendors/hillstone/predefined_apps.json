@@ -1,0 +1,21 @@
+{
+  "dns": ["tcp/53", "udp/53"],
+  "ftp": ["tcp/21"],
+  "http": ["tcp/80"],
+  "https": ["tcp/443"],
+  "ldap": ["tcp/389"],
+  "ms-sql": ["tcp/1433"],
+  "mysql": ["tcp/3306"],
+  "nntp": ["tcp/119"],
+  "ntp": ["udp/123"],
+  "oracle": ["tcp/1521"],
+  "postgresql": ["tcp/5432"],
+  "rdp": ["tcp/3389"],
+  "smb": ["tcp/139", "tcp/445"],
+  "smtp": ["tcp/25"],
+  "smtps": ["tcp/465"],
+  "snmp": ["udp/161-162"],
+  "ssh": ["tcp/22"],
+  "syslog": ["udp/514"],
+  "tftp": ["udp/69"]
+}

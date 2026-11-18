@@ -41,6 +41,9 @@ type Config struct {
 	StaticNATs     []StaticNAT     `json:"static_nats,omitempty"`
 	DynamicNATs    []DynamicNAT    `json:"dynamic_nats,omitempty"`
 	Diagnostics    []Diagnostic    `json:"diagnostics,omitempty"`
+	// Applications maps lowercase application names to their default
+	// ports, for application-default services and application queries.
+	Applications ServiceBook `json:"applications,omitempty"`
 }
 
 // Clone returns a deep copy of c that shares no slices with it.
@@ -95,6 +98,7 @@ func (c *Config) Clone() *Config {
 		return n
 	})
 	out.Diagnostics = slices.Clone(c.Diagnostics)
+	out.Applications = c.Applications.With(nil)
 	return &out
 }
 

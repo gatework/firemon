@@ -43,13 +43,17 @@ func (e *Engine) evaluate(p *Path, at time.Time) {
 		if e.inactive(r, at) {
 			continue
 		}
+		v := e.ruleView(r, p)
+		if v.skip {
+			continue
+		}
 		switch applies := zoneApplicability(r, p.From, p.To); {
 		case applies == appliesNo:
 			continue
-		case applies == appliesMaybe || !r.Decidable():
-			ev.taint(r)
+		case applies == appliesMaybe || !v.decidable:
+			ev.taint(r, v.bound)
 		default:
-			ev.decide(r, outcomeOf(r.Action()))
+			ev.decide(r, v.match, outcomeOf(r.Action()))
 		}
 		if ev.overBudget() {
 			p.Incomplete = true
@@ -71,8 +75,7 @@ func (e *Engine) evaluate(p *Path, at time.Time) {
 }
 
 // taint marks the parts of every piece an undecidable rule might match.
-func (ev *evaluator) taint(r *firemon.Rule) {
-	bound := r.Bound()
+func (ev *evaluator) taint(r *firemon.Rule, bound traffic.Space) {
 	var next []piece
 	for _, pc := range ev.pieces {
 		if !addressesOverlap(pc.space, bound) {
@@ -93,8 +96,7 @@ func (ev *evaluator) taint(r *firemon.Rule) {
 }
 
 // decide removes the packets r matches from every piece and records them.
-func (ev *evaluator) decide(r *firemon.Rule, o Outcome) {
-	match := r.Match()
+func (ev *evaluator) decide(r *firemon.Rule, match traffic.Space, o Outcome) {
 	var next []piece
 	for _, pc := range ev.pieces {
 		if !addressesOverlap(pc.space, match) {

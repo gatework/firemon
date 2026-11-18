@@ -24,6 +24,8 @@ type Options struct {
 	// entries replace those of DefaultServices with the same name; services
 	// declared in the configuration take precedence over both.
 	Services firemon.ServiceBook
+	// Applications overrides entries of DefaultApplications.
+	Applications firemon.ServiceBook
 }
 
 // Parser converts PAN-OS set-format configurations to firemon.Config. The
@@ -35,6 +37,7 @@ type Parser struct {
 // New returns a parser with the given options.
 func New(opts Options) *Parser {
 	opts.Services = DefaultServices().With(opts.Services)
+	opts.Applications = DefaultApplications().With(opts.Applications)
 	return &Parser{opts: opts}
 }
 
@@ -57,7 +60,9 @@ func (p *Parser) Parse(text string) (*firemon.Config, error) {
 	for _, st := range stmts {
 		s.dispatch(st)
 	}
-	return s.finish(), nil
+	cfg := s.finish()
+	cfg.Applications = p.applications()
+	return cfg, nil
 }
 
 // draft collects the attribute paths of one named rule in statement order.
@@ -245,4 +250,13 @@ func (b *rulebook) add(name string, line int, attr []string) {
 		b.drafts = append(b.drafts, draft{name: name, line: line})
 	}
 	b.drafts[i].attrs = append(b.drafts[i].attrs, slices.Clone(attr))
+}
+
+// applications returns the effective application book; the zero Parser
+// uses the default.
+func (p *Parser) applications() firemon.ServiceBook {
+	if p == nil || p.opts.Applications == nil {
+		return DefaultApplications()
+	}
+	return p.opts.Applications
 }

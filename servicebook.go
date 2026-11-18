@@ -58,15 +58,48 @@ func (b ServiceBook) MarshalJSON() ([]byte, error) {
 	return json.Marshal(raw)
 }
 
-// With returns a copy of b in which the services of over replace those of
-// the same name.
-func (b ServiceBook) With(over ServiceBook) ServiceBook {
-	out := maps.Clone(b)
-	if out == nil {
-		out = ServiceBook{}
+// UnmarshalJSON reads the JSON form written by MarshalJSON.
+func (b *ServiceBook) UnmarshalJSON(data []byte) error {
+	book, err := ParseServiceBook(data)
+	if err != nil {
+		return err
 	}
-	maps.Copy(out, over)
+	*b = book
+	return nil
+}
+
+// With returns a copy of b in which the services of over replace those of
+// the same name. A nil b and empty over give nil.
+func (b ServiceBook) With(over ServiceBook) ServiceBook {
+	if b == nil && len(over) == 0 {
+		return nil
+	}
+	out := make(ServiceBook, len(b)+len(over))
+	for name, entries := range b {
+		out[name] = slices.Clone(entries)
+	}
+	for name, entries := range over {
+		out[name] = slices.Clone(entries)
+	}
 	return out
+}
+
+// Lookup returns the set of name, ignoring case.
+func (b ServiceBook) Lookup(name string) (traffic.ServiceSet, bool) {
+	entries, ok := b[name]
+	if !ok {
+		for n, e := range b {
+			if strings.EqualFold(n, name) {
+				entries, ok = e, true
+				break
+			}
+		}
+	}
+	var set traffic.ServiceSet
+	for _, e := range entries {
+		set = set.Union(e.Set())
+	}
+	return set, ok
 }
 
 // Names returns the service names in sorted order.
