@@ -100,3 +100,20 @@ func TestRun_CollectThenQuerySnapshot(t *testing.T) {
 		t.Fatalf("deploy from snapshot: %d", code)
 	}
 }
+
+func TestRun_Locate(t *testing.T) {
+	t.Parallel()
+	store := t.TempDir() + "/snapshots"
+	for name, args := range map[string][]string{
+		"hs1": {"--vendor", "hillstone", "--config", hillstoneConf},
+		"pa1": {"--vendor", "paloalto", "--config", paloaltoConf},
+	} {
+		if code, out, errOut := run(t, "", append([]string{"collect", "--store", store, "--name", name}, args...)...); code != cli.ExitOK {
+			t.Fatalf("collect %s: %d %s%s", name, code, out, errOut)
+		}
+	}
+	code, out, errOut := run(t, "", "locate", "--store", store, "--design", "--src", "10.0.0.5", "--dst", "172.16.0.40", "--service", "tcp/8443", "--name", "req")
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "plan: change, verified true") {
+		t.Fatalf("locate: %d\n%s%s", code, out, errOut)
+	}
+}

@@ -8,6 +8,7 @@ declared:
   - ./design
   - ./deploy
   - ./audit
+  - ./inventory
   - ./vendors/hillstone
   - ./vendors/paloalto
   - ./adapter/netconnector
@@ -19,7 +20,7 @@ declared:
 
 rules:
   - name: domain packages stay free of I/O
-    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./vendors/...]
+    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./inventory, ./vendors/...]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
 
@@ -46,6 +47,10 @@ rules:
   - name: audit reviews the compiled domain only
     packages: [./audit]
     only_local: [., ./traffic]
+
+  - name: inventory spans firewalls through query and design
+    packages: [./inventory]
+    only_local: [., ./traffic, ./query, ./design]
 
   - name: vendors own device syntax and depend only on the domain
     packages: [./vendors/...]

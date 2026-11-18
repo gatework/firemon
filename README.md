@@ -28,6 +28,9 @@ firemon query --vendor paloalto --config pa1.txt --src 10.1.0.0/24 --dst 192.0.2
 # Which objects and rules reference an address
 firemon usage --vendor hillstone --config fw1.txt --addr 10.250.119.11
 
+# Which firewalls among all snapshots a flow crosses, each verdict, and per-firewall plans
+firemon locate --src 10.1.0.5 --dst 192.0.2.10 --service tcp/443 --design
+
 # Redundant, shadowed, expired and disabled rules, permit-any rules, unused objects
 firemon audit --vendor hillstone --config fw1.txt
 
@@ -50,6 +53,7 @@ Addresses accept `10.0.0.1`, `10.0.0.0/24`, `10.0.0.1-10.0.0.9` and `any`; servi
 | `query` | Ordered first-match evaluation with routing and NAT |
 | `design` | Verified change plans: reuse objects, extend rules, add rules |
 | `audit` | Shadowing, redundancy and hygiene review |
+| `inventory` | Firewalls a flow crosses: longest-prefix ownership plus next-hop chains |
 | `deploy` | Fingerprint-checked, journaled deployment on go-netops `apply` |
 | `vendors/hillstone`, `vendors/paloalto` | Parsing and rendering per vendor |
 | `adapter/netconnector` | Device access through net-connector |
