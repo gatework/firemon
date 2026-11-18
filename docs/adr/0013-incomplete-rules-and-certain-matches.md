@@ -20,4 +20,4 @@ Cross-validation against production configurations found three ways the model di
 
 ## Consequences
 
-Predefined services missing from a vendor book (StoneOS `HTTP-EXT`) no longer hide certain matches; supply the device's definition with `--service-book` to decide the rest.
+Predefined services missing from a vendor book no longer hide certain matches; supply the device's definition with `--service-book` to decide the rest.

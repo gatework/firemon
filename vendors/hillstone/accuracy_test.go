@@ -56,7 +56,7 @@ rule id 7
   action deny
   src-addr "Any"
   dst-addr "public"
-  service "HTTP-EXT"
+  service "MODEL-PORTS"
   service "HTTPS"
 exit
 rule id 1
@@ -119,9 +119,9 @@ func TestV3_CertainPartOfUndecidableRuleDecides(t *testing.T) {
 	if id, o, possible := decidingRule(t, e, "10.0.9.9", "8.8.8.8", 443); id != "7" || o != query.OutcomeDeny || possible != 0 {
 		t.Fatalf("HTTPS certainly matches rule 7: got %s %s (%d possible)", id, o, possible)
 	}
-	// Other ports may be HTTP-EXT: rule 7 may deny them first.
+	// Other ports may be MODEL-PORTS: rule 7 may deny them first.
 	if id, o, possible := decidingRule(t, e, "10.0.9.9", "8.8.8.8", 8080); id != "1" || o != query.OutcomeUnknown || possible != 1 {
-		t.Fatalf("tcp/8080 may be HTTP-EXT: got %s %s (%d possible)", id, o, possible)
+		t.Fatalf("tcp/8080 may be MODEL-PORTS: got %s %s (%d possible)", id, o, possible)
 	}
 }
 

@@ -8,10 +8,10 @@ import (
 )
 
 // predefinedServices is the default StoneOS 5.5 service book. It holds the
-// predefined names whose ports are protocol standards (IANA); names whose
-// ports depend on the model or release (for example HTTP-EXT) are left out
-// so rules using them stay undecidable until Options.Services supplies the
-// book observed on the device.
+// predefined names whose ports are protocol standards (IANA) or confirmed
+// on devices (HTTP-EXT: tcp/80 and tcp/443); names whose ports are not
+// known are left out so rules using them stay undecidable until
+// Options.Services supplies the book observed on the device.
 //
 //go:embed predefined_services.json
 var predefinedServices []byte
