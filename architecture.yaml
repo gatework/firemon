@@ -6,10 +6,11 @@ declared:
   - ./traffic
   - ./vendors/hillstone
   - ./vendors/paloalto
+  - ./query
 
 rules:
   - name: domain packages stay free of I/O
-    packages: [., ./traffic]
+    packages: [., ./traffic, ./query]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
 
@@ -25,3 +26,7 @@ rules:
     packages: [./vendors/...]
     only_local: [., ./traffic]
     deny: [os, os/exec, net, net/http, github.com/gatework/net-connector/...]
+
+  - name: query evaluates the domain only
+    packages: [./query]
+    only_local: [., ./traffic]

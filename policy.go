@@ -18,6 +18,7 @@ type Rule struct {
 	position int
 	spec     SecurityRule
 	match    traffic.Space
+	bound    traffic.Space
 	issues   []string
 	schedule *Schedule
 	loc      *time.Location
@@ -38,6 +39,13 @@ func (r *Rule) Action() Action { return r.spec.Action }
 // Match returns the exact match space. When Issues is non-empty it is the
 // part of the match that could be resolved.
 func (r *Rule) Match() traffic.Space { return r.match }
+
+// Bound returns a space that certainly contains every packet the rule can
+// match. For a decidable rule it equals Match; a dimension that could not
+// be resolved exactly (unknown objects, domain names, dynamic groups) is
+// widened to any, while criteria that only narrow the match (applications,
+// users, URL categories) leave it unchanged.
+func (r *Rule) Bound() traffic.Space { return r.bound }
 
 // Issues returns why the match space is not exact.
 func (r *Rule) Issues() []string { return slices.Clone(r.issues) }
@@ -65,6 +73,20 @@ func (r *Rule) ActiveAt(t time.Time) bool {
 		return false
 	}
 	return r.schedule == nil || r.schedule.ActiveAt(local)
+}
+
+// InactiveAt reports whether the rule certainly cannot match at instant t:
+// it is disabled, outside its validity window, or outside a schedule the
+// compiler could model. Unlike !ActiveAt it is safe for undecidable rules.
+func (r *Rule) InactiveAt(t time.Time) bool {
+	if r.spec.Disabled {
+		return true
+	}
+	local := t.In(r.loc)
+	if !r.spec.ActiveAt(local) {
+		return true
+	}
+	return r.schedule != nil && r.schedule.Unsupported == "" && !r.schedule.ActiveAt(local)
 }
 
 // NATRule is a compiled dynamic NAT rule.

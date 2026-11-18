@@ -203,24 +203,7 @@ func (fw *Firewall) compileRules(res *resolver) {
 	fw.rules = make([]*Rule, len(fw.cfg.Rules))
 	for i, spec := range fw.cfg.Rules {
 		r := &Rule{position: i, spec: spec, loc: fw.loc}
-		src, dst := res.operands(spec.Source), res.operands(spec.Destination)
-		svc := res.serviceList(spec.Services)
-		if len(spec.ServiceEntries) > 0 {
-			if len(spec.Services) == 0 {
-				svc.set = traffic.ServiceSet{}
-			}
-			for _, e := range spec.ServiceEntries {
-				svc.set = svc.set.Union(e.Set())
-			}
-		}
-		r.issues = slices.Concat(src.problems, dst.problems, svc.problems, spec.Unsupported)
-		if spec.NegateSource {
-			src.set = traffic.AnyAddress().Subtract(src.set)
-		}
-		if spec.NegateDestination {
-			dst.set = traffic.AnyAddress().Subtract(dst.set)
-		}
-		r.match = traffic.Space{Src: src.set, Dst: dst.set, Service: svc.set}
+		r.match, r.bound, r.issues = ruleSpace(res, spec)
 		r.issues = append(r.issues, fw.ruleSemanticIssues(spec)...)
 		if spec.Schedule != "" {
 			r.schedule = schedules[spec.Schedule]
@@ -242,6 +225,39 @@ func (fw *Firewall) compileRules(res *resolver) {
 		}
 		fw.rules[i] = r
 	}
+}
+
+// ruleSpace resolves a rule's operands into its exact match space, an
+// upper bound of what it can match, and the reasons the match is inexact.
+func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, issues []string) {
+	src, dst := res.operands(spec.Source), res.operands(spec.Destination)
+	svc := res.serviceList(spec.Services)
+	if len(spec.ServiceEntries) > 0 {
+		if len(spec.Services) == 0 {
+			svc.set = traffic.ServiceSet{}
+		}
+		for _, e := range spec.ServiceEntries {
+			svc.set = svc.set.Union(e.Set())
+		}
+	}
+	if spec.NegateSource {
+		src.set = traffic.AnyAddress().Subtract(src.set)
+	}
+	if spec.NegateDestination {
+		dst.set = traffic.AnyAddress().Subtract(dst.set)
+	}
+	match = traffic.Space{Src: src.set, Dst: dst.set, Service: svc.set}
+	bound = match
+	if !src.exact() {
+		bound.Src = traffic.AnyAddress()
+	}
+	if !dst.exact() {
+		bound.Dst = traffic.AnyAddress()
+	}
+	if !svc.exact() || spec.ApplicationDefault {
+		bound.Service = traffic.AnyService()
+	}
+	return match, bound, slices.Concat(src.problems, dst.problems, svc.problems, spec.Unsupported)
 }
 
 func (fw *Firewall) ruleSemanticIssues(spec SecurityRule) []string {
