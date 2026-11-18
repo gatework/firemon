@@ -27,6 +27,20 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 		case design.AddService:
 			do, err = renderService(c.Service)
 			undo = []string{"no service " + q(c.Service.Name)}
+		case design.AddAddressGroup:
+			do = []string{"address " + q(c.Group.Name)}
+			for _, m := range c.Group.Members {
+				do = append(do, "  member "+q(m))
+			}
+			do = append(do, "exit")
+			undo = []string{"no address " + q(c.Group.Name)}
+		case design.AddServiceGroup:
+			do = []string{"servgroup " + q(c.Group.Name)}
+			for _, m := range c.Group.Members {
+				do = append(do, "  service "+q(m))
+			}
+			do = append(do, "exit")
+			undo = []string{"no servgroup " + q(c.Group.Name)}
 		case design.ExtendRule:
 			do, undo, err = renderExtend(c)
 		case design.AddRule:

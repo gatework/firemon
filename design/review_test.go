@@ -101,3 +101,35 @@ func TestDuplicateRuleIDsAreIssues(t *testing.T) {
 		t.Fatal("duplicate rule IDs must be reported")
 	}
 }
+
+func TestAggregation_ThreeObjectsBecomeAGroup(t *testing.T) {
+	t.Parallel()
+	p := plan(t, lab(), intent(t, "10.0.2.1,10.0.2.3,10.0.2.5", "172.16.0.10", "tcp/443"))
+	got := describe(p.Changes)
+	want := []string{
+		"add address Host_10.0.2.1 10.0.2.1", "add address Host_10.0.2.3 10.0.2.3", "add address Host_10.0.2.5 10.0.2.5",
+		"add address group req_src Host_10.0.2.1,Host_10.0.2.3,Host_10.0.2.5", "add rule 1 at end",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") || !p.Verified {
+		t.Fatalf("changes:\n%s", strings.Join(got, "\n"))
+	}
+	rule := p.Changes[len(p.Changes)-1].(design.AddRule).Rule
+	if len(rule.Source) != 1 || rule.Source[0].Name != "req_src" {
+		t.Fatalf("rule source %+v", rule.Source)
+	}
+}
+
+func TestAggregation_ReusesAnEqualGroup(t *testing.T) {
+	t.Parallel()
+	cfg := lab()
+	cfg.Addresses = append(cfg.Addresses,
+		firemon.Address{Name: "h1", Entries: []firemon.AddressEntry{firemon.PrefixEntry(prefix("10.0.2.1/32"))}},
+		firemon.Address{Name: "h3", Entries: []firemon.AddressEntry{firemon.PrefixEntry(prefix("10.0.2.3/32"))}},
+		firemon.Address{Name: "h5", Entries: []firemon.AddressEntry{firemon.PrefixEntry(prefix("10.0.2.5/32"))}})
+	cfg.AddressGroups = []firemon.AddressGroup{{Name: "jump-hosts", Members: []string{"h1", "h3", "h5"}}}
+	p := plan(t, cfg, intent(t, "10.0.2.1,10.0.2.3,10.0.2.5", "172.16.0.10", "tcp/443"))
+	rule := p.Changes[len(p.Changes)-1].(design.AddRule).Rule
+	if len(p.Changes) != 1 || rule.Source[0].Name != "jump-hosts" {
+		t.Fatalf("changes %v", describe(p.Changes))
+	}
+}

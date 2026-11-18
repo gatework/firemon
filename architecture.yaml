@@ -10,6 +10,7 @@ declared:
   - ./audit
   - ./inventory
   - ./intake
+  - ./report
   - ./vendors/hillstone
   - ./vendors/paloalto
   - ./adapter/netconnector
@@ -22,7 +23,7 @@ declared:
 
 rules:
   - name: domain packages stay free of I/O
-    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./inventory, ./intake, ./vendors/...]
+    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./inventory, ./intake, ./report, ./vendors/...]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
 
@@ -57,6 +58,10 @@ rules:
   - name: intake reads operator input with the domain vocabulary only
     packages: [./intake]
     only_local: [., ./traffic]
+
+  - name: reports describe evaluations without vendor syntax
+    packages: [./report]
+    only_local: [., ./traffic, ./query, ./design, ./inventory, ./intake]
 
   - name: vendors own device syntax and depend only on the domain
     packages: [./vendors/...]

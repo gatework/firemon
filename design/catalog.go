@@ -18,10 +18,11 @@ type catalog struct {
 	taken     map[string]bool
 	created   []Change
 	rules     int
+	threshold int
 }
 
 func newCatalog(fw *firemon.Firewall, naming Naming) *catalog {
-	c := &catalog{naming: naming, addresses: map[string]string{}, services: map[string]string{}, taken: map[string]bool{}}
+	c := &catalog{naming: naming, addresses: map[string]string{}, services: map[string]string{}, taken: map[string]bool{}, threshold: DefaultGroupThreshold}
 	cfg := fw.Config()
 	for _, a := range cfg.Addresses {
 		c.taken[a.Name] = true
@@ -137,6 +138,35 @@ func (c *catalog) unique(name string) string {
 	return candidate
 }
 
+// groupAddresses aggregates names into one group when there are at least
+// threshold of them; a group already holding exactly set is reused.
+func (c *catalog) groupAddresses(names []string, set traffic.AddressSet, group string) []string {
+	if c.threshold < 0 || len(names) < c.threshold {
+		return names
+	}
+	if name, ok := c.addresses[set.String()]; ok && !slices.Contains(names, name) {
+		return []string{name}
+	}
+	name := c.unique(group)
+	c.created = append(c.created, AddAddressGroup{Group: firemon.AddressGroup{Name: name, Members: slices.Clone(names)}})
+	c.addresses[set.String()] = name
+	return []string{name}
+}
+
+// groupServices aggregates service names like groupAddresses.
+func (c *catalog) groupServices(names []string, set traffic.ServiceSet, group string) []string {
+	if c.threshold < 0 || len(names) < c.threshold {
+		return names
+	}
+	if name, ok := c.services[set.String()]; ok && !slices.Contains(names, name) {
+		return []string{name}
+	}
+	name := c.unique(group)
+	c.created = append(c.created, AddServiceGroup{Group: firemon.ServiceGroup{Name: name, Members: slices.Clone(names)}})
+	c.services[set.String()] = name
+	return []string{name}
+}
+
 // mark returns a point rollback can return to.
 func (c *catalog) mark() int { return len(c.created) }
 
@@ -150,6 +180,10 @@ func (c *catalog) nextRule() int {
 func (c *catalog) rollback(m int) {
 	for _, ch := range c.created[m:] {
 		switch v := ch.(type) {
+		case AddAddressGroup:
+			c.forget(v.Group.Name, c.addresses)
+		case AddServiceGroup:
+			c.forget(v.Group.Name, c.services)
 		case AddAddress:
 			delete(c.taken, v.Address.Name)
 			for key, name := range c.addresses {
@@ -167,4 +201,13 @@ func (c *catalog) rollback(m int) {
 		}
 	}
 	c.created = c.created[:m]
+}
+
+func (c *catalog) forget(name string, index map[string]string) {
+	delete(c.taken, name)
+	for key, n := range index {
+		if n == name {
+			delete(index, key)
+		}
+	}
 }

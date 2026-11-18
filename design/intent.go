@@ -34,9 +34,16 @@ func (i Intent) request(at time.Time) query.Request {
 	}
 }
 
-// Options configures a Planner. The zero value uses DefaultNaming and
-// time.Now.
+// Options configures a Planner. The zero value uses DefaultNaming,
+// time.Now and groups of DefaultGroupThreshold objects.
 type Options struct {
 	Naming Naming
 	Now    func() time.Time
+	// GroupThreshold is the number of objects in one field of a new or
+	// extended rule from which they are aggregated into a group; negative
+	// disables grouping.
+	GroupThreshold int
 }
+
+// DefaultGroupThreshold aggregates three or more objects into a group.
+const DefaultGroupThreshold = 3

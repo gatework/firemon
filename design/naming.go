@@ -20,6 +20,9 @@ type Naming struct {
 	Rule func(i Intent, index int) string
 	// Sanitize adapts a name to the vendor's object name rules.
 	Sanitize func(name string) string
+	// Group names a group that aggregates the objects of one field of a new
+	// or extended rule.
+	Group func(rule string, field Field) string
 }
 
 // DefaultNaming follows the operations convention of the Perl designer:
@@ -27,7 +30,7 @@ type Naming struct {
 // TCP_8000-8010, UDP_53, ICMP, ICMP_8, PROTO_89; rules are named after the
 // intent name or fm_<index>.
 func DefaultNaming() Naming {
-	return Naming{Address: addressName, Service: serviceName, Rule: ruleName, Sanitize: func(s string) string { return s }}
+	return Naming{Address: addressName, Service: serviceName, Rule: ruleName, Sanitize: func(s string) string { return s }, Group: groupName}
 }
 
 func (n Naming) withDefaults() Naming {
@@ -43,6 +46,9 @@ func (n Naming) withDefaults() Naming {
 	}
 	if n.Sanitize == nil {
 		n.Sanitize = d.Sanitize
+	}
+	if n.Group == nil {
+		n.Group = d.Group
 	}
 	return n
 }
@@ -92,4 +98,19 @@ func ruleName(i Intent, index int) string {
 		return base
 	}
 	return base + "_" + strconv.Itoa(index+1)
+}
+
+// groupName names an aggregating group after its rule: req_src, req_dst,
+// req_svc.
+func groupName(rule string, field Field) string {
+	switch field {
+	case FieldSource:
+		return rule + "_src"
+	case FieldDestination:
+		return rule + "_dst"
+	case FieldService:
+		return rule + "_svc"
+	case FieldUnset:
+	}
+	return rule + "_grp"
 }

@@ -28,6 +28,10 @@ func apply(cfg *firemon.Config, ch Change) error {
 		cfg.Addresses = append(cfg.Addresses, c.Address)
 	case AddService:
 		cfg.Services = append(cfg.Services, c.Service)
+	case AddAddressGroup:
+		cfg.AddressGroups = append(cfg.AddressGroups, c.Group)
+	case AddServiceGroup:
+		cfg.ServiceGroups = append(cfg.ServiceGroups, c.Group)
 	case ExtendRule:
 		i := slices.IndexFunc(cfg.Rules, func(r firemon.SecurityRule) bool { return r.ID == c.RuleID })
 		if i < 0 {

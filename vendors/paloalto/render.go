@@ -27,6 +27,12 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 		case design.AddService:
 			do, err = renderService(c.Service)
 			undo = []string{"delete service " + name(c.Service.Name)}
+		case design.AddAddressGroup:
+			do = []string{"set address-group " + name(c.Group.Name) + " static " + bracket(c.Group.Members)}
+			undo = []string{"delete address-group " + name(c.Group.Name)}
+		case design.AddServiceGroup:
+			do = []string{"set service-group " + name(c.Group.Name) + " members " + bracket(c.Group.Members)}
+			undo = []string{"delete service-group " + name(c.Group.Name)}
 		case design.ExtendRule:
 			do, undo, err = renderExtend(c)
 		case design.AddRule:
@@ -141,6 +147,15 @@ func list(values []string) string {
 	if len(values) == 1 {
 		return name(values[0])
 	}
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = name(v)
+	}
+	return "[ " + strings.Join(quoted, " ") + " ]"
+}
+
+// bracket always writes a bracketed list, as group members require.
+func bracket(values []string) string {
 	quoted := make([]string, len(values))
 	for i, v := range values {
 		quoted[i] = name(v)

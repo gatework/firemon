@@ -78,7 +78,8 @@ func (f Field) String() string {
 func (f Field) MarshalText() ([]byte, error) { return []byte(f.String()), nil }
 
 // Change is one vendor-neutral configuration change. The set of changes is
-// closed: AddAddress, AddService, ExtendRule and AddRule.
+// closed: AddAddress, AddService, AddAddressGroup, AddServiceGroup,
+// ExtendRule and AddRule.
 type Change interface {
 	fmt.Stringer
 	change()
@@ -92,6 +93,16 @@ type AddAddress struct {
 // AddService creates a service object.
 type AddService struct {
 	Service firemon.Service `json:"service"`
+}
+
+// AddAddressGroup creates an address group of existing or new objects.
+type AddAddressGroup struct {
+	Group firemon.AddressGroup `json:"group"`
+}
+
+// AddServiceGroup creates a service group of existing or new services.
+type AddServiceGroup struct {
+	Group firemon.ServiceGroup `json:"group"`
 }
 
 // ExtendRule adds members to one dimension of an existing rule.
@@ -127,6 +138,16 @@ func (c AddService) String() string {
 }
 
 // String describes the change.
+func (c AddAddressGroup) String() string {
+	return "add address group " + c.Group.Name + " " + strings.Join(c.Group.Members, ",")
+}
+
+// String describes the change.
+func (c AddServiceGroup) String() string {
+	return "add service group " + c.Group.Name + " " + strings.Join(c.Group.Members, ",")
+}
+
+// String describes the change.
 func (c ExtendRule) String() string {
 	return "extend rule " + c.RuleID + " " + c.Field.String() + " += " + strings.Join(c.Names, ",")
 }
@@ -140,10 +161,12 @@ func (c AddRule) String() string {
 	return "add rule " + c.Rule.ID + " " + where
 }
 
-func (AddAddress) change() {}
-func (AddService) change() {}
-func (ExtendRule) change() {}
-func (AddRule) change()    {}
+func (AddAddress) change()      {}
+func (AddService) change()      {}
+func (AddAddressGroup) change() {}
+func (AddServiceGroup) change() {}
+func (ExtendRule) change()      {}
+func (AddRule) change()         {}
 
 // Conflict is part of the intent a specific deny rule blocks.
 type Conflict struct {

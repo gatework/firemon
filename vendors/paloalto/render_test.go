@@ -85,3 +85,19 @@ func TestRenderer_RoundTrip(t *testing.T) {
 		t.Fatalf("after rendering: %s", res.Verdict)
 	}
 }
+
+func TestRenderer_Groups(t *testing.T) {
+	t.Parallel()
+	p := &design.Plan{Changes: []design.Change{
+		design.AddAddressGroup{Group: firemon.AddressGroup{Name: "g", Members: []string{"a", "b c"}}},
+		design.AddServiceGroup{Group: firemon.ServiceGroup{Name: "s", Members: []string{"x"}}},
+	}}
+	s, err := paloalto.Renderer{}.Render(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`set address-group g static [ a "b c" ]`, "set service-group s members [ x ]"}
+	if strings.Join(s.Commands, "\n") != strings.Join(want, "\n") || s.Rollback[0] != "delete service-group s" {
+		t.Fatalf("got %q / %q", s.Commands, s.Rollback)
+	}
+}

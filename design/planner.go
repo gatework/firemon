@@ -19,9 +19,10 @@ var ErrUnverifiable = errors.New("design: no verifiable change")
 
 // Planner designs plans for one firewall. It is safe for concurrent use.
 type Planner struct {
-	fw     *firemon.Firewall
-	naming Naming
-	now    func() time.Time
+	fw        *firemon.Firewall
+	naming    Naming
+	now       func() time.Time
+	threshold int
 }
 
 // New returns a planner for fw.
@@ -30,7 +31,11 @@ func New(fw *firemon.Firewall, opts Options) *Planner {
 	if now == nil {
 		now = time.Now
 	}
-	return &Planner{fw: fw, naming: opts.Naming.withDefaults(), now: now}
+	threshold := opts.GroupThreshold
+	if threshold == 0 {
+		threshold = DefaultGroupThreshold
+	}
+	return &Planner{fw: fw, naming: opts.Naming.withDefaults(), now: now, threshold: threshold}
 }
 
 // need is what one zone pair must newly permit.
@@ -61,6 +66,7 @@ func (p *Planner) Plan(intent Intent) (*Plan, error) {
 		return plan, nil
 	}
 	cat := newCatalog(p.fw, p.naming)
+	cat.threshold = p.threshold
 	var ruleChanges []Change
 	var opened []need
 	for _, n := range needs {
@@ -318,13 +324,13 @@ func (p *Planner) newRule(n need, s traffic.Space, intent Intent, cat *catalog) 
 		Name: cat.unique(p.naming.Rule(intent, index)), Description: intent.Description,
 		From: []string{n.from}, To: []string{n.to}, Action: firemon.ActionPermit, Schedule: intent.Schedule,
 	}
-	for _, name := range cat.addressNames(s.Src) {
+	for _, name := range cat.groupAddresses(cat.addressNames(s.Src), s.Src, p.naming.Group(r.Name, FieldSource)) {
 		r.Source = append(r.Source, firemon.NamedAddress(name))
 	}
-	for _, name := range cat.addressNames(s.Dst) {
+	for _, name := range cat.groupAddresses(cat.addressNames(s.Dst), s.Dst, p.naming.Group(r.Name, FieldDestination)) {
 		r.Destination = append(r.Destination, firemon.NamedAddress(name))
 	}
-	r.Services = cat.serviceNames(s.Service)
+	r.Services = cat.groupServices(cat.serviceNames(s.Service), s.Service, p.naming.Group(r.Name, FieldService))
 	r.ID = p.ruleID(r.Name, index)
 	add := AddRule{Rule: r}
 	if n.before != nil {
