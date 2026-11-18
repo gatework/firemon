@@ -121,6 +121,8 @@ func (s *state) dispatch(b block) {
 		s.vrouter(b, words)
 	case "rule":
 		s.rule(b, words)
+	case "policy":
+		s.policy(b, words)
 	}
 	s.markHead(b)
 	if !isPolicySection(b.keyword()) {
@@ -217,7 +219,7 @@ func (c *catalog[T]) items() []T { return slices.Clone(c.list) }
 // keyword are reported as diagnostics.
 func isPolicySection(keyword string) bool {
 	switch keyword {
-	case "address", "service", "servgroup", "schedule", "zone", "interface", "ip", "rule":
+	case "address", "service", "servgroup", "schedule", "zone", "interface", "ip", "rule", "policy":
 		return true
 	default:
 		return false

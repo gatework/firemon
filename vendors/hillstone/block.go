@@ -15,15 +15,19 @@ type block struct {
 }
 
 // keyword returns the first word of the head.
-func (b block) keyword() string {
+func (b *block) keyword() string {
 	k, _, _ := strings.Cut(b.head.Text, " ")
 	return k
 }
 
-// segment splits content into top-level blocks. A head at column zero opens
-// a block when the next line is indented, a continuation, or "exit"; the
-// block runs to the next "exit" at column zero. Lines at column zero inside
-// a block are continuations of wrapped strings and stay in the body.
+// segment splits content into top-level blocks.
+//
+// Current StoneOS output indents block bodies: a head at column zero opens a
+// block when the next line is indented or "exit", and the block runs to the
+// next "exit" at column zero; lines at column zero inside it are
+// continuations of wrapped strings. Older output does not indent bodies, so
+// the heads of policy-relevant blocks always open a block, which then runs
+// to the first "exit" that does not close a nested rule.
 func segment(content *parser.Content) []block {
 	lines := content.Lines()
 	var out []block
@@ -33,21 +37,56 @@ func segment(content *parser.Content) []block {
 			continue
 		}
 		b := block{head: head, last: head.Number}
-		if i+1 < len(lines) && (isIndented(lines[i+1].Text) || lines[i+1].Text == "exit") {
-			j := i + 1
-			for ; j < len(lines) && lines[j].Text != "exit"; j++ {
-				b.body = append(b.body, lines[j])
-			}
-			if j < len(lines) {
-				b.last = lines[j].Number
-			} else {
-				b.last = lines[len(lines)-1].Number
-			}
-			i = j
+		next := i + 1
+		switch {
+		case next < len(lines) && (isIndented(lines[next].Text) || lines[next].Text == "exit"):
+			i = b.collect(lines, next, func(l parser.Line) bool { return l.Text == "exit" })
+		case next < len(lines) && opensBlock(head.Text):
+			depth := 0
+			i = b.collect(lines, next, func(l parser.Line) bool {
+				t := strings.TrimSpace(l.Text)
+				switch {
+				case strings.HasPrefix(t, "rule ") && b.keyword() == "policy":
+					depth++
+				case t == "exit" && depth > 0:
+					depth--
+				case t == "exit":
+					return true
+				}
+				return false
+			})
 		}
 		out = append(out, b)
 	}
 	return out
+}
+
+// collect appends lines from start until end reports the closing line and
+// returns the index of that line (or of the last line).
+func (b *block) collect(lines []parser.Line, start int, end func(parser.Line) bool) int {
+	j := start
+	for ; j < len(lines) && !end(lines[j]); j++ {
+		b.body = append(b.body, lines[j])
+	}
+	if j >= len(lines) {
+		j = len(lines) - 1
+	}
+	b.last = lines[j].Number
+	return j
+}
+
+// opensBlock reports whether a head always opens a block, even when its
+// body is not indented.
+func opensBlock(head string) bool {
+	k, rest, _ := strings.Cut(head, " ")
+	switch k {
+	case "address", "service", "servgroup", "schedule", "zone", "interface", "rule", "policy":
+		return true
+	case "ip":
+		return strings.HasPrefix(rest, "vrouter ")
+	default:
+		return false
+	}
 }
 
 func isIndented(s string) bool { return strings.HasPrefix(s, " ") || strings.HasPrefix(s, "\t") }

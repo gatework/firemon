@@ -23,7 +23,45 @@ const anyName = "Any"
 //
 // A rule with aggregate-type is a rule-group header; it names the group of
 // the rules that reference it with aggregate-rule and is not itself a rule.
-func (s *state) rule(b block, head *words) {
+func (s *state) rule(b block, head *words) { s.ruleIn(b, head, nil, nil) }
+
+// policy parses the legacy zone-pair form, whose rules inherit its zones:
+//
+//	policy from "ZONE" to "ZONE"
+//	  rule id N
+//	    ...
+//	  exit
+//	exit
+func (s *state) policy(b block, head *words) {
+	var from, to []string
+	for !head.done() {
+		switch head.next() {
+		case "from":
+			from = []string{head.next()}
+		case "to":
+			to = []string{head.next()}
+		}
+	}
+	for i := 0; i < len(b.body); i++ {
+		w := newWords(b.body[i].Text)
+		if w.next() != "rule" {
+			continue
+		}
+		sub := block{head: b.body[i]}
+		for i++; i < len(b.body) && strings.TrimSpace(b.body[i].Text) != "exit"; i++ {
+			sub.body = append(sub.body, b.body[i])
+		}
+		s.mark(sub.head)
+		if i < len(b.body) {
+			s.mark(b.body[i])
+		}
+		s.ruleIn(sub, w, from, to)
+	}
+}
+
+// ruleIn parses one rule; from and to are the zones of an enclosing policy
+// block, used when the rule names none.
+func (s *state) ruleIn(b block, head *words, from, to []string) {
 	if head.next() != "id" {
 		return
 	}
@@ -52,6 +90,12 @@ func (s *state) rule(b block, head *words) {
 		s.ruleGroup[r.ID] = name
 		s.cfg.RuleGroups = append(s.cfg.RuleGroups, firemon.RuleGroup{ID: r.ID, Name: name})
 		return
+	}
+	if len(r.From) == 0 {
+		r.From = from
+	}
+	if len(r.To) == 0 {
+		r.To = to
 	}
 	r.From, r.To = anyZones(r.From), anyZones(r.To)
 	s.ruleIndex[r.ID] = len(s.cfg.Rules)
