@@ -64,6 +64,15 @@ firemon design --vendor paloalto --config pa1.txt --src 10.1.0.5 --dst 192.0.2.1
 firemon design --vendor hillstone --config fw1.txt --src any --dst 10.0.5.20 --service tcp/443 \
   --nat dnat --nat-ip 198.51.100.50 --nat-port 8443 --name REQ-1002
 
+# Policy convergence: unused objects, ineffective, broad and mergeable rules; --plan writes the
+# safe cleanups as commands verified to keep every decision, with rollback
+firemon hits --host 10.0.0.2 --user ops --vendor paloalto --name pa1   # optional: read-only hit counters
+firemon converge --snapshot pa1 --plan
+
+# Migration to another vendor: draft the mapping, fill in the ports, translate
+firemon migrate --vendor hillstone --config fw1.txt --to paloalto --init-mapping map.yaml
+firemon migrate --vendor hillstone --config fw1.txt --to paloalto --mapping map.yaml --out pa-migration
+
 # Design on the live device; with --apply push, verify and save/commit after confirmation
 firemon deploy --vendor hillstone --host 10.0.0.1 --user ops --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 --apply
 ```

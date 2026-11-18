@@ -38,3 +38,7 @@
 | Policy route | 策略路由 | Ordered PBR entry that chooses the egress before the routing table (`firemon.PolicyRoute`). |
 | NAT intent | NAT 需求 | The translation asked with an access intent: source, destination (published port) or static (`design.NATIntent`). |
 | Incomplete rule | 不完整策略 | A rule missing its action, an address or its service; the device ignores it (`SecurityRule.Incomplete`). |
+| Live object | 有效引用对象 | An object reachable from a rule, NAT rule, policy route, interface, route or external construct through group membership (`firemon.References`). |
+| Finding tier | 收敛层级 | Safe (a change keeping the effective policy exists and is verified) or Review (advice) (`converge.Tier`). |
+| Evidence | 证据 | What a convergence finding rests on: the configuration, hit counters, or both (`converge.Evidence`). |
+| Fidelity | 翻译保真度 | Exact, approximate (stated difference) or untranslatable (carried over disabled) (`migrate.Fidelity`). |
