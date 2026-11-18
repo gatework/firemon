@@ -21,7 +21,7 @@ type hop struct {
 // discover splits req into paths: by address family, by the interface
 // that routes back to the sources, by NAT, and by the egress interface of
 // the (translated) destinations. It stops adding paths at the budget.
-func (e *Engine) discover(req Request, table *firemon.RoutingTable) (paths []Path, unrouted traffic.AddressSet, incomplete bool) {
+func (e *search) discover(req Request, table *firemon.RoutingTable) (paths []Path, unrouted traffic.AddressSet, incomplete bool) {
 	for _, fam := range families(req) {
 		for _, in := range e.ingress(fam, table) {
 			inTable := e.tableOf(in.vr, table)
@@ -31,7 +31,7 @@ func (e *Engine) discover(req Request, table *firemon.RoutingTable) (paths []Pat
 					outs, lost := e.routedEgress(fam, inTable, rt)
 					unrouted = unrouted.Union(lost)
 					for _, out := range outs {
-						if len(paths) >= e.maxPaths {
+						if !e.admit() {
 							return paths, unrouted, true
 						}
 						paths = append(paths, e.routedPath(in, out, rt))

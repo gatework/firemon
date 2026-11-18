@@ -266,6 +266,9 @@ func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, pla
 			continue
 		}
 		p.f("  变更方案（已验证：%v）：\n", cp.Plan.Verified)
+		if cp.Plan.VerifyError != "" {
+			p.f("    验证未通过：%s\n", cp.Plan.VerifyError)
+		}
 		for _, c := range script.Commands {
 			p.f("    %s\n", c)
 		}

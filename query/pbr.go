@@ -22,7 +22,7 @@ type routed struct {
 // cannot be decided offline (user groups, unresolved domains) splits the
 // traffic into a branch that takes it, conditioned on the entry matching,
 // and a branch that does not.
-func (e *Engine) policyRoute(pc natPiece, in hop, domain string) []routed {
+func (e *search) policyRoute(pc natPiece, in hop, domain string) []routed {
 	rules := e.fw.PolicyRoutesFor(in.zone, in.iface)
 	work := []routed{{piece: pc}}
 	if len(rules) == 0 {
@@ -30,6 +30,9 @@ func (e *Engine) policyRoute(pc natPiece, in hop, domain string) []routed {
 	}
 	var done []routed
 	for _, r := range rules {
+		if e.tooMany(len(work)) {
+			break
+		}
 		if vr := r.Spec().VirtualRouter; vr != "" && in.vr != "" && vr != in.vr {
 			continue
 		}

@@ -25,6 +25,9 @@ const (
 	KindUnusedAddress
 	// KindUnusedService is a service object or group nothing references.
 	KindUnusedService
+	// KindIncomplete is a rule missing its action, an address or its
+	// service; the device ignores it.
+	KindIncomplete
 )
 
 // String returns the kind name.
@@ -48,6 +51,8 @@ func (k Kind) String() string {
 		return "unused-address"
 	case KindUnusedService:
 		return "unused-service"
+	case KindIncomplete:
+		return "incomplete"
 	default:
 		return "invalid"
 	}

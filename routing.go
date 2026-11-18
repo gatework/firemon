@@ -34,6 +34,7 @@ type routeEntry struct {
 	iface     string
 	zone      string
 	order     int
+	recursive bool // the interface was resolved through the next hop
 }
 
 // Name returns the virtual router name.
@@ -113,6 +114,9 @@ func buildRoutingTables(cfg *Config, ifaces map[string]Interface) (map[string]*R
 		}
 		pending = next
 	}
+	for _, t := range tables {
+		t.settle(ifaces)
+	}
 	var issues []Issue
 	for _, e := range pending {
 		issues = append(issues, Issue{Object: "route " + e.route.Destination.String(), Reason: "not installed: no route reaches next hop " + e.route.NextHop.String()})
@@ -121,6 +125,9 @@ func buildRoutingTables(cfg *Config, ifaces map[string]Interface) (map[string]*R
 		slices.SortStableFunc(t.entries, func(a, b routeEntry) int {
 			return cmp.Or(
 				cmp.Compare(b.route.Destination.Bits(), a.route.Destination.Bits()),
+				// Same-length prefixes stay together, so equal-cost routes
+				// declared apart are found as one group.
+				a.route.Destination.Addr().Compare(b.route.Destination.Addr()),
 				cmp.Compare(a.route.Distance, b.route.Distance),
 				cmp.Compare(a.route.Metric, b.route.Metric),
 				cmp.Compare(a.order, b.order),
@@ -143,16 +150,42 @@ func installable(e *routeEntry, t *RoutingTable, ifaces map[string]Interface) bo
 	if iface == "" {
 		return false
 	}
-	e.iface, e.zone = iface, ifaces[iface].Zone
+	e.iface, e.zone, e.recursive = iface, ifaces[iface].Zone, true
 	return true
+}
+
+// settle re-resolves recursive next hops against the whole table until
+// they no longer change, so the result does not depend on the order in
+// which routes became installable: a more specific route installed later
+// wins, as on the device.
+func (t *RoutingTable) settle(ifaces map[string]Interface) {
+	for range len(t.entries) + 1 {
+		changed := false
+		for i := range t.entries {
+			e := &t.entries[i]
+			if !e.recursive {
+				continue
+			}
+			if iface := t.resolveExcept(e.route.NextHop, i); iface != "" && iface != e.iface {
+				e.iface, e.zone, changed = iface, ifaces[iface].Zone, true
+			}
+		}
+		if !changed {
+			return
+		}
+	}
 }
 
 // resolve returns the egress interface of the most specific installed route
 // containing hop.
-func (t *RoutingTable) resolve(hop netip.Addr) string {
+func (t *RoutingTable) resolve(hop netip.Addr) string { return t.resolveExcept(hop, -1) }
+
+// resolveExcept is resolve ignoring entry skip, a route that cannot
+// resolve its own next hop.
+func (t *RoutingTable) resolveExcept(hop netip.Addr, skip int) string {
 	best, bits := "", -1
-	for _, e := range t.entries {
-		if e.iface != "" && e.route.Destination.Contains(hop) && e.route.Destination.Bits() > bits {
+	for i, e := range t.entries {
+		if i != skip && e.iface != "" && e.route.Destination.Contains(hop) && e.route.Destination.Bits() > bits {
 			best, bits = e.iface, e.route.Destination.Bits()
 		}
 	}

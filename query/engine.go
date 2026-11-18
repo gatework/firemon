@@ -19,6 +19,7 @@ type Engine struct {
 	maxPaths  int
 	schedules ScheduleMode
 	bridges   bool // some zone forwards at layer 2
+	pre       []natEntry
 }
 
 // New returns an engine for fw.
@@ -27,11 +28,21 @@ func New(fw *firemon.Firewall, opts Options) *Engine {
 	if now == nil {
 		now = time.Now
 	}
-	return &Engine{
+	e := &Engine{
 		fw: fw, rules: fw.Rules(), now: now,
-		max: cmp.Or(opts.MaxSpaces, DefaultMaxSpaces), maxPaths: cmp.Or(opts.MaxPaths, DefaultMaxPaths),
+		max: positiveOr(opts.MaxSpaces, DefaultMaxSpaces), maxPaths: positiveOr(opts.MaxPaths, DefaultMaxPaths),
 		schedules: opts.Schedules, bridges: fw.Bridges(),
 	}
+	e.pre = e.preEntries()
+	return e
+}
+
+// positiveOr returns v, or def when v is not positive.
+func positiveOr(v, def int) int {
+	if v > 0 {
+		return v
+	}
+	return def
 }
 
 // Firewall returns the evaluated firewall.
@@ -54,7 +65,7 @@ func (e *Engine) Query(req Request) (*Result, error) {
 		return nil, fmt.Errorf("query: unknown virtual router %q", vr)
 	}
 	res := &Result{Request: req, ZonesNeeded: (req.FromZone == "" || req.ToZone == "") && e.bridges}
-	res.Paths, res.Unrouted, res.Incomplete = e.discoverTargets(req, table)
+	res.Paths, res.Unrouted, res.Incomplete = (&search{Engine: e}).discoverTargets(req, table)
 	outcomes := map[Outcome]bool{}
 	if res.Incomplete {
 		outcomes[OutcomeUnknown] = true

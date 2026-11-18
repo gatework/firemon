@@ -88,6 +88,9 @@ func printProposal(cmd *cobra.Command, asJSON bool, prop workflow.Proposal) erro
 	p := &printer{w: cmd.OutOrStdout()}
 	plan := prop.Plan
 	p.f("status: %s  verified: %v  baseline: %s\n", plan.Status, plan.Verified, plan.Baseline[:16])
+	if plan.VerifyError != "" {
+		p.f("verification failed: %s\n", plan.VerifyError)
+	}
 	for _, c := range plan.Conflicts {
 		p.f("conflict: rule %s denies %s -> %s: %s (use --override to place new rules above it)\n", c.RuleID, c.From, c.To, c.Text)
 	}

@@ -10,7 +10,7 @@ import (
 // discoverTargets expands a request into its targets, the plain
 // destination addresses and each destination domain, times each
 // application, and discovers the paths of every target.
-func (e *Engine) discoverTargets(req Request, table *firemon.RoutingTable) (paths []Path, unrouted traffic.AddressSet, incomplete bool) {
+func (e *search) discoverTargets(req Request, table *firemon.RoutingTable) (paths []Path, unrouted traffic.AddressSet, incomplete bool) {
 	apps := req.Applications
 	if len(apps) == 0 {
 		apps = []string{""}
@@ -23,11 +23,11 @@ func (e *Engine) discoverTargets(req Request, table *firemon.RoutingTable) (path
 			paths, unrouted, incomplete = append(paths, tag(ps, "", false, app)...), unrouted.Union(lost), incomplete || inc
 		}
 		for _, d := range req.DstDomains {
-			ps, inc := e.discoverDomain(base, table, d)
-			paths, incomplete = append(paths, tag(ps, d, len(req.Resolved[d]) > 0, app)...), incomplete || inc
+			ps, lost, inc := e.discoverDomain(base, table, d)
+			paths, unrouted, incomplete = append(paths, tag(ps, d, len(req.Resolved[d]) > 0, app)...), unrouted.Union(lost), incomplete || inc
 		}
 	}
-	return paths, unrouted, incomplete
+	return paths, unrouted, incomplete || e.incomplete
 }
 
 // applicationService is the service evaluated for an application target:
@@ -45,7 +45,7 @@ func (e *Engine) applicationService(s traffic.ServiceSet, app string) traffic.Se
 
 // discoverDomain routes a domain target by its resolved addresses, or
 // through the default route when they are unknown.
-func (e *Engine) discoverDomain(req Request, table *firemon.RoutingTable, domain string) ([]Path, bool) {
+func (e *search) discoverDomain(req Request, table *firemon.RoutingTable, domain string) ([]Path, traffic.AddressSet, bool) {
 	if addrs := req.Resolved[domain]; len(addrs) > 0 {
 		var dst traffic.AddressSet
 		for _, a := range addrs {
@@ -53,11 +53,10 @@ func (e *Engine) discoverDomain(req Request, table *firemon.RoutingTable, domain
 		}
 		r := req
 		r.Dst = dst
-		ps, _, inc := e.discover(r, table)
-		return ps, inc
+		return e.discover(r, table)
 	}
 	var paths []Path
-	for _, fam := range []traffic.AddressSet{traffic.AnyIPv4()} {
+	for _, fam := range []traffic.AddressSet{traffic.AnyIPv4(), traffic.AnyIPv6()} {
 		r := req
 		r.Src, r.Dst = req.Src.Intersect(fam), fam
 		if r.Src.IsEmpty() {
@@ -65,7 +64,7 @@ func (e *Engine) discoverDomain(req Request, table *firemon.RoutingTable, domain
 		}
 		for _, in := range e.ingress(r, table) {
 			inTable := e.tableOf(in.vr, table)
-			def, ok := e.defaultEgress(r, inTable)
+			def, ok := e.defaultEgress(r, inTable, fam)
 			if !ok {
 				continue
 			}
@@ -82,23 +81,26 @@ func (e *Engine) discoverDomain(req Request, table *firemon.RoutingTable, domain
 					out = *rt.out
 				}
 				out.addrs = rt.piece.translated.Dst
-				if len(paths) >= e.maxPaths {
-					return paths, true
+				if !e.admit() {
+					return paths, traffic.AddressSet{}, true
 				}
 				paths = append(paths, e.routedPath(in, out, rt))
 			}
 		}
 	}
-	return paths, false
+	return paths, traffic.AddressSet{}, false
 }
 
 // defaultEgress is where traffic to an unknown Internet address leaves: the
 // interface of the default route, or the requested zone.
-func (e *Engine) defaultEgress(req Request, table *firemon.RoutingTable) (hop, bool) {
+func (e *Engine) defaultEgress(req Request, table *firemon.RoutingTable, family traffic.AddressSet) (hop, bool) {
 	if req.ToZone != "" {
 		return hop{vr: tableName(table), zone: req.ToZone, prefixLen: -1, addrs: req.Dst}, true
 	}
-	egress, _ := table.Lookup(traffic.AnyIPv4())
+	if table == nil {
+		return hop{}, false
+	}
+	egress, _ := table.Lookup(family)
 	for _, g := range egress {
 		if g.Route.Destination.Bits() == 0 && g.Interface != "" {
 			return hop{vr: table.Name(), zone: g.Zone, iface: g.Interface, prefixLen: 0, addrs: g.Addresses}, true

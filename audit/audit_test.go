@@ -106,3 +106,32 @@ func TestA1_InterfaceAndRouteObjectsAreUsed(t *testing.T) {
 		t.Fatalf("objects used by interfaces and routes reported unused: %d", n)
 	}
 }
+
+func TestH4_PolicyRouteObjectsAreUsed(t *testing.T) {
+	t.Parallel()
+	cfg := &firemon.Config{
+		Vendor:       firemon.VendorHillstone,
+		Addresses:    []firemon.Address{{Name: "video", Entries: []firemon.AddressEntry{firemon.PrefixEntry(netip.MustParsePrefix("192.0.2.0/24"))}}},
+		PolicyRoutes: []firemon.PolicyRoute{{Policy: "p", ID: "1", Destination: []firemon.AddressRef{firemon.NamedAddress("video")}}},
+	}
+	fw, err := firemon.Compile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := audit.Run(fw, audit.Options{Now: func() time.Time { return now }}).Count(audit.KindUnusedAddress); n != 0 {
+		t.Fatalf("an object only policy routing uses is reported unused")
+	}
+}
+
+func TestV1_IncompleteRuleIsReported(t *testing.T) {
+	t.Parallel()
+	cfg := &firemon.Config{Vendor: firemon.VendorHillstone, Rules: []firemon.SecurityRule{{ID: "6", Action: firemon.ActionPermit, Incomplete: "no source"}}}
+	fw, err := firemon.Compile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep := audit.Run(fw, audit.Options{Now: func() time.Time { return now }})
+	if rep.Count(audit.KindIncomplete) != 1 || rep.Count(audit.KindPermitAny) != 0 {
+		t.Fatalf("findings %+v", rep.Findings)
+	}
+}

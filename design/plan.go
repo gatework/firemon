@@ -193,4 +193,6 @@ type Plan struct {
 	// Verified reports that applying Changes permits the planned need and
 	// nothing outside the intent.
 	Verified bool `json:"verified"`
+	// VerifyError is why verification failed, when it did.
+	VerifyError string `json:"verify_error,omitempty"`
 }

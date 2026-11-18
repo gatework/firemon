@@ -81,9 +81,12 @@ func (e *Engine) preEntries() []natEntry {
 
 // translate applies the pre-routing NAT entries to base, first match per
 // packet, and returns the resulting pieces.
-func (e *Engine) translate(base traffic.Space, in hop, table *firemon.RoutingTable, req Request) []natPiece {
+func (e *search) translate(base traffic.Space, in hop, table *firemon.RoutingTable, req Request) []natPiece {
 	work := []natPiece{{original: base, translated: base}}
-	for _, en := range e.preEntries() {
+	for _, en := range e.pre {
+		if e.tooMany(len(work)) {
+			break
+		}
 		var next []natPiece
 		for _, pc := range work {
 			if pc.decided {

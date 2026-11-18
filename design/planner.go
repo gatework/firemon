@@ -81,7 +81,12 @@ func (p *Planner) Plan(intent Intent) (*Plan, error) {
 		opened = append(opened, n)
 	}
 	plan.Changes = append(slices.Clone(cat.created), ruleChanges...)
-	plan.Verified = len(plan.Changes) == 0 || p.verify(plan.Changes, intent, opened, at) == nil
+	plan.Verified = true
+	if len(plan.Changes) > 0 {
+		if err := p.verify(plan.Changes, intent, opened, at); err != nil {
+			plan.Verified, plan.VerifyError = false, err.Error()
+		}
+	}
 	plan.Status = StatusChange
 	if len(plan.Conflicts) > 0 {
 		plan.Status = StatusConflict
@@ -125,6 +130,13 @@ func (p *Planner) needs(res *query.Result, intent Intent, plan *Plan) []need {
 		}
 		n := &out[i]
 		n.scope = n.scope.Add(path.Policy)
+		if len(path.NATUncertain) > 0 {
+			// The packets the rules see depend on NAT that cannot be
+			// decided: nothing on this path is opened blindly.
+			plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": NAT may apply ("+strings.Join(path.NATUncertain, ",")+")")
+			n.conflict = n.conflict.Add(path.Policy)
+			continue
+		}
 		for _, d := range path.Decisions {
 			p.classify(n, d, intent, plan)
 		}

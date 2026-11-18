@@ -40,8 +40,15 @@ type Target interface {
 
 // Apply deploys a proposal, then persists it once the readback verified.
 func Apply(ctx context.Context, t Target, p bootstrap.Platform, prop Proposal, journal apply.Journal, now func() time.Time) (deploy.Receipt, error) {
-	d := deploy.New(t.Open, deploy.Options{Journal: journal, Now: now})
-	receipt, err := d.Deploy(ctx, deploy.Request{Plan: prop.Plan, Commands: p.DeployCommands(prop.Script), Device: t.Device()})
+	write := deploy.WriterFunc(func(plan *design.Plan) ([]string, error) {
+		script, err := p.Render(plan)
+		if err != nil {
+			return nil, err
+		}
+		return p.DeployCommands(script), nil
+	})
+	d := deploy.New(t.Open, deploy.Options{Writer: write, Journal: journal, Now: now})
+	receipt, err := d.Deploy(ctx, deploy.Request{Plan: prop.Plan, Device: t.Device()})
 	if err != nil {
 		return receipt, err
 	}

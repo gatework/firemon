@@ -103,8 +103,8 @@ func TestDeployer_Deploy(t *testing.T) {
 	p, commands := planFor(t, text)
 	dev := &device{text: text}
 	j := &journal{}
-	d := deploy.New(dev.open, deploy.Options{Journal: j, Now: func() time.Time { return now }})
-	receipt, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Commands: commands, Device: apply.Device{Host: "lab", Platform: "hillstone"}})
+	d := deploy.New(dev.open, deploy.Options{Writer: fixed(commands), Journal: j, Now: func() time.Time { return now }})
+	receipt, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Device: apply.Device{Host: "lab", Platform: "hillstone"}})
 	if err != nil {
 		t.Fatalf("deploy: %v (state %+v)", err, receipt.State)
 	}
@@ -118,8 +118,8 @@ func TestDeployer_RefusesDrift(t *testing.T) {
 	text := fixture(t)
 	p, commands := planFor(t, text)
 	dev := &device{text: text + "address \"late\"\n  ip 192.0.2.1/32\nexit\n"}
-	d := deploy.New(dev.open, deploy.Options{Journal: &journal{}, Now: func() time.Time { return now }})
-	_, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Commands: commands})
+	d := deploy.New(dev.open, deploy.Options{Writer: fixed(commands), Journal: &journal{}, Now: func() time.Time { return now }})
+	_, err := d.Deploy(t.Context(), deploy.Request{Plan: p})
 	if !errors.Is(err, deploy.ErrDrift) || len(dev.writes) != 0 {
 		t.Fatalf("err %v writes %d", err, len(dev.writes))
 	}
@@ -130,8 +130,8 @@ func TestDeployer_StopsOnRejectedCommand(t *testing.T) {
 	text := fixture(t)
 	p, commands := planFor(t, text)
 	dev := &device{text: text, failOn: commands[2]}
-	d := deploy.New(dev.open, deploy.Options{Journal: &journal{}, Now: func() time.Time { return now }})
-	receipt, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Commands: commands})
+	d := deploy.New(dev.open, deploy.Options{Writer: fixed(commands), Journal: &journal{}, Now: func() time.Time { return now }})
+	receipt, err := d.Deploy(t.Context(), deploy.Request{Plan: p})
 	if err == nil || receipt.State.Status == apply.StatusVerified || len(dev.writes) != 2 {
 		t.Fatalf("err %v status %s writes %d", err, receipt.State.Status, len(dev.writes))
 	}
@@ -144,9 +144,13 @@ func TestD7_UnexpectedReadbackFails(t *testing.T) {
 	text := fixture(t)
 	p, commands := planFor(t, text)
 	dev := &device{text: text, extra: "address \"device-added\"\n  ip 192.0.2.77/32\nexit\n"}
-	d := deploy.New(dev.open, deploy.Options{Journal: &journal{}, Now: func() time.Time { return now }})
-	_, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Commands: commands})
+	d := deploy.New(dev.open, deploy.Options{Writer: fixed(commands), Journal: &journal{}, Now: func() time.Time { return now }})
+	_, err := d.Deploy(t.Context(), deploy.Request{Plan: p})
 	if !errors.Is(err, deploy.ErrUnexpectedReadback) {
 		t.Fatalf("got %v", err)
 	}
+}
+
+func fixed(commands []string) deploy.Writer {
+	return deploy.WriterFunc(func(*design.Plan) ([]string, error) { return commands, nil })
 }

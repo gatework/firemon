@@ -59,6 +59,8 @@ func ruleFindings(r *firemon.Rule, at time.Time) []Finding {
 	spec := r.Spec()
 	var out []Finding
 	switch {
+	case spec.Incomplete != "":
+		return []Finding{{Kind: KindIncomplete, Rule: r.ID(), Detail: spec.Incomplete}}
 	case spec.Disabled:
 		out = append(out, Finding{Kind: KindDisabled, Rule: r.ID()})
 	case r.ExpiredAt(at):

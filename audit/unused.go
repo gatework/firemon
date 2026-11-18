@@ -87,6 +87,13 @@ func references(cfg *firemon.Config) (addrs, svcs map[string]bool) {
 	for _, m := range cfg.StaticNATs {
 		named([]firemon.AddressRef{m.Real, m.Mapped})
 	}
+	for _, p := range cfg.PolicyRoutes {
+		named(p.Source)
+		named(p.Destination)
+		for _, s := range p.Services {
+			svcs[s] = true
+		}
+	}
 	for _, i := range cfg.Interfaces {
 		for _, name := range i.AddressObjects {
 			addrs[name] = true

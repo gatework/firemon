@@ -32,8 +32,23 @@ var (
 // writes commands.
 type Opener = apply.Opener[*firemon.Config]
 
+// Writer renders a plan into the commands a deployment session sends.
+// Deploy renders the plan itself, so the commands sent are always the
+// verified plan's.
+type Writer interface {
+	Commands(plan *design.Plan) ([]string, error)
+}
+
+// WriterFunc adapts a function to Writer.
+type WriterFunc func(plan *design.Plan) ([]string, error)
+
+// Commands implements Writer.
+func (f WriterFunc) Commands(plan *design.Plan) ([]string, error) { return f(plan) }
+
 // Options configures a Deployer.
 type Options struct {
+	// Writer renders plans into device commands; it is required.
+	Writer Writer
 	// Journal records every state transition; it is required.
 	Journal apply.Journal
 	// Classify maps session errors to safe diagnostic codes.
@@ -45,6 +60,7 @@ type Options struct {
 // Deployer applies plans through one opener.
 type Deployer struct {
 	open     Opener
+	write    Writer
 	journal  apply.Journal
 	classify apply.Classifier
 	now      func() time.Time
@@ -56,16 +72,13 @@ func New(open Opener, opts Options) *Deployer {
 	if now == nil {
 		now = time.Now
 	}
-	return &Deployer{open: open, journal: opts.Journal, classify: opts.Classify, now: now}
+	return &Deployer{open: open, write: opts.Writer, journal: opts.Journal, classify: opts.Classify, now: now}
 }
 
 // Request is one deployment.
 type Request struct {
-	Plan *design.Plan
-	// Commands are the vendor writes, as returned by the vendor's
-	// DeployCommands for the rendered script.
-	Commands []string
-	Device   apply.Device
+	Plan   *design.Plan
+	Device apply.Device
 }
 
 // Receipt is the terminal journal state.
@@ -77,17 +90,24 @@ type Receipt struct {
 
 // Deploy applies req. The error is nil only when the readback verified.
 func (d *Deployer) Deploy(ctx context.Context, req Request) (Receipt, error) {
-	if req.Plan == nil || !req.Plan.Verified || len(req.Plan.Changes) == 0 || len(req.Commands) == 0 {
+	if req.Plan == nil || !req.Plan.Verified || len(req.Plan.Changes) == 0 {
 		return Receipt{}, ErrNothingToDeploy
 	}
-	if d.journal == nil {
-		return Receipt{}, errors.New("deploy: journal required")
+	if d.journal == nil || d.write == nil {
+		return Receipt{}, errors.New("deploy: journal and writer required")
 	}
-	p := &checkedPlan{plan: req.Plan, commands: req.Commands, now: d.now}
+	commands, err := d.write.Commands(req.Plan)
+	if err != nil {
+		return Receipt{}, fmt.Errorf("deploy: render: %w", err)
+	}
+	if len(commands) == 0 {
+		return Receipt{}, ErrNothingToDeploy
+	}
+	p := &checkedPlan{plan: req.Plan, commands: commands, now: d.now}
 	res, err := apply.Run(ctx, apply.Request[*firemon.Config]{
 		Plan: p,
 		Identity: apply.State{
-			Device: req.Device, PlanSHA256: digest(req.Commands), PlanItem: req.Plan.Intent.Name,
+			Device: req.Device, PlanSHA256: digest(commands), PlanItem: req.Plan.Intent.Name,
 			ExpectedConfigSHA256: req.Plan.Baseline,
 		},
 		Open:     d.open,
@@ -146,7 +166,10 @@ func (p *checkedPlan) CheckAfter(before, after *firemon.Config) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	if len(again.Changes) > 0 {
+	// The readback must need nothing more, and a plan that left nothing
+	// blocked or undecided must now find the intent permitted.
+	clean := len(p.plan.Conflicts) == 0 && len(p.plan.Unknown) == 0
+	if len(again.Changes) > 0 || (clean && again.Status != design.StatusNoChange) {
 		return "", ErrNotApplied
 	}
 	return fw.Fingerprint(), nil
