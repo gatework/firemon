@@ -1,50 +1,34 @@
-name: Go
-on: [push, pull_request]
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
 permissions:
   contents: read
+
+env:
+  GOWORK: "off"
+
 jobs:
-  format:
+  verify:
+    name: Check
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.x'
-          cache: false
-      - name: Check Go formatting
-        run: test -z "$(gofmt -l .)"
-  test:
-    name: ${{ matrix.module }} / Go ${{ matrix.go }}
-    runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.27.0', '1.27.x']
-        module: [core, adapter-pinned, adapter-current]
-    env:
-      GOTOOLCHAIN: local
-      GOWORK: 'off'
-      GOFLAGS: -mod=readonly
-    defaults:
-      run:
-        working-directory: ${{ matrix.module == 'core' && '.' || 'adapter/netconnector' }}
+        go: ["1.26.x", "1.27.x"] # STANDARD.md MOD-1
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version: ${{ matrix.go }}
+          check-latest: true
           cache: false
-      - name: Pair adapter with the checked-out core
-        if: matrix.module == 'adapter-current'
-        working-directory: .
-        run: |
-          workfile="$RUNNER_TEMP/firemon.work"
-          GOWORK="$workfile" go work init "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/adapter/netconnector"
-          echo "GOWORK=$workfile" >> "$GITHUB_ENV"
-      - run: go mod verify
-      - run: go vet ./...
-      - run: go test -race -count=1 ./...
-      - run: go build ./...
-      - name: Check fixed module manifests
-        if: matrix.module != 'adapter-current'
-        run: go mod tidy -diff
+      - name: Check (STANDARD.md MOD-5)
+        run: make check

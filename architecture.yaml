@@ -1,0 +1,21 @@
+# firemon import boundaries (STANDARD.md ARC-1), enforced by archcheck in `make check`.
+# Direction: cmd -> internal/cli -> internal/bootstrap -> internal/workflow
+#            -> query/design/deploy -> firemon -> traffic; vendors and adapter point inward.
+declared:
+  - .
+  - ./traffic
+
+rules:
+  - name: domain packages stay free of I/O
+    packages: [., ./traffic]
+    deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
+           github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
+    transitive: true
+
+  - name: traffic is the base algebra
+    packages: [./traffic]
+    deny: [./...]
+
+  - name: the domain depends only on traffic
+    packages: [.]
+    only_local: [./traffic]
