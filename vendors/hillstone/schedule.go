@@ -13,9 +13,10 @@ import (
 //	periodic daily|weekdays|weekend|DAY... HH:MM:SS to HH:MM:SS
 //	description "TEXT"
 //
-// Periodic forms spanning days ("monday 08:00 to friday 18:00"), day-in-month
-// and day-range are reported as diagnostics; a schedule with an unparsed
-// period makes the rules using it undecidable.
+// A period spanning days ("monday 08:00 to friday 18:00") becomes one
+// recurrence per day. day-in-month and day-range are reported as
+// diagnostics; a schedule with an unparsed period makes the rules using it
+// undecidable.
 func (s *state) schedule(b block, head *words) {
 	name := head.next()
 	sch := s.schedules.upsert(name, func() firemon.Schedule { return firemon.Schedule{Name: name} })
@@ -31,13 +32,13 @@ func (s *state) schedule(b block, head *words) {
 			}
 			sch.Windows = append(sch.Windows, win)
 		case "periodic":
-			r, ok := periodic(w)
+			rs, ok := periodic(w)
 			if !ok {
 				s.diagnose(l, "unsupported periodic schedule")
 				sch.Unsupported = strings.TrimSpace(l.Text)
 				continue
 			}
-			sch.Recurrences = append(sch.Recurrences, r)
+			sch.Recurrences = append(sch.Recurrences, rs...)
 		case "description":
 			sch.Description = w.next()
 		default:
@@ -82,7 +83,42 @@ func (s *state) dateTime(w *words) (time.Time, bool) {
 	return t, err == nil
 }
 
-func periodic(w *words) (firemon.Recurrence, bool) {
+func periodic(w *words) ([]firemon.Recurrence, bool) {
+	if from, ok := weekday(w.peek()); ok && w.peekAt(2) == "to" {
+		if to, ok := weekday(w.peekAt(3)); ok {
+			return spanning(w, from, to)
+		}
+	}
+	r, ok := sameDay(w)
+	if !ok {
+		return nil, false
+	}
+	return []firemon.Recurrence{r}, true
+}
+
+// spanning reads "DAY HH:MM:SS to DAY HH:MM:SS": a continuous period from
+// one weekday to another, as one recurrence per day.
+func spanning(w *words, from, to time.Weekday) ([]firemon.Recurrence, bool) {
+	w.next()
+	start, ok1 := clockOffset(w.next())
+	w.next() // to
+	w.next()
+	end, ok2 := clockOffset(w.next())
+	if !ok1 || !ok2 || !w.done() {
+		return nil, false
+	}
+	end = min(end+time.Second, 24*time.Hour) // inclusive to the second
+	if from == to {
+		return nil, false // a week-long period: not a form StoneOS writes
+	}
+	out := []firemon.Recurrence{{Days: []time.Weekday{from}, Start: start, End: 24 * time.Hour}}
+	for d := (from + 1) % 7; d != to; d = (d + 1) % 7 {
+		out = append(out, firemon.Recurrence{Days: []time.Weekday{d}, Start: 0, End: 24 * time.Hour})
+	}
+	return append(out, firemon.Recurrence{Days: []time.Weekday{to}, Start: 0, End: end}), true
+}
+
+func sameDay(w *words) (firemon.Recurrence, bool) {
 	var r firemon.Recurrence
 	switch kw := w.peek(); kw {
 	case "daily":

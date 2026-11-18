@@ -94,8 +94,10 @@ type state struct {
 	hostBits  map[string]string   // address object -> unmasked ip-netmask value
 	security  *rulebook
 	nat       *rulebook
-	scope     string            // "shared" or "vsys" for the statement being read
-	owners    map[string]string // kind:name -> scope that defined it
+	pbf       *rulebook
+	others    map[string]*rulebook // qos, dos: only their object references matter
+	scope     string               // "shared" or "vsys" for the statement being read
+	owners    map[string]string    // kind:name -> scope that defined it
 	vsysNames map[string]bool
 	book      firemon.ServiceBook
 }
@@ -130,6 +132,8 @@ func newState(loc *time.Location) *state {
 		hostBits:  map[string]string{},
 		security:  newRulebook(),
 		nat:       newRulebook(),
+		pbf:       newRulebook(),
+		others:    map[string]*rulebook{},
 		owners:    map[string]string{},
 		vsysNames: map[string]bool{},
 	}
@@ -218,6 +222,8 @@ func (s *state) finish() *firemon.Config {
 	s.flushRoutes()
 	s.buildSecurityRules()
 	s.buildNATRules()
+	s.buildPBF()
+	s.externalUses()
 	return s.cfg
 }
 

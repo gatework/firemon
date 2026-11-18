@@ -1,6 +1,10 @@
 package audit
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/gatework/firemon"
+)
 
 // Kind classifies a finding.
 type Kind uint8
@@ -28,6 +32,13 @@ const (
 	// KindIncomplete is a rule missing its action, an address or its
 	// service; the device ignores it.
 	KindIncomplete
+	// KindUnusedSchedule is a schedule nothing references.
+	KindUnusedSchedule
+	// KindNeverMatches is a decidable rule whose match is empty, typically
+	// because it uses an empty object.
+	KindNeverMatches
+	// KindEmptyObject is an object or group without any entry or member.
+	KindEmptyObject
 )
 
 // String returns the kind name.
@@ -53,6 +64,12 @@ func (k Kind) String() string {
 		return "unused-service"
 	case KindIncomplete:
 		return "incomplete"
+	case KindUnusedSchedule:
+		return "unused-schedule"
+	case KindNeverMatches:
+		return "never-matches"
+	case KindEmptyObject:
+		return "empty-object"
 	default:
 		return "invalid"
 	}
@@ -66,8 +83,9 @@ type Finding struct {
 	Kind Kind `json:"kind"`
 	// Rule is the rule ID, or empty for object findings.
 	Rule string `json:"rule,omitempty"`
-	// Object is the object name for unused-object findings.
-	Object string `json:"object,omitempty"`
+	// Object is the object name for object findings, of kind ObjectKind.
+	Object     string             `json:"object,omitempty"`
+	ObjectKind firemon.ObjectKind `json:"object_kind,omitempty"`
 	// By lists the earlier rules that cover a shadowed or redundant rule.
 	By     []string `json:"by,omitempty"`
 	Detail string   `json:"detail,omitempty"`

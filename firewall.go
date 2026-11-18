@@ -30,6 +30,7 @@ type Firewall struct {
 	nat         []*NATRule
 	statics     []*StaticMapping
 	pbr         []*PBRRule
+	refs        References
 	issues      []Issue
 	fingerprint string
 }
@@ -59,6 +60,7 @@ func Compile(cfg *Config) (*Firewall, error) {
 	fw.tables, issues = buildRoutingTables(cfg, fw.interfaces)
 	fw.issues = append(fw.issues, issues...)
 	fw.compilePolicyRoutes(res)
+	fw.refs = buildReferences(fw.cfg)
 	return fw, nil
 }
 

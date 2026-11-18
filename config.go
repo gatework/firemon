@@ -42,7 +42,10 @@ type Config struct {
 	DynamicNATs    []DynamicNAT    `json:"dynamic_nats,omitempty"`
 	PolicyRoutes   []PolicyRoute   `json:"policy_routes,omitempty"`
 	PolicyBindings []PolicyBinding `json:"policy_bindings,omitempty"`
-	Diagnostics    []Diagnostic    `json:"diagnostics,omitempty"`
+	// ExternalUses are references from constructs the model does not
+	// evaluate, such as QoS pipes.
+	ExternalUses []ExternalUse `json:"external_uses,omitempty"`
+	Diagnostics  []Diagnostic  `json:"diagnostics,omitempty"`
 	// Applications maps lowercase application names to their default
 	// ports, for application-default services and application queries.
 	Applications ServiceBook `json:"applications,omitempty"`
@@ -106,6 +109,7 @@ func (c *Config) Clone() *Config {
 		return p
 	})
 	out.PolicyBindings = slices.Clone(c.PolicyBindings)
+	out.ExternalUses = slices.Clone(c.ExternalUses)
 	out.Diagnostics = slices.Clone(c.Diagnostics)
 	out.Applications = c.Applications.With(nil)
 	return &out

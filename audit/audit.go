@@ -38,7 +38,7 @@ func Run(fw *firemon.Firewall, opts Options) Report {
 	}
 	for i, rule := range rules {
 		r.Findings = append(r.Findings, ruleFindings(rule, at)...)
-		if !sure[i] {
+		if !sure[i] || rule.Match().IsEmpty() {
 			continue
 		}
 		f, complete := shadowing(rule, rules[:i], sure[:i], budget)
@@ -49,7 +49,7 @@ func Run(fw *firemon.Firewall, opts Options) Report {
 			r.Findings = append(r.Findings, *f)
 		}
 	}
-	r.Findings = append(r.Findings, unused(fw)...)
+	r.Findings = append(r.Findings, objectFindings(fw)...)
 	return r
 }
 
@@ -74,8 +74,10 @@ func ruleFindings(r *firemon.Rule, at time.Time) []Finding {
 		out = append(out, Finding{Kind: KindUndecidable, Rule: r.ID(), Detail: joinIssues(r.Issues())})
 	}
 	m := r.Match()
-	if r.Action() == firemon.ActionPermit && r.Decidable() && m.Src.ContainsSet(traffic.AnyIPv4()) &&
-		m.Dst.ContainsSet(traffic.AnyIPv4()) && m.Service.IsAny() {
+	if r.Decidable() && m.IsEmpty() {
+		out = append(out, Finding{Kind: KindNeverMatches, Rule: r.ID(), Detail: "an operand is empty"})
+	}
+	if r.Action() == firemon.ActionPermit && r.Decidable() && !spec.Disabled && anyFamily(m.Src, m.Dst) && m.Service.IsAny() {
 		out = append(out, Finding{Kind: KindPermitAny, Rule: r.ID(), Detail: "zones " + zones(spec.From) + " -> " + zones(spec.To)})
 	}
 	return out
@@ -147,4 +149,15 @@ func joinIssues(issues []firemon.Issue) string {
 		parts[i] = is.Reason
 	}
 	return strings.Join(parts, "; ")
+}
+
+// anyFamily reports whether src and dst both hold every address of one
+// family.
+func anyFamily(src, dst traffic.AddressSet) bool {
+	for _, all := range []traffic.AddressSet{traffic.AnyIPv4(), traffic.AnyIPv6()} {
+		if src.ContainsSet(all) && dst.ContainsSet(all) {
+			return true
+		}
+	}
+	return false
 }

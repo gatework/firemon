@@ -19,9 +19,12 @@ type PolicyRoute struct {
 	Source        []AddressRef `json:"source,omitempty"`
 	Destination   []AddressRef `json:"destination,omitempty"`
 	Services      []string     `json:"services,omitempty"`
-	NextHop       netip.Addr   `json:"next_hop,omitzero"`
-	Interface     string       `json:"interface,omitempty"`
-	Disabled      bool         `json:"disabled,omitempty"`
+	// NegateSource and NegateDestination invert the address match (PAN-OS).
+	NegateSource      bool       `json:"negate_source,omitempty"`
+	NegateDestination bool       `json:"negate_destination,omitempty"`
+	NextHop           netip.Addr `json:"next_hop,omitzero"`
+	Interface         string     `json:"interface,omitempty"`
+	Disabled          bool       `json:"disabled,omitempty"`
 	// Unsupported lists match criteria that cannot be evaluated offline,
 	// such as user groups.
 	Unsupported []string `json:"unsupported,omitempty"`
@@ -104,6 +107,12 @@ func (fw *Firewall) compilePolicyRoutes(res *resolver) {
 		p := &PBRRule{position: i, spec: spec}
 		src, dst := res.operands(spec.Source), res.operands(spec.Destination)
 		svc := res.serviceList(spec.Services)
+		if spec.NegateSource && src.exact() {
+			src.set = traffic.AnyAddress().Subtract(src.set)
+		}
+		if spec.NegateDestination && dst.exact() {
+			dst.set = traffic.AnyAddress().Subtract(dst.set)
+		}
 		p.match = traffic.Space{Src: src.set, Dst: dst.set, Service: svc.set}
 		p.bound = p.match
 		if !src.exact() {
@@ -120,6 +129,9 @@ func (fw *Firewall) compilePolicyRoutes(res *resolver) {
 			issuesOf(IssueKindObject, src.problems), issuesOf(IssueKindDomain, src.domainProblems),
 			issuesOf(IssueKindObject, dst.problems), issuesOf(IssueKindDestinationDomain, dst.domainProblems),
 			issuesOf(IssueKindObject, svc.problems), unsupportedIssues(spec.Unsupported))
+		if (spec.NegateSource && !src.exact()) || (spec.NegateDestination && !dst.exact()) {
+			p.issues = append(p.issues, Issue{Kind: IssueKindObject, Reason: "negated operand is not exact"})
+		}
 		p.iface = spec.Interface
 		if p.iface == "" && spec.NextHop.IsValid() {
 			if t, ok := fw.tables[spec.VirtualRouter]; ok {

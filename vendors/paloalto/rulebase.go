@@ -25,6 +25,19 @@ func (s *state) rulebase(p *path, st statement) {
 			book = s.nat
 		}
 		book.add(name, st.first, p.value())
+	case "pbf", "qos", "dos":
+		if p.next() != "rules" {
+			return
+		}
+		name := p.next()
+		book := s.pbf
+		if base != "pbf" {
+			if s.others[base] == nil {
+				s.others[base] = newRulebook()
+			}
+			book = s.others[base]
+		}
+		book.add(name, st.first, p.value())
 	case "default-security-rules":
 		if p.next() != "rules" {
 			return

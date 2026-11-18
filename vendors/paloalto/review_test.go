@@ -2,6 +2,7 @@ package paloalto_test
 
 import (
 	"encoding/json"
+	"net/netip"
 	"testing"
 
 	"github.com/gatework/firemon"
@@ -85,4 +86,32 @@ func equalJSON(t *testing.T, a, b any) bool {
 		t.Fatal(err1, err2)
 	}
 	return string(x) == string(y)
+}
+
+func TestPBF_ParsedAndItsObjectsUsed(t *testing.T) {
+	t.Parallel()
+	cfg, fw := compileSet(t, `set address intranet ip-netmask 10.0.0.0/8
+set address qos-host ip-netmask 192.0.2.9
+set zone trust network layer3 ethernet1/2
+set network interface ethernet ethernet1/2 layer3 ip 10.0.0.1/24
+set network interface ethernet ethernet1/3 layer3 ip 198.51.100.2/24
+set network virtual-router default interface [ ethernet1/2 ethernet1/3 ]
+set rulebase pbf rules out-isp2 from zone trust
+set rulebase pbf rules out-isp2 source any
+set rulebase pbf rules out-isp2 destination intranet
+set rulebase pbf rules out-isp2 negate-destination yes
+set rulebase pbf rules out-isp2 service any
+set rulebase pbf rules out-isp2 action forward egress-interface ethernet1/3
+set rulebase pbf rules out-isp2 action forward nexthop ip-address 198.51.100.1
+set rulebase qos rules shape destination qos-host
+`)
+	if len(cfg.PolicyRoutes) != 1 || len(cfg.PolicyBindings) != 1 || !cfg.PolicyRoutes[0].NegateDestination || cfg.PolicyRoutes[0].Interface != "ethernet1/3" {
+		t.Fatalf("pbf %+v bindings %+v", cfg.PolicyRoutes, cfg.PolicyBindings)
+	}
+	if routes := fw.PolicyRoutesFor("trust", ""); len(routes) != 1 || routes[0].Match().Dst.Contains(netip.MustParseAddr("10.1.1.1")) {
+		t.Fatal("negate-destination: traffic to the intranet is not forwarded")
+	}
+	if u := fw.References().Unused(); len(u) != 0 {
+		t.Fatalf("pbf and qos objects are in use: %v", u)
+	}
 }

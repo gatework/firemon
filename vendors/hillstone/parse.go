@@ -154,6 +154,8 @@ func (s *state) dispatch(b block) {
 		s.policy(b, words)
 	case "pbr-policy":
 		s.pbrPolicy(b, words)
+	case "qos-engine":
+		s.qosEngine(b)
 	case "policy-global":
 		if containsRule(b) {
 			s.policy(b, words) // rules nested in the global policy block

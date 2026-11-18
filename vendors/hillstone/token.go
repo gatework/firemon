@@ -62,6 +62,14 @@ func (w *words) peek() string {
 	return w.toks[w.pos].text
 }
 
+// peekAt returns the token n places ahead (0 is peek) without consuming.
+func (w *words) peekAt(n int) string {
+	if w.pos+n >= len(w.toks) {
+		return ""
+	}
+	return w.toks[w.pos+n].text
+}
+
 // done reports whether every token was consumed.
 func (w *words) done() bool { return w.pos >= len(w.toks) }
 
