@@ -115,6 +115,8 @@ func (s *state) securityAttribute(r *firemon.SecurityRule, attr []string) {
 		}
 	case "log-start", "log-end":
 		r.Log = r.Log || yes(values)
+	case "group-tag":
+		r.Group = strings.Join(values, " ")
 	case "source-user", "category", "source-hip", "destination-hip", "source-imei", "source-imsi", "source-nw-slice":
 		if vs := anyless(values); len(vs) > 0 {
 			r.Unsupported = append(r.Unsupported, key+" "+strings.Join(vs, ","))

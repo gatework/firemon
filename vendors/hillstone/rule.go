@@ -66,11 +66,25 @@ func (s *state) ruleIn(b block, head *words, from, to []string) {
 		return
 	}
 	r := firemon.SecurityRule{ID: head.next()}
+	existing, merge := s.ruleIndex[r.ID]
+	if merge {
+		// A later block for the same rule changes it, as on the device.
+		r = s.cfg.Rules[existing]
+		r.Incomplete = ""
+	}
+	place := ""
+	if kw := head.next(); kw == "before" || kw == "after" {
+		place = kw + " " + head.next()
+	} else if kw == "top" {
+		place = kw
+	}
 	header := false
 	for _, l := range b.body {
 		w := newWords(l.Text)
 		kw := w.next()
 		switch {
+		case kw == "no":
+			removeAttribute(&r, w)
 		case kw == "aggregate-type":
 			header = true
 		case kw == "aggregate-rule":
@@ -105,8 +119,11 @@ func (s *state) ruleIn(b block, head *words, from, to []string) {
 	if r.Incomplete = incomplete(r); r.Incomplete != "" {
 		s.diagnose(b.head, "incomplete rule, ignored by the device: "+r.Incomplete)
 	}
-	s.ruleIndex[r.ID] = len(s.cfg.Rules)
-	s.cfg.Rules = append(s.cfg.Rules, r)
+	if merge {
+		s.cfg.Rules[existing] = r
+		return
+	}
+	s.insertRule(r, place)
 }
 
 // ruleAttribute handles non-operand rule lines and reports whether kw was
@@ -247,4 +264,50 @@ func incomplete(r firemon.SecurityRule) string {
 		return ""
 	}
 	return "no " + strings.Join(missing, ", ")
+}
+
+// insertRule adds a rule at its placement ("top", "before ID", "after ID"),
+// which only commands carry; a running configuration lists rules in order.
+func (s *state) insertRule(r firemon.SecurityRule, place string) {
+	at := len(s.cfg.Rules)
+	kw, ref, _ := strings.Cut(place, " ")
+	switch kw {
+	case "top":
+		at = 0
+	case "before", "after":
+		if i, ok := s.ruleIndex[ref]; ok {
+			at = i
+			if kw == "after" {
+				at++
+			}
+		}
+	}
+	s.cfg.Rules = slices.Insert(s.cfg.Rules, at, r)
+	if at == len(s.cfg.Rules)-1 {
+		s.ruleIndex[r.ID] = at
+		return
+	}
+	for i := at; i < len(s.cfg.Rules); i++ {
+		s.ruleIndex[s.cfg.Rules[i].ID] = i
+	}
+}
+
+// removeAttribute applies a "no KEYWORD VALUE" line of a rule block.
+func removeAttribute(r *firemon.SecurityRule, w *words) {
+	kw, value := w.next(), w.next()
+	named := func(ref firemon.AddressRef) bool { return !ref.IsInline() && ref.Name == value }
+	switch kw {
+	case "src-addr":
+		r.Source = slices.DeleteFunc(r.Source, named)
+	case "dst-addr":
+		r.Destination = slices.DeleteFunc(r.Destination, named)
+	case "service":
+		r.Services = slices.DeleteFunc(r.Services, func(s string) bool { return s == value })
+	case "application":
+		r.Applications = slices.DeleteFunc(r.Applications, func(s string) bool { return s == value })
+	case "schedule":
+		r.Schedule = ""
+	case "disable":
+		r.Disabled = false
+	}
 }

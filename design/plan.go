@@ -79,7 +79,8 @@ func (f Field) MarshalText() ([]byte, error) { return []byte(f.String()), nil }
 
 // Change is one vendor-neutral configuration change. The set of changes is
 // closed: AddAddress, AddService, AddAddressGroup, AddServiceGroup,
-// ExtendRule, AddRule, AddNAT and AddStaticNAT.
+// ExtendRule, AddRule, AddNAT, AddStaticNAT, AddSchedule, ReduceRule and
+// the Delete changes.
 type Change interface {
 	fmt.Stringer
 	change()
@@ -210,8 +211,10 @@ type Conflict struct {
 	Text   string         `json:"space"`
 }
 
-// Plan is the designed change set for one intent.
+// Plan is a designed change set: for an intent (access), a cleanup or a
+// migration.
 type Plan struct {
+	Kind      PlanKind   `json:"kind"`
 	Intent    Intent     `json:"-"`
 	Baseline  string     `json:"baseline"`
 	Status    Status     `json:"status"`

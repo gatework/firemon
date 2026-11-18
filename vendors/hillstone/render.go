@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/design"
@@ -30,11 +31,7 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 			do, err = renderService(c.Service)
 			undo = []string{"no service " + q(c.Service.Name)}
 		case design.AddAddressGroup:
-			do = []string{"address " + q(c.Group.Name)}
-			for _, m := range c.Group.Members {
-				do = append(do, "  member "+q(m))
-			}
-			do = append(do, "exit")
+			do, err = renderAddressBody(c.Group.Name, c.Group.Description, c.Group.Entries, c.Group.Members)
 			undo = []string{"no address " + q(c.Group.Name)}
 		case design.AddServiceGroup:
 			do = []string{"servgroup " + q(c.Group.Name)}
@@ -46,14 +43,17 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 		case design.ExtendRule:
 			do, undo, err = renderExtend(c)
 		case design.AddRule:
-			do = renderRule(c)
+			do, err = renderRule(c)
 			undo = []string{"no rule id " + c.Rule.ID}
 		case design.AddNAT:
 			do, undo, err = renderNAT(c)
 		case design.AddStaticNAT:
 			do, undo, err = renderStaticNAT(c.Mapping)
 		default:
-			err = fmt.Errorf("hillstone: unsupported change %T", ch)
+			var ok bool
+			if do, undo, ok, err = renderCleanup(ch); !ok {
+				err = fmt.Errorf("hillstone: unsupported change %T", ch)
+			}
 		}
 		if err != nil {
 			return design.Script{}, err
@@ -67,20 +67,38 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 }
 
 func renderAddress(a firemon.Address) ([]string, error) {
-	head := "address " + q(a.Name)
-	if len(a.Entries) > 0 && (a.Entries[0].Prefix.Addr().Is6() || a.Entries[0].From.Is6()) {
+	return renderAddressBody(a.Name, a.Description, a.Entries, nil)
+}
+
+// renderAddressBody writes an address object or group: StoneOS keeps both
+// in one namespace, with entries (exclusions included) and members.
+func renderAddressBody(name, description string, entries []firemon.AddressEntry, members []string) ([]string, error) {
+	head := "address " + q(name)
+	if len(entries) > 0 && (entries[0].Prefix.Addr().Is6() || entries[0].From.Is6()) {
 		head += " ipv6"
 	}
 	out := []string{head}
-	for _, e := range a.Entries {
+	if description != "" {
+		out = append(out, "  description "+q(description))
+	}
+	for _, e := range entries {
+		prefix := "  "
+		if e.Exclude {
+			prefix += "exclude "
+		}
 		switch e.Kind {
 		case firemon.AddressKindPrefix:
-			out = append(out, "  ip "+e.Prefix.String())
+			out = append(out, prefix+"ip "+e.Prefix.String())
 		case firemon.AddressKindRange:
-			out = append(out, "  range "+e.From.String()+" "+e.To.String())
-		case firemon.AddressKindFQDN, firemon.AddressKindUnset:
-			return nil, fmt.Errorf("hillstone: cannot render %s entry of %q", e.Kind, a.Name)
+			out = append(out, prefix+"range "+e.From.String()+" "+e.To.String())
+		case firemon.AddressKindFQDN:
+			out = append(out, prefix+"host "+q(e.FQDN))
+		case firemon.AddressKindUnset:
+			return nil, fmt.Errorf("hillstone: empty entry in %q", name)
 		}
+	}
+	for _, m := range members {
+		out = append(out, "  member "+q(m))
 	}
 	return append(out, "exit"), nil
 }
@@ -140,23 +158,53 @@ func renderExtend(c design.ExtendRule) (do, undo []string, err error) {
 	return append(do, "exit"), append(undo, "exit"), nil
 }
 
-func renderRule(c design.AddRule) []string {
+// renderRule writes every attribute of a rule, so that a rule removed by a
+// cleanup can be restored as it was.
+func renderRule(c design.AddRule) ([]string, error) {
 	r := c.Rule
+	if r.NegateSource || r.NegateDestination || r.Scope != firemon.ZoneScopeAny || r.ApplicationDefault {
+		return nil, fmt.Errorf("hillstone: rule %s: negation, rule-type and application-default have no StoneOS form", r.ID)
+	}
 	head := "rule id " + r.ID
 	if c.Before != "" {
 		head += " before " + c.Before
 	}
-	out := []string{head, "  action " + map[firemon.Action]string{firemon.ActionPermit: "permit", firemon.ActionDeny: "deny"}[r.Action]}
+	out := []string{head}
+	if action, ok := map[firemon.Action]string{firemon.ActionPermit: "permit", firemon.ActionDeny: "deny"}[r.Action]; ok {
+		out = append(out, "  action "+action)
+	}
 	out = append(out, zoneLines("src-zone", r.From)...)
 	out = append(out, zoneLines("dst-zone", r.To)...)
-	out = append(out, refLines("src-addr", r.Source)...)
-	out = append(out, refLines("dst-addr", r.Destination)...)
-	if len(r.Services) == 0 {
+	src, err1 := refLines("src", r.Source)
+	dst, err2 := refLines("dst", r.Destination)
+	if err := errors.Join(err1, err2); err != nil {
+		return nil, fmt.Errorf("hillstone: rule %s: %w", r.ID, err)
+	}
+	out = append(out, src...)
+	out = append(out, dst...)
+	if len(r.Services) == 0 && len(r.ServiceEntries) == 0 && len(r.Applications) == 0 {
 		out = append(out, "  service "+q(anyName))
 	}
 	for _, s := range r.Services {
 		out = append(out, "  service "+q(s))
 	}
+	for _, e := range r.ServiceEntries {
+		line, err := serviceLine(e)
+		if err != nil {
+			return nil, fmt.Errorf("hillstone: rule %s: %w", r.ID, err)
+		}
+		out = append(out, "  service-rule "+line)
+	}
+	for _, a := range r.Applications {
+		out = append(out, "  application "+q(a))
+	}
+	out = append(out, ruleOptions(r)...)
+	return append(out, "exit"), nil
+}
+
+// ruleOptions writes the attributes that do not match traffic.
+func ruleOptions(r firemon.SecurityRule) []string {
+	var out []string
 	if r.Name != "" {
 		out = append(out, "  name "+q(r.Name))
 	}
@@ -166,8 +214,22 @@ func renderRule(c design.AddRule) []string {
 	if r.Schedule != "" {
 		out = append(out, "  schedule "+q(r.Schedule))
 	}
-	return append(out, "exit")
+	if !r.Window.Start.IsZero() {
+		out = append(out, "  start-time "+stoneTime(r.Window.Start))
+	}
+	if !r.Window.End.IsZero() {
+		out = append(out, "  expire-time "+stoneTime(r.Window.End))
+	}
+	if r.Log {
+		out = append(out, "  log session-end")
+	}
+	if r.Disabled {
+		out = append(out, "  disable")
+	}
+	return out
 }
+
+func stoneTime(t time.Time) string { return t.Format("1/2/2006 15:04:05") }
 
 func zoneLines(keyword string, zones []string) []string {
 	if len(zones) == 0 {
@@ -180,15 +242,30 @@ func zoneLines(keyword string, zones []string) []string {
 	return out
 }
 
-func refLines(keyword string, refs []firemon.AddressRef) []string {
+// refLines writes addresses of one side: objects as src-addr, inline
+// entries as src-ip, src-range or src-host; none means Any.
+func refLines(side string, refs []firemon.AddressRef) ([]string, error) {
 	if len(refs) == 0 {
-		return []string{"  " + keyword + " " + q(anyName)}
+		return []string{"  " + side + "-addr " + q(anyName)}, nil
 	}
 	out := make([]string, 0, len(refs))
 	for _, r := range refs {
-		out = append(out, "  "+keyword+" "+q(r.Name))
+		if !r.IsInline() {
+			out = append(out, "  "+side+"-addr "+q(r.Name))
+			continue
+		}
+		switch e := r.Entry; e.Kind {
+		case firemon.AddressKindPrefix:
+			out = append(out, "  "+side+"-ip "+e.Prefix.String())
+		case firemon.AddressKindRange:
+			out = append(out, "  "+side+"-range "+e.From.String()+" "+e.To.String())
+		case firemon.AddressKindFQDN:
+			out = append(out, "  "+side+"-host "+q(e.FQDN))
+		case firemon.AddressKindUnset:
+			return nil, errors.New("empty inline address")
+		}
 	}
-	return out
+	return out, nil
 }
 
 func q(s string) string { return strconv.Quote(s) }

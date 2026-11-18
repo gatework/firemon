@@ -38,13 +38,16 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 		case design.ExtendRule:
 			do, undo, err = renderExtend(c)
 		case design.AddRule:
-			do = renderRule(c)
+			do, err = renderRule(c)
 			undo = []string{"delete rulebase security rules " + name(c.Rule.ID)}
 		case design.AddNAT:
 			do, err = renderNAT(c)
 			undo = []string{"delete rulebase nat rules " + name(c.Rule.ID)}
 		default:
-			err = fmt.Errorf("paloalto: unsupported change %T", ch)
+			var ok bool
+			if do, undo, ok, err = renderCleanup(ch); !ok {
+				err = fmt.Errorf("paloalto: unsupported change %T", ch)
+			}
 		}
 		if err != nil {
 			return design.Script{}, err
@@ -103,22 +106,57 @@ func renderExtend(c design.ExtendRule) (do, undo []string, err error) {
 	return []string{"set " + prefix + list(c.Names)}, []string{"delete " + prefix + list(c.Names)}, nil
 }
 
-func renderRule(c design.AddRule) []string {
+// renderRule writes every attribute of a rule, so that a rule removed by a
+// cleanup can be restored as it was.
+func renderRule(c design.AddRule) ([]string, error) {
 	r := c.Rule
+	if len(r.ServiceEntries) > 0 || r.Window != (firemon.TimeWindow{}) {
+		return nil, fmt.Errorf("paloalto: rule %s: inline services and validity windows need objects (service, schedule)", r.ID)
+	}
+	src, err1 := operandTexts(r.Source)
+	dst, err2 := operandTexts(r.Destination)
+	if err := errors.Join(err1, err2); err != nil {
+		return nil, fmt.Errorf("paloalto: rule %s: %w", r.ID, err)
+	}
 	p := "set rulebase security rules " + name(r.ID) + " "
 	action := map[firemon.Action]string{firemon.ActionPermit: "allow", firemon.ActionDeny: "deny"}[r.Action]
 	services := r.Services
-	if len(services) == 0 {
-		services = []string{"any"}
+	if r.ApplicationDefault {
+		services = append(slices.Clone(services), "application-default")
 	}
 	out := []string{
 		p + "from " + list(orAny(r.From)),
 		p + "to " + list(orAny(r.To)),
-		p + "source " + list(orAny(refNames(r.Source))),
-		p + "destination " + list(orAny(refNames(r.Destination))),
-		p + "application any",
-		p + "service " + list(services),
-		p + "action " + action,
+		p + "source " + list(orAny(src)),
+		p + "destination " + list(orAny(dst)),
+		p + "application " + list(orAny(r.Applications)),
+		p + "service " + list(orAny(services)),
+	}
+	if action != "" {
+		out = append(out, p+"action "+action)
+	}
+	out = append(out, ruleOptions(p, r)...)
+	if c.Before != "" {
+		out = append(out, "move rulebase security rules "+name(r.ID)+" before "+name(c.Before))
+	}
+	return out, nil
+}
+
+// ruleOptions writes the attributes that do not match addresses.
+func ruleOptions(p string, r firemon.SecurityRule) []string {
+	var out []string
+	switch r.Scope {
+	case firemon.ZoneScopeIntra:
+		out = append(out, p+"rule-type intrazone")
+	case firemon.ZoneScopeInter:
+		out = append(out, p+"rule-type interzone")
+	case firemon.ZoneScopeAny:
+	}
+	if r.NegateSource {
+		out = append(out, p+"negate-source yes")
+	}
+	if r.NegateDestination {
+		out = append(out, p+"negate-destination yes")
 	}
 	if r.Description != "" {
 		out = append(out, p+"description "+strconv.Quote(r.Description))
@@ -126,16 +164,14 @@ func renderRule(c design.AddRule) []string {
 	if r.Schedule != "" {
 		out = append(out, p+"schedule "+name(r.Schedule))
 	}
-	if c.Before != "" {
-		out = append(out, "move rulebase security rules "+name(r.ID)+" before "+name(c.Before))
+	if r.Group != "" {
+		out = append(out, p+"group-tag "+name(r.Group))
 	}
-	return out
-}
-
-func refNames(refs []firemon.AddressRef) []string {
-	out := make([]string, len(refs))
-	for i, r := range refs {
-		out[i] = r.Name
+	if r.Log {
+		out = append(out, p+"log-end yes")
+	}
+	if r.Disabled {
+		out = append(out, p+"disabled yes")
 	}
 	return out
 }

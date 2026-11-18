@@ -56,7 +56,7 @@ func (p *Planner) Plan(intent Intent) (*Plan, error) {
 	}
 	at := p.now()
 	out, changes, access := p.planNAT(intent, at)
-	plan := &Plan{Intent: intent, Baseline: p.fw.Fingerprint(), NAT: &out}
+	plan := &Plan{Kind: PlanKindAccess, Intent: intent, Baseline: p.fw.Fingerprint(), NAT: &out}
 	switch out.Status {
 	case NATStatusNeedsAddress, NATStatusIndeterminate:
 		plan.Status = StatusIndeterminate
@@ -102,7 +102,7 @@ func (p *Planner) planAccess(intent Intent) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	plan := &Plan{Intent: intent, Baseline: p.fw.Fingerprint()}
+	plan := &Plan{Kind: PlanKindAccess, Intent: intent, Baseline: p.fw.Fingerprint()}
 	if res.Verdict == query.VerdictAllowed {
 		plan.Status, plan.Verified = StatusNoChange, true
 		return plan, nil

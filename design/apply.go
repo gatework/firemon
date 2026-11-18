@@ -23,6 +23,9 @@ func Apply(cfg *firemon.Config, changes []Change) error {
 }
 
 func apply(cfg *firemon.Config, ch Change) error {
+	if ok, err := applyCleanup(cfg, ch); ok {
+		return err
+	}
 	switch c := ch.(type) {
 	case AddAddress:
 		cfg.Addresses = append(cfg.Addresses, c.Address)

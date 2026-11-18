@@ -93,6 +93,9 @@ func (d *Deployer) Deploy(ctx context.Context, req Request) (Receipt, error) {
 	if req.Plan == nil || !req.Plan.Verified || len(req.Plan.Changes) == 0 {
 		return Receipt{}, ErrNothingToDeploy
 	}
+	if req.Plan.Kind != design.PlanKindAccess && req.Plan.Kind != design.PlanKindCleanup {
+		return Receipt{}, fmt.Errorf("deploy: %s plans are not deployed", req.Plan.Kind)
+	}
 	if d.journal == nil || d.write == nil {
 		return Receipt{}, errors.New("deploy: journal and writer required")
 	}
@@ -161,6 +164,11 @@ func (p *checkedPlan) CheckAfter(before, after *firemon.Config) (string, error) 
 	}
 	if want.Fingerprint() != fw.Fingerprint() {
 		return "", ErrUnexpectedReadback
+	}
+	if p.plan.Kind == design.PlanKindCleanup {
+		// The plan was verified to keep the effective policy; the readback
+		// is exactly the verified configuration.
+		return fw.Fingerprint(), nil
 	}
 	again, err := design.New(fw, design.Options{Now: p.now}).Plan(p.plan.Intent)
 	if err != nil {
