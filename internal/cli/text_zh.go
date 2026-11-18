@@ -110,17 +110,18 @@ var natStatusText = map[design.NATStatus]string{
 }
 
 var categoryText = map[converge.Category]string{
-	converge.CategoryUnusedObject: "未使用对象",
-	converge.CategoryEmptyObject:  "空对象",
-	converge.CategoryNeverMatches: "永不匹配的策略",
-	converge.CategoryIncomplete:   "不完整策略（设备忽略）",
-	converge.CategoryDisabled:     "已禁用策略",
-	converge.CategoryExpired:      "已过期策略",
-	converge.CategoryRedundant:    "冗余策略（被同动作策略完全覆盖）",
-	converge.CategoryShadowed:     "被遮蔽策略（被相反动作策略完全覆盖）",
-	converge.CategoryMergeable:    "可合并策略",
-	converge.CategoryBroad:        "过宽放通",
-	converge.CategoryZeroHit:      "零命中策略",
+	converge.CategoryUnusedObject:    "未使用对象",
+	converge.CategoryEmptyObject:     "空对象",
+	converge.CategoryNeverMatches:    "永不匹配的策略",
+	converge.CategoryIncomplete:      "不完整策略（设备忽略）",
+	converge.CategoryDisabled:        "已禁用策略",
+	converge.CategoryExpired:         "已过期策略",
+	converge.CategoryRedundant:       "冗余策略（被同动作策略完全覆盖）",
+	converge.CategoryShadowed:        "被遮蔽策略（被相反动作策略完全覆盖）",
+	converge.CategoryMergeable:       "可合并策略",
+	converge.CategoryBroad:           "过宽放通",
+	converge.CategoryZeroHit:         "零命中策略",
+	converge.CategoryDuplicateObject: "重复对象（内容相同、名称不同）",
 }
 
 var tierText = map[converge.Tier]string{

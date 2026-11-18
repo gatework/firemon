@@ -3,6 +3,7 @@ package converge
 import (
 	"cmp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/gatework/firemon"
@@ -84,6 +85,7 @@ func Analyze(fw *firemon.Firewall, opts Options) Report {
 	r.Findings = append(r.Findings, mergeable(fw, flagged, at, opts.MaxSpaces)...)
 	r.Findings = append(r.Findings, broad(fw, flagged, opts.Hits, minWindow)...)
 	r.Findings = append(r.Findings, zeroHits(fw, flagged, opts.Hits, minWindow)...)
+	r.Findings = append(r.Findings, duplicateObjects(fw)...)
 	position := map[string]int{}
 	for _, rule := range fw.Rules() {
 		position[rule.ID()] = rule.Position()
@@ -166,4 +168,71 @@ func demoteUnrestorable(cfg *firemon.Config, findings []Finding) {
 			}
 		}
 	}
+}
+
+// duplicateObjects groups live objects of one namespace whose resolved
+// contents are equal: rules could share one of them. Merging them changes
+// every reference, so it is advice.
+func duplicateObjects(fw *firemon.Firewall) []Finding {
+	refs := fw.References()
+	cfg := fw.Config()
+	kindOf := map[string]firemon.ObjectKind{}
+	for _, a := range cfg.Addresses {
+		if !a.Predefined {
+			kindOf["a:"+a.Name] = firemon.ObjectKindAddress
+		}
+	}
+	for _, g := range cfg.AddressGroups {
+		if !g.Predefined {
+			kindOf["a:"+g.Name] = firemon.ObjectKindAddressGroup
+		}
+	}
+	for _, s := range cfg.Services {
+		if !s.Predefined {
+			kindOf["s:"+s.Name] = firemon.ObjectKindService
+		}
+	}
+	for _, g := range cfg.ServiceGroups {
+		if !g.Predefined {
+			kindOf["s:"+g.Name] = firemon.ObjectKindServiceGroup
+		}
+	}
+	groups := map[string][]firemon.ObjectRef{}
+	var keys []string
+	add := func(key string, o firemon.ObjectRef) {
+		if !refs.Live(o) {
+			return // unused objects are reported as such
+		}
+		if _, ok := groups[key]; !ok {
+			keys = append(keys, key)
+		}
+		groups[key] = append(groups[key], o)
+	}
+	for name, set := range fw.Addresses() {
+		if k, ok := kindOf["a:"+name]; ok && !set.IsEmpty() {
+			add("address "+set.String(), firemon.ObjectRef{Kind: k, Name: name})
+		}
+	}
+	for name, set := range fw.Services() {
+		if k, ok := kindOf["s:"+name]; ok && !set.IsEmpty() {
+			add("service "+set.String(), firemon.ObjectRef{Kind: k, Name: name})
+		}
+	}
+	var out []Finding
+	for _, key := range keys {
+		objs := groups[key]
+		if len(objs) < 2 {
+			continue
+		}
+		names := make([]string, len(objs))
+		for i, o := range objs {
+			names[i] = o.Name
+		}
+		out = append(out, Finding{
+			ID: CategoryDuplicateObject.String() + ":" + objs[0].Kind.String() + ":" + objs[0].Name, Category: CategoryDuplicateObject,
+			Tier: TierReview, Evidence: EvidenceStatic, Objects: objs,
+			Detail: "equal contents " + strings.TrimPrefix(strings.TrimPrefix(key, "address "), "service ") + "; refer to one of " + strings.Join(names, ", "),
+		})
+	}
+	return out
 }

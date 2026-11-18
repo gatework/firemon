@@ -116,6 +116,9 @@ func TestConverge_FindsAndPlansSafeCleanups(t *testing.T) {
 	if !ok || b.Evidence != converge.EvidenceBoth || !slices.Contains(b.Reasons, converge.ReasonNoHits) {
 		t.Fatalf("rule 9 is broad and unused: %+v", b)
 	}
+	if d, ok := rep.Find("duplicate-object:address:db1"); ok {
+		t.Fatalf("db1 and db2 differ: %+v", d)
+	}
 	if rep.Count(converge.CategoryUnusedObject) != 2 {
 		t.Fatalf("old-group then old-host: %+v", rep.Findings)
 	}

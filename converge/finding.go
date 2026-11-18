@@ -35,6 +35,9 @@ const (
 	CategoryBroad
 	// CategoryZeroHit: a rule without hits over the observation window.
 	CategoryZeroHit
+	// CategoryDuplicateObject: objects of one kind with equal contents
+	// under different names; rules could refer to one of them.
+	CategoryDuplicateObject
 )
 
 // String returns the category name.
@@ -64,6 +67,8 @@ func (c Category) String() string {
 		return "broad"
 	case CategoryZeroHit:
 		return "zero-hit"
+	case CategoryDuplicateObject:
+		return "duplicate-object"
 	default:
 		return "invalid"
 	}
