@@ -8,7 +8,7 @@ firemon v0.2 grew to about 110k lines. The root package mixed DTOs, entities, pa
 
 ## Decision
 
-Rebuild the module from an empty tree instead of refactoring in place. Scope phase 1 to one firewall end to end (parse, query, design, render, deploy) for Hillstone StoneOS and PAN-OS set-format configurations. Multi-firewall path finding, snapshot persistence and other vendors are phase 2.
+Rebuild the module from an empty tree instead of refactoring in place. Scope phase 1 to one firewall end to end (parse, query, design, render, deploy) for Hillstone StoneOS and PAN-OS set-format configurations. Multi-firewall path finding (ADR 0006), snapshot persistence and policy audit followed in phase 2; other vendors are out of scope for now.
 
 Layout: `traffic` (set algebra) ← `firemon` (domain model and compiler) ← `query`, `design`, `deploy`; `vendors/<vendor>` parse and render; `adapter/netconnector` talks to devices; `internal/{workflow,bootstrap,cli}` and `cmd/firemon` drive it.
 

@@ -22,3 +22,9 @@
 | Intent | 访问意图 | Requested access: sources, destinations, services. |
 | Plan | 变更计划 | Vendor-neutral list of changes that realizes an intent. |
 | Baseline fingerprint | 基线指纹 | Digest of the configuration a plan was designed against. |
+| Redundant rule | 冗余策略 | Rule fully covered by earlier rules with the same action; safe to remove. |
+| Shadowed rule | 被遮蔽策略 | Rule fully covered by earlier rules, at least one with the opposite action. |
+| Snapshot | 配置快照 | Stored raw text, parsed configuration and fingerprint of one device. |
+| Inventory | 防火墙清单 | Set of firewalls a flow is located across. |
+| Owner | 归属防火墙 | Firewall with the most specific non-default route to an end of a flow. |
+| Crossing | 经过防火墙 | Part of a flow one firewall routes between two of its interfaces. |

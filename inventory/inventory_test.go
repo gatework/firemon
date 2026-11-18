@@ -24,6 +24,14 @@ type route struct{ dst, hop string }
 // firewall builds a layer-3 firewall with one zone per interface.
 func firewall(t *testing.T, links []link, routes []route, rules ...firemon.SecurityRule) *firemon.Firewall {
 	t.Helper()
+	fw, err := newFirewall(links, routes, rules...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fw
+}
+
+func newFirewall(links []link, routes []route, rules ...firemon.SecurityRule) (*firemon.Firewall, error) {
 	cfg := &firemon.Config{
 		Vendor:         firemon.VendorPaloAlto,
 		Semantics:      firemon.Semantics{InterzoneAction: firemon.ActionDeny, IntrazoneAction: firemon.ActionPermit, DefaultVirtualRouter: "vr"},
@@ -37,11 +45,7 @@ func firewall(t *testing.T, links []link, routes []route, rules ...firemon.Secur
 	for _, r := range routes {
 		cfg.Routes = append(cfg.Routes, firemon.Route{VirtualRouter: "vr", Destination: netip.MustParsePrefix(r.dst), NextHop: netip.MustParseAddr(r.hop)})
 	}
-	fw, err := firemon.Compile(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return fw
+	return firemon.Compile(cfg)
 }
 
 func lab(t *testing.T, coreRules ...firemon.SecurityRule) *inventory.Inventory {
@@ -63,8 +67,7 @@ func lab(t *testing.T, coreRules ...firemon.SecurityRule) *inventory.Inventory {
 	return inv
 }
 
-func request(t *testing.T, src, dst, svc string) query.Request {
-	t.Helper()
+func request(src, dst, svc string) query.Request {
 	s, _ := traffic.ParseAddressSet(src)
 	d, _ := traffic.ParseAddressSet(dst)
 	v, _ := traffic.ParseServiceSet(svc)
@@ -89,11 +92,11 @@ func TestInventory_Locate(t *testing.T) {
 		crossing []string
 		verdict  query.Verdict
 	}{
-		{"internet access crosses core and edge", lab(t, webOut), request(t, "10.1.0.5", "8.8.8.8", "tcp/443"),
+		{"internet access crosses core and edge", lab(t, webOut), request("10.1.0.5", "8.8.8.8", "tcp/443"),
 			[]string{"core(users>transit)", "edge(inside>internet)"}, query.VerdictAllowed},
-		{"internal flow crosses only core", lab(t, webOut), request(t, "10.1.0.5", "10.2.0.9", "tcp/22"),
+		{"internal flow crosses only core", lab(t, webOut), request("10.1.0.5", "10.2.0.9", "tcp/22"),
 			[]string{"core(users>servers)"}, query.VerdictDenied},
-		{"denied on one firewall denies the trace", lab(t), request(t, "10.1.0.5", "8.8.8.8", "tcp/443"),
+		{"denied on one firewall denies the trace", lab(t), request("10.1.0.5", "8.8.8.8", "tcp/443"),
 			[]string{"core(users>transit)", "edge(inside>internet)"}, query.VerdictPartial},
 	}
 	for _, tt := range tests {
