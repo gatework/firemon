@@ -11,8 +11,8 @@ import (
 // PortRange is an inclusive range of 16-bit numbers: TCP, UDP and SCTP ports,
 // or an ICMP type and code encoded as type<<8 | code.
 type PortRange struct {
-	Low  uint16
-	High uint16
+	Low  uint16 `json:"low"`
+	High uint16 `json:"high"`
 }
 
 // AnyPort covers every port number.

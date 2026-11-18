@@ -1,0 +1,233 @@
+package hillstone
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/gatework/firemon"
+	"github.com/gatework/parser"
+)
+
+// DefaultVirtualRouter is the StoneOS routing context of layer-3 zones that
+// do not name one.
+const DefaultVirtualRouter = "trust-vr"
+
+// Options configures a Parser. The zero value parses with UTC schedules
+// and the default input limits.
+type Options struct {
+	// Location is the device time zone for schedules and rule windows.
+	Location *time.Location
+	// Limits bounds the input size.
+	Limits parser.Limits
+}
+
+// Parser converts StoneOS running configurations to firemon.Config.
+// The zero value is ready to use.
+type Parser struct {
+	opts Options
+}
+
+// New returns a parser with the given options.
+func New(opts Options) *Parser { return &Parser{opts: opts} }
+
+// Parse converts the text of "show configuration running".
+func (p *Parser) Parse(text string) (*firemon.Config, error) {
+	content, err := parser.New(text, p.opts.Limits)
+	if err != nil {
+		return nil, fmt.Errorf("hillstone: %w", err)
+	}
+	s := newState(content, p.location())
+	for _, b := range segment(content) {
+		s.dispatch(b)
+	}
+	return s.finish(), nil
+}
+
+func (p *Parser) location() *time.Location {
+	if p == nil || p.opts.Location == nil {
+		return time.UTC
+	}
+	return p.opts.Location
+}
+
+// state accumulates one parse.
+type state struct {
+	cfg       *firemon.Config
+	cursor    *parser.Cursor
+	loc       *time.Location
+	addresses *catalog[addressDraft]
+	services  *catalog[firemon.Service]
+	groups    *catalog[firemon.ServiceGroup]
+	schedules *catalog[firemon.Schedule]
+	zones     *catalog[firemon.Zone]
+	ifaces    *catalog[firemon.Interface]
+	routers   *catalog[firemon.VirtualRouter]
+	ruleIndex map[string]int
+	ruleGroup map[string]string // aggregate rule id -> group name
+}
+
+func newState(content *parser.Content, loc *time.Location) *state {
+	return &state{
+		cfg: &firemon.Config{
+			Vendor:   firemon.VendorHillstone,
+			Location: loc,
+			Semantics: firemon.Semantics{
+				PolicyDestination:    firemon.AddressStageTranslated,
+				IntrazoneAction:      firemon.ActionDeny,
+				InterzoneAction:      firemon.ActionDeny,
+				DefaultVirtualRouter: DefaultVirtualRouter,
+			},
+		},
+		cursor:    content.Cursor(),
+		loc:       loc,
+		addresses: newCatalog[addressDraft](),
+		services:  newCatalog[firemon.Service](),
+		groups:    newCatalog[firemon.ServiceGroup](),
+		schedules: newCatalog[firemon.Schedule](),
+		zones:     newCatalog[firemon.Zone](),
+		ifaces:    newCatalog[firemon.Interface](),
+		routers:   newCatalog[firemon.VirtualRouter](),
+		ruleIndex: map[string]int{},
+		ruleGroup: map[string]string{},
+	}
+}
+
+func (s *state) dispatch(b block) {
+	words := newWords(b.head.Text)
+	switch kw := words.next(); kw {
+	case "Version":
+		s.cfg.Version = words.rest()
+	case "hostname":
+		s.cfg.Hostname = words.next()
+	case "address":
+		s.address(b, words)
+	case "service":
+		s.service(b, words)
+	case "servgroup":
+		s.serviceGroup(b, words)
+	case "schedule":
+		s.schedule(b, words)
+	case "zone":
+		s.zone(b, words)
+	case "interface":
+		s.iface(b, words)
+	case "ip":
+		if words.next() != "vrouter" {
+			break // ip name-server and similar global settings
+		}
+		s.vrouter(b, words)
+	case "rule":
+		s.rule(b, words)
+	}
+	s.markHead(b)
+	if !isPolicySection(b.keyword()) {
+		s.markRange(b.head.Number, b.last)
+	}
+}
+
+// finish assembles the configuration and reports unrecognized lines.
+func (s *state) finish() *firemon.Config {
+	cfg := s.cfg
+	for _, a := range s.addresses.items() {
+		if a.isGroup() {
+			cfg.AddressGroups = append(cfg.AddressGroups, a.group())
+		} else {
+			cfg.Addresses = append(cfg.Addresses, a.address())
+		}
+	}
+	cfg.Addresses = append(cfg.Addresses, builtinAddresses(s.addresses)...)
+	cfg.Services = append(s.services.items(), builtinServices(s.services, s.groups)...)
+	cfg.ServiceGroups = s.groups.items()
+	cfg.Schedules = s.schedules.items()
+	cfg.VirtualRouters = s.routers.items()
+	cfg.Zones = s.zones.items()
+	cfg.Interfaces = s.interfaceVRs()
+	for i := range cfg.Rules {
+		cfg.Rules[i].Group = s.ruleGroup[cfg.Rules[i].Group]
+	}
+	for line := range s.cursor.Unparsed() {
+		if !isBlank(line.Text) && line.Text != "exit" && !strings.HasPrefix(line.Text, "#") {
+			cfg.Diagnostics = append(cfg.Diagnostics, firemon.Diagnostic{Line: line.Number, Text: strings.TrimSpace(line.Text), Reason: "unrecognized"})
+		}
+	}
+	return cfg
+}
+
+// interfaceVRs assigns every interface the virtual router of its zone.
+func (s *state) interfaceVRs() []firemon.Interface {
+	out := s.ifaces.items()
+	for i := range out {
+		if z, ok := s.zones.get(out[i].Zone); ok {
+			out[i].VirtualRouter = z.VirtualRouter
+		}
+	}
+	return out
+}
+
+func (s *state) markHead(b block) { _ = s.cursor.SetParsed(b.head.Number, true) }
+
+func (s *state) mark(l parser.Line) { _ = s.cursor.SetParsed(l.Number, true) }
+
+func (s *state) markRange(first, last int) { _ = s.cursor.SetParsedRange(first, last, true) }
+
+func (s *state) diagnose(l parser.Line, reason string) {
+	s.mark(l)
+	s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Line: l.Number, Text: strings.TrimSpace(l.Text), Reason: reason})
+}
+
+// catalog keeps named items in first-declaration order and merges repeated
+// declarations into the first one.
+type catalog[T any] struct {
+	index map[string]int
+	list  []T
+}
+
+func newCatalog[T any]() *catalog[T] { return &catalog[T]{index: map[string]int{}} }
+
+// upsert returns the item named name, creating it with init when missing.
+func (c *catalog[T]) upsert(name string, init func() T) *T {
+	if i, ok := c.index[name]; ok {
+		return &c.list[i]
+	}
+	c.index[name] = len(c.list)
+	c.list = append(c.list, init())
+	return &c.list[len(c.list)-1]
+}
+
+func (c *catalog[T]) get(name string) (T, bool) {
+	i, ok := c.index[name]
+	if !ok {
+		var zero T
+		return zero, false
+	}
+	return c.list[i], true
+}
+
+func (c *catalog[T]) has(name string) bool {
+	_, ok := c.index[name]
+	return ok
+}
+
+func (c *catalog[T]) items() []T { return slices.Clone(c.list) }
+
+// isPolicySection reports whether unrecognized lines of a block with this
+// keyword are reported as diagnostics.
+func isPolicySection(keyword string) bool {
+	switch keyword {
+	case "address", "service", "servgroup", "schedule", "zone", "interface", "ip", "rule":
+		return true
+	default:
+		return false
+	}
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
+}

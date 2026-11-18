@@ -90,7 +90,8 @@ func (n *NATRule) Match() traffic.Space { return n.match }
 
 // Translated returns the addresses the rewritten side is translated to. It
 // is empty for TranslationModeNone and for interface-address translation
-// whose interface has no address.
+// without a named interface, where the egress interface of each packet
+// supplies the address.
 func (n *NATRule) Translated() traffic.AddressSet { return n.translated }
 
 // Issues returns why the match or translation is not exact.

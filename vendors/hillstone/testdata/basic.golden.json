@@ -1,0 +1,1095 @@
+{
+  "vendor": "hillstone",
+  "hostname": "lab-fw1",
+  "version": "5.5R10",
+  "semantics": {
+    "PolicyDestination": 2,
+    "IntrazoneAction": "deny",
+    "InterzoneAction": "deny",
+    "DefaultVirtualRouter": "trust-vr"
+  },
+  "virtual_routers": [
+    {
+      "name": "trust-vr"
+    }
+  ],
+  "zones": [
+    {
+      "name": "trust",
+      "virtual_router": "trust-vr",
+      "mode": "layer3"
+    },
+    {
+      "name": "untrust",
+      "virtual_router": "trust-vr",
+      "mode": "layer3"
+    },
+    {
+      "name": "dmz",
+      "virtual_router": "trust-vr",
+      "mode": "layer3"
+    },
+    {
+      "name": "l2-trust",
+      "mode": "layer2"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "ethernet0/0",
+      "zone": "untrust",
+      "virtual_router": "trust-vr",
+      "addresses": [
+        "203.0.113.2/30",
+        "198.51.100.1/24",
+        "2001:db8:1::2/64"
+      ]
+    },
+    {
+      "name": "ethernet0/1",
+      "zone": "trust",
+      "virtual_router": "trust-vr",
+      "addresses": [
+        "10.0.0.1/24"
+      ],
+      "description": "inside"
+    },
+    {
+      "name": "ethernet0/2",
+      "zone": "dmz",
+      "virtual_router": "trust-vr",
+      "addresses": [
+        "172.16.0.1/24"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "virtual_router": "trust-vr",
+      "destination": "0.0.0.0/0",
+      "next_hop": "203.0.113.1",
+      "distance": 1
+    },
+    {
+      "virtual_router": "trust-vr",
+      "destination": "10.0.0.0/8",
+      "next_hop": "10.0.0.254",
+      "distance": 1
+    },
+    {
+      "virtual_router": "trust-vr",
+      "destination": "192.168.50.0/24",
+      "interface": "ethernet0/2",
+      "distance": 1,
+      "description": "lab"
+    },
+    {
+      "virtual_router": "trust-vr",
+      "destination": "::/0",
+      "next_hop": "2001:db8:1::1",
+      "distance": 1
+    }
+  ],
+  "addresses": [
+    {
+      "name": "web-servers",
+      "description": "dmz web farm",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "172.16.0.10/32"
+        },
+        {
+          "kind": "range",
+          "from": "172.16.0.20",
+          "to": "172.16.0.29"
+        }
+      ]
+    },
+    {
+      "name": "lan",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "10.0.0.0/16"
+        },
+        {
+          "kind": "prefix",
+          "prefix": "10.0.9.0/24",
+          "exclude": true
+        }
+      ]
+    },
+    {
+      "name": "cdn",
+      "entries": [
+        {
+          "kind": "fqdn",
+          "fqdn": "*.cdn.example.com"
+        }
+      ]
+    },
+    {
+      "name": "v6-net",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "2001:db8:2::/48"
+        }
+      ]
+    },
+    {
+      "name": "Any",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "0.0.0.0/0"
+        },
+        {
+          "kind": "prefix",
+          "prefix": "::/0"
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "IPv6-any",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "::/0"
+        }
+      ],
+      "predefined": true
+    }
+  ],
+  "address_groups": [
+    {
+      "name": "all-internal",
+      "members": [
+        "lan",
+        "web-servers"
+      ]
+    }
+  ],
+  "services": [
+    {
+      "name": "TCP_8080",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 8080,
+            "high": 8080
+          }
+        }
+      ]
+    },
+    {
+      "name": "TCP_8000-8010",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 8000,
+            "high": 8010
+          }
+        }
+      ]
+    },
+    {
+      "name": "DNS_EXT",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 53,
+            "high": 53
+          }
+        },
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 53,
+            "high": 53
+          }
+        }
+      ]
+    },
+    {
+      "name": "FROM_443",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 443,
+            "high": 443
+          },
+          "dst": {
+            "low": 0,
+            "high": 65535
+          }
+        }
+      ]
+    },
+    {
+      "name": "Any",
+      "entries": [
+        {
+          "any_protocol": true,
+          "protocol": "0",
+          "src": {
+            "low": 0,
+            "high": 0
+          },
+          "dst": {
+            "low": 0,
+            "high": 0
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "BGP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 179,
+            "high": 179
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "DHCP-Relay",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 67,
+            "high": 68
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "DNS",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 53,
+            "high": 53
+          }
+        },
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 53,
+            "high": 53
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "FTP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 21,
+            "high": 21
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "HTTP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 80,
+            "high": 80
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "HTTPS",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 443,
+            "high": 443
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "ICMP",
+      "entries": [
+        {
+          "protocol": "icmp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 0,
+            "high": 65535
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "ICMPv6",
+      "entries": [
+        {
+          "protocol": "icmpv6",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 0,
+            "high": 65535
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "IMAP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 143,
+            "high": 143
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "MDNS",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 5353,
+            "high": 5353
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "MSRPC",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 135,
+            "high": 135
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "MySQL",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 3306,
+            "high": 3306
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "NFS",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 2049,
+            "high": 2049
+          }
+        },
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 2049,
+            "high": 2049
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "NNTP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 119,
+            "high": 119
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "NTP",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 123,
+            "high": 123
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "OSPF",
+      "entries": [
+        {
+          "protocol": "89",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 0,
+            "high": 65535
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "PING",
+      "entries": [
+        {
+          "protocol": "icmp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 2048,
+            "high": 2303
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "PING6",
+      "entries": [
+        {
+          "protocol": "icmpv6",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 32768,
+            "high": 33023
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "POP3",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 110,
+            "high": 110
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "RADIUS",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 1812,
+            "high": 1813
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "RDP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 3389,
+            "high": 3389
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "SMB",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 139,
+            "high": 139
+          }
+        },
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 445,
+            "high": 445
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "SMTP",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 25,
+            "high": 25
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "SNMP",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 161,
+            "high": 162
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "SSH",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 22,
+            "high": 22
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "SUNRPC",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 111,
+            "high": 111
+          }
+        },
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 111,
+            "high": 111
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "SYSLOG",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 514,
+            "high": 514
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "TELNET",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 23,
+            "high": 23
+          }
+        }
+      ],
+      "predefined": true
+    }
+  ],
+  "service_groups": [
+    {
+      "name": "web",
+      "members": [
+        "HTTP",
+        "HTTPS",
+        "TCP_8080"
+      ]
+    }
+  ],
+  "schedules": [
+    {
+      "name": "change-window",
+      "windows": [
+        {
+          "start": "2026-11-01T00:00:00Z",
+          "end": "2026-12-01T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "name": "worktime",
+      "description": "office hours",
+      "recurrences": [
+        {
+          "days": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "start": 28800000000000,
+          "end": 66600000000000
+        }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "3",
+      "name": "block-inbound",
+      "from": [
+        "untrust"
+      ],
+      "to": [
+        "trust"
+      ],
+      "source": [
+        {
+          "name": "Any"
+        }
+      ],
+      "destination": [
+        {
+          "name": "lan"
+        }
+      ],
+      "services": [
+        "Any"
+      ],
+      "action": "deny",
+      "group": "ops"
+    },
+    {
+      "id": "1",
+      "name": "web-in",
+      "from": [
+        "untrust"
+      ],
+      "to": [
+        "dmz"
+      ],
+      "source": [
+        {
+          "name": "Any"
+        }
+      ],
+      "destination": [
+        {
+          "name": "web-servers"
+        }
+      ],
+      "services": [
+        "web"
+      ],
+      "action": "permit",
+      "log": true
+    },
+    {
+      "id": "7",
+      "source": [
+        {
+          "entry": {
+            "kind": "prefix",
+            "prefix": "10.0.1.0/24"
+          }
+        },
+        {
+          "entry": {
+            "kind": "range",
+            "from": "10.0.2.5",
+            "to": "10.0.2.9"
+          }
+        }
+      ],
+      "destination": [
+        {
+          "entry": {
+            "kind": "fqdn",
+            "fqdn": "updates.example.com"
+          }
+        }
+      ],
+      "services": [
+        "HTTPS"
+      ],
+      "action": "permit",
+      "disabled": true
+    },
+    {
+      "id": "8",
+      "description": "temporary ssh",
+      "from": [
+        "trust"
+      ],
+      "to": [
+        "untrust"
+      ],
+      "source": [
+        {
+          "name": "lan"
+        }
+      ],
+      "destination": [
+        {
+          "name": "Any"
+        }
+      ],
+      "service_entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 22,
+            "high": 22
+          }
+        }
+      ],
+      "action": "permit",
+      "schedule": "worktime",
+      "window": {
+        "start": "2026-11-01T08:00:00Z",
+        "end": "2026-12-31T23:59:59Z"
+      }
+    },
+    {
+      "id": "9",
+      "from": [
+        "trust"
+      ],
+      "to": [
+        "untrust"
+      ],
+      "source": [
+        {
+          "name": "lan"
+        }
+      ],
+      "destination": [
+        {
+          "name": "Any"
+        }
+      ],
+      "services": [
+        "Any"
+      ],
+      "applications": [
+        "HTTPS"
+      ],
+      "action": "permit"
+    }
+  ],
+  "static_nats": [
+    {
+      "id": "1",
+      "virtual_router": "trust-vr",
+      "real": {
+        "entry": {
+          "kind": "prefix",
+          "prefix": "172.16.0.11/32"
+        }
+      },
+      "mapped": {
+        "entry": {
+          "kind": "prefix",
+          "prefix": "198.51.100.10/32"
+        }
+      }
+    }
+  ],
+  "dynamic_nats": [
+    {
+      "id": "1",
+      "kind": "source",
+      "virtual_router": "trust-vr",
+      "egress": "ethernet0/0",
+      "source": [
+        {
+          "name": "lan"
+        }
+      ],
+      "destination": [
+        {
+          "name": "Any"
+        }
+      ],
+      "services": [
+        "Any"
+      ],
+      "translated": {
+        "mode": "interface",
+        "interface": "ethernet0/0",
+        "port_translation": true
+      }
+    },
+    {
+      "id": "2",
+      "kind": "source",
+      "virtual_router": "trust-vr",
+      "egress": "ethernet0/0",
+      "source": [
+        {
+          "entry": {
+            "kind": "prefix",
+            "prefix": "10.1.0.0/16"
+          }
+        }
+      ],
+      "destination": [
+        {
+          "name": "Any"
+        }
+      ],
+      "services": [
+        "Any"
+      ],
+      "translated": {
+        "mode": "address",
+        "addresses": [
+          {
+            "entry": {
+              "kind": "prefix",
+              "prefix": "198.51.100.7/32"
+            }
+          }
+        ],
+        "port_translation": true
+      },
+      "disabled": true
+    },
+    {
+      "id": "1",
+      "kind": "destination",
+      "virtual_router": "trust-vr",
+      "source": [
+        {
+          "name": "Any"
+        }
+      ],
+      "destination": [
+        {
+          "entry": {
+            "kind": "prefix",
+            "prefix": "198.51.100.80/32"
+          }
+        }
+      ],
+      "services": [
+        "HTTP"
+      ],
+      "translated": {
+        "mode": "address",
+        "addresses": [
+          {
+            "entry": {
+              "kind": "prefix",
+              "prefix": "172.16.0.10/32"
+            }
+          }
+        ],
+        "port": 8080
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "line": 156,
+      "text": "unknown-keyword 42",
+      "reason": "unrecognized"
+    }
+  ]
+}

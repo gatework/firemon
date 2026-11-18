@@ -48,6 +48,8 @@ type SecurityRule struct {
 	NegateSource      bool     `json:"negate_source,omitempty"`
 	NegateDestination bool     `json:"negate_destination,omitempty"`
 	Services          []string `json:"services,omitempty"`
+	// ServiceEntries are inline services, matched in addition to Services.
+	ServiceEntries []ServiceEntry `json:"service_entries,omitempty"`
 	// ApplicationDefault restricts services to each application's default
 	// ports (PAN-OS "application-default").
 	ApplicationDefault bool     `json:"application_default,omitempty"`

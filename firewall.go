@@ -205,6 +205,14 @@ func (fw *Firewall) compileRules(res *resolver) {
 		r := &Rule{position: i, spec: spec, loc: fw.loc}
 		src, dst := res.operands(spec.Source), res.operands(spec.Destination)
 		svc := res.serviceList(spec.Services)
+		if len(spec.ServiceEntries) > 0 {
+			if len(spec.Services) == 0 {
+				svc.set = traffic.ServiceSet{}
+			}
+			for _, e := range spec.ServiceEntries {
+				svc.set = svc.set.Union(e.Set())
+			}
+		}
 		r.issues = slices.Concat(src.problems, dst.problems, svc.problems, spec.Unsupported)
 		if spec.NegateSource {
 			src.set = traffic.AnyAddress().Subtract(src.set)
@@ -216,8 +224,11 @@ func (fw *Firewall) compileRules(res *resolver) {
 		r.issues = append(r.issues, fw.ruleSemanticIssues(spec)...)
 		if spec.Schedule != "" {
 			r.schedule = schedules[spec.Schedule]
-			if r.schedule == nil {
+			switch {
+			case r.schedule == nil:
 				r.issues = append(r.issues, "unknown schedule "+quote(spec.Schedule))
+			case r.schedule.Unsupported != "":
+				r.issues = append(r.issues, "unsupported schedule "+quote(spec.Schedule))
 			}
 		}
 		for _, z := range slices.Concat(spec.From, spec.To) {
@@ -286,6 +297,9 @@ func (fw *Firewall) translation(res *resolver, t Translation, issues []string) (
 		r := res.operands(t.Addresses)
 		return r.set, append(issues, r.problems...)
 	case TranslationModeInterface:
+		if t.Interface == "" {
+			return traffic.AddressSet{}, issues // the egress interface, known only per packet
+		}
 		var out traffic.AddressSet
 		for _, p := range fw.interfaces[t.Interface].Addresses {
 			out = out.Union(traffic.NewAddressSet(netip.PrefixFrom(p.Addr(), p.Addr().BitLen())))

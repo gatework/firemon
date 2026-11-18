@@ -46,6 +46,9 @@ type Schedule struct {
 	Description string       `json:"description,omitempty"`
 	Windows     []TimeWindow `json:"windows,omitempty"`
 	Recurrences []Recurrence `json:"recurrences,omitempty"`
+	// Unsupported describes a period the parser could not model; rules using
+	// the schedule are undecidable.
+	Unsupported string `json:"unsupported,omitempty"`
 }
 
 // ActiveAt reports whether the schedule is active at t, which must already

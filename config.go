@@ -93,6 +93,7 @@ func cloneRule(r SecurityRule) SecurityRule {
 	r.From, r.To = slices.Clone(r.From), slices.Clone(r.To)
 	r.Source, r.Destination = slices.Clone(r.Source), slices.Clone(r.Destination)
 	r.Services, r.Applications = slices.Clone(r.Services), slices.Clone(r.Applications)
+	r.ServiceEntries = slices.Clone(r.ServiceEntries)
 	r.Unsupported = slices.Clone(r.Unsupported)
 	return r
 }

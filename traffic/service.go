@@ -64,6 +64,19 @@ func (p Protocol) String() string {
 	}
 }
 
+// MarshalText implements encoding.TextMarshaler with the String form.
+func (p Protocol) MarshalText() ([]byte, error) { return []byte(p.String()), nil }
+
+// UnmarshalText implements encoding.TextUnmarshaler with ParseProtocol.
+func (p *Protocol) UnmarshalText(text []byte) error {
+	parsed, err := ParseProtocol(string(text))
+	if err != nil {
+		return err
+	}
+	*p = parsed
+	return nil
+}
+
 // HasPorts reports whether the protocol carries source and destination ports.
 func (p Protocol) HasPorts() bool {
 	return p == ProtocolTCP || p == ProtocolUDP || p == ProtocolSCTP

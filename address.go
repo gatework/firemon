@@ -37,6 +37,9 @@ func (k AddressKind) String() string {
 	}
 }
 
+// MarshalText implements encoding.TextMarshaler.
+func (k AddressKind) MarshalText() ([]byte, error) { return []byte(k.String()), nil }
+
 // AddressEntry is one member of an address object.
 type AddressEntry struct {
 	Kind   AddressKind  `json:"kind"`

@@ -4,13 +4,13 @@
 declared:
   - .
   - ./traffic
+  - ./vendors/hillstone
 
 rules:
   - name: domain packages stay free of I/O
     packages: [., ./traffic]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
-    transitive: true
 
   - name: traffic is the base algebra
     packages: [./traffic]
@@ -19,3 +19,8 @@ rules:
   - name: the domain depends only on traffic
     packages: [.]
     only_local: [./traffic]
+
+  - name: vendors depend only on the domain and the shared parser
+    packages: [./vendors/...]
+    only_local: [., ./traffic]
+    deny: [os, os/exec, net, net/http, github.com/gatework/net-connector/...]
