@@ -7,10 +7,11 @@ declared:
   - ./vendors/hillstone
   - ./vendors/paloalto
   - ./query
+  - ./design
 
 rules:
   - name: domain packages stay free of I/O
-    packages: [., ./traffic, ./query]
+    packages: [., ./traffic, ./query, ./design]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
 
@@ -24,9 +25,13 @@ rules:
 
   - name: vendors depend only on the domain and the shared parser
     packages: [./vendors/...]
-    only_local: [., ./traffic]
+    only_local: [., ./traffic, ./design]
     deny: [os, os/exec, net, net/http, github.com/gatework/net-connector/...]
 
   - name: query evaluates the domain only
     packages: [./query]
     only_local: [., ./traffic]
+
+  - name: design plans on the domain and the query engine
+    packages: [./design]
+    only_local: [., ./traffic, ./query]
