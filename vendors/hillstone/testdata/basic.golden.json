@@ -1467,14 +1467,6 @@
           "name": "lan"
         }
       ],
-      "destination": [
-        {
-          "name": "Any"
-        }
-      ],
-      "services": [
-        "Any"
-      ],
       "translated_source": {
         "mode": "interface",
         "interface": "ethernet0/0",
@@ -1493,14 +1485,6 @@
           }
         }
       ],
-      "destination": [
-        {
-          "name": "Any"
-        }
-      ],
-      "services": [
-        "Any"
-      ],
       "translated_source": {
         "mode": "address",
         "addresses": [
@@ -1518,11 +1502,6 @@
     {
       "id": "1",
       "virtual_router": "trust-vr",
-      "source": [
-        {
-          "name": "Any"
-        }
-      ],
       "destination": [
         {
           "entry": {

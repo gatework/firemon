@@ -2,6 +2,7 @@ package hillstone
 
 import (
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -193,8 +194,33 @@ func (s *state) dynamicNAT(vr, kw string, w *words) bool {
 	} else {
 		n.TranslatedSource = t
 	}
-	s.cfg.DynamicNATs = append(s.cfg.DynamicNATs, n)
+	s.insertNAT(n, kw == "dnatrule")
 	return true
+}
+
+// insertNAT adds a rule at its placement among the rules of its list.
+func (s *state) insertNAT(n firemon.DynamicNAT, destination bool) {
+	place := s.place
+	s.place = ""
+	sameList := func(o firemon.DynamicNAT) bool {
+		return (o.TranslatedDestination.Mode == firemon.TranslationModeAddress) == destination
+	}
+	at := len(s.cfg.DynamicNATs)
+	kw, ref, _ := strings.Cut(place, " ")
+	switch kw {
+	case "top":
+		if i := slices.IndexFunc(s.cfg.DynamicNATs, sameList); i >= 0 {
+			at = i
+		}
+	case "before", "after":
+		if i := slices.IndexFunc(s.cfg.DynamicNATs, func(o firemon.DynamicNAT) bool { return o.ID == ref && sameList(o) }); i >= 0 {
+			at = i
+			if kw == "after" {
+				at++
+			}
+		}
+	}
+	s.cfg.DynamicNATs = slices.Insert(s.cfg.DynamicNATs, at, n)
 }
 
 func (s *state) natClause(n *firemon.DynamicNAT, t *firemon.Translation, w *words) bool {
@@ -203,16 +229,20 @@ func (s *state) natClause(n *firemon.DynamicNAT, t *firemon.Translation, w *word
 		n.ID = w.next()
 	case "from", "to":
 		ref, ok := natOperand(w)
-		if !ok {
+		switch {
+		case !ok:
 			return false
-		}
-		if kw == "from" {
+		case ref.Name == anyName:
+			// The predefined Any object: an empty list matches any.
+		case kw == "from":
 			n.Source = append(n.Source, ref)
-		} else {
+		default:
 			n.Destination = append(n.Destination, ref)
 		}
 	case "service":
-		n.Services = append(n.Services, w.next())
+		if svc := w.next(); svc != anyName {
+			n.Services = append(n.Services, svc)
+		}
 	case "eif":
 		n.Egress = w.next()
 	case "trans-to":
@@ -225,12 +255,23 @@ func (s *state) natClause(n *firemon.DynamicNAT, t *firemon.Translation, w *word
 		t.PortTranslation = w.next() == "dynamicport"
 	case "disable":
 		n.Disabled = true
-	case "sticky", "log", "load-balance", "track-ping", "track-tcp", "description":
-		if kw == "description" {
-			n.Description = w.next()
-		}
+	case "description":
+		n.Description = w.next()
+	case "sticky", "log", "load-balance":
+	case "top":
+		s.place = kw
+	case "before", "after":
+		s.place = kw + " " + w.next()
+	case "track-ping", "track-tcp":
+		w.next() // the tracked object
+	case "ingress-interface", "evr":
+		// Narrow the match in ways the model does not evaluate.
+		n.Unsupported = append(n.Unsupported, kw+" "+w.next())
 	default:
-		return false
+		n.Unsupported = append(n.Unsupported, "unrecognized "+kw+" "+w.rest())
+		for !w.done() {
+			w.next()
+		}
 	}
 	return true
 }

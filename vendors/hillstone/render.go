@@ -1,6 +1,8 @@
 package hillstone
 
 import (
+	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -46,6 +48,10 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 		case design.AddRule:
 			do = renderRule(c)
 			undo = []string{"no rule id " + c.Rule.ID}
+		case design.AddNAT:
+			do, undo, err = renderNAT(c)
+		case design.AddStaticNAT:
+			do, undo, err = renderStaticNAT(c.Mapping)
 		default:
 			err = fmt.Errorf("hillstone: unsupported change %T", ch)
 		}
@@ -192,4 +198,88 @@ func q(s string) string { return strconv.Quote(s) }
 // mode. Saving is a separate, confirmed step.
 func DeployCommands(s design.Script) []string {
 	return slices.Concat([]string{"configure"}, s.Commands, []string{"exit"})
+}
+
+// renderNAT writes a snatrule or dnatrule inside its virtual router. The
+// rule is placed before c.Before, since NAT rules match in order.
+func renderNAT(c design.AddNAT) (do, undo []string, err error) {
+	r := c.Rule
+	kind := "snatrule"
+	t := r.TranslatedSource
+	if design.NATSide(r) == firemon.NATKindDestination {
+		kind, t = "dnatrule", r.TranslatedDestination
+	}
+	if len(r.Services) > 1 {
+		return nil, nil, fmt.Errorf("hillstone: %s %s: one service", kind, r.ID)
+	}
+	from, err1 := natOperandText(r.Source)
+	to, err2 := natOperandText(r.Destination)
+	if err := errors.Join(err1, err2); err != nil {
+		return nil, nil, fmt.Errorf("hillstone: %s %s: %w", kind, r.ID, err)
+	}
+	line := kind + " id " + r.ID
+	if c.Before != "" {
+		line += " before " + c.Before
+	}
+	service := anyName
+	if len(r.Services) == 1 {
+		service = r.Services[0]
+	}
+	line += " from " + from + " to " + to + " service " + q(service)
+	if r.Egress != "" {
+		line += " eif " + r.Egress
+	}
+	switch t.Mode {
+	case firemon.TranslationModeInterface:
+		line += " trans-to eif-ip"
+	case firemon.TranslationModeAddress:
+		to, err := natOperandText(t.Addresses)
+		if err != nil || len(t.Addresses) != 1 {
+			return nil, nil, fmt.Errorf("hillstone: %s %s: one translated address", kind, r.ID)
+		}
+		line += " trans-to " + to
+	case firemon.TranslationModeUnset, firemon.TranslationModeNone:
+		return nil, nil, fmt.Errorf("hillstone: %s %s: no translation", kind, r.ID)
+	}
+	if kind == "snatrule" {
+		line += " mode " + map[bool]string{true: "dynamicport", false: "dynamicip"}[t.PortTranslation]
+	} else if t.Port != 0 {
+		line += " port " + strconv.Itoa(int(t.Port))
+	}
+	vr := "ip vrouter " + q(cmp.Or(r.VirtualRouter, DefaultVirtualRouter))
+	return []string{vr, "  " + line, "exit"}, []string{vr, "  no " + kind + " id " + r.ID, "exit"}, nil
+}
+
+// renderStaticNAT writes a bnatrule inside its virtual router.
+func renderStaticNAT(m firemon.StaticNAT) (do, undo []string, err error) {
+	virtual, err1 := natOperandText([]firemon.AddressRef{m.Mapped})
+	inside, err2 := natOperandText([]firemon.AddressRef{m.Real})
+	if err := errors.Join(err1, err2); err != nil {
+		return nil, nil, fmt.Errorf("hillstone: bnatrule %s: %w", m.ID, err)
+	}
+	vr := "ip vrouter " + q(cmp.Or(m.VirtualRouter, DefaultVirtualRouter))
+	line := "bnatrule id " + m.ID + " virtual " + virtual + " real " + inside
+	return []string{vr, "  " + line, "exit"}, []string{vr, "  no bnatrule id " + m.ID, "exit"}, nil
+}
+
+// natOperandText writes one NAT operand: an address book entry, an inline
+// prefix or range, or Any for an empty list.
+func natOperandText(refs []firemon.AddressRef) (string, error) {
+	switch {
+	case len(refs) == 0:
+		return "address-book " + q(anyName), nil
+	case len(refs) > 1:
+		return "", errors.New("one address operand")
+	case !refs[0].IsInline():
+		return "address-book " + q(refs[0].Name), nil
+	}
+	e := refs[0].Entry
+	switch e.Kind {
+	case firemon.AddressKindPrefix:
+		return "ip " + e.Prefix.String(), nil
+	case firemon.AddressKindRange:
+		return "range " + e.From.String() + " " + e.To.String(), nil
+	case firemon.AddressKindFQDN, firemon.AddressKindUnset:
+	}
+	return "", fmt.Errorf("cannot write %s entry", e.Kind)
 }

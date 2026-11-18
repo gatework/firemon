@@ -56,6 +56,10 @@ func apply(cfg *firemon.Config, ch Change) error {
 		case FieldUnset:
 			return fmt.Errorf("design: extend rule %q: field unset", c.RuleID)
 		}
+	case AddNAT:
+		return applyNAT(cfg, c)
+	case AddStaticNAT:
+		cfg.StaticNATs = append(cfg.StaticNATs, c.Mapping)
 	case AddRule:
 		at := len(cfg.Rules)
 		if c.Before != "" {
@@ -85,4 +89,60 @@ func extendsAny(r *firemon.SecurityRule, f Field) bool {
 	default:
 		return false
 	}
+}
+
+// ErrUnknownNAT reports a NAT change placed before a rule the
+// configuration does not have.
+var ErrUnknownNAT = errors.New("design: unknown NAT rule")
+
+// applyNAT inserts c.Rule into its NAT list and, on single-order vendors,
+// renumbers the precedences to the new order.
+func applyNAT(cfg *firemon.Config, c AddNAT) error {
+	single := cfg.Semantics.NATOrder == firemon.NATOrderSingle
+	at := len(cfg.DynamicNATs)
+	if c.Before != "" {
+		at = slices.IndexFunc(cfg.DynamicNATs, func(n firemon.DynamicNAT) bool {
+			return n.ID == c.Before && (single || NATSide(n) == NATSide(c.Rule))
+		})
+		if at < 0 {
+			return fmt.Errorf("%w %q", ErrUnknownNAT, c.Before)
+		}
+	}
+	cfg.DynamicNATs = slices.Insert(cfg.DynamicNATs, at, c.Rule)
+	if c.Bidirectional && len(c.Rule.Source) == 1 && len(c.Rule.TranslatedSource.Addresses) == 1 {
+		r := c.Rule
+		cfg.StaticNATs = append(cfg.StaticNATs, firemon.StaticNAT{
+			ID: r.ID, Name: r.Name, Real: r.Source[0], Mapped: r.TranslatedSource.Addresses[0], Zones: slices.Clone(r.To),
+			Disabled: r.Disabled, InboundOnly: true,
+		})
+	}
+	if single {
+		renumber(cfg)
+	}
+	return nil
+}
+
+// renumber gives single-list NAT rules precedences in list order; the
+// reverse halves of bi-directional rules follow their rule.
+func renumber(cfg *firemon.Config) {
+	byID := make(map[string]int, len(cfg.DynamicNATs))
+	for i := range cfg.DynamicNATs {
+		cfg.DynamicNATs[i].Precedence = i + 1
+		byID[cfg.DynamicNATs[i].ID] = i + 1
+	}
+	for i := range cfg.StaticNATs {
+		if p, ok := byID[cfg.StaticNATs[i].ID]; ok && cfg.StaticNATs[i].InboundOnly {
+			cfg.StaticNATs[i].Precedence = p
+		}
+	}
+}
+
+// NATSide returns the list a dynamic NAT rule belongs to on
+// separate-order vendors: destination when it translates destinations,
+// source otherwise.
+func NATSide(n firemon.DynamicNAT) firemon.NATKind {
+	if m := n.TranslatedDestination.Mode; m != firemon.TranslationModeUnset && m != firemon.TranslationModeNone {
+		return firemon.NATKindDestination
+	}
+	return firemon.NATKindSource
 }

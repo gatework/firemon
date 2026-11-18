@@ -97,6 +97,7 @@ func (c *Config) Clone() *Config {
 		n.Services = slices.Clone(n.Services)
 		n.TranslatedSource.Addresses = slices.Clone(n.TranslatedSource.Addresses)
 		n.TranslatedDestination.Addresses = slices.Clone(n.TranslatedDestination.Addresses)
+		n.Unsupported = slices.Clone(n.Unsupported)
 		return n
 	})
 	out.PolicyRoutes = cloneEach(c.PolicyRoutes, func(p PolicyRoute) PolicyRoute {

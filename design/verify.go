@@ -96,9 +96,40 @@ func scopeOf(needs []need, r *firemon.Rule) (traffic.Region, bool) {
 func permittedOn(res *query.Result, from, to string) traffic.Region {
 	var out traffic.Region
 	for i := range res.Paths {
-		if res.Paths[i].From == from && res.Paths[i].To == to {
-			out = out.Union(res.Paths[i].Region(query.OutcomePermit))
+		path := &res.Paths[i]
+		if path.From != from || path.To != to {
+			continue
+		}
+		out = out.Union(path.Region(query.OutcomePermit))
+		for _, d := range path.Decisions {
+			if d.Outcome == query.OutcomeUnknown && d.Final == query.OutcomePermit && onlyNarrowDenies(d.Possible) {
+				out = out.Union(d.Space)
+			}
 		}
 	}
 	return out
+}
+
+// narrowing reports issue kinds that only narrow a rule within its
+// address and service match.
+func narrowing(k firemon.IssueKind) bool {
+	return k == firemon.IssueKindApplication || k == firemon.IssueKindURLCategory || k == firemon.IssueKindUser
+}
+
+// onlyNarrowDenies reports whether the rules that may match first are deny
+// rules that only add criteria the model cannot see, such as applications,
+// URL categories or users: they block specific applications or users
+// within any traffic, and a permit for the rest is what the intent asks.
+func onlyNarrowDenies(rules []*firemon.Rule) bool {
+	for _, r := range rules {
+		if r.Action() != firemon.ActionDeny {
+			return false
+		}
+		for _, is := range r.Issues() {
+			if !narrowing(is.Kind) {
+				return false
+			}
+		}
+	}
+	return len(rules) > 0
 }

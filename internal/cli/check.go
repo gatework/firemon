@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,6 +16,7 @@ import (
 	"github.com/gatework/firemon/inventory"
 	"github.com/gatework/firemon/query"
 	"github.com/gatework/firemon/report"
+	"github.com/gatework/firemon/traffic"
 )
 
 // checkFlags are the inputs of the check command: free-form text the
@@ -21,6 +24,7 @@ import (
 type checkFlags struct {
 	src, dst, service       string
 	fromZone, toZone        string
+	nat                     natFlags
 	name, description       string
 	override, plan, resolve bool
 }
@@ -50,6 +54,7 @@ func newCheckCmd(o *options) *cobra.Command {
 	fl.BoolVar(&f.override, "override", false, "允许新策略放在具体拒绝策略之前")
 	fl.BoolVar(&f.plan, "design", false, "为每台防火墙输出变更方案与命令")
 	fl.BoolVar(&f.resolve, "resolve", false, "解析域名，以便按 IP 写的策略也能判定")
+	f.nat.register(fl)
 	return cmd
 }
 
@@ -63,6 +68,13 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 		printNotes(&printer{w: cmd.OutOrStdout()}, in.Notes)
 		return &usageError{err}
 	}
+	nat, err := f.nat.intent()
+	if err != nil {
+		return &usageError{err}
+	}
+	if nat != nil && !f.plan {
+		return &usageError{errors.New("--nat designs a change: add --design")}
+	}
 	req := query.Request{
 		Src: in.Src, Dst: in.Dst, DstDomains: in.DstDomains, Service: in.Service, Applications: in.Applications,
 		FromZone: f.fromZone, ToZone: f.toZone,
@@ -70,7 +82,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	if f.resolve && len(in.DstDomains) > 0 {
 		req.Resolved = dns.Resolver{}.Resolve(cmd.Context(), in.DstDomains)
 	}
-	tr, err := inv.Locate(req)
+	tr, err := locatePublished(inv, req, nat)
 	if err != nil {
 		return err
 	}
@@ -78,7 +90,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	if f.plan && !in.Dst.IsEmpty() {
 		intent := design.Intent{
 			Src: in.Src, Dst: in.Dst, Service: in.Service, FromZone: f.fromZone, ToZone: f.toZone,
-			Name: f.name, Description: f.description, Override: f.override,
+			Name: f.name, Description: f.description, Override: f.override, NAT: nat,
 		}
 		if plans, err = inv.Plan(intent); err != nil {
 			return err
@@ -257,13 +269,24 @@ func printPath(p *printer, path report.Path) {
 
 func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, platforms map[string]bootstrap.Platform) {
 	for _, cp := range plans {
-		if cp.Cluster != f.Cluster || cp.Plan == nil || len(cp.Plan.Changes) == 0 {
+		if cp.Cluster != f.Cluster || cp.Plan == nil {
+			continue
+		}
+		if len(cp.Plan.Changes) == 0 {
+			printNATOutcome(p, cp.Plan.NAT)
 			continue
 		}
 		script, err := platforms[cp.Firewall].Render(cp.Plan)
 		if err != nil {
 			p.f("  方案无法生成命令：%v\n", err)
 			continue
+		}
+		printNATOutcome(p, cp.Plan.NAT)
+		for _, u := range cp.Plan.Unknown {
+			p.f("  无法设计：%s\n", u)
+		}
+		for _, w := range cp.Plan.Warnings {
+			p.f("  注意：%s\n", w)
 		}
 		p.f("  变更方案（已验证：%v）：\n", cp.Plan.Verified)
 		if cp.Plan.VerifyError != "" {
@@ -308,4 +331,56 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// printNATOutcome writes the NAT part of a plan.
+func printNATOutcome(p *printer, n *design.NATOutcome) {
+	if n == nil {
+		return
+	}
+	line := "  NAT 设计：" + text(natStatusText, n.Status, n.Status.String())
+	switch {
+	case len(n.Existing) > 0 && n.Status == design.NATStatusConflict:
+		line += "，NAT 规则 " + strings.Join(n.Existing, ",") + " 排在前面，已把该地址端口映射到其他服务器"
+	case len(n.Existing) > 0:
+		line += "，已由 NAT 规则 " + strings.Join(n.Existing, ",") + " 按顺序首条命中完成"
+	case n.Rule != "":
+		line += "，新增规则 " + n.Rule
+		if n.Before != "" {
+			line += "，放在规则 " + n.Before + " 之前（NAT 按顺序匹配，越靠前越优先）"
+		} else {
+			line += "，放在列表末尾"
+		}
+	}
+	if n.Address != "" {
+		line += "，地址 " + n.Address
+	}
+	if n.Interface != "" {
+		line += "，使用 " + n.Interface + " 接口地址"
+	}
+	if n.Reused {
+		line += "（复用已有 NAT 地址）"
+	}
+	if n.Reason != "" {
+		line += "：" + n.Reason
+	}
+	p.f("%s\n", line)
+}
+
+// locatePublished locates the request as clients send it: to the published
+// address when destination or static NAT already maps it, else to the
+// server itself (an unpublished address ends at the firewall).
+func locatePublished(inv *inventory.Inventory, req query.Request, nat *design.NATIntent) (inventory.Trace, error) {
+	if nat != nil && nat.Mode != design.NATModeSource && nat.Address.IsValid() {
+		pub := req
+		svc, err := design.PublishedService(req.Service, nat.Port)
+		if err != nil {
+			return inventory.Trace{}, &usageError{err}
+		}
+		pub.Dst, pub.Service = traffic.NewAddressSet(netip.PrefixFrom(nat.Address, nat.Address.BitLen())), svc
+		if tr, err := inv.Locate(pub); err != nil || len(tr.Crossings) > 0 {
+			return tr, err
+		}
+	}
+	return inv.Locate(req)
 }

@@ -77,7 +77,7 @@ func (inv *Inventory) Locate(req query.Request) (Trace, error) {
 		if err != nil {
 			return Trace{}, err
 		}
-		if c.ZonesNeeded && !slices.Contains(t.ZonesNeeded, cluster) {
+		if c.ZonesNeeded && len(c.Paths) == 0 && !slices.Contains(t.ZonesNeeded, cluster) {
 			t.ZonesNeeded = append(t.ZonesNeeded, cluster)
 		}
 		if len(c.Paths) == 0 && !c.Incomplete {

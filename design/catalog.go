@@ -39,6 +39,9 @@ func newCatalog(fw *firemon.Firewall, naming Naming) *catalog {
 	for _, r := range cfg.Rules {
 		c.taken[r.ID], c.taken[r.Name] = true, true // rule names may not collide either (PAN-OS merges)
 	}
+	for _, n := range cfg.DynamicNATs {
+		c.taken[n.ID], c.taken[n.Name] = true, true
+	}
 	for name, set := range fw.Addresses() {
 		if key := set.String(); c.addresses[key] == "" {
 			c.addresses[key] = name
@@ -210,4 +213,33 @@ func (c *catalog) forget(name string, index map[string]string) {
 			delete(index, key)
 		}
 	}
+}
+
+// oneAddress returns at most one name for set: NAT rules take a single
+// operand, so several objects are always grouped.
+func (c *catalog) oneAddress(names []string, set traffic.AddressSet, group string) []string {
+	if len(names) <= 1 {
+		return names
+	}
+	if name, ok := c.addresses[set.String()]; ok && !slices.Contains(names, name) {
+		return []string{name}
+	}
+	name := c.unique(group)
+	c.created = append(c.created, AddAddressGroup{Group: firemon.AddressGroup{Name: name, Members: slices.Clone(names)}})
+	c.addresses[set.String()] = name
+	return []string{name}
+}
+
+// oneService returns at most one service name for set, like oneAddress.
+func (c *catalog) oneService(names []string, set traffic.ServiceSet, group string) []string {
+	if len(names) <= 1 {
+		return names
+	}
+	if name, ok := c.services[set.String()]; ok && !slices.Contains(names, name) {
+		return []string{name}
+	}
+	name := c.unique(group)
+	c.created = append(c.created, AddServiceGroup{Group: firemon.ServiceGroup{Name: name, Members: slices.Clone(names)}})
+	c.services[set.String()] = name
+	return []string{name}
 }

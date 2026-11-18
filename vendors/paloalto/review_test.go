@@ -1,6 +1,7 @@
 package paloalto_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/gatework/firemon"
@@ -74,4 +75,14 @@ set rulebase nat rules out source-translation dynamic-ip-and-port interface-addr
 	if len(got) != 1 || got[0].Entry.Prefix.String() != "103.24.178.130/32" {
 		t.Fatalf("interface address %+v", got)
 	}
+}
+
+func equalJSON(t *testing.T, a, b any) bool {
+	t.Helper()
+	x, err1 := json.Marshal(a)
+	y, err2 := json.Marshal(b)
+	if err1 != nil || err2 != nil {
+		t.Fatal(err1, err2)
+	}
+	return string(x) == string(y)
 }

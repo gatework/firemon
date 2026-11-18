@@ -67,3 +67,12 @@ func TestPolicyGlobalNestedRules(t *testing.T) {
 		t.Fatal("rules nested in policy-global are parsed")
 	}
 }
+
+func compileConfig(t *testing.T, cfg *firemon.Config) *firemon.Firewall {
+	t.Helper()
+	fw, err := firemon.Compile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fw
+}

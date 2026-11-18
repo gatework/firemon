@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/intake"
 	"github.com/gatework/firemon/inventory"
 	"github.com/gatework/firemon/query"
@@ -96,4 +97,12 @@ var issueKindText = map[string]string{
 	"unknown-object": "未知对象",
 	"nat":            "NAT 无法判定",
 	"other":          "其他条件",
+}
+
+var natStatusText = map[design.NATStatus]string{
+	design.NATStatusSatisfied:     "已满足",
+	design.NATStatusAdded:         "需新增",
+	design.NATStatusNeedsAddress:  "需分配公网地址",
+	design.NATStatusIndeterminate: "无法判定",
+	design.NATStatusConflict:      "冲突（加 --override 才会插到该规则之前）",
 }

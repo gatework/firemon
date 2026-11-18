@@ -151,6 +151,7 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 	for _, c := range t.Crossings {
 		f := firewallReport(c)
 		f.Plan = planFor(plans, c.Cluster)
+		f.Status = max(f.Status, natStatus(f.Plan))
 		if fw := fws[c.Cluster]; fw != nil && (f.Status == StatusPartialMatch || f.Status == StatusNeedNew || f.Status == StatusBlocked) {
 			f.Candidates = candidates(fw, c.Paths, f.Plan)
 		}
@@ -401,4 +402,22 @@ func describe(r traffic.Region, p query.Path) string {
 		parts = append(parts, s.Src.String()+" -> "+p.Domain+" "+s.Service.String())
 	}
 	return strings.Join(parts, "; ")
+}
+
+// natStatus is the status the NAT part of a plan imposes: a translation
+// still to add needs new configuration like an access rule does.
+func natStatus(p *design.Plan) Status {
+	if p == nil || p.NAT == nil {
+		return StatusUnset
+	}
+	switch p.NAT.Status {
+	case design.NATStatusAdded:
+		return StatusNeedNew
+	case design.NATStatusNeedsAddress, design.NATStatusIndeterminate:
+		return StatusIndeterminate
+	case design.NATStatusConflict:
+		return StatusBlocked
+	case design.NATStatusSatisfied, design.NATStatusUnset:
+	}
+	return StatusUnset
 }

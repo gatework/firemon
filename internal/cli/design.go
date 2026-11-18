@@ -13,6 +13,7 @@ import (
 // intentFlags extend the traffic flags with what a new rule records.
 type intentFlags struct {
 	trafficFlags
+	nat                         natFlags
 	name, description, schedule string
 	override                    bool
 }
@@ -24,6 +25,7 @@ func (i *intentFlags) register(cmd *cobra.Command) {
 	f.StringVar(&i.description, "description", "", "description of new rules, for example the ticket")
 	f.StringVar(&i.schedule, "schedule", "", "existing schedule to attach to new rules")
 	f.BoolVar(&i.override, "override", false, "place new rules above specific deny rules instead of reporting conflicts")
+	i.nat.register(f)
 }
 
 func (i *intentFlags) intent(book firemon.ServiceBook) (design.Intent, error) {
@@ -31,10 +33,14 @@ func (i *intentFlags) intent(book firemon.ServiceBook) (design.Intent, error) {
 	if err != nil {
 		return design.Intent{}, err
 	}
+	nat, err := i.nat.intent()
+	if err != nil {
+		return design.Intent{}, &usageError{err}
+	}
 	return design.Intent{
 		Src: t.src, Dst: t.dst, Service: t.service,
 		FromZone: i.fromZone, ToZone: i.toZone, VirtualRouter: i.vr,
-		Name: i.name, Description: i.description, Schedule: i.schedule, Override: i.override,
+		Name: i.name, Description: i.description, Schedule: i.schedule, Override: i.override, NAT: nat,
 	}, nil
 }
 
@@ -90,6 +96,31 @@ func printProposal(cmd *cobra.Command, asJSON bool, prop workflow.Proposal) erro
 	p.f("status: %s  verified: %v  baseline: %s\n", plan.Status, plan.Verified, plan.Baseline[:16])
 	if plan.VerifyError != "" {
 		p.f("verification failed: %s\n", plan.VerifyError)
+	}
+	if n := plan.NAT; n != nil {
+		p.f("nat: %s", n.Status)
+		switch {
+		case len(n.Existing) > 0:
+			p.f(" by rule %s", strings.Join(n.Existing, ","))
+		case n.Rule != "":
+			p.f(" rule %s", n.Rule)
+			if n.Before != "" {
+				p.f(" before %s (NAT matches in order)", n.Before)
+			}
+		}
+		if n.Address != "" {
+			p.f(" address %s", n.Address)
+		}
+		if n.Interface != "" {
+			p.f(" interface address of %s", n.Interface)
+		}
+		if n.Reused {
+			p.f(" (reused)")
+		}
+		if n.Reason != "" {
+			p.f(": %s", n.Reason)
+		}
+		p.f("\n")
 	}
 	for _, c := range plan.Conflicts {
 		p.f("conflict: rule %s denies %s -> %s: %s (use --override to place new rules above it)\n", c.RuleID, c.From, c.To, c.Text)

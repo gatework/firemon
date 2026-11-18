@@ -36,3 +36,5 @@
 | Candidate rule | 候选修改策略 | Existing permit rule that could carry the remaining traffic. |
 | Domain target / application target | 域名目标 / 应用目标 | Request part matched by domain pattern or application name. |
 | Policy route | 策略路由 | Ordered PBR entry that chooses the egress before the routing table (`firemon.PolicyRoute`). |
+| NAT intent | NAT 需求 | The translation asked with an access intent: source, destination (published port) or static (`design.NATIntent`). |
+| Incomplete rule | 不完整策略 | A rule missing its action, an address or its service; the device ignores it (`SecurityRule.Incomplete`). |

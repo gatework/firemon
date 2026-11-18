@@ -47,8 +47,56 @@ type need struct {
 	before   *firemon.Rule  // first deny deciding the need; nil means end
 }
 
-// Plan designs the changes that permit intent.
+// Plan designs the changes that permit intent and, when it asks for one,
+// translate it. The NAT part comes first: access is then designed on the
+// configuration with the NAT change, for the traffic as it arrives.
 func (p *Planner) Plan(intent Intent) (*Plan, error) {
+	if intent.NAT == nil || intent.NAT.Mode == NATModeUnset {
+		return p.planAccess(intent)
+	}
+	at := p.now()
+	out, changes, access := p.planNAT(intent, at)
+	plan := &Plan{Intent: intent, Baseline: p.fw.Fingerprint(), NAT: &out}
+	switch out.Status {
+	case NATStatusNeedsAddress, NATStatusIndeterminate:
+		plan.Status = StatusIndeterminate
+		plan.Unknown = append(plan.Unknown, "NAT: "+out.Reason)
+		return plan, nil
+	case NATStatusConflict:
+		plan.Status = StatusConflict
+		return plan, nil
+	case NATStatusSatisfied:
+		ap, err := p.planAccess(access)
+		if err != nil {
+			return nil, err
+		}
+		ap.Intent, ap.NAT = intent, &out
+		return ap, nil
+	case NATStatusAdded, NATStatusUnset:
+	}
+	cfg := p.fw.Config()
+	if err := Apply(cfg, changes); err != nil {
+		return nil, err
+	}
+	withNAT, err := firemon.Compile(cfg)
+	if err != nil {
+		return nil, err
+	}
+	sub := &Planner{fw: withNAT, naming: p.naming, now: func() time.Time { return at }, threshold: p.threshold}
+	ap, err := sub.planAccess(access)
+	if err != nil {
+		return nil, err
+	}
+	ap.Intent, ap.Baseline, ap.NAT = intent, plan.Baseline, &out
+	ap.Changes = append(changes, ap.Changes...)
+	if ap.Status == StatusNoChange {
+		ap.Status = StatusChange
+	}
+	return ap, nil
+}
+
+// planAccess designs the security rule changes that permit intent.
+func (p *Planner) planAccess(intent Intent) (*Plan, error) {
 	at := p.now()
 	res, err := p.engine(p.fw, intent).Query(intent.request(at))
 	if err != nil {
@@ -174,6 +222,10 @@ func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan)
 	switch outcome {
 	case query.OutcomeDefault:
 		n.region = n.region.Union(d.Space)
+		if onlyNarrowDenies(d.Possible) {
+			plan.Warnings = append(plan.Warnings, d.Space.String()+": deny rules "+ruleIDs(d.Possible)+
+				" that match applications, URL categories or users still come first")
+		}
 	case query.OutcomeDeny:
 		if !catchAll(d.Rule) && !intent.Override {
 			n.conflict = n.conflict.Union(d.Space)
@@ -183,6 +235,10 @@ func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan)
 		n.region = n.region.Union(d.Space)
 		if n.before == nil || d.Rule.Position() < n.before.Position() {
 			n.before = d.Rule
+		}
+		if onlyNarrowDenies(d.Possible) {
+			plan.Warnings = append(plan.Warnings, d.Space.String()+": deny rules "+ruleIDs(d.Possible)+
+				" that match applications, URL categories or users still come first")
 		}
 	case query.OutcomeUnknown:
 		plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": "+d.Space.String())

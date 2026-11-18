@@ -25,6 +25,8 @@ type Intent struct {
 	// Override places new rules above specific deny rules that block the
 	// intent instead of reporting them as conflicts.
 	Override bool
+	// NAT asks for a translation with the access; nil plans access only.
+	NAT *NATIntent
 }
 
 func (i Intent) request(at time.Time) query.Request {

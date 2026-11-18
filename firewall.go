@@ -349,7 +349,7 @@ func (fw *Firewall) compileNAT(res *resolver) {
 		if !svc.exact() {
 			n.bound.Service = traffic.AnyService()
 		}
-		n.issues = slices.Concat(src.allProblems(), dst.allProblems(), svc.allProblems())
+		n.issues = slices.Concat(src.allProblems(), dst.allProblems(), svc.allProblems(), spec.Unsupported)
 		n.src, n.issues = fw.translation(res, spec.TranslatedSource, n.issues)
 		n.dst, n.issues = fw.translation(res, spec.TranslatedDestination, n.issues)
 		if spec.TranslatedSource.Mode == TranslationModeUnset && spec.TranslatedDestination.Mode == TranslationModeUnset {

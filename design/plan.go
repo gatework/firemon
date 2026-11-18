@@ -79,7 +79,7 @@ func (f Field) MarshalText() ([]byte, error) { return []byte(f.String()), nil }
 
 // Change is one vendor-neutral configuration change. The set of changes is
 // closed: AddAddress, AddService, AddAddressGroup, AddServiceGroup,
-// ExtendRule and AddRule.
+// ExtendRule, AddRule, AddNAT and AddStaticNAT.
 type Change interface {
 	fmt.Stringer
 	change()
@@ -117,6 +117,37 @@ type ExtendRule struct {
 type AddRule struct {
 	Rule   firemon.SecurityRule `json:"rule"`
 	Before string               `json:"before,omitempty"`
+}
+
+// AddNAT inserts a dynamic NAT rule. NAT is first match like security
+// rules, so the rule goes before the rule with ID Before in the same NAT
+// list (the source or destination list of separate-order vendors, the one
+// list of single-order vendors), or at the end of that list. Bidirectional
+// adds the reverse half of a static source translation (PAN-OS static-ip
+// bi-directional).
+type AddNAT struct {
+	Rule          firemon.DynamicNAT `json:"rule"`
+	Before        string             `json:"before,omitempty"`
+	Bidirectional bool               `json:"bidirectional,omitempty"`
+}
+
+// AddStaticNAT adds a one-to-one mapping (StoneOS bnatrule).
+type AddStaticNAT struct {
+	Mapping firemon.StaticNAT `json:"mapping"`
+}
+
+// String describes the change.
+func (c AddNAT) String() string {
+	where := "at end"
+	if c.Before != "" {
+		where = "before " + c.Before
+	}
+	return "add nat " + c.Rule.ID + " " + where
+}
+
+// String describes the change.
+func (c AddStaticNAT) String() string {
+	return "add static nat " + c.Mapping.ID + " " + c.Mapping.Mapped.String() + " <-> " + c.Mapping.Real.String()
 }
 
 // String describes the change.
@@ -167,6 +198,8 @@ func (AddAddressGroup) change() {}
 func (AddServiceGroup) change() {}
 func (ExtendRule) change()      {}
 func (AddRule) change()         {}
+func (AddNAT) change()          {}
+func (AddStaticNAT) change()    {}
 
 // Conflict is part of the intent a specific deny rule blocks.
 type Conflict struct {
@@ -195,4 +228,6 @@ type Plan struct {
 	Verified bool `json:"verified"`
 	// VerifyError is why verification failed, when it did.
 	VerifyError string `json:"verify_error,omitempty"`
+	// NAT is the outcome of the NAT part, when the intent asks for one.
+	NAT *NATOutcome `json:"nat,omitempty"`
 }

@@ -88,6 +88,10 @@ type state struct {
 	ruleIndex map[string]int
 	ruleGroup map[string]string // aggregate rule id -> group name
 	book      firemon.ServiceBook
+	// place is the placement keyword of the NAT rule being read ("top",
+	// "before ID", "after ID"); it appears in commands, never in a running
+	// configuration, which lists rules in order.
+	place string
 }
 
 func newState(content *parser.Content, loc *time.Location) *state {

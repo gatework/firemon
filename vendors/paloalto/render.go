@@ -1,6 +1,8 @@
 package paloalto
 
 import (
+	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -38,6 +40,9 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 		case design.AddRule:
 			do = renderRule(c)
 			undo = []string{"delete rulebase security rules " + name(c.Rule.ID)}
+		case design.AddNAT:
+			do, err = renderNAT(c)
+			undo = []string{"delete rulebase nat rules " + name(c.Rule.ID)}
 		default:
 			err = fmt.Errorf("paloalto: unsupported change %T", ch)
 		}
@@ -207,4 +212,81 @@ func Naming() design.Naming {
 		}
 		return string(b)
 	}}
+}
+
+// renderNAT writes a NAT rule and moves it before c.Before: the NAT
+// rulebase is one first-match list.
+func renderNAT(c design.AddNAT) ([]string, error) {
+	r := c.Rule
+	p := "set rulebase nat rules " + name(r.ID) + " "
+	src, err1 := operandTexts(r.Source)
+	dst, err2 := operandTexts(r.Destination)
+	if err := errors.Join(err1, err2); err != nil {
+		return nil, fmt.Errorf("paloalto: nat rule %s: %w", r.ID, err)
+	}
+	egress := cmp.Or(r.Egress, "any")
+	out := []string{
+		p + "from " + list(orAny(r.From)),
+		p + "to " + list(orAny(r.To)),
+		p + "source " + list(orAny(src)),
+		p + "destination " + list(orAny(dst)),
+		p + "service " + list(orAny(r.Services)),
+		p + "to-interface " + name(egress),
+	}
+	switch t := r.TranslatedSource; t.Mode {
+	case firemon.TranslationModeInterface:
+		out = append(out, p+"source-translation dynamic-ip-and-port interface-address interface "+name(t.Interface))
+	case firemon.TranslationModeAddress:
+		addrs, err := operandTexts(t.Addresses)
+		if err != nil {
+			return nil, fmt.Errorf("paloalto: nat rule %s: %w", r.ID, err)
+		}
+		kind := "dynamic-ip"
+		switch {
+		case c.Bidirectional:
+			kind = "static-ip"
+		case t.PortTranslation:
+			kind = "dynamic-ip-and-port"
+		}
+		out = append(out, p+"source-translation "+kind+" translated-address "+list(addrs))
+		if c.Bidirectional {
+			out = append(out, p+"source-translation static-ip bi-directional yes")
+		}
+	case firemon.TranslationModeUnset, firemon.TranslationModeNone:
+	}
+	if t := r.TranslatedDestination; t.Mode == firemon.TranslationModeAddress {
+		addrs, err := operandTexts(t.Addresses)
+		if err != nil || len(addrs) != 1 {
+			return nil, fmt.Errorf("paloalto: nat rule %s: one translated destination", r.ID)
+		}
+		out = append(out, p+"destination-translation translated-address "+name(addrs[0]))
+		if t.Port != 0 {
+			out = append(out, p+"destination-translation translated-port "+strconv.Itoa(int(t.Port)))
+		}
+	}
+	if c.Before != "" {
+		out = append(out, "move rulebase nat rules "+name(r.ID)+" before "+name(c.Before))
+	}
+	return out, nil
+}
+
+// operandTexts writes address references: object names, or inline
+// addresses and ranges.
+func operandTexts(refs []firemon.AddressRef) ([]string, error) {
+	out := make([]string, 0, len(refs))
+	for _, r := range refs {
+		if !r.IsInline() {
+			out = append(out, r.Name)
+			continue
+		}
+		switch e := r.Entry; e.Kind {
+		case firemon.AddressKindPrefix:
+			out = append(out, e.Prefix.String())
+		case firemon.AddressKindRange:
+			out = append(out, e.From.String()+"-"+e.To.String())
+		case firemon.AddressKindFQDN, firemon.AddressKindUnset:
+			return nil, fmt.Errorf("cannot write %s entry inline", e.Kind)
+		}
+	}
+	return out, nil
 }
