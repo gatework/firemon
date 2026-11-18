@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,6 +14,8 @@ import (
 	"github.com/gatework/firemon/converge"
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/hits"
+	"github.com/gatework/firemon/internal/bootstrap"
+	"github.com/gatework/firemon/internal/workflow"
 )
 
 type convergeFlags struct {
@@ -44,6 +48,9 @@ func newConvergeCmd(o *options) *cobra.Command {
 }
 
 func (o *options) converge(cmd *cobra.Command, f convergeFlags) error {
+	if o.inventoryFile != "" {
+		return o.convergeFleet(cmd, f)
+	}
 	loaded, platform, err := o.load(cmd.Context())
 	if err != nil {
 		return err
@@ -170,4 +177,94 @@ func printCleanupPlan(p *printer, plan *design.Plan, script design.Script) {
 	}
 	p.f("命令：\n  %s\n回退命令：\n  %s\n", strings.Join(script.Commands, "\n  "), strings.Join(script.Rollback, "\n  "))
 	p.f("删除策略后可能产生新的未使用对象，下发后请再运行一次 converge。\n")
+}
+
+// convergeFleet reviews every cluster of --inventory on its first member
+// by name, with the hit counters of all its members merged: a rule unused
+// on the active member may carry the standby's traffic after a failover.
+func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
+	store, err := filestore.New(o.store)
+	if err != nil {
+		return err
+	}
+	fleet, _, err := o.fleet(cmd, store)
+	if err != nil {
+		return err
+	}
+	clusters := map[string][]fleetMember{}
+	var order []string
+	for _, m := range fleet {
+		c := cmp.Or(m.cluster, m.name)
+		if _, ok := clusters[c]; !ok {
+			order = append(order, c)
+		}
+		clusters[c] = append(clusters[c], m)
+	}
+	slices.Sort(order)
+	p := &printer{w: cmd.OutOrStdout()}
+	for _, c := range order {
+		members := clusters[c]
+		slices.SortFunc(members, func(a, b fleetMember) int { return strings.Compare(a.name, b.name) })
+		snap, err := store.Load(cmd.Context(), members[0].snapshot)
+		if err != nil {
+			return fmt.Errorf("cluster %s: %w", c, err)
+		}
+		loaded, err := workflow.FromConfig(snap.Config)
+		if err != nil {
+			return err
+		}
+		platform, err := bootstrap.Lookup(snap.Vendor, snap.Config.Location, nil)
+		if err != nil {
+			return err
+		}
+		counters, err := clusterHits(cmd, store, c, members)
+		if err != nil {
+			return err
+		}
+		rep := converge.Analyze(loaded.Firewall, converge.Options{Now: o.deps.Now, Hits: counters, MinWindow: f.minWindow})
+		p.f("\n══ %s（成员 %s）\n", c, memberNames(members))
+		printConverge(p, rep)
+		if !f.plan {
+			continue
+		}
+		plan, err := converge.Plan(loaded.Firewall, rep, converge.Selection{IDs: f.selection}, converge.PlanOptions{Now: o.deps.Now, Naming: platform.Naming})
+		if err != nil {
+			return &usageError{fmt.Errorf("cluster %s: %w", c, err)}
+		}
+		script, err := platform.Render(plan)
+		if err != nil {
+			return err
+		}
+		printCleanupPlan(p, plan, script)
+	}
+	return p.err
+}
+
+// clusterHits merges the latest counters of the members that have any;
+// nil when none has.
+func clusterHits(cmd *cobra.Command, store *filestore.Store, cluster string, members []fleetMember) (*hits.Snapshot, error) {
+	var snaps []hits.Snapshot
+	for _, m := range members {
+		s, err := store.LatestHits(cmd.Context(), m.snapshot)
+		if errors.Is(err, filestore.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		snaps = append(snaps, s)
+	}
+	if len(snaps) == 0 {
+		return nil, nil //nolint:nilnil // no counters: static review only
+	}
+	merged := hits.Merge(cluster, snaps...)
+	return &merged, nil
+}
+
+func memberNames(members []fleetMember) string {
+	names := make([]string, len(members))
+	for i, m := range members {
+		names[i] = m.name
+	}
+	return strings.Join(names, ",")
 }
