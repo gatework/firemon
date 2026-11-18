@@ -139,15 +139,15 @@ func TestParse_GoldenRoundTrip(t *testing.T) {
 
 func TestParse_ServiceBookOverride(t *testing.T) {
 	t.Parallel()
-	text := "rule id 1\n  action permit\n  src-addr \"Any\"\n  dst-addr \"Any\"\n  service \"HTTP-EXT\"\n  service \"HTTP\"\nexit\n"
+	text := "rule id 1\n  action permit\n  src-addr \"Any\"\n  dst-addr \"Any\"\n  service \"MODEL-PORTS\"\n  service \"HTTP\"\nexit\n"
 	fw, err := firemon.Compile(mustParse(t, hillstone.Options{}, text))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r, _ := fw.Rule("1"); r.Decidable() {
-		t.Fatal("HTTP-EXT is not in the default book; the rule must be undecidable")
+		t.Fatal("MODEL-PORTS is not in the default book; the rule must be undecidable")
 	}
-	book, err := firemon.ParseServiceBook([]byte(`{"HTTP-EXT":["tcp/8080"],"HTTP":["tcp/80","tcp/8000"]}`))
+	book, err := firemon.ParseServiceBook([]byte(`{"MODEL-PORTS":["tcp/8080"],"HTTP":["tcp/80","tcp/8000"]}`))
 	if err != nil {
 		t.Fatal(err)
 	}

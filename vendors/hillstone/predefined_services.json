@@ -14,6 +14,7 @@
   "H323": ["tcp/1720"],
   "HTTP": ["tcp/80"],
   "HTTPS": ["tcp/443"],
+  "HTTP-EXT": ["tcp/80", "tcp/443"],
   "ICMP": ["icmp"],
   "ICMPv6": ["icmpv6"],
   "IGMP": ["2"],

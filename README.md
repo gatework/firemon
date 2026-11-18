@@ -86,7 +86,7 @@ firemon migrate --vendor hillstone --config fw1.txt --to paloalto --mapping map.
 firemon deploy --vendor hillstone --host 10.0.0.1 --user ops --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 --apply
 ```
 
-Built-in services differ by vendor, model and release. `firemon services --vendor hillstone` prints the predefined service book firemon assumes; when the device differs, save a corrected JSON book (`{"HTTP-EXT": ["tcp/8080"]}`) and pass it with `--service-book` (see ADR 0007). Names missing from the book leave the rest of a rule's service list decisive: traffic that a known service matches is decided by the rule, the rest is reported as possibly matched.
+Built-in services differ by vendor, model and release. `firemon services --vendor hillstone` prints the predefined service book firemon assumes; when the device differs, save a corrected JSON book (`{"MODEL-PORTS": ["tcp/8080"]}`) and pass it with `--service-book` (see ADR 0007). Names missing from the book leave the rest of a rule's service list decisive: traffic that a known service matches is decided by the rule, the rest is reported as possibly matched.
 
 Addresses accept `10.0.0.1`, `10.0.0.0/24`, `10.0.0.1-10.0.0.9` and `any`; services accept `tcp/443`, `udp/53`, `tcp/8000-8010`, `icmp`, `icmp/8`, `89` and `any`, comma separated. Transparent (layer-2) deployments need `--from-zone` and `--to-zone`, because zones cannot be derived from routing.
 

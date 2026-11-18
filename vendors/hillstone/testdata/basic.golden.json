@@ -503,6 +503,34 @@
       "predefined": true
     },
     {
+      "name": "HTTP-EXT",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 80,
+            "high": 80
+          }
+        },
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 443,
+            "high": 443
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
       "name": "HTTPS",
       "entries": [
         {
