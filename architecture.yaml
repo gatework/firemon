@@ -11,6 +11,7 @@ declared:
   - ./vendors/hillstone
   - ./vendors/paloalto
   - ./adapter/netconnector
+  - ./adapter/filestore
   - ./internal/bootstrap
   - ./internal/workflow
   - ./internal/cli
@@ -54,9 +55,13 @@ rules:
     packages: [./vendors/hillstone]
     deny: [./vendors/paloalto]
 
-  - name: the adapter is the only package that talks to devices
-    packages: [./adapter/netconnector]
+  - name: adapters depend only on the domain
+    packages: [./adapter/...]
     only_local: [.]
+
+  - name: only the netconnector adapter talks to devices
+    packages: [./adapter/filestore]
+    deny: [github.com/gatework/net-connector/connector, github.com/gatework/net-connector/vendors/...]
 
   - name: workflows do not reach the command line
     packages: [./internal/workflow, ./internal/bootstrap]

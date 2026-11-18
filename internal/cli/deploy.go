@@ -26,8 +26,8 @@ func newDeployCmd(o *options) *cobra.Command {
 			"retried, and the configuration is read back and checked before it is saved or committed.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if o.file != "" {
-				return &usageError{errors.New("deploy reads the device; do not set --config")}
+			if o.file != "" || o.snapshot != "" {
+				return &usageError{errors.New("deploy reads the device; do not set --config or --snapshot")}
 			}
 			intent, err := in.intent()
 			if err != nil {

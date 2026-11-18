@@ -78,3 +78,25 @@ func TestRun_QueryJSON(t *testing.T) {
 		t.Fatalf("paths %+v", res.Paths)
 	}
 }
+
+func TestRun_CollectThenQuerySnapshot(t *testing.T) {
+	t.Parallel()
+	store := t.TempDir() + "/snapshots"
+	code, out, errOut := run(t, "", "collect", "--vendor", "paloalto", "--config", paloaltoConf, "--store", store, "--name", "pa1")
+	if code != cli.ExitOK || !strings.Contains(out, "stored pa1") {
+		t.Fatalf("collect: %d\n%s%s", code, out, errOut)
+	}
+	code, out, errOut = run(t, "", "collect", "--list", "--store", store)
+	if code != cli.ExitOK || !strings.Contains(out, "pa1") {
+		t.Fatalf("list: %d\n%s%s", code, out, errOut)
+	}
+	code, out, errOut = run(t, "", "query", "--snapshot", "pa1", "--store", store,
+		"--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "udp/53")
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "trust -> untrust") {
+		t.Fatalf("query snapshot: %d\n%s%s", code, out, errOut)
+	}
+	code, _, _ = run(t, "", "deploy", "--snapshot", "pa1", "--store", store, "--src", "10.0.0.1", "--dst", "10.0.0.2", "--service", "tcp/22")
+	if code != cli.ExitUsage {
+		t.Fatalf("deploy from snapshot: %d", code)
+	}
+}

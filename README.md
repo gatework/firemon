@@ -12,9 +12,13 @@ go install github.com/gatework/firemon/cmd/firemon@latest
 
 ## Command line
 
-Every command reads the configuration from `--config FILE`, or from the device with `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output.
+Every command reads the configuration from `--config FILE`, from a stored snapshot with `--snapshot NAME` (directory `--store`), or from the device with `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output.
 
 ```sh
+# Store a device's configuration as a snapshot; later commands use --snapshot fw1
+firemon collect --vendor hillstone --host 10.0.0.1 --user ops --name fw1
+firemon collect --list
+
 # Objects, diagnostics and rules that cannot be evaluated offline
 firemon parse --vendor hillstone --config fw1.txt
 
@@ -49,6 +53,7 @@ Addresses accept `10.0.0.1`, `10.0.0.0/24`, `10.0.0.1-10.0.0.9` and `any`; servi
 | `deploy` | Fingerprint-checked, journaled deployment on go-netops `apply` |
 | `vendors/hillstone`, `vendors/paloalto` | Parsing and rendering per vendor |
 | `adapter/netconnector` | Device access through net-connector |
+| `adapter/filestore` | Snapshot directory: raw text, parsed configuration, fingerprint |
 
 See the package examples (`go doc github.com/gatework/firemon/query`) and the [ADRs](docs/adr) for the model and the semantics.
 

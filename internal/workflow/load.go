@@ -25,6 +25,18 @@ type Source struct {
 type Loaded struct {
 	Config   *firemon.Config
 	Firewall *firemon.Firewall
+	// Raw is the configuration text, empty for compiled snapshots.
+	Raw string
+}
+
+// FromConfig compiles an already parsed configuration, such as a stored
+// snapshot.
+func FromConfig(cfg *firemon.Config) (Loaded, error) {
+	fw, err := firemon.Compile(cfg)
+	if err != nil {
+		return Loaded{}, err
+	}
+	return Loaded{Config: cfg, Firewall: fw}, nil
 }
 
 // Load reads, parses and compiles the source.
@@ -49,9 +61,7 @@ func Load(ctx context.Context, src Source) (Loaded, error) {
 	if err != nil {
 		return Loaded{}, err
 	}
-	fw, err := firemon.Compile(cfg)
-	if err != nil {
-		return Loaded{}, err
-	}
-	return Loaded{Config: cfg, Firewall: fw}, nil
+	loaded, err := FromConfig(cfg)
+	loaded.Raw = text
+	return loaded, err
 }

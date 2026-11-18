@@ -69,6 +69,8 @@ type options struct {
 	deps     *Deps
 	vendor   string
 	file     string
+	snapshot string
+	store    string
 	timezone string
 	device   deviceFlags
 	json     bool
@@ -85,12 +87,14 @@ func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
 	f := root.PersistentFlags()
 	f.StringVar(&o.vendor, "vendor", "", "device vendor: hillstone or paloalto")
 	f.StringVar(&o.file, "config", "", "running configuration file (instead of reading the device)")
+	f.StringVar(&o.snapshot, "snapshot", "", "use the stored snapshot of this device (see collect)")
+	f.StringVar(&o.store, "store", defaultStore(), "snapshot directory")
 	f.StringVar(&o.timezone, "timezone", "Local", "device time zone for schedules (IANA name)")
 	f.BoolVar(&o.json, "json", false, "print JSON")
 	o.device.register(root)
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &usageError{err} })
 	root.SetContext(ctx)
-	root.AddCommand(newParseCmd(o), newQueryCmd(o), newUsageCmd(o), newDesignCmd(o), newDeployCmd(o), newAuditCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
+	root.AddCommand(newParseCmd(o), newQueryCmd(o), newUsageCmd(o), newDesignCmd(o), newDeployCmd(o), newAuditCmd(o), newCollectCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
 	return root
 }
 
@@ -107,8 +111,11 @@ func (o *options) platform() (bootstrap.Platform, error) {
 	return bootstrap.Lookup(v, loc)
 }
 
-// load reads the configuration from --config or from the device.
+// load reads the configuration from --config, --snapshot or the device.
 func (o *options) load(ctx context.Context) (workflow.Loaded, bootstrap.Platform, error) {
+	if o.snapshot != "" {
+		return o.loadSnapshot(ctx)
+	}
 	p, err := o.platform()
 	if err != nil {
 		return workflow.Loaded{}, p, err
