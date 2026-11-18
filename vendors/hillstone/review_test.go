@@ -18,7 +18,7 @@ func compileText(t *testing.T, text string) *firemon.Firewall {
 
 func TestHa_UnreadableOperandMakesRuleUndecidable(t *testing.T) {
 	t.Parallel()
-	fw := compileText(t, "rule id 1\n  action deny\n  src-country CN\n  service \"Any\"\nexit\nrule id 2\n  action permit\n  some-new-keyword x\nexit\n")
+	fw := compileText(t, "rule id 1\n  action deny\n  src-country CN\n  dst-addr \"Any\"\n  service \"Any\"\nexit\nrule id 2\n  action permit\n  src-addr \"Any\"\n  dst-addr \"Any\"\n  service \"Any\"\n  some-new-keyword x\nexit\n")
 	for _, id := range []string{"1", "2"} {
 		if r, _ := fw.Rule(id); r.Decidable() {
 			t.Errorf("rule %s with an unreadable line must not be decidable", id)
@@ -40,10 +40,13 @@ exit
 rule id 1
   action permit
   src-addr "bad-mask"
+  dst-addr "Any"
   service "with-timeout"
 exit
 rule id 2
   action permit
+  src-addr "Any"
+  dst-addr "Any"
   service "bad-svc"
 exit
 `)

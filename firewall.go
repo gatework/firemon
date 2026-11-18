@@ -128,6 +128,18 @@ func (fw *Firewall) NATRulesFor(side NATKind) []*NATRule {
 // StaticNATs returns the static NAT mappings in declaration order.
 func (fw *Firewall) StaticNATs() []*StaticMapping { return slices.Clone(fw.statics) }
 
+// Bridges reports whether an interface is bound to a layer-2 zone
+// (transparent mode): traffic through it is not located by routing. The
+// predefined layer-2 zones alone do not count.
+func (fw *Firewall) Bridges() bool {
+	for _, i := range fw.cfg.Interfaces {
+		if z, ok := fw.zones[i.Zone]; ok && z.Mode == ZoneModeLayer2 {
+			return true
+		}
+	}
+	return false
+}
+
 // Zone returns the zone with the given name.
 func (fw *Firewall) Zone(name string) (Zone, bool) {
 	z, ok := fw.zones[name]
@@ -195,6 +207,9 @@ func (fw *Firewall) compileObjects(res *resolver) {
 	fw.addresses = make(map[string]resolved[traffic.AddressSet], len(res.addresses)+len(res.addressGroups))
 	for _, a := range fw.cfg.Addresses {
 		fw.addresses[a.Name] = res.address(a.Name)
+		if onlyExclusions(a.Entries) {
+			fw.issue("address "+a.Name, "only exclusions: read as every address except them")
+		}
 	}
 	for _, g := range fw.cfg.AddressGroups {
 		if _, dup := res.addresses[g.Name]; dup {
@@ -225,10 +240,13 @@ func (fw *Firewall) compileRules(res *resolver) {
 		seen[spec.ID] = true
 		r := &Rule{position: i, spec: spec, loc: fw.loc}
 		var dstDomainIssues []string
-		r.match, r.bound, r.issues, r.dstDomains, dstDomainIssues = ruleSpace(res, spec)
+		var certain bool
+		r.match, r.bound, r.issues, r.dstDomains, dstDomainIssues, certain = ruleSpace(res, spec)
 		appIssues := appIssues(spec)
 		r.domainIssues, r.appIssues = len(dstDomainIssues), len(appIssues)
-		r.issues = slices.Concat(r.issues, dstDomainIssues, appIssues, fw.ruleSemanticIssues(spec))
+		semantic := fw.ruleSemanticIssues(spec)
+		r.issues = slices.Concat(r.issues, dstDomainIssues, appIssues, semantic)
+		r.certain = certain && len(appIssues) == 0 && len(semantic) == 0
 		for _, a := range spec.Applications {
 			r.apps = append(r.apps, strings.ToLower(a))
 		}
@@ -236,17 +254,22 @@ func (fw *Firewall) compileRules(res *resolver) {
 			r.schedule = schedules[spec.Schedule]
 			switch {
 			case r.schedule == nil:
-				r.issues = append(r.issues, "unknown schedule "+quote(spec.Schedule))
+				r.issues, r.certain = append(r.issues, "unknown schedule "+quote(spec.Schedule)), false
 			case r.schedule.Unsupported != "":
-				r.issues = append(r.issues, "unsupported schedule "+quote(spec.Schedule))
+				r.issues, r.certain = append(r.issues, "unsupported schedule "+quote(spec.Schedule)), false
 			}
 		}
 		for _, z := range slices.Concat(spec.From, spec.To) {
 			if _, ok := fw.zones[z]; !ok {
-				r.issues = append(r.issues, "unknown zone "+quote(z))
+				r.issues, r.certain = append(r.issues, "unknown zone "+quote(z)), false
 			}
 		}
 		r.issues = slices.Compact(r.issues)
+		if spec.Incomplete != "" {
+			// The device ignores the rule, so its match is exact: nothing.
+			r.issues = nil
+			fw.issue("rule "+spec.ID, "incomplete, never matches: "+spec.Incomplete)
+		}
 		for _, reason := range r.issues {
 			fw.issue("rule "+spec.ID, reason)
 		}
@@ -256,7 +279,7 @@ func (fw *Firewall) compileRules(res *resolver) {
 
 // ruleSpace resolves a rule's operands into its exact match space, an
 // upper bound of what it can match, and the reasons the match is inexact.
-func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, issues []string, dstDomains traffic.DomainSet, dstDomainIssues []string) {
+func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, issues []string, dstDomains traffic.DomainSet, dstDomainIssues []string, certain bool) {
 	src, dst := res.operands(spec.Source), res.operands(spec.Destination)
 	svc := res.serviceList(spec.Services)
 	if len(spec.ServiceEntries) > 0 {
@@ -285,11 +308,16 @@ func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, is
 		bound.Service = traffic.AnyService()
 	}
 	issues = slices.Concat(src.problems, src.domainProblems, dst.problems, svc.problems, svc.domainProblems, spec.Unsupported)
+	// match is certainly matched when every dimension only understates the
+	// true set and no other criterion narrows the rule. A negated inexact
+	// dimension turns an understatement into an overstatement.
+	certain = !src.overstated && !dst.overstated && !svc.overstated && len(spec.Unsupported) == 0 &&
+		!spec.ApplicationDefault && (!spec.NegateSource || src.exact()) && (!spec.NegateDestination || dst.exact())
 	if spec.NegateDestination && !dst.domains.IsEmpty() {
 		// A negated domain cannot be matched by name either.
-		return match, bound, append(issues, dst.domainProblems...), traffic.DomainSet{}, nil
+		return match, bound, append(issues, dst.domainProblems...), traffic.DomainSet{}, nil, certain
 	}
-	return match, bound, issues, dst.domains, dst.domainProblems
+	return match, bound, issues, dst.domains, dst.domainProblems, certain
 }
 
 // appIssues are the reasons application matching makes a rule inexact for

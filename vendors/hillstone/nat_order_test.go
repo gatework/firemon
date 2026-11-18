@@ -67,6 +67,7 @@ exit
 rule id 1
   action permit
   src-zone "inside"
+  src-addr "Any"
   dst-addr "Any"
   service "Any"
 exit

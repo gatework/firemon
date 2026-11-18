@@ -14,6 +14,7 @@ import (
 // English identifier.
 
 var statusText = map[report.Status]string{
+	report.StatusUnset:         "未经过任何防火墙",
 	report.StatusFullMatch:     "完全命中",
 	report.StatusPartialMatch:  "部分命中",
 	report.StatusNeedNew:       "需要新增",
@@ -32,6 +33,7 @@ var ownershipText = map[inventory.Ownership]string{
 	inventory.OwnershipDeclared: "受保护网段",
 	inventory.OwnershipDerived:  "路由推导",
 	inventory.OwnershipTransit:  "途经",
+	inventory.OwnershipZones:    "按指定区域",
 }
 
 var relationText = map[traffic.Relation]string{

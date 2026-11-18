@@ -114,7 +114,7 @@ func needsByPair(paths []query.Path) []pairNeed {
 // assess relates one rule to one zone pair's need.
 func assess(r *firemon.Rule, pn pairNeed) (Candidate, bool) {
 	spec := r.Spec()
-	if r.Action() != firemon.ActionPermit || spec.Disabled || !r.Applies(pn.from, pn.to) {
+	if r.Action() != firemon.ActionPermit || r.Ignored() || !r.Applies(pn.from, pn.to) {
 		return Candidate{}, false
 	}
 	need, scope, m := box(pn.need), box(pn.scope), r.Match()

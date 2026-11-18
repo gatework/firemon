@@ -65,7 +65,7 @@ func (s *state) ruleIn(b block, head *words, from, to []string) {
 	if head.next() != "id" {
 		return
 	}
-	r := firemon.SecurityRule{ID: head.next(), Action: firemon.ActionPermit}
+	r := firemon.SecurityRule{ID: head.next()}
 	header := false
 	for _, l := range b.body {
 		w := newWords(l.Text)
@@ -102,6 +102,9 @@ func (s *state) ruleIn(b block, head *words, from, to []string) {
 		r.To = to
 	}
 	r.From, r.To = anyZones(r.From), anyZones(r.To)
+	if r.Incomplete = incomplete(r); r.Incomplete != "" {
+		s.diagnose(b.head, "incomplete rule, ignored by the device: "+r.Incomplete)
+	}
 	s.ruleIndex[r.ID] = len(s.cfg.Rules)
 	s.cfg.Rules = append(s.cfg.Rules, r)
 }
@@ -216,4 +219,32 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// incomplete returns which required part a rule lacks. StoneOS only
+// enforces a rule that has an action, a source, a destination and a
+// service or application; the running configuration still lists rules
+// created without them.
+func incomplete(r firemon.SecurityRule) string {
+	var missing []string
+	if r.Action == firemon.ActionUnset && !slices.ContainsFunc(r.Unsupported, func(u string) bool { return strings.HasPrefix(u, "action ") }) {
+		missing = append(missing, "action")
+	}
+	// An operand the parser could not read is still present on the device.
+	unread := func(prefix string) bool {
+		return slices.ContainsFunc(r.Unsupported, func(u string) bool { return strings.HasPrefix(u, "unparsed "+prefix) })
+	}
+	if len(r.Source) == 0 && !unread("src-") {
+		missing = append(missing, "source")
+	}
+	if len(r.Destination) == 0 && !unread("dst-") {
+		missing = append(missing, "destination")
+	}
+	if len(r.Services) == 0 && len(r.ServiceEntries) == 0 && len(r.Applications) == 0 {
+		missing = append(missing, "service")
+	}
+	if len(missing) == 0 {
+		return ""
+	}
+	return "no " + strings.Join(missing, ", ")
 }

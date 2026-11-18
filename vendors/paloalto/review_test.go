@@ -63,3 +63,15 @@ set rulebase security rules r action allow
 		t.Fatal("an address with an invalid value cannot be exact")
 	}
 }
+
+func TestV2_InterfaceAddressIsTheHost(t *testing.T) {
+	t.Parallel()
+	cfg, _ := compileSet(t, `set rulebase nat rules out from inside to outside source any destination any service any
+set rulebase nat rules out source-translation dynamic-ip-and-port interface-address interface ethernet1/2
+set rulebase nat rules out source-translation dynamic-ip-and-port interface-address ip 103.24.178.130/28
+`)
+	got := cfg.DynamicNATs[0].TranslatedSource.Addresses
+	if len(got) != 1 || got[0].Entry.Prefix.String() != "103.24.178.130/32" {
+		t.Fatalf("interface address %+v", got)
+	}
+}

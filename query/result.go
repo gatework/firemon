@@ -139,7 +139,7 @@ type Path struct {
 	Application    string
 	// Conditions hold for this path to be taken, when policy routes that
 	// cannot be decided offline split the traffic.
-	Conditions []string
+	Conditions []Condition
 	// PolicyRoute names the policy route that chose the egress, if any.
 	PolicyRoute string
 	// NATUncertain names NAT rules that may apply to this path but cannot
@@ -176,6 +176,10 @@ type Result struct {
 	// Incomplete reports that the path or evaluation budget was exhausted;
 	// the verdict then covers only the evaluated part.
 	Incomplete bool
+	// ZonesNeeded reports that the firewall bridges traffic through
+	// layer-2 zones, which routing cannot locate: the request should name
+	// its zones.
+	ZonesNeeded bool
 }
 
 // verdictOf combines outcomes into a verdict.
@@ -192,4 +196,19 @@ func verdictOf(outcomes map[Outcome]bool) Verdict {
 	default:
 		return VerdictUnset
 	}
+}
+
+// Condition is an assumption a path depends on: that a policy route whose
+// criteria cannot be decided offline (user groups, unresolved domains)
+// matches, or does not.
+type Condition struct {
+	PolicyRoute string `json:"policy_route"`
+	Matches     bool   `json:"matches"`
+}
+
+func (c Condition) String() string {
+	if c.Matches {
+		return "policy route " + c.PolicyRoute + " matches"
+	}
+	return "policy route " + c.PolicyRoute + " does not match"
 }

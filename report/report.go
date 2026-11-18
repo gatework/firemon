@@ -59,7 +59,10 @@ type Report struct {
 	Notes     []intake.Note `json:"notes,omitempty"`
 	Excluded  Excluded      `json:"excluded"`
 	Ambiguous []string      `json:"ambiguous,omitempty"`
-	Firewalls []Firewall    `json:"firewalls"`
+	// ZonesNeeded lists firewalls with layer-2 zones the request did not
+	// name zones for.
+	ZonesNeeded []string   `json:"zones_needed,omitempty"`
+	Firewalls   []Firewall `json:"firewalls"`
 	// Status is the worst status over the firewalls.
 	Status Status `json:"status"`
 }
@@ -85,25 +88,30 @@ type Firewall struct {
 	UndecidedTraffic string `json:"undecided_traffic,omitempty"`
 	// Otherwise are the rules (or the default action) that decide the
 	// undecided traffic when the undecided rules do not match.
-	Otherwise  []Hit        `json:"otherwise,omitempty"`
-	Remaining  string       `json:"remaining,omitempty"`
-	Candidates []Candidate  `json:"candidates,omitempty"`
-	Plan       *design.Plan `json:"plan,omitempty"`
+	Otherwise []Hit  `json:"otherwise,omitempty"`
+	Remaining string `json:"remaining,omitempty"`
+	// Unrouted is the destination part the firewall has no route for.
+	Unrouted string `json:"unrouted,omitempty"`
+	// Incomplete reports a cut-short evaluation.
+	Incomplete  bool         `json:"incomplete,omitempty"`
+	ZonesNeeded bool         `json:"zones_needed,omitempty"`
+	Candidates  []Candidate  `json:"candidates,omitempty"`
+	Plan        *design.Plan `json:"plan,omitempty"`
 }
 
 // Path summarizes one path through a firewall.
 type Path struct {
-	From        string        `json:"from"`
-	To          string        `json:"to"`
-	Ingress     string        `json:"ingress,omitempty"`
-	Egress      string        `json:"egress,omitempty"`
-	Domain      string        `json:"domain,omitempty"`
-	Application string        `json:"application,omitempty"`
-	PolicyRoute string        `json:"policy_route,omitempty"`
-	Conditions  []string      `json:"conditions,omitempty"`
-	NAT         []NAT         `json:"nat,omitempty"`
-	NATSkipped  []string      `json:"nat_skipped,omitempty"`
-	Verdict     query.Verdict `json:"verdict"`
+	From        string            `json:"from"`
+	To          string            `json:"to"`
+	Ingress     string            `json:"ingress,omitempty"`
+	Egress      string            `json:"egress,omitempty"`
+	Domain      string            `json:"domain,omitempty"`
+	Application string            `json:"application,omitempty"`
+	PolicyRoute string            `json:"policy_route,omitempty"`
+	Conditions  []query.Condition `json:"conditions,omitempty"`
+	NAT         []NAT             `json:"nat,omitempty"`
+	NATSkipped  []string          `json:"nat_skipped,omitempty"`
+	Verdict     query.Verdict     `json:"verdict"`
 }
 
 // NAT is one translation applied on a path.
@@ -130,7 +138,7 @@ type Hit struct {
 // Build assembles the report. fws maps clusters to the evaluated firewall,
 // for candidate analysis; plans are optional.
 func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firewall, plans []inventory.ClusterPlan) Report {
-	r := Report{Notes: notes, Ambiguous: t.Ambiguous}
+	r := Report{Notes: notes, Ambiguous: t.Ambiguous, ZonesNeeded: t.ZonesNeeded}
 	if !t.Excluded.Src.IsEmpty() {
 		r.Excluded.Src = t.Excluded.Src.String()
 	}
@@ -160,7 +168,13 @@ func planFor(plans []inventory.ClusterPlan, cluster string) *design.Plan {
 
 // firewallReport classifies one crossing.
 func firewallReport(c inventory.Crossing) Firewall {
-	f := Firewall{Cluster: c.Cluster, Firewall: c.Firewall, Members: c.Members, Ownership: c.Ownership}
+	f := Firewall{
+		Cluster: c.Cluster, Firewall: c.Firewall, Members: c.Members, Ownership: c.Ownership,
+		Incomplete: c.Incomplete,
+	}
+	if !c.Unrouted.IsEmpty() {
+		f.Unrouted = c.Unrouted.String()
+	}
 	var permitted, blocked, deflt, unknown traffic.Region
 	var acc hitSets
 	for _, p := range c.Paths {
@@ -195,7 +209,7 @@ func firewallReport(c inventory.Crossing) Firewall {
 	if rest := blocked.Union(deflt); !rest.IsEmpty() {
 		f.Remaining = rest.String()
 	}
-	f.Status = classify(!permitted.IsEmpty(), !blocked.IsEmpty(), !deflt.IsEmpty(), !unknown.IsEmpty())
+	f.Status = classify(!permitted.IsEmpty(), !blocked.IsEmpty(), !deflt.IsEmpty() || f.Unrouted != "", !unknown.IsEmpty() || c.Incomplete)
 	return f
 }
 

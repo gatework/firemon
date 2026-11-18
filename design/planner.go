@@ -313,7 +313,7 @@ func (p *Planner) extensions(n need, target traffic.Space, cat *catalog) []exten
 // r's match is exact and unconditional.
 func extendable(r *firemon.Rule, from, to string) bool {
 	s := r.Spec()
-	return r.Action() == firemon.ActionPermit && r.Decidable() && !r.Scheduled() && !s.Disabled &&
+	return r.Action() == firemon.ActionPermit && r.Decidable() && !r.Scheduled() && !r.Ignored() &&
 		slices.Equal(s.From, []string{from}) && slices.Equal(s.To, []string{to}) &&
 		!s.NegateSource && !s.NegateDestination && len(s.ServiceEntries) == 0 && len(s.Applications) == 0
 }

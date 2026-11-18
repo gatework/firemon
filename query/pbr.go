@@ -14,7 +14,7 @@ type routed struct {
 	piece      natPiece
 	out        *hop
 	policy     string // policy route that chose out
-	conditions []string
+	conditions []Condition
 }
 
 // policyRoute applies the policy routes bound to the ingress zone or
@@ -41,7 +41,39 @@ func (e *Engine) policyRoute(pc natPiece, in hop, domain string) []routed {
 		}
 		work = next
 	}
-	return append(done, work...)
+	return fold(append(done, work...))
+}
+
+// fold removes conditions that do not matter: where both branches of an
+// undecidable entry reach the same egress, the traffic takes it whether or
+// not the entry matches.
+func fold(parts []routed) []routed {
+	for i := range parts {
+		a := parts[i]
+		n := len(a.conditions)
+		if a.out == nil || n == 0 || !a.conditions[n-1].Matches {
+			continue
+		}
+		for j := range parts {
+			b := parts[j]
+			if j == i || b.out == nil || b.out.iface != a.out.iface || b.out.zone != a.out.zone || len(b.conditions) != n ||
+				!slices.Equal(b.conditions[:n-1], a.conditions[:n-1]) || b.conditions[n-1] != (Condition{PolicyRoute: a.conditions[n-1].PolicyRoute}) {
+				continue
+			}
+			both := a.piece.translated.Intersect(b.piece.translated)
+			if both.IsEmpty() {
+				continue
+			}
+			merged := b.restrict(both)
+			merged.conditions = slices.Clip(a.conditions[:n-1])
+			var rest []routed
+			rest = append(rest, a.restrictAll(a.piece.translated.Subtract(both))...)
+			rest = append(rest, b.restrictAll(b.piece.translated.Subtract(both))...)
+			out := slices.Concat(parts[:min(i, j)], parts[min(i, j)+1:max(i, j)], parts[max(i, j)+1:], []routed{merged}, rest)
+			return fold(out)
+		}
+	}
+	return parts
 }
 
 // applyPolicyRoute splits one undecided part by one entry.
@@ -64,9 +96,9 @@ func (e *Engine) applyPolicyRoute(r *firemon.PBRRule, w routed, domain string) (
 			return nil, []routed{w}
 		}
 		yes := w.restrict(maybe)
-		yes.out, yes.policy, yes.conditions = out, id, append(clip(w.conditions), "policy route "+id+" matches")
+		yes.out, yes.policy, yes.conditions = out, id, append(slices.Clip(w.conditions), Condition{PolicyRoute: id, Matches: true})
 		no := w.restrict(maybe)
-		no.conditions = append(clip(w.conditions), "policy route "+id+" does not match")
+		no.conditions = append(slices.Clip(w.conditions), Condition{PolicyRoute: id})
 		return []routed{yes}, append([]routed{no}, w.restrictAll(s.Subtract(bound))...)
 	}
 	hit := s.Intersect(match)
@@ -77,8 +109,6 @@ func (e *Engine) applyPolicyRoute(r *firemon.PBRRule, w routed, domain string) (
 	t.out, t.policy = out, id
 	return []routed{t}, w.restrictAll(s.Subtract(match))
 }
-
-func clip(s []string) []string { return slices.Clip(s) }
 
 // restrict narrows a routed part to space s of its translated traffic.
 func (w routed) restrict(s traffic.Space) routed {

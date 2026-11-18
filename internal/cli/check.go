@@ -20,6 +20,7 @@ import (
 // operator pastes, read by intake.
 type checkFlags struct {
 	src, dst, service       string
+	fromZone, toZone        string
 	name, description       string
 	override, plan, resolve bool
 }
@@ -42,6 +43,8 @@ func newCheckCmd(o *options) *cobra.Command {
 	fl.StringVar(&f.src, "src", "", "源地址：IP、网段、范围、IP+掩码，任意分隔")
 	fl.StringVar(&f.dst, "dst", "", "目的地址：同上，也可以是域名")
 	fl.StringVar(&f.service, "service", "", "服务：443、tcp 80、80/udp、https、ping、app:ssh …")
+	fl.StringVar(&f.fromZone, "from-zone", "", "源区域（透明模式或无法按路由定位时指定）")
+	fl.StringVar(&f.toZone, "to-zone", "", "目的区域")
 	fl.StringVar(&f.name, "name", "", "新建策略名称，例如工单号")
 	fl.StringVar(&f.description, "description", "", "新建策略描述")
 	fl.BoolVar(&f.override, "override", false, "允许新策略放在具体拒绝策略之前")
@@ -60,7 +63,10 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 		printNotes(&printer{w: cmd.OutOrStdout()}, in.Notes)
 		return &usageError{err}
 	}
-	req := query.Request{Src: in.Src, Dst: in.Dst, DstDomains: in.DstDomains, Service: in.Service, Applications: in.Applications}
+	req := query.Request{
+		Src: in.Src, Dst: in.Dst, DstDomains: in.DstDomains, Service: in.Service, Applications: in.Applications,
+		FromZone: f.fromZone, ToZone: f.toZone,
+	}
 	if f.resolve && len(in.DstDomains) > 0 {
 		req.Resolved = dns.Resolver{}.Resolve(cmd.Context(), in.DstDomains)
 	}
@@ -70,7 +76,10 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	}
 	var plans []inventory.ClusterPlan
 	if f.plan && !in.Dst.IsEmpty() {
-		intent := design.Intent{Src: in.Src, Dst: in.Dst, Service: in.Service, Name: f.name, Description: f.description, Override: f.override}
+		intent := design.Intent{
+			Src: in.Src, Dst: in.Dst, Service: in.Service, FromZone: f.fromZone, ToZone: f.toZone,
+			Name: f.name, Description: f.description, Override: f.override,
+		}
 		if plans, err = inv.Plan(intent); err != nil {
 			return err
 		}
@@ -147,6 +156,9 @@ func printReport(cmd *cobra.Command, rep report.Report, plans []inventory.Cluste
 	if rep.Excluded.Src != "" || rep.Excluded.Dst != "" {
 		p.f("\n未经过任何防火墙（已剔除）：源 %s  目的 %s\n", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst))
 	}
+	for _, name := range rep.ZonesNeeded {
+		p.f("提示：%s 有透明模式（二层）接口，经二层转发的流量无法按路由定位，请用 --from-zone/--to-zone 指定区域\n", name)
+	}
 	for _, a := range rep.Ambiguous {
 		p.f("归属不唯一（多个防火墙同等声明，均已检查）：%s\n", a)
 	}
@@ -191,6 +203,13 @@ func printFirewall(p *printer, f report.Firewall) {
 	if f.Remaining != "" {
 		p.f("  未放通部分：%s\n", f.Remaining)
 	}
+	if f.Unrouted != "" {
+		p.f("  无路由（被丢弃）的目的：%s\n", f.Unrouted)
+	}
+	if f.Incomplete {
+		p.f("  评估超出预算被截断，结论仅覆盖已评估部分，按无法判定处理\n")
+	}
+
 	for _, c := range f.Candidates {
 		mark := "候选"
 		if c.Recommended {
@@ -258,16 +277,11 @@ func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, pla
 }
 
 // conditionText renders a path condition.
-func conditionText(c string) string {
-	if rest, ok := strings.CutPrefix(c, "policy route "); ok {
-		if id, matched := strings.CutSuffix(rest, " matches"); matched {
-			return "策略路由 " + id + " 命中（含无法离线判定的条件，如用户组）"
-		}
-		if id, missed := strings.CutSuffix(rest, " does not match"); missed {
-			return "策略路由 " + id + " 不命中"
-		}
+func conditionText(c query.Condition) string {
+	if c.Matches {
+		return "策略路由 " + c.PolicyRoute + " 命中（含无法离线判定的条件，如用户组）"
 	}
-	return c
+	return "策略路由 " + c.PolicyRoute + " 不命中"
 }
 
 func zoneIface(zone, iface string) string {

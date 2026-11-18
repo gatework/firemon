@@ -1,6 +1,7 @@
 package firemon
 
 import (
+	"net/netip"
 	"slices"
 
 	"github.com/gatework/firemon/traffic"
@@ -18,9 +19,21 @@ type resolved[T any] struct {
 	// problem in domainProblems, since IP-based evaluation cannot use it.
 	domains        traffic.DomainSet
 	domainProblems []string
+	// overstated is set when set may contain values the true set lacks: an
+	// exclusion or a membership could not be resolved. Otherwise set is
+	// always part of the true set, the problems only hiding more of it.
+	overstated bool
 }
 
 func (r resolved[T]) exact() bool { return len(r.problems) == 0 && len(r.domainProblems) == 0 }
+
+// absorb adds a part to an OR-list: the list overstates when any part does.
+func (r *resolved[T]) absorb(problems, domainProblems []string, domains traffic.DomainSet, overstated bool) {
+	r.problems = append(r.problems, problems...)
+	r.domains = r.domains.Union(domains)
+	r.domainProblems = append(r.domainProblems, domainProblems...)
+	r.overstated = r.overstated || overstated
+}
 
 // allProblems returns every reason the set is inexact, domains included.
 func (r resolved[T]) allProblems() []string {
@@ -72,7 +85,7 @@ func (r *resolver) address(name string) resolved[traffic.AddressSet] {
 	}
 	key := "address:" + name
 	if r.visiting[key] {
-		return resolved[traffic.AddressSet]{problems: []string{"address membership cycle through " + quote(name)}}
+		return resolved[traffic.AddressSet]{problems: []string{"address membership cycle through " + quote(name)}, overstated: true}
 	}
 	r.visiting[key] = true
 	defer delete(r.visiting, key)
@@ -80,7 +93,7 @@ func (r *resolver) address(name string) resolved[traffic.AddressSet] {
 	var res resolved[traffic.AddressSet]
 	switch {
 	case r.addresses[name] != nil:
-		res = entriesSet(r.addresses[name].Entries, name)
+		res = entriesSet(withAny(r.addresses[name].Entries), name)
 		for _, bad := range r.addresses[name].Invalid {
 			res.problems = append(res.problems, "invalid entry "+quote(bad)+" in "+quote(name))
 		}
@@ -94,7 +107,11 @@ func (r *resolver) address(name string) resolved[traffic.AddressSet] {
 }
 
 func (r *resolver) group(g *AddressGroup) resolved[traffic.AddressSet] {
-	res := entriesSet(g.Entries, g.Name)
+	entries := g.Entries
+	if len(g.Members) == 0 && g.Filter == "" {
+		entries = withAny(entries)
+	}
+	res := entriesSet(entries, g.Name)
 	if g.Filter != "" {
 		res.problems = append(res.problems, "dynamic address group "+quote(g.Name))
 	}
@@ -104,9 +121,7 @@ func (r *resolver) group(g *AddressGroup) resolved[traffic.AddressSet] {
 	for _, m := range g.Members {
 		member := r.address(m)
 		res.set = res.set.Union(member.set)
-		res.problems = append(res.problems, member.problems...)
-		res.domains = res.domains.Union(member.domains)
-		res.domainProblems = append(res.domainProblems, member.domainProblems...)
+		res.absorb(member.problems, member.domainProblems, member.domains, member.overstated)
 	}
 	// Excluded entries apply after members are merged.
 	for _, e := range g.Entries {
@@ -131,9 +146,7 @@ func (r *resolver) operands(refs []AddressRef) resolved[traffic.AddressSet] {
 			part = r.address(ref.Name)
 		}
 		res.set = res.set.Union(part.set)
-		res.problems = append(res.problems, part.problems...)
-		res.domains = res.domains.Union(part.domains)
-		res.domainProblems = append(res.domainProblems, part.domainProblems...)
+		res.absorb(part.problems, part.domainProblems, part.domains, part.overstated)
 	}
 	return res
 }
@@ -145,7 +158,7 @@ func (r *resolver) service(name string) resolved[traffic.ServiceSet] {
 	}
 	key := "service:" + name
 	if r.visiting[key] {
-		return resolved[traffic.ServiceSet]{problems: []string{"service membership cycle through " + quote(name)}}
+		return resolved[traffic.ServiceSet]{problems: []string{"service membership cycle through " + quote(name)}, overstated: true}
 	}
 	r.visiting[key] = true
 	defer delete(r.visiting, key)
@@ -163,7 +176,7 @@ func (r *resolver) service(name string) resolved[traffic.ServiceSet] {
 		for _, m := range r.serviceGroups[name].Members {
 			member := r.service(m)
 			res.set = res.set.Union(member.set)
-			res.problems = append(res.problems, member.problems...)
+			res.absorb(member.problems, nil, traffic.DomainSet{}, member.overstated)
 		}
 	default:
 		res.problems = []string{"unknown service " + quote(name)}
@@ -181,7 +194,7 @@ func (r *resolver) serviceList(names []string) resolved[traffic.ServiceSet] {
 	for _, n := range names {
 		part := r.service(n)
 		res.set = res.set.Union(part.set)
-		res.problems = append(res.problems, part.problems...)
+		res.absorb(part.problems, nil, traffic.DomainSet{}, part.overstated)
 	}
 	return res
 }
@@ -204,6 +217,7 @@ func entriesSet(entries []AddressEntry, owner string) resolved[traffic.AddressSe
 				continue
 			}
 			res.problems = append(res.problems, reason)
+			res.overstated = res.overstated || e.Exclude // an unknown exclusion may remove more
 			continue
 		}
 		if e.Exclude {
@@ -217,3 +231,22 @@ func entriesSet(entries []AddressEntry, owner string) resolved[traffic.AddressSe
 }
 
 func quote(s string) string { return "\"" + s + "\"" }
+
+var (
+	anyIPv4 = netip.PrefixFrom(netip.IPv4Unspecified(), 0)
+	anyIPv6 = netip.PrefixFrom(netip.IPv6Unspecified(), 0)
+)
+
+// onlyExclusions reports whether entries exclude addresses but include none.
+func onlyExclusions(entries []AddressEntry) bool {
+	return len(entries) > 0 && !slices.ContainsFunc(entries, func(e AddressEntry) bool { return !e.Exclude })
+}
+
+// withAny reads entries that are all exclusions as every address except
+// them, as StoneOS objects with only exclude lines are written.
+func withAny(entries []AddressEntry) []AddressEntry {
+	if !onlyExclusions(entries) {
+		return entries
+	}
+	return append([]AddressEntry{{Kind: AddressKindPrefix, Prefix: anyIPv4}, {Kind: AddressKindPrefix, Prefix: anyIPv6}}, entries...)
+}

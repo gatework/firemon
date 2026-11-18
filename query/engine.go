@@ -18,6 +18,7 @@ type Engine struct {
 	max       int
 	maxPaths  int
 	schedules ScheduleMode
+	bridges   bool // some zone forwards at layer 2
 }
 
 // New returns an engine for fw.
@@ -29,7 +30,7 @@ func New(fw *firemon.Firewall, opts Options) *Engine {
 	return &Engine{
 		fw: fw, rules: fw.Rules(), now: now,
 		max: cmp.Or(opts.MaxSpaces, DefaultMaxSpaces), maxPaths: cmp.Or(opts.MaxPaths, DefaultMaxPaths),
-		schedules: opts.Schedules,
+		schedules: opts.Schedules, bridges: fw.Bridges(),
 	}
 }
 
@@ -52,7 +53,7 @@ func (e *Engine) Query(req Request) (*Result, error) {
 	if !ok && (req.FromZone == "" || req.ToZone == "") {
 		return nil, fmt.Errorf("query: unknown virtual router %q", vr)
 	}
-	res := &Result{Request: req}
+	res := &Result{Request: req, ZonesNeeded: (req.FromZone == "" || req.ToZone == "") && e.bridges}
 	res.Paths, res.Unrouted, res.Incomplete = e.discoverTargets(req, table)
 	outcomes := map[Outcome]bool{}
 	if res.Incomplete {

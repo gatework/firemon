@@ -139,7 +139,7 @@ func TestParse_GoldenRoundTrip(t *testing.T) {
 
 func TestParse_ServiceBookOverride(t *testing.T) {
 	t.Parallel()
-	text := "rule id 1\n  action permit\n  service \"HTTP-EXT\"\n  service \"HTTP\"\nexit\n"
+	text := "rule id 1\n  action permit\n  src-addr \"Any\"\n  dst-addr \"Any\"\n  service \"HTTP-EXT\"\n  service \"HTTP\"\nexit\n"
 	fw, err := firemon.Compile(mustParse(t, hillstone.Options{}, text))
 	if err != nil {
 		t.Fatal(err)

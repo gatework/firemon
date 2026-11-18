@@ -21,6 +21,10 @@ const (
 	// OwnershipTransit marks a firewall the traffic reaches through route
 	// next hops without owning either end.
 	OwnershipTransit
+	// OwnershipZones marks the only firewall of an inventory evaluated for
+	// traffic it does not route, because the request names both zones (a
+	// transparent firewall bridges it).
+	OwnershipZones
 )
 
 // String returns the ownership name.
@@ -34,6 +38,8 @@ func (o Ownership) String() string {
 		return "derived"
 	case OwnershipTransit:
 		return "transit"
+	case OwnershipZones:
+		return "zones"
 	default:
 		return "invalid"
 	}

@@ -50,7 +50,14 @@ func (e *Engine) evaluate(p *Path, at time.Time) {
 		switch applies := zoneApplicability(r, p.From, p.To); {
 		case applies == appliesNo:
 			continue
-		case applies == appliesMaybe || !v.decidable:
+		case applies == appliesMaybe:
+			ev.taint(r, v.bound)
+		case !v.decidable:
+			// First match: what the rule certainly matches is decided here,
+			// the rest of its bound only possibly.
+			if !v.certain.IsEmpty() {
+				ev.decide(r, v.certain, outcomeOf(r.Action()))
+			}
 			ev.taint(r, v.bound)
 		default:
 			ev.decide(r, v.match, outcomeOf(r.Action()))
@@ -165,9 +172,9 @@ func (ev *evaluator) overBudget() bool { return len(ev.pieces) > ev.max }
 func (e *Engine) inactive(r *firemon.Rule, at time.Time) bool {
 	switch e.schedules {
 	case ScheduleAlwaysActive:
-		return r.Spec().Disabled || r.ExpiredAt(at)
+		return r.Ignored() || r.ExpiredAt(at)
 	case ScheduleNeverActive:
-		return r.Spec().Disabled || r.Scheduled()
+		return r.Ignored() || r.Scheduled()
 	case ScheduleAt:
 		return r.InactiveAt(at)
 	default:

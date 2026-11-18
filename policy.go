@@ -27,8 +27,11 @@ type Rule struct {
 	// only application matching cause; a target that carries a domain or an
 	// application decides those dimensions itself.
 	domainIssues, appIssues int
-	schedule                *Schedule
-	loc                     *time.Location
+	// certain is set when Match is certainly matched even though the rule
+	// is undecidable: its unresolved parts can only add to the match.
+	certain  bool
+	schedule *Schedule
+	loc      *time.Location
 }
 
 // Position returns the zero-based evaluation order of the rule.
@@ -59,6 +62,17 @@ func (r *Rule) Issues() []string { return slices.Clone(r.issues) }
 
 // Decidable reports whether the match space is exact.
 func (r *Rule) Decidable() bool { return len(r.issues) == 0 }
+
+// Certain returns the space the rule certainly matches: Match when the
+// rule is decidable, or when every unresolved part (an unknown service in
+// a list, a domain among addresses) can only add to it. An undecidable
+// rule matches Certain for sure and Bound possibly.
+func (r *Rule) Certain() (traffic.Space, bool) {
+	if r.Decidable() || r.certain {
+		return r.match, true
+	}
+	return traffic.Space{}, false
+}
 
 // DecidableFor reports whether the rule is exact for a target that names
 // its destination domain (domains) or its application (apps): those
@@ -95,10 +109,14 @@ func (r *Rule) Applies(from, to string) bool {
 	return zoneMatches(r.spec.From, from) && zoneMatches(r.spec.To, to) && r.spec.Scope.Allows(from, to)
 }
 
+// Ignored reports whether the rule never matches regardless of time: it is
+// disabled, or incomplete.
+func (r *Rule) Ignored() bool { return r.spec.Disabled || r.spec.Incomplete != "" }
+
 // ActiveAt reports whether the rule is enabled and its schedule and window
 // allow instant t.
 func (r *Rule) ActiveAt(t time.Time) bool {
-	if r.spec.Disabled {
+	if r.Ignored() {
 		return false
 	}
 	local := t.In(r.loc)
@@ -112,7 +130,7 @@ func (r *Rule) ActiveAt(t time.Time) bool {
 // it is disabled, outside its validity window, or outside a schedule the
 // compiler could model. Unlike !ActiveAt it is safe for undecidable rules.
 func (r *Rule) InactiveAt(t time.Time) bool {
-	if r.spec.Disabled {
+	if r.Ignored() {
 		return true
 	}
 	local := t.In(r.loc)

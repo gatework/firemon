@@ -102,7 +102,7 @@ func (e *Engine) translate(base traffic.Space, in hop, table *firemon.RoutingTab
 // uncertain, and the rest stays undecided.
 func (e *Engine) matchEntry(en natEntry, pc natPiece, in hop, table *firemon.RoutingTable, req Request) []natPiece {
 	if en.rule != nil && en.rule.Spec().Disabled && en.rule.AppliesFromIgnoringState(in.zone) && pc.original.Overlaps(en.rule.Match()) {
-		pc.skipped = append(clip(pc.skipped), "nat "+en.rule.Spec().ID)
+		pc.skipped = append(slices.Clip(pc.skipped), "nat "+en.rule.Spec().ID)
 	}
 	hit, maybe, miss := e.classify(en, pc.original, in, table, req)
 	var out []natPiece

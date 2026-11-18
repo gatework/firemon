@@ -117,8 +117,11 @@ func tag(paths []Path, domain string, resolved bool, app string) []Path {
 // view is how one rule matches one path's target.
 type view struct {
 	match, bound traffic.Space
-	decidable    bool
-	skip         bool // the rule certainly does not match this target
+	// certain is matched for sure when the rule is not decidable; empty
+	// when nothing is.
+	certain   traffic.Space
+	decidable bool
+	skip      bool // the rule certainly does not match this target
 }
 
 // ruleView adapts a rule to the target of path p: an application target
@@ -127,6 +130,7 @@ type view struct {
 // domain patterns by name and its addresses through the resolution.
 func (e *Engine) ruleView(r *firemon.Rule, p *Path) view {
 	v := view{match: r.Match(), bound: r.Bound(), decidable: r.DecidableFor(p.Domain != "", p.Application != "")}
+	v.certain, _ = r.Certain()
 	if p.Application != "" {
 		if !r.MatchesApplication(p.Application) {
 			return view{skip: true}
@@ -145,6 +149,9 @@ func (e *Engine) ruleView(r *firemon.Rule, p *Path) view {
 	switch {
 	case r.DstDomains().Match(p.Domain):
 		v.match.Dst, v.bound.Dst = traffic.AnyAddress(), traffic.AnyAddress()
+		if !v.certain.IsEmpty() {
+			v.certain.Dst = traffic.AnyAddress()
+		}
 	case p.DomainResolved:
 		// The rule's addresses decide; its other domain patterns do not
 		// cover this name.
@@ -157,7 +164,7 @@ func (e *Engine) ruleView(r *firemon.Rule, p *Path) view {
 		return view{skip: true}
 	default:
 		// Addresses only: the unresolved name may or may not be one of them.
-		v.bound.Dst, v.decidable = traffic.AnyAddress(), false
+		v.bound.Dst, v.decidable, v.certain = traffic.AnyAddress(), false, traffic.Space{}
 	}
 	return v
 }

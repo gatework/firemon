@@ -30,7 +30,14 @@ type Crossing struct {
 	Parts     []Part
 	Paths     []query.Path
 	Src, Dst  traffic.AddressSet
-	Verdict   query.Verdict
+	// Unrouted is the destination part the firewall has no route for.
+	Unrouted traffic.AddressSet
+	// Incomplete reports that a budget cut the evaluation short: the
+	// verdict covers only part of the traffic and is indeterminate.
+	Incomplete bool
+	// ZonesNeeded reports layer-2 zones that routing cannot locate.
+	ZonesNeeded bool
+	Verdict     query.Verdict
 }
 
 // Excluded is the traffic no firewall of the inventory owns on either end.
@@ -45,6 +52,9 @@ type Trace struct {
 	// Ambiguous lists address ranges several clusters claim equally; all of
 	// them are evaluated.
 	Ambiguous []string
+	// ZonesNeeded lists clusters with layer-2 zones that the request did
+	// not name zones for: traffic bridged through them is not located.
+	ZonesNeeded []string
 	// Verdict is allowed only when every crossing allows its part.
 	Verdict query.Verdict
 }
@@ -67,7 +77,10 @@ func (inv *Inventory) Locate(req query.Request) (Trace, error) {
 		if err != nil {
 			return Trace{}, err
 		}
-		if len(c.Paths) == 0 {
+		if c.ZonesNeeded && !slices.Contains(t.ZonesNeeded, cluster) {
+			t.ZonesNeeded = append(t.ZonesNeeded, cluster)
+		}
+		if len(c.Paths) == 0 && !c.Incomplete {
 			continue
 		}
 		outcomes[c.Verdict] = true
@@ -114,7 +127,14 @@ func (inv *Inventory) assign(req query.Request, t *Trace) (map[string]*assignmen
 				p.DstDomains = req.DstDomains
 			}
 			if sp.cluster == "" && dp.cluster == "" {
+				if only := inv.Clusters(); len(only) == 1 && req.FromZone != "" && req.ToZone != "" {
+					zp := p
+					zp.FromZone, zp.ToZone = req.FromZone, req.ToZone
+					add(only[0], OwnershipZones, zp)
+					continue
+				}
 				t.Excluded.Src, t.Excluded.Dst = t.Excluded.Src.Union(sp.set), t.Excluded.Dst.Union(dp.set)
+				inv.bridgesMayCarry(t)
 				continue
 			}
 			inv.assignPair(sp, dp, p, add)
@@ -200,19 +220,35 @@ func (inv *Inventory) evaluate(cluster string, a *assignment, req query.Request)
 	c := Crossing{Cluster: cluster, Firewall: m.name, Members: inv.clusterMembers(cluster), Ownership: a.ownership, Parts: a.parts}
 	for _, p := range a.parts {
 		r := req
-		r.Src, r.Dst, r.DstDomains, r.FromZone, r.ToZone = p.Src, p.Dst, p.DstDomains, p.FromZone, p.ToZone
+		r.Src, r.Dst, r.DstDomains = p.Src, p.Dst, p.DstDomains
+		r.FromZone, r.ToZone = cmp.Or(p.FromZone, req.FromZone), cmp.Or(p.ToZone, req.ToZone)
 		res, err := m.engine.Query(r)
 		if err != nil {
 			return Crossing{}, fmt.Errorf("inventory: %s: %w", m.name, err)
 		}
+		c.Incomplete = c.Incomplete || res.Incomplete
+		c.ZonesNeeded = c.ZonesNeeded || res.ZonesNeeded
+		var crossing bool
 		for _, path := range res.Paths {
 			if crossesFirewall(path, p) {
+				crossing = true
 				c.Paths = append(c.Paths, path)
 				c.Src, c.Dst = c.Src.Union(path.Original.Src), c.Dst.Union(path.Original.Dst)
 			}
 		}
+		if crossing {
+			c.Unrouted = c.Unrouted.Union(res.Unrouted)
+		}
 	}
 	c.Verdict = combine(c.Paths)
+	switch {
+	case c.Incomplete:
+		c.Verdict = query.VerdictIndeterminate
+	case !c.Unrouted.IsEmpty() && c.Verdict == query.VerdictAllowed:
+		c.Verdict = query.VerdictPartial // the unrouted part is dropped
+	case !c.Unrouted.IsEmpty() && c.Verdict == query.VerdictUnset:
+		c.Verdict = query.VerdictDenied
+	}
 	return c, nil
 }
 
@@ -229,7 +265,10 @@ func crossesFirewall(p query.Path, part Part) bool {
 // Plan designs, per crossed cluster and part, the change that permits the
 // part of intent crossing it.
 func (inv *Inventory) Plan(intent design.Intent) ([]ClusterPlan, error) {
-	t, err := inv.Locate(query.Request{Src: intent.Src, Dst: intent.Dst, Service: intent.Service, VirtualRouter: intent.VirtualRouter})
+	t, err := inv.Locate(query.Request{
+		Src: intent.Src, Dst: intent.Dst, Service: intent.Service, VirtualRouter: intent.VirtualRouter,
+		FromZone: intent.FromZone, ToZone: intent.ToZone,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +277,8 @@ func (inv *Inventory) Plan(intent design.Intent) ([]ClusterPlan, error) {
 		m := inv.primary(c.Cluster)
 		for _, p := range c.Parts {
 			part := intent
-			part.Src, part.Dst, part.FromZone, part.ToZone = p.Src, p.Dst, p.FromZone, p.ToZone
+			part.Src, part.Dst = p.Src, p.Dst
+			part.FromZone, part.ToZone = cmp.Or(p.FromZone, intent.FromZone), cmp.Or(p.ToZone, intent.ToZone)
 			plan, err := m.planner.Plan(part)
 			if err != nil {
 				return nil, fmt.Errorf("inventory: %s: %w", c.Cluster, err)
@@ -287,4 +327,14 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	slices.SortFunc(keys, cmp.Compare)
 	return keys
+}
+
+// bridgesMayCarry notes the clusters with layer-2 interfaces: excluded
+// traffic may still cross them, bridged rather than routed.
+func (inv *Inventory) bridgesMayCarry(t *Trace) {
+	for _, m := range inv.members {
+		if m.fw.Bridges() && !slices.Contains(t.ZonesNeeded, m.cluster) {
+			t.ZonesNeeded = append(t.ZonesNeeded, m.cluster)
+		}
+	}
 }

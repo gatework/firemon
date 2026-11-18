@@ -127,6 +127,10 @@ type SecurityRule struct {
 	// Unsupported lists match criteria the parser recognized but cannot
 	// evaluate, such as users, URL categories or HIP profiles.
 	Unsupported []string `json:"unsupported,omitempty"`
+	// Incomplete is why the device ignores the rule, when a required part
+	// such as the action, an address or the service is missing. An
+	// incomplete rule never matches.
+	Incomplete string `json:"incomplete,omitempty"`
 }
 
 // ActiveAt reports whether the rule's inline window allows t.
