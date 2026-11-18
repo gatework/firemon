@@ -35,6 +35,22 @@ func New(vendor firemon.Vendor, conn connector.ConnectionConfig, parse ParseFunc
 	return &Client{vendor: vendor, conn: conn, parse: parse}, nil
 }
 
+// Show runs one read-only command and returns its output. It is meant for
+// display commands such as rule hit counters; it never enters
+// configuration mode.
+func (c *Client) Show(ctx context.Context, command string) (string, error) {
+	var out string
+	err := c.with(ctx, func(ctx context.Context, op *connector.Operation) error {
+		res, err := op.ExecuteCommand(ctx, connector.Command{Text: command, Source: "firemon"}, connector.ExecuteOptions{})
+		if err != nil {
+			return err
+		}
+		out, err = res.JoinedOutput()
+		return err
+	})
+	return out, err
+}
+
 // RunningConfig returns the device's running configuration text.
 func (c *Client) RunningConfig(ctx context.Context) (string, error) {
 	var text string

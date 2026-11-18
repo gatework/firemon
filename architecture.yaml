@@ -8,6 +8,7 @@ declared:
   - ./design
   - ./deploy
   - ./audit
+  - ./hits
   - ./inventory
   - ./intake
   - ./report
@@ -24,7 +25,7 @@ declared:
 
 rules:
   - name: domain packages stay free of I/O
-    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./inventory, ./intake, ./report, ./vendors/...]
+    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./hits, ./inventory, ./intake, ./report, ./vendors/...]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
 
@@ -52,6 +53,10 @@ rules:
     packages: [./audit]
     only_local: [., ./traffic]
 
+  - name: hit counters are domain evidence
+    packages: [./hits]
+    only_local: [.]
+
   - name: inventory spans firewalls through query and design
     packages: [./inventory]
     only_local: [., ./traffic, ./query, ./design]
@@ -66,7 +71,7 @@ rules:
 
   - name: vendors own device syntax and depend only on the domain
     packages: [./vendors/...]
-    only_local: [., ./traffic, ./design]
+    only_local: [., ./traffic, ./design, ./hits]
 
   - name: vendors do not depend on each other
     packages: [./vendors/hillstone]
@@ -74,7 +79,7 @@ rules:
 
   - name: adapters depend only on the domain
     packages: [./adapter/netconnector, ./adapter/filestore]
-    only_local: [.]
+    only_local: [., ./hits]
 
   - name: the resolver stands alone
     packages: [./adapter/dns]

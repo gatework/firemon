@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"cmp"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/design"
+	"github.com/gatework/firemon/hits"
 	"github.com/gatework/firemon/vendors/hillstone"
 	"github.com/gatework/firemon/vendors/paloalto"
 )
@@ -26,6 +28,10 @@ type Platform struct {
 	Parse          func(text string) (*firemon.Config, error)
 	Render         func(plan *design.Plan) (design.Script, error)
 	DeployCommands func(script design.Script) []string
+	// HitCountCommand reads the rule hit counters; ParseHits reads its
+	// output.
+	HitCountCommand string
+	ParseHits       func(text, firewall string, taken time.Time) (hits.Snapshot, error)
 }
 
 // Lookup returns the platform of vendor with schedules in loc. book, when
@@ -37,12 +43,17 @@ func Lookup(vendor firemon.Vendor, loc *time.Location, book firemon.ServiceBook)
 		return Platform{
 			Vendor: vendor, Services: hillstone.DefaultServices().With(book), Applications: hillstone.DefaultApplications(),
 			Parse: p.Parse, Render: hillstone.Renderer{}.Render, DeployCommands: hillstone.DeployCommands,
+			HitCountCommand: hillstone.HitCountCommand, ParseHits: hillstone.ParseHits,
 		}, nil
 	case firemon.VendorPaloAlto:
 		p := paloalto.New(paloalto.Options{Location: loc, Services: book})
 		return Platform{
 			Vendor: vendor, Services: paloalto.DefaultServices().With(book), Applications: paloalto.DefaultApplications(), Naming: paloalto.Naming(),
 			Parse: p.Parse, Render: paloalto.Renderer{}.Render, DeployCommands: paloalto.DeployCommands,
+			HitCountCommand: paloalto.HitCountCommand,
+			ParseHits: func(text, firewall string, taken time.Time) (hits.Snapshot, error) {
+				return paloalto.ParseHits(text, firewall, taken, cmp.Or(loc, time.UTC))
+			},
 		}, nil
 	case firemon.VendorUnset:
 		return Platform{}, fmt.Errorf("bootstrap: vendor required")
