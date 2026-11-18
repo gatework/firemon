@@ -1,0 +1,136 @@
+package inventory
+
+import (
+	"cmp"
+	"fmt"
+	"slices"
+
+	"github.com/gatework/firemon/traffic"
+)
+
+// Ownership tells how a firewall came to own addresses.
+type Ownership uint8
+
+// Ownerships, from most to least authoritative.
+const (
+	OwnershipUnset Ownership = iota
+	// OwnershipDeclared comes from the protected networks of the inventory.
+	OwnershipDeclared
+	// OwnershipDerived comes from the firewall's own non-default routes.
+	OwnershipDerived
+	// OwnershipTransit marks a firewall the traffic reaches through route
+	// next hops without owning either end.
+	OwnershipTransit
+)
+
+// String returns the ownership name.
+func (o Ownership) String() string {
+	switch o {
+	case OwnershipUnset:
+		return "unset"
+	case OwnershipDeclared:
+		return "declared"
+	case OwnershipDerived:
+		return "derived"
+	case OwnershipTransit:
+		return "transit"
+	default:
+		return "invalid"
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (o Ownership) MarshalText() ([]byte, error) { return []byte(o.String()), nil }
+
+// claim is one cluster's claim on addresses.
+type claim struct {
+	cluster, zone string
+	set           traffic.AddressSet
+	bits          int
+	ownership     Ownership
+}
+
+// owned is a part of an address set and its owner.
+type owned struct {
+	cluster, zone string
+	set           traffic.AddressSet
+	ownership     Ownership
+}
+
+// buildClaims turns declared protections into claims and, for clusters
+// without declarations, derives claims from non-default routes.
+func (inv *Inventory) buildClaims(protections []Protection) ([]claim, error) {
+	declared := map[string]bool{}
+	var out []claim
+	for _, p := range protections {
+		m := inv.memberNamed(p.Firewall)
+		if m == nil {
+			return nil, fmt.Errorf("inventory: protection for unknown firewall %q", p.Firewall)
+		}
+		declared[m.cluster] = true
+		excluded := traffic.NewAddressSet(p.Exclude...)
+		for _, n := range p.Networks {
+			set := traffic.NewAddressSet(n).Subtract(excluded)
+			out = append(out, claim{cluster: m.cluster, zone: p.Zone, set: set, bits: n.Bits(), ownership: OwnershipDeclared})
+		}
+	}
+	for _, m := range inv.members {
+		if declared[m.cluster] {
+			continue
+		}
+		table, ok := m.fw.RoutingTable(m.fw.Semantics().DefaultVirtualRouter)
+		if !ok {
+			continue
+		}
+		egress, _ := table.Lookup(traffic.AnyAddress())
+		for _, e := range egress {
+			if b := e.Route.Destination.Bits(); b > 0 && e.Interface != "" {
+				out = append(out, claim{cluster: m.cluster, set: e.Addresses, bits: b, ownership: OwnershipDerived})
+			}
+		}
+	}
+	// Declared claims win over derived ones; within each, longest prefix.
+	slices.SortStableFunc(out, func(a, b claim) int {
+		return cmp.Or(cmp.Compare(a.ownership, b.ownership), cmp.Compare(b.bits, a.bits))
+	})
+	return out, nil
+}
+
+// owners splits s by owner. Claims of equal rank and prefix length that
+// belong to different clusters share the addresses; ambiguous reports them.
+func (inv *Inventory) owners(s traffic.AddressSet) (parts []owned, unowned traffic.AddressSet, ambiguous []string) {
+	remaining := s
+	for i := 0; i < len(inv.claims) && !remaining.IsEmpty(); {
+		j := i
+		var taken traffic.AddressSet
+		var clusters []string
+		for ; j < len(inv.claims) && inv.claims[j].ownership == inv.claims[i].ownership && inv.claims[j].bits == inv.claims[i].bits; j++ {
+			c := inv.claims[j]
+			hit := remaining.Intersect(c.set)
+			if hit.IsEmpty() {
+				continue
+			}
+			parts = appendOwned(parts, owned{cluster: c.cluster, zone: c.zone, set: hit, ownership: c.ownership})
+			taken = taken.Union(hit)
+			if !slices.Contains(clusters, c.cluster) {
+				clusters = append(clusters, c.cluster)
+			}
+		}
+		if len(clusters) > 1 {
+			ambiguous = append(ambiguous, taken.String())
+		}
+		remaining = remaining.Subtract(taken)
+		i = j
+	}
+	return parts, remaining, ambiguous
+}
+
+// appendOwned merges a part into an existing part of the same owner and zone.
+func appendOwned(parts []owned, o owned) []owned {
+	i := slices.IndexFunc(parts, func(p owned) bool { return p.cluster == o.cluster && p.zone == o.zone && p.ownership == o.ownership })
+	if i < 0 {
+		return append(parts, o)
+	}
+	parts[i].set = parts[i].set.Union(o.set)
+	return parts
+}

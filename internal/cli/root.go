@@ -72,9 +72,11 @@ type options struct {
 	snapshot string
 	store    string
 	book     string
-	timezone string
-	device   deviceFlags
-	json     bool
+	// inventoryFile is the YAML operator inventory with protected networks.
+	inventoryFile string
+	timezone      string
+	device        deviceFlags
+	json          bool
 }
 
 func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
@@ -90,6 +92,7 @@ func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
 	f.StringVar(&o.file, "config", "", "running configuration file (instead of reading the device)")
 	f.StringVar(&o.snapshot, "snapshot", "", "use the stored snapshot of this device (see collect)")
 	f.StringVar(&o.store, "store", defaultStore(), "snapshot directory")
+	f.StringVar(&o.inventoryFile, "inventory", "", "YAML inventory: firewalls, HA clusters, snapshots and protected networks")
 	f.StringVar(&o.book, "service-book", "", "JSON predefined service book observed on the device, overriding the vendor default (see services)")
 	f.StringVar(&o.timezone, "timezone", "Local", "device time zone for schedules (IANA name)")
 	f.BoolVar(&o.json, "json", false, "print JSON")

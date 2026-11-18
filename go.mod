@@ -9,6 +9,7 @@ require (
 	github.com/gatework/set v0.1.1
 	github.com/google/go-cmp v0.7.0
 	github.com/spf13/cobra v1.10.2
+	go.yaml.in/yaml/v3 v3.0.6
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 )
 

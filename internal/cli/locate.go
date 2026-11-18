@@ -2,12 +2,14 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gatework/firemon/adapter/filestore"
+	"github.com/gatework/firemon/adapter/yamlfile"
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/internal/bootstrap"
 	"github.com/gatework/firemon/internal/workflow"
@@ -35,10 +37,16 @@ func newLocateCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var plans map[string]*design.Plan
+			plans := map[string]*design.Plan{}
 			if plan {
-				if plans, err = inv.Plan(intent); err != nil {
+				cps, err := inv.Plan(intent)
+				if err != nil {
 					return err
+				}
+				for _, cp := range cps {
+					if _, seen := plans[cp.Cluster]; !seen {
+						plans[cp.Cluster] = cp.Plan
+					}
 				}
 			}
 			if err := o.printTrace(cmd, tr, plans, platforms); err != nil {
@@ -55,11 +63,58 @@ func newLocateCmd(o *options) *cobra.Command {
 	return cmd
 }
 
-// inventory loads every snapshot in the store.
+// fleetMember is one firewall to load: its member name, cluster and
+// snapshot.
+type fleetMember struct {
+	name, cluster, snapshot string
+}
+
+// inventory loads the fleet: the firewalls of --inventory with their
+// clusters and protected networks, or every stored snapshot.
 func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[string]bootstrap.Platform, error) {
 	store, err := filestore.New(o.store)
 	if err != nil {
 		return nil, nil, err
+	}
+	fleet, protections, err := o.fleet(cmd, store)
+	if err != nil {
+		return nil, nil, err
+	}
+	var members []inventory.Member
+	platforms := map[string]bootstrap.Platform{}
+	for _, fm := range fleet {
+		snap, err := store.Load(cmd.Context(), fm.snapshot)
+		if err != nil {
+			return nil, nil, fmt.Errorf("firewall %s: %w", fm.name, err)
+		}
+		loaded, err := workflow.FromConfig(snap.Config)
+		if err != nil {
+			return nil, nil, err
+		}
+		if platforms[fm.name], err = bootstrap.Lookup(snap.Vendor, snap.Config.Location, nil); err != nil {
+			return nil, nil, err
+		}
+		members = append(members, inventory.Member{Name: fm.name, Cluster: fm.cluster, Firewall: loaded.Firewall, Naming: platforms[fm.name].Naming})
+	}
+	inv, err := inventory.New(members, inventory.Options{Now: o.deps.Now, Protections: protections})
+	return inv, platforms, err
+}
+
+func (o *options) fleet(cmd *cobra.Command, store *filestore.Store) ([]fleetMember, []inventory.Protection, error) {
+	if o.inventoryFile != "" {
+		f, err := yamlfile.Load(o.inventoryFile)
+		if err != nil {
+			return nil, nil, err
+		}
+		protections, err := f.Protections(cmd.Context())
+		if err != nil {
+			return nil, nil, err
+		}
+		out := make([]fleetMember, 0, len(f.Firewalls))
+		for _, fw := range f.Firewalls {
+			out = append(out, fleetMember{name: fw.Name, cluster: fw.Cluster, snapshot: fw.SnapshotOf()})
+		}
+		return out, protections, nil
 	}
 	snaps, err := store.List(cmd.Context())
 	if err != nil {
@@ -68,24 +123,11 @@ func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[strin
 	if len(snaps) == 0 {
 		return nil, nil, errors.New("no snapshots in " + o.store + "; store some with collect")
 	}
-	var members []inventory.Member
-	platforms := map[string]bootstrap.Platform{}
-	for _, meta := range snaps {
-		snap, err := store.Load(cmd.Context(), meta.Device)
-		if err != nil {
-			return nil, nil, err
-		}
-		loaded, err := workflow.FromConfig(snap.Config)
-		if err != nil {
-			return nil, nil, err
-		}
-		if platforms[snap.Device], err = bootstrap.Lookup(snap.Vendor, snap.Config.Location, nil); err != nil {
-			return nil, nil, err
-		}
-		members = append(members, inventory.Member{Name: snap.Device, Firewall: loaded.Firewall, Naming: platforms[snap.Device].Naming})
+	out := make([]fleetMember, 0, len(snaps))
+	for _, s := range snaps {
+		out = append(out, fleetMember{name: s.Device, snapshot: s.Device})
 	}
-	inv, err := inventory.New(members, inventory.Options{Now: o.deps.Now})
-	return inv, platforms, err
+	return out, nil, nil
 }
 
 func (o *options) printTrace(cmd *cobra.Command, tr inventory.Trace, plans map[string]*design.Plan, platforms map[string]bootstrap.Platform) error {
@@ -97,11 +139,11 @@ func (o *options) printTrace(cmd *cobra.Command, tr inventory.Trace, plans map[s
 	}
 	var views []crossingView
 	for _, c := range tr.Crossings {
-		v := crossingView{Firewall: c.Firewall, Verdict: c.Verdict}
+		v := crossingView{Firewall: c.Cluster, Verdict: c.Verdict}
 		for _, p := range c.Paths {
 			v.Paths = append(v.Paths, viewPath(p))
 		}
-		if p, ok := plans[c.Firewall]; ok {
+		if p, ok := plans[c.Cluster]; ok {
 			script, err := platforms[c.Firewall].Render(p)
 			if err != nil {
 				return err

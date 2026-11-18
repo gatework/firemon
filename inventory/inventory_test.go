@@ -119,12 +119,16 @@ func TestInventory_Plan(t *testing.T) {
 	in.Src, _ = traffic.ParseAddressSet("10.1.0.5")
 	in.Dst, _ = traffic.ParseAddressSet("8.8.8.8")
 	in.Service, _ = traffic.ParseServiceSet("tcp/443")
-	plans, err := lab(t).Plan(in)
+	cps, err := lab(t).Plan(in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plans["core"].Status != design.StatusChange || !plans["core"].Verified || plans["edge"].Status != design.StatusNoChange {
-		t.Fatalf("core %s edge %s", plans["core"].Status, plans["edge"].Status)
+	plans := map[string]*design.Plan{}
+	for _, cp := range cps {
+		plans[cp.Cluster] = cp.Plan
+	}
+	if plans["core"] == nil || plans["core"].Status != design.StatusChange || !plans["core"].Verified || plans["edge"].Status != design.StatusNoChange {
+		t.Fatalf("plans %+v", plans)
 	}
 	if _, ok := plans["dc"]; ok {
 		t.Fatal("dc is not on the path")
@@ -136,5 +140,49 @@ func TestNew_RejectsDuplicates(t *testing.T) {
 	fw := firewall(t, []link{{"x0", "a", "10.9.0.1/24"}}, nil)
 	if _, err := inventory.New([]inventory.Member{{Name: "a", Firewall: fw}, {Name: "a", Firewall: fw}}, inventory.Options{}); err == nil {
 		t.Fatal("want duplicate error")
+	}
+}
+
+func TestInventory_DeclaredProtectionWins(t *testing.T) {
+	t.Parallel()
+	// Two sites both route 10.0.0.0/8 inward; only the declaration tells
+	// which one protects 10.1.0.0/16.
+	siteA, _ := newFirewall([]link{{"a0", "wan", "192.0.2.2/30"}, {"a1", "lan", "10.1.0.1/24"}},
+		[]route{{"0.0.0.0/0", "192.0.2.1"}, {"10.0.0.0/8", "10.1.0.254"}},
+		firemon.SecurityRule{ID: "out", Action: firemon.ActionPermit})
+	siteB, _ := newFirewall([]link{{"b0", "wan", "198.51.100.2/30"}, {"b1", "lan", "10.2.0.1/24"}},
+		[]route{{"0.0.0.0/0", "198.51.100.1"}, {"10.0.0.0/8", "10.2.0.254"}})
+	inv, err := inventory.New([]inventory.Member{{Name: "a", Firewall: siteA}, {Name: "b", Firewall: siteB}},
+		inventory.Options{Now: func() time.Time { return now }, Protections: []inventory.Protection{
+			{Firewall: "a", Zone: "lan", Networks: []netip.Prefix{netip.MustParsePrefix("10.1.0.0/16")}},
+			{Firewall: "b", Zone: "lan", Networks: []netip.Prefix{netip.MustParsePrefix("10.2.0.0/16")}},
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, err := inv.Locate(request("10.1.5.5, 172.31.0.1", "8.8.8.8", "tcp/443"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(tr); !slices.Equal(got, []string{"a(lan>wan)"}) || tr.Crossings[0].Ownership != inventory.OwnershipDeclared {
+		t.Fatalf("crossings %v", got)
+	}
+	if tr.Excluded.Src.String() != "172.31.0.1" || tr.Excluded.Dst.String() != "8.8.8.8" {
+		t.Fatalf("addresses no firewall owns must be excluded: %+v", tr.Excluded)
+	}
+}
+
+func TestInventory_ClusterEvaluatedOnce(t *testing.T) {
+	t.Parallel()
+	fw, _ := newFirewall([]link{{"x0", "wan", "192.0.2.2/30"}, {"x1", "lan", "10.1.0.1/24"}},
+		[]route{{"0.0.0.0/0", "192.0.2.1"}})
+	inv, err := inventory.New([]inventory.Member{{Name: "fw1", Cluster: "site", Firewall: fw}, {Name: "fw2", Cluster: "site", Firewall: fw}},
+		inventory.Options{Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, _ := inv.Locate(request("10.1.0.5", "8.8.8.8", "tcp/443"))
+	if len(tr.Crossings) != 1 || tr.Crossings[0].Firewall != "fw1" || !slices.Equal(tr.Crossings[0].Members, []string{"fw1", "fw2"}) {
+		t.Fatalf("crossings %+v", tr.Crossings)
 	}
 }

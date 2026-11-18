@@ -14,6 +14,7 @@ declared:
   - ./vendors/paloalto
   - ./adapter/netconnector
   - ./adapter/filestore
+  - ./adapter/yamlfile
   - ./internal/bootstrap
   - ./internal/workflow
   - ./internal/cli
@@ -66,11 +67,15 @@ rules:
     deny: [./vendors/paloalto]
 
   - name: adapters depend only on the domain
-    packages: [./adapter/...]
+    packages: [./adapter/netconnector, ./adapter/filestore]
     only_local: [.]
 
+  - name: the inventory file adapter feeds the inventory
+    packages: [./adapter/yamlfile]
+    only_local: [., ./inventory]
+
   - name: only the netconnector adapter talks to devices
-    packages: [./adapter/filestore]
+    packages: [./adapter/filestore, ./adapter/yamlfile]
     deny: [github.com/gatework/net-connector/connector, github.com/gatework/net-connector/vendors/...]
 
   - name: workflows do not reach the command line
