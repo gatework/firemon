@@ -168,6 +168,9 @@ func printReport(cmd *cobra.Command, rep report.Report, plans []inventory.Cluste
 	if rep.Excluded.Src != "" || rep.Excluded.Dst != "" {
 		p.f("\n未经过任何防火墙（已剔除）：源 %s  目的 %s\n", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst))
 	}
+	for _, in := range rep.Inside {
+		p.f("源与目的同在 %s 的 %s 区域一侧，不经过该防火墙：%s\n", in.Cluster, in.Zone, in.Traffic)
+	}
 	for _, name := range rep.ZonesNeeded {
 		p.f("提示：%s 有透明模式（二层）接口，经二层转发的流量无法按路由定位，请用 --from-zone/--to-zone 指定区域\n", name)
 	}
@@ -272,8 +275,17 @@ func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, pla
 		if cp.Cluster != f.Cluster || cp.Plan == nil {
 			continue
 		}
+		printNATOutcome(p, cp.Plan.NAT)
+		for _, c := range cp.Plan.Conflicts {
+			p.f("  设计冲突：策略 %s 拒绝 %s（%s → %s），未自动放在其前；确认后加 --override\n", c.RuleID, c.Text, c.From, c.To)
+		}
+		for _, u := range cp.Plan.Unknown {
+			p.f("  无法设计：%s\n", u)
+		}
+		for _, w := range cp.Plan.Warnings {
+			p.f("  注意：%s\n", w)
+		}
 		if len(cp.Plan.Changes) == 0 {
-			printNATOutcome(p, cp.Plan.NAT)
 			continue
 		}
 		script, err := platforms[cp.Firewall].Render(cp.Plan)
@@ -281,14 +293,7 @@ func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, pla
 			p.f("  方案无法生成命令：%v\n", err)
 			continue
 		}
-		printNATOutcome(p, cp.Plan.NAT)
-		for _, u := range cp.Plan.Unknown {
-			p.f("  无法设计：%s\n", u)
-		}
-		for _, w := range cp.Plan.Warnings {
-			p.f("  注意：%s\n", w)
-		}
-		p.f("  变更方案（已验证：%v）：\n", cp.Plan.Verified)
+		p.f("  变更方案（%s，已验证：%v）：\n", cp.Firewall, cp.Plan.Verified)
 		if cp.Plan.VerifyError != "" {
 			p.f("    验证未通过：%s\n", cp.Plan.VerifyError)
 		}

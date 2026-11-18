@@ -67,6 +67,7 @@ func newLocateCmd(o *options) *cobra.Command {
 // snapshot.
 type fleetMember struct {
 	name, cluster, snapshot string
+	active                  bool
 }
 
 // inventory loads the fleet: the firewalls of --inventory with their
@@ -94,7 +95,10 @@ func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[strin
 		if platforms[fm.name], err = bootstrap.Lookup(snap.Vendor, snap.Config.Location, nil); err != nil {
 			return nil, nil, err
 		}
-		members = append(members, inventory.Member{Name: fm.name, Cluster: fm.cluster, Firewall: loaded.Firewall, Naming: platforms[fm.name].Naming})
+		members = append(members, inventory.Member{
+			Name: fm.name, Cluster: fm.cluster, Firewall: loaded.Firewall, Naming: platforms[fm.name].Naming,
+			Active: fm.active,
+		})
 	}
 	inv, err := inventory.New(members, inventory.Options{Now: o.deps.Now, Protections: protections})
 	return inv, platforms, err
@@ -112,7 +116,7 @@ func (o *options) fleet(cmd *cobra.Command, store *filestore.Store) ([]fleetMemb
 		}
 		out := make([]fleetMember, 0, len(f.Firewalls))
 		for _, fw := range f.Firewalls {
-			out = append(out, fleetMember{name: fw.Name, cluster: fw.Cluster, snapshot: fw.SnapshotOf()})
+			out = append(out, fleetMember{name: fw.Name, cluster: fw.Cluster, snapshot: fw.SnapshotOf(), active: fw.Active()})
 		}
 		return out, protections, nil
 	}

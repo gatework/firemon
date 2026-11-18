@@ -37,7 +37,9 @@ type Crossing struct {
 	Incomplete bool
 	// ZonesNeeded reports layer-2 zones that routing cannot locate.
 	ZonesNeeded bool
-	Verdict     query.Verdict
+	// Inside are the parts that stay behind one interface.
+	Inside  []Inside
+	Verdict query.Verdict
 }
 
 // Excluded is the traffic no firewall of the inventory owns on either end.
@@ -55,6 +57,9 @@ type Trace struct {
 	// ZonesNeeded lists clusters with layer-2 zones that the request did
 	// not name zones for: traffic bridged through them is not located.
 	ZonesNeeded []string
+	// Inside lists parts whose ends are both behind one interface of a
+	// cluster: the traffic does not cross it.
+	Inside []Inside
 	// Verdict is allowed only when every crossing allows its part.
 	Verdict query.Verdict
 }
@@ -77,6 +82,7 @@ func (inv *Inventory) Locate(req query.Request) (Trace, error) {
 		if err != nil {
 			return Trace{}, err
 		}
+		t.Inside = append(t.Inside, c.Inside...)
 		if c.ZonesNeeded && len(c.Paths) == 0 && !slices.Contains(t.ZonesNeeded, cluster) {
 			t.ZonesNeeded = append(t.ZonesNeeded, cluster)
 		}
@@ -149,8 +155,11 @@ func (inv *Inventory) assignPair(sp, dp owned, p Part, vr string, add func(strin
 		if sp.ownership == OwnershipDeclared {
 			sp1.FromZone = sp.zone
 		}
-		if dp.cluster == sp.cluster && dp.ownership == OwnershipDeclared {
+		switch {
+		case dp.cluster == sp.cluster && dp.ownership == OwnershipDeclared:
 			sp1.ToZone = dp.zone
+		case dp.cluster != sp.cluster:
+			sp1.ToZone = inv.outside(sp.cluster) // the destination is elsewhere
 		}
 		add(sp.cluster, sp.ownership, sp1)
 		for _, transit := range inv.chain(sp.cluster, p, vr) {
@@ -164,6 +173,7 @@ func (inv *Inventory) assignPair(sp, dp owned, p Part, vr string, add func(strin
 		if dp.ownership == OwnershipDeclared {
 			dp1.ToZone = dp.zone
 		}
+		dp1.FromZone = inv.outside(dp.cluster) // the source is elsewhere
 		add(dp.cluster, dp.ownership, dp1)
 	}
 }
@@ -223,6 +233,11 @@ func (inv *Inventory) evaluate(cluster string, a *assignment, req query.Request)
 	m := inv.primary(cluster)
 	c := Crossing{Cluster: cluster, Firewall: m.name, Members: inv.clusterMembers(cluster), Ownership: a.ownership, Parts: a.parts}
 	for _, p := range a.parts {
+		if p.FromZone != "" && p.FromZone == p.ToZone && m.fw.ZoneInterfaces(p.FromZone) <= 1 {
+			// Both ends behind one interface: the traffic does not cross.
+			c.Inside = append(c.Inside, Inside{Cluster: cluster, Zone: p.FromZone, Src: p.Src, Dst: p.Dst})
+			continue
+		}
 		r := req
 		r.Src, r.Dst, r.DstDomains = p.Src, p.Dst, p.DstDomains
 		r.FromZone, r.ToZone = cmp.Or(p.FromZone, req.FromZone), cmp.Or(p.ToZone, req.ToZone)
@@ -337,8 +352,53 @@ func sortedKeys[V any](m map[string]V) []string {
 // traffic may still cross them, bridged rather than routed.
 func (inv *Inventory) bridgesMayCarry(t *Trace) {
 	for _, m := range inv.members {
-		if m.fw.Bridges() && !slices.Contains(t.ZonesNeeded, m.cluster) {
+		if m.fw.Bridges() && !inv.declared(m.cluster) && !slices.Contains(t.ZonesNeeded, m.cluster) {
 			t.ZonesNeeded = append(t.ZonesNeeded, m.cluster)
 		}
 	}
+}
+
+// outside returns the zone on the other side of a cluster's protected
+// networks: the only other zone of the same mode with an interface. The
+// protected networks act as routes to their zone and everything else is
+// reached through this one, which is how a transparent firewall, whose
+// routing only covers management, is located. Empty when not unique, then
+// routing decides.
+func (inv *Inventory) outside(cluster string) string {
+	m := inv.primary(cluster)
+	if m == nil {
+		return ""
+	}
+	protected := map[string]bool{}
+	for _, c := range inv.claims {
+		if c.cluster == cluster && c.ownership == OwnershipDeclared && c.zone != "" {
+			protected[c.zone] = true
+		}
+	}
+	if len(protected) != 1 {
+		return ""
+	}
+	var inside string
+	for z := range protected {
+		inside = z
+	}
+	zone, ok := m.fw.Zone(inside)
+	if !ok {
+		return ""
+	}
+	return m.fw.PeerZone(zone)
+}
+
+// Inside is traffic both of whose ends are behind one interface of a
+// cluster's zone.
+type Inside struct {
+	Cluster  string
+	Zone     string
+	Src, Dst traffic.AddressSet
+}
+
+// declared reports whether a cluster declares protected networks, which
+// locate it without routing.
+func (inv *Inventory) declared(cluster string) bool {
+	return slices.ContainsFunc(inv.claims, func(c claim) bool { return c.cluster == cluster && c.ownership == OwnershipDeclared })
 }

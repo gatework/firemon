@@ -16,11 +16,20 @@ import (
 
 // Firewall is one inventory entry.
 type Firewall struct {
-	Name      string      `yaml:"name"`
-	Cluster   string      `yaml:"cluster,omitempty"`
-	Snapshot  string      `yaml:"snapshot,omitempty"`
-	Protected []Protected `yaml:"protected,omitempty"`
+	Name     string `yaml:"name"`
+	Cluster  string `yaml:"cluster,omitempty"`
+	Snapshot string `yaml:"snapshot,omitempty"`
+	// Role is active or backup within the cluster; the active member is
+	// evaluated and planned on.
+	Role string `yaml:"role,omitempty"`
+	// ProtectedZone is the zone behind which the protected networks sit,
+	// for the entries of Protected that name no zone of their own.
+	ProtectedZone string      `yaml:"protected_zone,omitempty"`
+	Protected     []Protected `yaml:"protected,omitempty"`
 }
+
+// Active reports whether the firewall is its cluster's active member.
+func (fw Firewall) Active() bool { return fw.Role == "active" }
 
 // Protected is one group of protected networks behind a zone.
 type Protected struct {
@@ -61,6 +70,9 @@ func Parse(raw []byte) (*File, error) {
 			return nil, fmt.Errorf("yamlfile: firewall %q listed twice", fw.Name)
 		}
 		seen[fw.Name] = true
+		if fw.Role != "" && fw.Role != "active" && fw.Role != "backup" {
+			return nil, fmt.Errorf("yamlfile: firewall %q: role %q: use active or backup", fw.Name, fw.Role)
+		}
 		if _, err := fw.protections(); err != nil {
 			return nil, err
 		}
@@ -96,7 +108,7 @@ func (fw Firewall) protections() ([]inventory.Protection, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, inventory.Protection{Firewall: fw.Name, Zone: p.Zone, Networks: nets, Exclude: excl})
+		out = append(out, inventory.Protection{Firewall: fw.Name, Zone: cmp.Or(p.Zone, fw.ProtectedZone), Networks: nets, Exclude: excl})
 	}
 	return out, nil
 }

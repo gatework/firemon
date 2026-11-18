@@ -211,13 +211,22 @@ func (p *Planner) dropPortless(n *need, plan *Plan) {
 
 func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan) {
 	outcome := d.Outcome
-	if outcome == query.OutcomeUnknown && onlyPermits(d.Possible) {
+	switch {
+	case outcome == query.OutcomeUnknown && onlyPermits(d.Possible):
 		// Undecidable permit rules can only allow more; plan as if the
 		// final decision applied and say so.
 		outcome = d.Final
 		if outcome != query.OutcomePermit {
 			plan.Warnings = append(plan.Warnings, d.Space.String()+" may already be permitted by undecidable rules "+ruleIDs(d.Possible))
 		}
+	case outcome == query.OutcomeUnknown && onlyNarrowing(d.Possible):
+		// The rules that may match first only add applications, URL
+		// categories or users to their match: they act on part of any
+		// traffic, and a permit for the rest is what the intent asks.
+		// Verification accepts the same (onlyNarrowDenies).
+		outcome = d.Final
+		plan.Warnings = append(plan.Warnings, d.Space.String()+": rules "+ruleIDs(d.Possible)+
+			" that match applications, URL categories or users may still decide part of it first")
 	}
 	switch outcome {
 	case query.OutcomeDefault:
@@ -439,4 +448,15 @@ func natIDs(refs []query.NATRef) string {
 		ids[i] = r.String()
 	}
 	return strings.Join(ids, ",")
+}
+
+// onlyNarrowing reports whether every rule is a permit, or a deny that
+// only narrows by application, URL category or user.
+func onlyNarrowing(rules []*firemon.Rule) bool {
+	for _, r := range rules {
+		if r.Action() != firemon.ActionPermit && !onlyNarrowDenies([]*firemon.Rule{r}) {
+			return false
+		}
+	}
+	return len(rules) > 0
 }

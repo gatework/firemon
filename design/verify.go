@@ -102,7 +102,7 @@ func permittedOn(res *query.Result, from, to string) traffic.Region {
 		}
 		out = out.Union(path.Region(query.OutcomePermit))
 		for _, d := range path.Decisions {
-			if d.Outcome == query.OutcomeUnknown && d.Final == query.OutcomePermit && onlyNarrowDenies(d.Possible) {
+			if d.Outcome == query.OutcomeUnknown && d.Final == query.OutcomePermit && onlyNarrowing(d.Possible) {
 				out = out.Union(d.Space)
 			}
 		}

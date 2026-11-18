@@ -130,6 +130,34 @@ func (fw *Firewall) Bridges() bool {
 	return false
 }
 
+// PeerZone returns the only other zone of z's mode that has an interface,
+// such as the untrusted side of a transparent firewall; empty when there
+// is none or several.
+func (fw *Firewall) PeerZone(z Zone) string {
+	peer := ""
+	for _, other := range fw.cfg.Zones {
+		if other.Name == z.Name || other.Mode != z.Mode || fw.ZoneInterfaces(other.Name) == 0 {
+			continue
+		}
+		if peer != "" {
+			return ""
+		}
+		peer = other.Name
+	}
+	return peer
+}
+
+// ZoneInterfaces returns how many interfaces are bound to a zone.
+func (fw *Firewall) ZoneInterfaces(zone string) int {
+	n := 0
+	for _, i := range fw.cfg.Interfaces {
+		if i.Zone == zone {
+			n++
+		}
+	}
+	return n
+}
+
 // Zone returns the zone with the given name.
 func (fw *Firewall) Zone(name string) (Zone, bool) {
 	z, ok := fw.zones[name]

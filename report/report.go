@@ -61,8 +61,10 @@ type Report struct {
 	Ambiguous []string      `json:"ambiguous,omitempty"`
 	// ZonesNeeded lists firewalls with layer-2 zones the request did not
 	// name zones for.
-	ZonesNeeded []string   `json:"zones_needed,omitempty"`
-	Firewalls   []Firewall `json:"firewalls"`
+	ZonesNeeded []string `json:"zones_needed,omitempty"`
+	// Inside is traffic that stays on one side of a firewall.
+	Inside    []Inside   `json:"inside,omitempty"`
+	Firewalls []Firewall `json:"firewalls"`
 	// Status is the worst status over the firewalls.
 	Status Status `json:"status"`
 }
@@ -142,6 +144,9 @@ type Hit struct {
 // for candidate analysis; plans are optional.
 func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firewall, plans []inventory.ClusterPlan) Report {
 	r := Report{Notes: notes, Ambiguous: t.Ambiguous, ZonesNeeded: t.ZonesNeeded}
+	for _, in := range t.Inside {
+		r.Inside = append(r.Inside, Inside{Cluster: in.Cluster, Zone: in.Zone, Traffic: in.Src.String() + " -> " + in.Dst.String()})
+	}
 	if !t.Excluded.Src.IsEmpty() {
 		r.Excluded.Src = t.Excluded.Src.String()
 	}
@@ -420,4 +425,12 @@ func natStatus(p *design.Plan) Status {
 	case design.NATStatusSatisfied, design.NATStatusUnset:
 	}
 	return StatusUnset
+}
+
+// Inside is traffic both of whose ends sit behind one interface of a
+// firewall: it does not cross it.
+type Inside struct {
+	Cluster string `json:"cluster"`
+	Zone    string `json:"zone"`
+	Traffic string `json:"traffic"`
 }

@@ -55,6 +55,15 @@ firemon locate --src 10.1.0.5 --dst 192.0.2.10 --service tcp/443 --design
 # Redundant, shadowed, expired and disabled rules, permit-any rules, unused objects
 firemon audit --vendor hillstone --config fw1.txt
 
+# Transparent (layer-2) HA clusters: protected networks act as routes to the protected zone,
+# everything else is reached through the peer zone; the active member is evaluated and planned on.
+#   firewalls:
+#     - {name: szx9-in-fw01, cluster: SZX9-IN, role: active, protected_zone: l2-trust,
+#        protected: [{networks: [10.250.0.0/16, 10.254.0.0/16]}]}
+#     - {name: szx9-in-fw02, cluster: SZX9-IN, role: backup, protected_zone: l2-trust,
+#        protected: [{networks: [10.250.0.0/16, 10.254.0.0/16]}]}
+firemon check --inventory firemon.yaml --src 10.248.30.5 --dst 10.250.116.25 --service tcp/9600 --design
+
 # Design and render the change that permits a request (no device access)
 firemon design --vendor paloalto --config pa1.txt --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 \
   --name REQ-1001 --description "ticket 1001"

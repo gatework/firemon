@@ -2,6 +2,7 @@ package firemon
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
 )
 
@@ -324,4 +325,26 @@ func (b *refBuilder) propagate() {
 		b.r.live[o] = true
 		stack = append(stack, b.members[o]...)
 	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (k *ObjectKind) UnmarshalText(text []byte) error {
+	for v := ObjectKindUnset; v <= ObjectKindSchedule; v++ {
+		if v.String() == string(text) {
+			*k = v
+			return nil
+		}
+	}
+	return fmt.Errorf("firemon: unknown object kind %q", text)
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *UseSite) UnmarshalText(text []byte) error {
+	for v := UseSiteUnset; v <= UseSiteOther; v++ {
+		if v.String() == string(text) {
+			*s = v
+			return nil
+		}
+	}
+	return fmt.Errorf("firemon: unknown use site %q", text)
 }

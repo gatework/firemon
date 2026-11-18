@@ -26,6 +26,9 @@ type Member struct {
 	Firewall *firemon.Firewall
 	// Naming is the vendor naming policy for planned objects.
 	Naming design.Naming
+	// Active marks the cluster member evaluated and planned on; without
+	// one, the first member by name is.
+	Active bool
 }
 
 // Protection declares networks a firewall protects, optionally behind one
@@ -56,6 +59,7 @@ type Inventory struct {
 
 type member struct {
 	name, cluster string
+	active        bool
 	fw            *firemon.Firewall
 	engine        *query.Engine
 	planner       *design.Planner
@@ -74,7 +78,7 @@ func New(members []Member, opts Options) (*Inventory, error) {
 			return nil, fmt.Errorf("%w: %q", ErrDuplicate, m.Name)
 		}
 		inv.members = append(inv.members, member{
-			name: m.Name, cluster: cmp.Or(m.Cluster, m.Name), fw: m.Firewall,
+			name: m.Name, cluster: cmp.Or(m.Cluster, m.Name), fw: m.Firewall, active: m.Active,
 			engine:  query.New(m.Firewall, query.Options{Now: now}),
 			planner: design.New(m.Firewall, design.Options{Now: now, Naming: m.Naming}),
 		})
@@ -118,7 +122,10 @@ func (inv *Inventory) Firewall(cluster string) *firemon.Firewall {
 
 // primary returns the member a cluster is evaluated on.
 func (inv *Inventory) primary(cluster string) *member {
-	i := slices.IndexFunc(inv.members, func(m member) bool { return m.cluster == cluster })
+	i := slices.IndexFunc(inv.members, func(m member) bool { return m.cluster == cluster && m.active })
+	if i < 0 {
+		i = slices.IndexFunc(inv.members, func(m member) bool { return m.cluster == cluster })
+	}
 	if i < 0 {
 		return nil
 	}

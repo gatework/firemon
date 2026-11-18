@@ -179,8 +179,8 @@ func printCleanupPlan(p *printer, plan *design.Plan, script design.Script) {
 	p.f("删除策略后可能产生新的未使用对象，下发后请再运行一次 converge。\n")
 }
 
-// convergeFleet reviews every cluster of --inventory on its first member
-// by name, with the hit counters of all its members merged: a rule unused
+// convergeFleet reviews every cluster of --inventory on its active member
+// (or the first by name), with the hit counters of all its members merged: a rule unused
 // on the active member may carry the standby's traffic after a failover.
 func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
 	store, err := filestore.New(o.store)
@@ -204,7 +204,10 @@ func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
 	p := &printer{w: cmd.OutOrStdout()}
 	for _, c := range order {
 		members := clusters[c]
-		slices.SortFunc(members, func(a, b fleetMember) int { return strings.Compare(a.name, b.name) })
+		// The active member first, then by name: it is the one reviewed.
+		slices.SortFunc(members, func(a, b fleetMember) int {
+			return cmp.Or(compareActive(a, b), strings.Compare(a.name, b.name))
+		})
 		snap, err := store.Load(cmd.Context(), members[0].snapshot)
 		if err != nil {
 			return fmt.Errorf("cluster %s: %w", c, err)
@@ -267,4 +270,15 @@ func memberNames(members []fleetMember) string {
 		names[i] = m.name
 	}
 	return strings.Join(names, ",")
+}
+
+func compareActive(a, b fleetMember) int {
+	switch {
+	case a.active == b.active:
+		return 0
+	case a.active:
+		return -1
+	default:
+		return 1
+	}
 }
