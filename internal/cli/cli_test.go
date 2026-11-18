@@ -43,6 +43,7 @@ func TestRun(t *testing.T) {
 		{"design", []string{"design", "--vendor", "paloalto", "--config", paloaltoConf,
 			"--src", "10.0.7.0/24", "--dst", "172.16.0.40", "--service", "tcp/8443", "--from-zone", "trust", "--to-zone", "dmz", "--name", "req"},
 			cli.ExitOK, "set rulebase security rules req action allow"},
+		{"audit", []string{"audit", "--vendor", "hillstone", "--config", hillstoneConf}, cli.ExitOK, "unused-address"},
 		{"unknown vendor", []string{"parse", "--vendor", "acme", "--config", hillstoneConf}, cli.ExitUsage, ""},
 		{"deploy rejects files", []string{"deploy", "--vendor", "hillstone", "--config", hillstoneConf,
 			"--src", "10.0.0.1", "--dst", "10.0.0.2", "--service", "tcp/22"}, cli.ExitUsage, ""},

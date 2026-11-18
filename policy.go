@@ -89,6 +89,17 @@ func (r *Rule) InactiveAt(t time.Time) bool {
 	return r.schedule != nil && r.schedule.Unsupported == "" && !r.schedule.ActiveAt(local)
 }
 
+// ExpiredAt reports whether the rule can never become active again after
+// instant t: its validity window has ended, or its schedule has only
+// absolute windows that all ended.
+func (r *Rule) ExpiredAt(t time.Time) bool {
+	local := t.In(r.loc)
+	if end := r.spec.Window.End; !end.IsZero() && !local.Before(end) {
+		return true
+	}
+	return r.schedule != nil && r.schedule.Unsupported == "" && r.schedule.ExpiredAt(local)
+}
+
 // NATRule is a compiled dynamic NAT rule.
 type NATRule struct {
 	position   int

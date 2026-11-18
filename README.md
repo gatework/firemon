@@ -24,6 +24,9 @@ firemon query --vendor paloalto --config pa1.txt --src 10.1.0.0/24 --dst 192.0.2
 # Which objects and rules reference an address
 firemon usage --vendor hillstone --config fw1.txt --addr 10.250.119.11
 
+# Redundant, shadowed, expired and disabled rules, permit-any rules, unused objects
+firemon audit --vendor hillstone --config fw1.txt
+
 # Design and render the change that permits a request (no device access)
 firemon design --vendor paloalto --config pa1.txt --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 \
   --name REQ-1001 --description "ticket 1001"
@@ -42,6 +45,7 @@ Addresses accept `10.0.0.1`, `10.0.0.0/24`, `10.0.0.1-10.0.0.9` and `any`; servi
 | `firemon` | Domain model (`Config`) and compiler (`Compile` → `Firewall`) |
 | `query` | Ordered first-match evaluation with routing and NAT |
 | `design` | Verified change plans: reuse objects, extend rules, add rules |
+| `audit` | Shadowing, redundancy and hygiene review |
 | `deploy` | Fingerprint-checked, journaled deployment on go-netops `apply` |
 | `vendors/hillstone`, `vendors/paloalto` | Parsing and rendering per vendor |
 | `adapter/netconnector` | Device access through net-connector |

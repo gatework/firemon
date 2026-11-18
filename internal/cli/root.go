@@ -90,7 +90,7 @@ func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
 	o.device.register(root)
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &usageError{err} })
 	root.SetContext(ctx)
-	root.AddCommand(newParseCmd(o), newQueryCmd(o), newUsageCmd(o), newDesignCmd(o), newDeployCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
+	root.AddCommand(newParseCmd(o), newQueryCmd(o), newUsageCmd(o), newDesignCmd(o), newDeployCmd(o), newAuditCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
 	return root
 }
 
