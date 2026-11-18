@@ -72,6 +72,9 @@ type Route struct {
 	Destination   netip.Prefix `json:"destination"`
 	NextHop       netip.Addr   `json:"next_hop,omitzero"`
 	Interface     string       `json:"interface,omitempty"`
+	// NextVirtualRouter forwards matching traffic to another virtual
+	// router's table (PAN-OS next-vr).
+	NextVirtualRouter string `json:"next_virtual_router,omitempty"`
 	// Distance is the administrative distance; Metric breaks ties between
 	// routes of equal distance.
 	Distance    uint32 `json:"distance,omitempty"`

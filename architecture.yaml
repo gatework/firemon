@@ -5,6 +5,7 @@ declared:
   - .
   - ./traffic
   - ./vendors/hillstone
+  - ./vendors/paloalto
 
 rules:
   - name: domain packages stay free of I/O

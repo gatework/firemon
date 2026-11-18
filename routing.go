@@ -9,7 +9,9 @@ import (
 )
 
 // Egress is the part of a destination set one route forwards, with the
-// interface and zone the traffic leaves through.
+// interface and zone the traffic leaves through. A route to another
+// virtual router has no interface; Route.NextVirtualRouter names the
+// table to continue the lookup in.
 type Egress struct {
 	Route     Route
 	Connected bool
@@ -88,7 +90,7 @@ func buildRoutingTables(cfg *Config, ifaces map[string]Interface) (map[string]*R
 		if iface == "" {
 			iface = nextHopInterface(t, r.NextHop)
 		}
-		if iface == "" {
+		if iface == "" && r.NextVirtualRouter == "" {
 			issues = append(issues, Issue{Object: "route " + r.Destination.String(), Reason: "no interface reaches next hop " + r.NextHop.String()})
 		}
 		t.entries = append(t.entries, routeEntry{route: r, iface: iface, zone: ifaces[iface].Zone, order: order})
