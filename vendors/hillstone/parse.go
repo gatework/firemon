@@ -78,6 +78,7 @@ func newState(content *parser.Content, loc *time.Location) *state {
 				IntrazoneAction:      firemon.ActionDeny,
 				InterzoneAction:      firemon.ActionDeny,
 				DefaultVirtualRouter: DefaultVirtualRouter,
+				NumericRuleIDs:       true,
 			},
 		},
 		cursor:    content.Cursor(),

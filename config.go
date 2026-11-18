@@ -34,6 +34,7 @@ type Config struct {
 	ServiceGroups  []ServiceGroup  `json:"service_groups,omitempty"`
 	Schedules      []Schedule      `json:"schedules,omitempty"`
 	Rules          []SecurityRule  `json:"rules,omitempty"`
+	RuleGroups     []RuleGroup     `json:"rule_groups,omitempty"`
 	StaticNATs     []StaticNAT     `json:"static_nats,omitempty"`
 	DynamicNATs    []DynamicNAT    `json:"dynamic_nats,omitempty"`
 	Diagnostics    []Diagnostic    `json:"diagnostics,omitempty"`
@@ -74,6 +75,7 @@ func (c *Config) Clone() *Config {
 		return s
 	})
 	out.Rules = cloneEach(c.Rules, cloneRule)
+	out.RuleGroups = slices.Clone(c.RuleGroups)
 	out.StaticNATs = cloneEach(c.StaticNATs, func(n StaticNAT) StaticNAT {
 		n.Zones = slices.Clone(n.Zones)
 		return n

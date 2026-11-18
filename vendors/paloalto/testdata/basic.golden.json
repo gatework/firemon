@@ -2,10 +2,10 @@
   "vendor": "paloalto",
   "hostname": "lab-pa1",
   "semantics": {
-    "PolicyDestination": 1,
-    "IntrazoneAction": "deny",
-    "InterzoneAction": "deny",
-    "DefaultVirtualRouter": "default"
+    "policy_destination": "original",
+    "intrazone_action": "deny",
+    "interzone_action": "deny",
+    "default_virtual_router": "default"
   },
   "virtual_routers": [
     {

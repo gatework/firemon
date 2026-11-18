@@ -71,3 +71,10 @@ type SecurityRule struct {
 
 // ActiveAt reports whether the rule's inline window allows t.
 func (r SecurityRule) ActiveAt(t time.Time) bool { return r.Window.Contains(t) }
+
+// RuleGroup is a named folder of security rules (Hillstone aggregate
+// policy). Its ID shares the rule ID space but it matches no traffic.
+type RuleGroup struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}

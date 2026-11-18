@@ -3,10 +3,11 @@
   "hostname": "lab-fw1",
   "version": "5.5R10",
   "semantics": {
-    "PolicyDestination": 2,
-    "IntrazoneAction": "deny",
-    "InterzoneAction": "deny",
-    "DefaultVirtualRouter": "trust-vr"
+    "policy_destination": "translated",
+    "intrazone_action": "deny",
+    "interzone_action": "deny",
+    "default_virtual_router": "trust-vr",
+    "numeric_rule_ids": true
   },
   "virtual_routers": [
     {
@@ -971,6 +972,12 @@
         "HTTPS"
       ],
       "action": "permit"
+    }
+  ],
+  "rule_groups": [
+    {
+      "id": "10",
+      "name": "ops"
     }
   ],
   "static_nats": [

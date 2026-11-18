@@ -28,17 +28,18 @@ func (i Issue) String() string { return i.Object + ": " + i.Reason }
 
 // Firewall is a compiled, immutable firewall. It is safe for concurrent use.
 type Firewall struct {
-	cfg        *Config
-	loc        *time.Location
-	addresses  map[string]resolved[traffic.AddressSet]
-	services   map[string]resolved[traffic.ServiceSet]
-	zones      map[string]Zone
-	interfaces map[string]Interface
-	tables     map[string]*RoutingTable
-	rules      []*Rule
-	nat        []*NATRule
-	statics    []*StaticMapping
-	issues     []Issue
+	cfg         *Config
+	loc         *time.Location
+	addresses   map[string]resolved[traffic.AddressSet]
+	services    map[string]resolved[traffic.ServiceSet]
+	zones       map[string]Zone
+	interfaces  map[string]Interface
+	tables      map[string]*RoutingTable
+	rules       []*Rule
+	nat         []*NATRule
+	statics     []*StaticMapping
+	issues      []Issue
+	fingerprint string
 }
 
 // Compile resolves every reference in cfg and returns the evaluable
@@ -51,10 +52,11 @@ func Compile(cfg *Config) (*Firewall, error) {
 	}
 	cfg = cfg.Clone()
 	fw := &Firewall{
-		cfg:        cfg,
-		loc:        cmp.Or(cfg.Location, time.UTC),
-		zones:      make(map[string]Zone, len(cfg.Zones)),
-		interfaces: make(map[string]Interface, len(cfg.Interfaces)),
+		cfg:         cfg,
+		fingerprint: fingerprint(cfg),
+		loc:         cmp.Or(cfg.Location, time.UTC),
+		zones:       make(map[string]Zone, len(cfg.Zones)),
+		interfaces:  make(map[string]Interface, len(cfg.Interfaces)),
 	}
 	fw.indexNetwork()
 	res := newResolver(cfg)
@@ -97,6 +99,9 @@ func (fw *Firewall) Rule(id string) (*Rule, bool) {
 	}
 	return fw.rules[i], true
 }
+
+// RuleGroups returns the rule groups in declaration order.
+func (fw *Firewall) RuleGroups() []RuleGroup { return slices.Clone(fw.cfg.RuleGroups) }
 
 // NATRules returns the dynamic NAT rules of one kind in evaluation order.
 func (fw *Firewall) NATRules(kind NATKind) []*NATRule {

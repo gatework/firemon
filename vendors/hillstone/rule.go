@@ -48,7 +48,9 @@ func (s *state) rule(b block, head *words) {
 		s.mark(l)
 	}
 	if header {
-		s.ruleGroup[r.ID] = firstNonEmpty(r.Name, "rule group "+r.ID)
+		name := firstNonEmpty(r.Name, "rule group "+r.ID)
+		s.ruleGroup[r.ID] = name
+		s.cfg.RuleGroups = append(s.cfg.RuleGroups, firemon.RuleGroup{ID: r.ID, Name: name})
 		return
 	}
 	r.From, r.To = anyZones(r.From), anyZones(r.To)

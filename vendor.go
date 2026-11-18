@@ -77,20 +77,37 @@ const (
 	AddressStageTranslated
 )
 
+// MarshalText implements encoding.TextMarshaler.
+func (s AddressStage) MarshalText() ([]byte, error) {
+	switch s {
+	case AddressStageUnset:
+		return []byte("unset"), nil
+	case AddressStageOriginal:
+		return []byte("original"), nil
+	case AddressStageTranslated:
+		return []byte("translated"), nil
+	default:
+		return nil, fmt.Errorf("firemon: invalid address stage %d", uint8(s))
+	}
+}
+
 // Semantics records the vendor behaviour policy evaluation depends on. The
 // vendor parser fills it in; the query engine never switches on Vendor.
 type Semantics struct {
 	// PolicyDestination is the destination address form security rules
 	// match when destination NAT applies. Zones are always derived from the
 	// translated destination.
-	PolicyDestination AddressStage
+	PolicyDestination AddressStage `json:"policy_destination"`
 	// IntrazoneAction applies to traffic that enters and leaves the same zone
 	// and matches no rule.
-	IntrazoneAction Action
+	IntrazoneAction Action `json:"intrazone_action"`
 	// InterzoneAction applies to traffic between different zones that
 	// matches no rule.
-	InterzoneAction Action
+	InterzoneAction Action `json:"interzone_action"`
 	// DefaultVirtualRouter is the routing context used when a request does
 	// not name one.
-	DefaultVirtualRouter string
+	DefaultVirtualRouter string `json:"default_virtual_router,omitempty"`
+	// NumericRuleIDs reports that rule IDs are device-assigned numbers
+	// (Hillstone) rather than rule names (PAN-OS).
+	NumericRuleIDs bool `json:"numeric_rule_ids,omitempty"`
 }
