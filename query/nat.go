@@ -17,6 +17,7 @@ type natPiece struct {
 	srcHit     *NATHit
 	mapped     *firemon.StaticMapping // inbound static mapping, for narrowing
 	uncertain  []string               // NAT rules that may have matched
+	skipped    []string               // disabled NAT rules that would have matched
 	decided    bool
 }
 
@@ -100,6 +101,9 @@ func (e *Engine) translate(base traffic.Space, in hop, table *firemon.RoutingTab
 // translated and decided, possibly matched parts carry the entry as
 // uncertain, and the rest stays undecided.
 func (e *Engine) matchEntry(en natEntry, pc natPiece, in hop, table *firemon.RoutingTable, req Request) []natPiece {
+	if en.rule != nil && en.rule.Spec().Disabled && en.rule.AppliesFromIgnoringState(in.zone) && pc.original.Overlaps(en.rule.Match()) {
+		pc.skipped = append(clip(pc.skipped), "nat "+en.rule.Spec().ID)
+	}
 	hit, maybe, miss := e.classify(en, pc.original, in, table, req)
 	var out []natPiece
 	for _, s := range hit {
@@ -237,17 +241,17 @@ func (e *Engine) applyEntry(en natEntry, s traffic.Space, pc natPiece) natPiece 
 			if t.Port != 0 {
 				out.translated.Service = withPort(s.Service, t.Port)
 			}
-			out.dstHit = &NATHit{Rule: n, Side: firemon.NATKindDestination, Translated: out.translated.Dst}
+			out.dstHit = &NATHit{Rule: n, Side: firemon.NATKindDestination, Translated: out.translated.Dst, Position: n.Position(), Space: traffic.NewRegion(s)}
 		}
 		if t := n.Translation(firemon.NATKindSource); t.Mode != firemon.TranslationModeUnset && t.Mode != firemon.TranslationModeNone {
-			out.srcHit = &NATHit{Rule: n, Side: firemon.NATKindSource, Translated: n.Translated(firemon.NATKindSource)}
+			out.srcHit = &NATHit{Rule: n, Side: firemon.NATKindSource, Translated: n.Translated(firemon.NATKindSource), Position: n.Position(), Space: traffic.NewRegion(s)}
 		}
 	case en.inbound:
 		out.translated.Dst = en.static.ToReal(s.Dst)
 		out.mapped = en.static
-		out.dstHit = &NATHit{Static: en.static, Side: firemon.NATKindDestination, Translated: out.translated.Dst}
+		out.dstHit = &NATHit{Static: en.static, Side: firemon.NATKindDestination, Translated: out.translated.Dst, Position: -1, Space: traffic.NewRegion(s)}
 	default:
-		out.srcHit = &NATHit{Static: en.static, Side: firemon.NATKindSource, Translated: en.static.ToMapped(s.Src)}
+		out.srcHit = &NATHit{Static: en.static, Side: firemon.NATKindSource, Translated: en.static.ToMapped(s.Src), Position: -1, Space: traffic.NewRegion(s)}
 	}
 	return out
 }
@@ -260,43 +264,52 @@ func (e *Engine) sourceNAT(p *Path, s traffic.Space, in, out hop) {
 		if remaining.IsEmpty() {
 			return
 		}
-		spec := n.Spec()
-		if spec.Disabled || !n.InVirtualRouter(in.vr) || (spec.Egress != "" && spec.Egress != out.iface) {
-			continue
-		}
-		switch zoneApplies(spec.From, spec.To, in.zone, out.zone) {
-		case appliesNo:
-			continue
-		case appliesMaybe:
-			if !remaining.Intersect(n.Bound()).IsEmpty() {
-				p.NATUncertain = append(p.NATUncertain, "nat "+spec.ID)
-			}
-			continue
-		case appliesYes:
-		}
-		if !n.Decidable() {
-			if !remaining.Intersect(n.Bound()).IsEmpty() {
-				p.NATUncertain = append(p.NATUncertain, "nat "+spec.ID)
-			}
-			continue
-		}
-		if remaining.Intersect(n.Match()).IsEmpty() {
-			continue
-		}
-		if !n.Exempts() {
-			t := n.Translated(firemon.NATKindSource)
-			if t.IsEmpty() {
-				t = e.interfaceAddresses(out.iface)
-			}
-			p.SourceNAT = append(p.SourceNAT, NATHit{Rule: n, Side: firemon.NATKindSource, Translated: t})
-		}
-		remaining = remaining.Subtract(n.Match())
+		remaining = e.sourceNATRule(p, n, remaining, in, out)
 	}
 	for _, m := range e.fw.StaticNATs() {
-		if !m.Spec().InboundOnly && m.InVirtualRouter(in.vr) && m.AppliesOutbound(in.zone, out.zone) && remaining.Intersect(traffic.Space{Src: m.Real(), Dst: traffic.AnyAddress(), Service: traffic.AnyService()}).Len() > 0 {
-			p.SourceNAT = append(p.SourceNAT, NATHit{Static: m, Side: firemon.NATKindSource, Translated: m.ToMapped(s.Src)})
+		if !m.Spec().InboundOnly && m.InVirtualRouter(in.vr) && m.AppliesOutbound(in.zone, out.zone) {
+			part := remaining.Intersect(traffic.Space{Src: m.Real(), Dst: traffic.AnyAddress(), Service: traffic.AnyService()})
+			if !part.IsEmpty() {
+				p.SourceNAT = append(p.SourceNAT, NATHit{Static: m, Side: firemon.NATKindSource, Translated: m.ToMapped(s.Src), Position: -1, Space: part})
+			}
 		}
 	}
+}
+
+// sourceNATRule applies one source NAT rule to the untranslated rest of a
+// path and returns what is left for later rules.
+func (e *Engine) sourceNATRule(p *Path, n *firemon.NATRule, remaining traffic.Region, in, out hop) traffic.Region {
+	spec := n.Spec()
+	if !n.InVirtualRouter(in.vr) || (spec.Egress != "" && spec.Egress != out.iface) {
+		return remaining
+	}
+	applies := zoneApplies(spec.From, spec.To, in.zone, out.zone)
+	switch {
+	case applies == appliesNo:
+		return remaining
+	case spec.Disabled:
+		if applies == appliesYes && !remaining.Intersect(n.Match()).IsEmpty() {
+			p.NATSkipped = append(p.NATSkipped, "nat "+spec.ID)
+		}
+		return remaining
+	case applies == appliesMaybe || !n.Decidable():
+		if !remaining.Intersect(n.Bound()).IsEmpty() {
+			p.NATUncertain = append(p.NATUncertain, "nat "+spec.ID)
+		}
+		return remaining
+	}
+	hit := remaining.Intersect(n.Match())
+	if hit.IsEmpty() {
+		return remaining
+	}
+	if !n.Exempts() {
+		t := n.Translated(firemon.NATKindSource)
+		if t.IsEmpty() {
+			t = e.interfaceAddresses(out.iface)
+		}
+		p.SourceNAT = append(p.SourceNAT, NATHit{Rule: n, Side: firemon.NATKindSource, Translated: t, Position: n.Position(), Space: hit})
+	}
+	return remaining.Subtract(n.Match())
 }
 
 func (e *Engine) interfaceAddresses(name string) traffic.AddressSet {

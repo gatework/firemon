@@ -40,6 +40,8 @@ type Config struct {
 	RuleGroups     []RuleGroup     `json:"rule_groups,omitempty"`
 	StaticNATs     []StaticNAT     `json:"static_nats,omitempty"`
 	DynamicNATs    []DynamicNAT    `json:"dynamic_nats,omitempty"`
+	PolicyRoutes   []PolicyRoute   `json:"policy_routes,omitempty"`
+	PolicyBindings []PolicyBinding `json:"policy_bindings,omitempty"`
 	Diagnostics    []Diagnostic    `json:"diagnostics,omitempty"`
 	// Applications maps lowercase application names to their default
 	// ports, for application-default services and application queries.
@@ -97,6 +99,12 @@ func (c *Config) Clone() *Config {
 		n.TranslatedDestination.Addresses = slices.Clone(n.TranslatedDestination.Addresses)
 		return n
 	})
+	out.PolicyRoutes = cloneEach(c.PolicyRoutes, func(p PolicyRoute) PolicyRoute {
+		p.Source, p.Destination = slices.Clone(p.Source), slices.Clone(p.Destination)
+		p.Services, p.Unsupported = slices.Clone(p.Services), slices.Clone(p.Unsupported)
+		return p
+	})
+	out.PolicyBindings = slices.Clone(c.PolicyBindings)
 	out.Diagnostics = slices.Clone(c.Diagnostics)
 	out.Applications = c.Applications.With(nil)
 	return &out

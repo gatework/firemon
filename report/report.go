@@ -99,7 +99,10 @@ type Path struct {
 	Egress      string        `json:"egress,omitempty"`
 	Domain      string        `json:"domain,omitempty"`
 	Application string        `json:"application,omitempty"`
+	PolicyRoute string        `json:"policy_route,omitempty"`
+	Conditions  []string      `json:"conditions,omitempty"`
 	NAT         []NAT         `json:"nat,omitempty"`
+	NATSkipped  []string      `json:"nat_skipped,omitempty"`
 	Verdict     query.Verdict `json:"verdict"`
 }
 
@@ -109,7 +112,11 @@ type NAT struct {
 	Rule       string          `json:"rule"`
 	Static     bool            `json:"static,omitempty"`
 	Translated string          `json:"translated"`
-	Uncertain  bool            `json:"uncertain,omitempty"`
+	// Position is the one-based place of the rule in its NAT list; zero for
+	// static mappings and uncertain entries.
+	Position  int    `json:"position,omitempty"`
+	Traffic   string `json:"traffic,omitempty"`
+	Uncertain bool   `json:"uncertain,omitempty"`
 }
 
 // Hit is a rule and the part of the request it decides.
@@ -307,7 +314,10 @@ func classify(permitted, blocked, deflt, unknown bool) Status {
 }
 
 func pathSummary(p query.Path) Path {
-	out := Path{From: p.From, To: p.To, Ingress: p.Ingress, Egress: p.Egress, Domain: p.Domain, Application: p.Application, Verdict: p.Verdict}
+	out := Path{
+		From: p.From, To: p.To, Ingress: p.Ingress, Egress: p.Egress, Domain: p.Domain, Application: p.Application,
+		PolicyRoute: p.PolicyRoute, Conditions: p.Conditions, NATSkipped: p.NATSkipped, Verdict: p.Verdict,
+	}
 	if h := p.DestinationNAT; h != nil {
 		out.NAT = append(out.NAT, natLine(*h))
 	}
@@ -322,9 +332,12 @@ func pathSummary(p query.Path) Path {
 
 func natLine(h query.NATHit) NAT {
 	n := NAT{Side: h.Side, Translated: h.Translated.String()}
+	if !h.Space.IsEmpty() {
+		n.Traffic = compact(h.Space)
+	}
 	switch {
 	case h.Rule != nil:
-		n.Rule = h.Rule.Spec().ID
+		n.Rule, n.Position = h.Rule.Spec().ID, h.Position+1
 	case h.Static != nil:
 		n.Rule, n.Static = h.Static.Spec().ID, true
 	}

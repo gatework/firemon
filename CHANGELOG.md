@@ -22,4 +22,5 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 - Predefined service books: embedded per-vendor defaults, device books with `--service-book`, `firemon services` (ADR 0007).
 - Review round 2: route installation and ECMP, address-family split, single-list (PAN-OS) and separate (StoneOS) NAT first-match with zone checks per routed part, schedule modes, strict catch-all denies, unique rule names, readback equality on deploy, parsers that never widen unreadable rules.
 - `intake` tolerant input, domain and application targets (ADR 0009), protected networks and HA clusters (ADR 0008), the `report` package with candidates and group aggregation (ADR 0010), `firemon check`.
+- Policy-based routing (StoneOS pbr-policy and bindings) applied before the routing table, with conditional branches for user-group entries; NAT hits report their order position, translated traffic and skipped disabled rules (ADR 0011).
 - `firemon` CLI: parse, query, usage, audit, design, deploy, collect, locate.

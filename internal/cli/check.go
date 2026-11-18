@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -160,21 +161,7 @@ func printFirewall(p *printer, f report.Firewall) {
 	p.f("\n■ %s（%s，成员 %s）：%s\n", f.Cluster, text(ownershipText, f.Ownership, f.Ownership.String()),
 		strings.Join(f.Members, ","), text(statusText, f.Status, f.Status.String()))
 	for _, path := range f.Paths {
-		target := ""
-		if path.Domain != "" {
-			target += " 域名 " + path.Domain
-		}
-		if path.Application != "" {
-			target += " 应用 " + path.Application
-		}
-		p.f("  路径 %s → %s%s：%s\n", zoneIface(path.From, path.Ingress), zoneIface(path.To, path.Egress), target, text(verdictText, path.Verdict, path.Verdict.String()))
-		for _, n := range path.NAT {
-			if n.Uncertain {
-				p.f("    NAT %s 可能生效，无法判定\n", n.Rule)
-				continue
-			}
-			p.f("    %s %s → %s\n", text(natSideText, n.Side, n.Side.String()), n.Rule, n.Translated)
-		}
+		printPath(p, path)
 	}
 	hits := func(title string, hs []report.Hit) {
 		for _, h := range hs {
@@ -218,6 +205,37 @@ func printFirewall(p *printer, f report.Firewall) {
 	}
 }
 
+func printPath(p *printer, path report.Path) {
+	target := ""
+	if path.Domain != "" {
+		target += " 域名 " + path.Domain
+	}
+	if path.Application != "" {
+		target += " 应用 " + path.Application
+	}
+	p.f("  路径 %s → %s%s：%s\n", zoneIface(path.From, path.Ingress), zoneIface(path.To, path.Egress), target, text(verdictText, path.Verdict, path.Verdict.String()))
+	if path.PolicyRoute != "" {
+		p.f("    策略路由 %s 选择出口\n", path.PolicyRoute)
+	}
+	for _, c := range path.Conditions {
+		p.f("    前提：%s\n", conditionText(c))
+	}
+	for _, id := range path.NATSkipped {
+		p.f("    已跳过禁用的 %s\n", id)
+	}
+	for _, n := range path.NAT {
+		if n.Uncertain {
+			p.f("    NAT %s 可能生效，无法判定\n", n.Rule)
+			continue
+		}
+		order := ""
+		if n.Position > 0 {
+			order = fmt.Sprintf("（第 %d 条，按顺序首条命中）", n.Position)
+		}
+		p.f("    %s %s%s：%s → %s\n", text(natSideText, n.Side, n.Side.String()), n.Rule, order, orDash(n.Traffic), n.Translated)
+	}
+}
+
 func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, platforms map[string]bootstrap.Platform) {
 	for _, cp := range plans {
 		if cp.Cluster != f.Cluster || cp.Plan == nil || len(cp.Plan.Changes) == 0 {
@@ -237,6 +255,19 @@ func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, pla
 			p.f("    %s\n", c)
 		}
 	}
+}
+
+// conditionText renders a path condition.
+func conditionText(c string) string {
+	if rest, ok := strings.CutPrefix(c, "policy route "); ok {
+		if id, matched := strings.CutSuffix(rest, " matches"); matched {
+			return "策略路由 " + id + " 命中（含无法离线判定的条件，如用户组）"
+		}
+		if id, missed := strings.CutSuffix(rest, " does not match"); missed {
+			return "策略路由 " + id + " 不命中"
+		}
+	}
+	return c
 }
 
 func zoneIface(zone, iface string) string {

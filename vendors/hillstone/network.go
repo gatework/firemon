@@ -34,6 +34,8 @@ func (s *state) zone(b block, head *words) {
 			z.VirtualRouter = w.next()
 		case "description":
 			z.Description = w.next()
+		case "bind":
+			s.bindPolicy(w, name, "")
 		}
 		s.mark(l) // anti-attack and identification settings do not affect matching
 	}
@@ -53,6 +55,8 @@ func (s *state) iface(b block, head *words) {
 			i.Zone = w.next()
 		case "description":
 			i.Description = w.next()
+		case "bind":
+			s.bindPolicy(w, "", name)
 		case "ip", "ipv6":
 			if w.peek() != "address" {
 				break

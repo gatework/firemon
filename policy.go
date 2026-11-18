@@ -198,6 +198,10 @@ func (n *NATRule) AppliesFrom(from string) bool {
 	return !n.spec.Disabled && zoneMatches(n.spec.From, from)
 }
 
+// AppliesFromIgnoringState reports whether the rule's From zones admit
+// zone from, whether or not the rule is enabled.
+func (n *NATRule) AppliesFromIgnoringState(from string) bool { return zoneMatches(n.spec.From, from) }
+
 // Applies reports whether the rule is written for traffic from zone from to
 // zone to.
 func (n *NATRule) Applies(from, to string) bool {

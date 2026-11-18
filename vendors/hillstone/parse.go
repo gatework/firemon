@@ -148,6 +148,8 @@ func (s *state) dispatch(b block) {
 		s.rule(b, words)
 	case "policy":
 		s.policy(b, words)
+	case "pbr-policy":
+		s.pbrPolicy(b, words)
 	case "policy-global":
 		if containsRule(b) {
 			s.policy(b, words) // rules nested in the global policy block
@@ -252,7 +254,7 @@ func (c *catalog[T]) items() []T { return slices.Clone(c.list) }
 // keyword are reported as diagnostics.
 func isPolicySection(keyword string) bool {
 	switch keyword {
-	case "address", "service", "servgroup", "schedule", "zone", "interface", "ip", "rule", "policy", "policy-global":
+	case "address", "service", "servgroup", "schedule", "zone", "interface", "ip", "rule", "policy", "policy-global", "pbr-policy":
 		return true
 	default:
 		return false

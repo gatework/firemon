@@ -65,18 +65,28 @@ func (e *Engine) discoverDomain(req Request, table *firemon.RoutingTable, domain
 		}
 		for _, in := range e.ingress(r, table) {
 			inTable := e.tableOf(in.vr, table)
-			out, ok := e.defaultEgress(r, inTable)
+			def, ok := e.defaultEgress(r, inTable)
 			if !ok {
 				continue
 			}
 			// An unresolved name leaves by the default route, so its address
 			// is one the default route forwards: not in any more specific route.
-			pc := natPiece{original: traffic.Space{Src: in.addrs, Dst: out.addrs, Service: r.Service}}
+			pc := natPiece{original: traffic.Space{Src: in.addrs, Dst: def.addrs, Service: r.Service}}
 			pc.translated = pc.original
-			if len(paths) >= e.maxPaths {
-				return paths, true
+			for _, rt := range e.policyRoute(pc, in, domain) {
+				out := def
+				if rt.out != nil {
+					if rt.out.iface == "" {
+						continue
+					}
+					out = *rt.out
+				}
+				out.addrs = rt.piece.translated.Dst
+				if len(paths) >= e.maxPaths {
+					return paths, true
+				}
+				paths = append(paths, e.routedPath(in, out, rt))
 			}
-			paths = append(paths, e.path(in, out, pc))
 		}
 	}
 	return paths, false

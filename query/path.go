@@ -27,13 +27,15 @@ func (e *Engine) discover(req Request, table *firemon.RoutingTable) (paths []Pat
 			inTable := e.tableOf(in.vr, table)
 			base := traffic.Space{Src: in.addrs, Dst: fam.Dst, Service: fam.Service}
 			for _, pc := range e.translate(base, in, inTable, fam) {
-				outs, lost := e.egress(fam, inTable, pc.translated.Dst)
-				unrouted = unrouted.Union(lost)
-				for _, out := range outs {
-					if len(paths) >= e.maxPaths {
-						return paths, unrouted, true
+				for _, rt := range e.policyRoute(pc, in, "") {
+					outs, lost := e.routedEgress(fam, inTable, rt)
+					unrouted = unrouted.Union(lost)
+					for _, out := range outs {
+						if len(paths) >= e.maxPaths {
+							return paths, unrouted, true
+						}
+						paths = append(paths, e.routedPath(in, out, rt))
 					}
-					paths = append(paths, e.path(in, out, pc))
 				}
 			}
 		}
@@ -75,6 +77,7 @@ func (e *Engine) path(in, out hop, pc natPiece) Path {
 		From: in.zone, To: out.zone, Ingress: in.iface, Egress: out.iface,
 		IngressPrefixLen: in.prefixLen, EgressPrefixLen: out.prefixLen,
 		Original: original, Policy: policy, DestinationNAT: pc.dstHit, NATUncertain: slices.Clone(pc.uncertain),
+		NATSkipped: slices.Clone(pc.skipped),
 	}
 	if pc.srcHit != nil {
 		hit := *pc.srcHit
@@ -85,6 +88,30 @@ func (e *Engine) path(in, out hop, pc natPiece) Path {
 	}
 	if e.fw.Semantics().NATOrder != firemon.NATOrderSingle {
 		e.sourceNAT(&p, translated, in, out)
+	}
+	return p
+}
+
+// routedEgress is the egress of a routed part: the policy route's, or the
+// routing table's.
+func (e *Engine) routedEgress(req Request, table *firemon.RoutingTable, rt routed) ([]hop, traffic.AddressSet) {
+	if rt.out == nil {
+		return e.egress(req, table, rt.piece.translated.Dst)
+	}
+	if rt.out.iface == "" {
+		return nil, rt.piece.translated.Dst // next hop unreachable: dropped
+	}
+	h := *rt.out
+	h.addrs = rt.piece.translated.Dst
+	return []hop{h}, traffic.AddressSet{}
+}
+
+// routedPath builds the path of a routed part.
+func (e *Engine) routedPath(in, out hop, rt routed) Path {
+	p := e.path(in, out, rt.piece)
+	p.Conditions = rt.conditions
+	if rt.out != nil {
+		p.PolicyRoute = rt.policy
 	}
 	return p
 }

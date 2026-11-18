@@ -105,6 +105,11 @@ type NATHit struct {
 	Side firemon.NATKind
 	// Translated is the rewritten address set.
 	Translated traffic.AddressSet
+	// Position is the rule's place in its NAT list (zero-based): NAT is
+	// first-match in order, like security rules. Static mappings report -1.
+	Position int
+	// Space is the traffic this rule translates on the path.
+	Space traffic.Region
 }
 
 // Path is the part of a request that crosses the firewall between one
@@ -132,12 +137,20 @@ type Path struct {
 	Domain         string
 	DomainResolved bool
 	Application    string
+	// Conditions hold for this path to be taken, when policy routes that
+	// cannot be decided offline split the traffic.
+	Conditions []string
+	// PolicyRoute names the policy route that chose the egress, if any.
+	PolicyRoute string
 	// NATUncertain names NAT rules that may apply to this path but cannot
 	// be decided (unknown zones or unresolvable objects); the path's
 	// decisions are then unknown.
 	NATUncertain []string
-	Decisions    []Decision
-	Verdict      Verdict
+	// NATSkipped names disabled NAT rules that would otherwise have matched
+	// before the one that applied.
+	NATSkipped []string
+	Decisions  []Decision
+	Verdict    Verdict
 	// Incomplete reports that the evaluation budget was exhausted.
 	Incomplete bool
 }
