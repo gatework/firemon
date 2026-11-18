@@ -79,16 +79,10 @@ const (
 
 // MarshalText implements encoding.TextMarshaler.
 func (s AddressStage) MarshalText() ([]byte, error) {
-	switch s {
-	case AddressStageUnset:
-		return []byte("unset"), nil
-	case AddressStageOriginal:
-		return []byte("original"), nil
-	case AddressStageTranslated:
-		return []byte("translated"), nil
-	default:
+	if s > AddressStageTranslated {
 		return nil, fmt.Errorf("firemon: invalid address stage %d", uint8(s))
 	}
+	return []byte(s.String()), nil
 }
 
 // Semantics records the vendor behaviour policy evaluation depends on. The

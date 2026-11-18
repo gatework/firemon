@@ -73,6 +73,7 @@ func newState(content *parser.Content, loc *time.Location) *state {
 		cfg: &firemon.Config{
 			Vendor:   firemon.VendorHillstone,
 			Location: loc,
+			TimeZone: loc.String(),
 			Semantics: firemon.Semantics{
 				PolicyDestination:    firemon.AddressStageTranslated,
 				IntrazoneAction:      firemon.ActionDeny,

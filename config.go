@@ -23,6 +23,9 @@ type Config struct {
 	Semantics Semantics `json:"semantics"`
 	// Location is the device time zone for schedules; nil means UTC.
 	Location *time.Location `json:"-"`
+	// TimeZone is the IANA name of Location, kept so a stored configuration
+	// can restore it.
+	TimeZone string `json:"time_zone,omitempty"`
 
 	VirtualRouters []VirtualRouter `json:"virtual_routers,omitempty"`
 	Zones          []Zone          `json:"zones,omitempty"`

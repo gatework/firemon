@@ -110,3 +110,29 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+// TestParse_GoldenRoundTrip checks that the stored JSON form compiles to
+// the same firewall as the parsed configuration, so snapshots never need
+// re-parsing.
+func TestParse_GoldenRoundTrip(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(filepath.Join("testdata", "basic.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored firemon.Config
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		t.Fatal(err)
+	}
+	want, err := firemon.Compile(parseFixture(t, "basic.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := firemon.Compile(&stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Fingerprint() != want.Fingerprint() {
+		t.Fatal("stored configuration compiles differently")
+	}
+}

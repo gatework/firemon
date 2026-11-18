@@ -9,6 +9,7 @@
     "default_virtual_router": "trust-vr",
     "numeric_rule_ids": true
   },
+  "time_zone": "UTC",
   "virtual_routers": [
     {
       "name": "trust-vr"

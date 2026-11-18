@@ -7,6 +7,7 @@
     "interzone_action": "deny",
     "default_virtual_router": "default"
   },
+  "time_zone": "UTC",
   "virtual_routers": [
     {
       "name": "default"
