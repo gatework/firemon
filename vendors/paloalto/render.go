@@ -162,3 +162,12 @@ func portText(lo, hi uint16) string {
 	}
 	return strconv.Itoa(int(lo)) + "-" + strconv.Itoa(int(hi))
 }
+
+// DeployCommands returns the rendered commands as one candidate batch: the
+// deployment session commits it atomically, so it is a single write.
+func DeployCommands(s design.Script) []string {
+	if len(s.Commands) == 0 {
+		return nil
+	}
+	return []string{strings.Join(s.Commands, "\n")}
+}

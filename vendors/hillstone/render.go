@@ -172,3 +172,10 @@ func refLines(keyword string, refs []firemon.AddressRef) []string {
 }
 
 func q(s string) string { return strconv.Quote(s) }
+
+// DeployCommands returns the commands a deployment session sends, one per
+// write: configuration mode, the rendered lines, and leaving configuration
+// mode. Saving is a separate, confirmed step.
+func DeployCommands(s design.Script) []string {
+	return slices.Concat([]string{"configure"}, s.Commands, []string{"exit"})
+}
