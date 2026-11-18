@@ -91,6 +91,10 @@ type Decision struct {
 	// Possible lists undecidable rules that might have matched this space
 	// before Rule did.
 	Possible []*firemon.Rule
+	// Final is the outcome Rule (or the default action) gives. It equals
+	// Outcome unless a possible rule with a different action makes the
+	// outcome unknown.
+	Final Outcome
 }
 
 // NATHit records a NAT rule applied on a path.

@@ -113,18 +113,34 @@ func (ev *evaluator) finish(o Outcome) {
 }
 
 // record adds space to the decision of rule r with the same possible set.
-func (ev *evaluator) record(r *firemon.Rule, o Outcome, possible []*firemon.Rule, s traffic.Space) {
-	if len(possible) > 0 {
+func (ev *evaluator) record(r *firemon.Rule, final Outcome, possible []*firemon.Rule, s traffic.Space) {
+	o := final
+	if !agree(final, possible) {
 		o = OutcomeUnknown
 	}
 	for i := range ev.decisions {
 		d := &ev.decisions[i]
-		if d.Rule == r && d.Outcome == o && slices.Equal(d.Possible, possible) {
+		if d.Rule == r && d.Outcome == o && d.Final == final && slices.Equal(d.Possible, possible) {
 			d.Space = d.Space.Add(s)
 			return
 		}
 	}
-	ev.decisions = append(ev.decisions, Decision{Rule: r, Outcome: o, Space: traffic.NewRegion(s), Possible: slices.Clone(possible)})
+	ev.decisions = append(ev.decisions, Decision{Rule: r, Outcome: o, Final: final, Space: traffic.NewRegion(s), Possible: slices.Clone(possible)})
+}
+
+// agree reports whether every possible rule would give the same result as
+// the final outcome, so the uncertainty does not change the verdict.
+func agree(final Outcome, possible []*firemon.Rule) bool {
+	permits := final == OutcomePermit
+	if final == OutcomeUnknown {
+		return len(possible) == 0
+	}
+	for _, r := range possible {
+		if (r.Action() == firemon.ActionPermit) != permits || r.Action() == firemon.ActionUnset {
+			return false
+		}
+	}
+	return true
 }
 
 func (ev *evaluator) overBudget() bool { return len(ev.pieces) > ev.max }
