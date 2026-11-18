@@ -52,7 +52,9 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 		default:
 			var ok bool
 			if do, undo, ok, err = renderCleanup(ch); !ok {
-				err = fmt.Errorf("hillstone: unsupported change %T", ch)
+				if do, undo, ok, err = renderNetwork(ch); !ok {
+					err = fmt.Errorf("hillstone: unsupported change %T", ch)
+				}
 			}
 		}
 		if err != nil {
@@ -173,16 +175,23 @@ func renderRule(c design.AddRule) ([]string, error) {
 	if action, ok := map[firemon.Action]string{firemon.ActionPermit: "permit", firemon.ActionDeny: "deny"}[r.Action]; ok {
 		out = append(out, "  action "+action)
 	}
-	out = append(out, zoneLines("src-zone", r.From)...)
-	out = append(out, zoneLines("dst-zone", r.To)...)
-	src, err1 := refLines("src", r.Source)
-	dst, err2 := refLines("dst", r.Destination)
+	// An incomplete rule is restored as it was: no part it lacks is filled
+	// in with Any, which would make the device enforce it.
+	complete := r.Incomplete == ""
+	if len(r.From) > 0 || complete {
+		out = append(out, zoneLines("src-zone", r.From)...)
+	}
+	if len(r.To) > 0 || complete {
+		out = append(out, zoneLines("dst-zone", r.To)...)
+	}
+	src, err1 := refLines("src", r.Source, complete)
+	dst, err2 := refLines("dst", r.Destination, complete)
 	if err := errors.Join(err1, err2); err != nil {
 		return nil, fmt.Errorf("hillstone: rule %s: %w", r.ID, err)
 	}
 	out = append(out, src...)
 	out = append(out, dst...)
-	if len(r.Services) == 0 && len(r.ServiceEntries) == 0 && len(r.Applications) == 0 {
+	if complete && len(r.Services) == 0 && len(r.ServiceEntries) == 0 && len(r.Applications) == 0 {
 		out = append(out, "  service "+q(anyName))
 	}
 	for _, s := range r.Services {
@@ -220,6 +229,9 @@ func ruleOptions(r firemon.SecurityRule) []string {
 	if !r.Window.End.IsZero() {
 		out = append(out, "  expire-time "+stoneTime(r.Window.End))
 	}
+	if r.Group != "" {
+		out = append(out, "  aggregate-rule "+r.Group)
+	}
 	if r.Log {
 		out = append(out, "  log session-end")
 	}
@@ -244,7 +256,10 @@ func zoneLines(keyword string, zones []string) []string {
 
 // refLines writes addresses of one side: objects as src-addr, inline
 // entries as src-ip, src-range or src-host; none means Any.
-func refLines(side string, refs []firemon.AddressRef) ([]string, error) {
+func refLines(side string, refs []firemon.AddressRef, anyWhenEmpty bool) ([]string, error) {
+	if len(refs) == 0 && !anyWhenEmpty {
+		return nil, nil
+	}
 	if len(refs) == 0 {
 		return []string{"  " + side + "-addr " + q(anyName)}, nil
 	}

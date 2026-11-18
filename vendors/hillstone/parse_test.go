@@ -76,8 +76,8 @@ func TestParse_Semantics(t *testing.T) {
 			t.Errorf("rule %s: got %q decidable=%v %v", tt.id, got, r.Decidable(), r.Issues())
 		}
 	}
-	if r, _ := fw.Rule("3"); r.Spec().Group != "ops" {
-		t.Errorf("aggregate group: got %q", r.Spec().Group)
+	if r, _ := fw.Rule("3"); r.Spec().Group != "10" || fw.Config().RuleGroups[0] != (firemon.RuleGroup{ID: "10", Name: "ops"}) {
+		t.Errorf("aggregate group: got %q, groups %v", r.Spec().Group, fw.Config().RuleGroups)
 	}
 	if got := len(fw.Rules()); got != 5 {
 		t.Errorf("rules: got %d, want 5 (aggregate header excluded)", got)

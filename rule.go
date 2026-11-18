@@ -122,7 +122,8 @@ type SecurityRule struct {
 	// (Hillstone start-time/expire-time).
 	Schedule string     `json:"schedule,omitempty"`
 	Window   TimeWindow `json:"window,omitzero"`
-	// Group is the rule-group (Hillstone aggregate) this rule belongs to.
+	// Group is the rule group this rule belongs to: the StoneOS aggregate
+	// rule ID (see Config.RuleGroups for its name) or the PAN-OS group tag.
 	Group string `json:"group,omitempty"`
 	// Unsupported lists match criteria the parser recognized but cannot
 	// evaluate, such as users, URL categories or HIP profiles.

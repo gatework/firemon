@@ -46,7 +46,9 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 		default:
 			var ok bool
 			if do, undo, ok, err = renderCleanup(ch); !ok {
-				err = fmt.Errorf("paloalto: unsupported change %T", ch)
+				if do, undo, ok, err = renderNetwork(ch); !ok {
+					err = fmt.Errorf("paloalto: unsupported change %T", ch)
+				}
 			}
 		}
 		if err != nil {

@@ -269,3 +269,8 @@ func (p *Parser) applications() firemon.ServiceBook {
 	}
 	return p.opts.Applications
 }
+
+// Capabilities describes what PAN-OS configurations express.
+func Capabilities() firemon.Capabilities {
+	return firemon.Capabilities{NegateAddresses: true, RuleTypes: true, ApplicationDefault: true, MaxNameLength: maxNameLength}
+}

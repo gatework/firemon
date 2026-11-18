@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/converge"
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/intake"
 	"github.com/gatework/firemon/inventory"
@@ -105,4 +106,56 @@ var natStatusText = map[design.NATStatus]string{
 	design.NATStatusNeedsAddress:  "需分配公网地址",
 	design.NATStatusIndeterminate: "无法判定",
 	design.NATStatusConflict:      "冲突（加 --override 才会插到该规则之前）",
+}
+
+var categoryText = map[converge.Category]string{
+	converge.CategoryUnusedObject: "未使用对象",
+	converge.CategoryEmptyObject:  "空对象",
+	converge.CategoryNeverMatches: "永不匹配的策略",
+	converge.CategoryIncomplete:   "不完整策略（设备忽略）",
+	converge.CategoryDisabled:     "已禁用策略",
+	converge.CategoryExpired:      "已过期策略",
+	converge.CategoryRedundant:    "冗余策略（被同动作策略完全覆盖）",
+	converge.CategoryShadowed:     "被遮蔽策略（被相反动作策略完全覆盖）",
+	converge.CategoryMergeable:    "可合并策略",
+	converge.CategoryBroad:        "过宽放通",
+	converge.CategoryZeroHit:      "零命中策略",
+}
+
+var tierText = map[converge.Tier]string{
+	converge.TierSafe:   "可安全清理",
+	converge.TierReview: "需人工确认",
+}
+
+var evidenceText = map[converge.Evidence]string{
+	converge.EvidenceStatic: "配置分析",
+	converge.EvidenceHits:   "命中计数",
+	converge.EvidenceBoth:   "配置+命中",
+}
+
+var convergeReasonText = map[converge.Reason]string{
+	converge.ReasonSourceAny:       "源为 any",
+	converge.ReasonDestinationAny:  "目的为 any",
+	converge.ReasonServiceAny:      "服务为 any",
+	converge.ReasonZoneAny:         "区域为 any",
+	converge.ReasonWideSource:      "源含 /16 及以上网段",
+	converge.ReasonWideDestination: "目的含 /16 及以上网段",
+	converge.ReasonVeryWide:        "含 /8 及以上网段",
+	converge.ReasonNoHits:          "观察期内零命中，建议删除",
+	converge.ReasonHits:            "有命中，收窄需结合流量日志",
+	converge.ReasonCountersReset:   "计数观察期不足",
+}
+
+var objectKindText = map[firemon.ObjectKind]string{
+	firemon.ObjectKindAddress:      "地址",
+	firemon.ObjectKindAddressGroup: "地址组",
+	firemon.ObjectKindService:      "服务",
+	firemon.ObjectKindServiceGroup: "服务组",
+	firemon.ObjectKindSchedule:     "时间计划",
+}
+
+var fieldText2 = map[design.Field]string{
+	design.FieldSource:      "源地址",
+	design.FieldDestination: "目的地址",
+	design.FieldService:     "服务",
 }

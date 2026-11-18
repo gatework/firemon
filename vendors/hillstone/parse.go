@@ -156,6 +156,8 @@ func (s *state) dispatch(b block) {
 		s.pbrPolicy(b, words)
 	case "qos-engine":
 		s.qosEngine(b)
+	case "no":
+		s.undo(words)
 	case "policy-global":
 		if containsRule(b) {
 			s.policy(b, words) // rules nested in the global policy block
@@ -188,9 +190,6 @@ func (s *state) finish() *firemon.Config {
 	cfg.VirtualRouters = s.routers.items()
 	cfg.Zones = s.zones.items()
 	cfg.Interfaces = s.interfaceVRs()
-	for i := range cfg.Rules {
-		cfg.Rules[i].Group = s.ruleGroup[cfg.Rules[i].Group]
-	}
 	for line := range s.cursor.Unparsed() {
 		if !isBlank(line.Text) && line.Text != "exit" && !strings.HasPrefix(line.Text, "#") {
 			cfg.Diagnostics = append(cfg.Diagnostics, firemon.Diagnostic{Line: line.Number, Text: strings.TrimSpace(line.Text), Reason: "unrecognized"})
@@ -256,6 +255,21 @@ func (c *catalog[T]) has(name string) bool {
 
 func (c *catalog[T]) items() []T { return slices.Clone(c.list) }
 
+// remove deletes an item, as a "no" command does on the device.
+func (c *catalog[T]) remove(name string) {
+	i, ok := c.index[name]
+	if !ok {
+		return
+	}
+	c.list = slices.Delete(c.list, i, i+1)
+	delete(c.index, name)
+	for n, j := range c.index {
+		if j > i {
+			c.index[n] = j - 1
+		}
+	}
+}
+
 // isPolicySection reports whether unrecognized lines of a block with this
 // keyword are reported as diagnostics.
 func isPolicySection(keyword string) bool {
@@ -283,4 +297,43 @@ func (p *Parser) applications() firemon.ServiceBook {
 		return DefaultApplications()
 	}
 	return p.opts.Applications
+}
+
+// undo applies a top-level "no" command that removes a rule or an object.
+// Running configurations never hold them; deployment commands do, and
+// reading them back as the device would lets tests check a cleanup.
+func (s *state) undo(w *words) {
+	switch kw := w.next(); kw {
+	case "rule":
+		if w.next() != "id" {
+			return
+		}
+		id := w.next()
+		i, ok := s.ruleIndex[id]
+		if !ok {
+			return
+		}
+		s.cfg.Rules = slices.Delete(s.cfg.Rules, i, i+1)
+		delete(s.ruleIndex, id)
+		for j := i; j < len(s.cfg.Rules); j++ {
+			s.ruleIndex[s.cfg.Rules[j].ID] = j
+		}
+	case "address":
+		s.addresses.remove(w.next())
+	case "service":
+		s.services.remove(w.next())
+	case "servgroup":
+		s.groups.remove(w.next())
+	case "schedule":
+		s.schedules.remove(w.next())
+	}
+}
+
+// Capabilities describes what StoneOS configurations express.
+func Capabilities() firemon.Capabilities {
+	return firemon.Capabilities{
+		ExcludeEntries: true, MixedAddressObjects: true, GroupEntries: true, WildcardFQDN: true,
+		MultiProtocolServices: true, RuleWindows: true, InlineServices: true, InlineFQDN: true, NumericRuleIDs: true,
+		MaxNameLength: 95,
+	}
 }

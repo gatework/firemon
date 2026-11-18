@@ -9,6 +9,7 @@ declared:
   - ./deploy
   - ./audit
   - ./hits
+  - ./converge
   - ./inventory
   - ./intake
   - ./report
@@ -25,7 +26,7 @@ declared:
 
 rules:
   - name: domain packages stay free of I/O
-    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./hits, ./inventory, ./intake, ./report, ./vendors/...]
+    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./hits, ./converge, ./inventory, ./intake, ./report, ./vendors/...]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
 
@@ -52,6 +53,10 @@ rules:
   - name: audit reviews the compiled domain only
     packages: [./audit]
     only_local: [., ./traffic]
+
+  - name: convergence reviews the domain with evidence and plans cleanups
+    packages: [./converge]
+    only_local: [., ./traffic, ./query, ./design, ./audit, ./hits]
 
   - name: hit counters are domain evidence
     packages: [./hits]
