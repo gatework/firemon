@@ -166,6 +166,7 @@ func (s *state) bindInterfaces() {
 		ifc := &s.cfg.Interfaces[i]
 		ifc.VirtualRouter = s.ifaceVR[ifc.Name]
 		for _, ref := range s.ifaceRefs[ifc.Name] {
+			ifc.AddressObjects = append(ifc.AddressObjects, ref)
 			p, ok := interfaceAddress(s.hostBits[ref])
 			if !ok {
 				s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Text: "interface " + ifc.Name + " ip " + ref, Reason: "unknown address object"})
@@ -201,6 +202,11 @@ func (s *state) flushRoutes() {
 		}
 		if p, ok := s.prefixValue(ref.hop); ok && p.IsSingleIP() {
 			r.NextHop = p.Addr()
+		}
+		for _, v := range []string{ref.dst, ref.hop} {
+			if _, isObject := s.addresses[v]; isObject {
+				r.Objects = append(r.Objects, v)
+			}
 		}
 		if !r.Destination.IsValid() {
 			s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Text: "static-route " + r.Name, Reason: "route without destination"})

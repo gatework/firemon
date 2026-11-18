@@ -171,3 +171,25 @@ func DeployCommands(s design.Script) []string {
 	}
 	return []string{strings.Join(s.Commands, "\n")}
 }
+
+// maxNameLength is the PAN-OS limit for object and rule names.
+const maxNameLength = 63
+
+// Naming returns the design naming policy for PAN-OS: names may hold
+// letters, digits, '.', '_', '-' and spaces, up to 63 characters, so IPv6
+// colons and prefix slashes become '_'.
+func Naming() design.Naming {
+	return design.Naming{Sanitize: func(name string) string {
+		b := []byte(name)
+		for i, c := range b {
+			ok := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-' || c == ' '
+			if !ok {
+				b[i] = '_'
+			}
+		}
+		if len(b) > maxNameLength {
+			b = b[:maxNameLength]
+		}
+		return string(b)
+	}}
+}

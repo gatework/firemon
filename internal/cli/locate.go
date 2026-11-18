@@ -82,7 +82,7 @@ func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[strin
 		if platforms[snap.Device], err = bootstrap.Lookup(snap.Vendor, snap.Config.Location, nil); err != nil {
 			return nil, nil, err
 		}
-		members = append(members, inventory.Member{Name: snap.Device, Firewall: loaded.Firewall})
+		members = append(members, inventory.Member{Name: snap.Device, Firewall: loaded.Firewall, Naming: platforms[snap.Device].Naming})
 	}
 	inv, err := inventory.New(members, inventory.Options{Now: o.deps.Now})
 	return inv, platforms, err

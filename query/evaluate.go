@@ -40,7 +40,7 @@ func (e *Engine) evaluate(p *Path, at time.Time) {
 		if len(ev.pieces) == 0 {
 			break
 		}
-		if r.InactiveAt(at) {
+		if e.inactive(r, at) {
 			continue
 		}
 		switch applies := zoneApplicability(r, p.From, p.To); {
@@ -158,6 +158,20 @@ func agree(final Outcome, possible []*firemon.Rule) bool {
 }
 
 func (ev *evaluator) overBudget() bool { return len(ev.pieces) > ev.max }
+
+// inactive reports whether r cannot match under the engine's schedule mode.
+func (e *Engine) inactive(r *firemon.Rule, at time.Time) bool {
+	switch e.schedules {
+	case ScheduleAlwaysActive:
+		return r.Spec().Disabled || r.ExpiredAt(at)
+	case ScheduleNeverActive:
+		return r.Spec().Disabled || r.Scheduled()
+	case ScheduleAt:
+		return r.InactiveAt(at)
+	default:
+		return r.InactiveAt(at)
+	}
+}
 
 // defaultOutcome is the vendor default action for the path's zones.
 func (e *Engine) defaultOutcome(p *Path) Outcome {

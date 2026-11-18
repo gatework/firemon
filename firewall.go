@@ -209,7 +209,12 @@ func (fw *Firewall) compileRules(res *resolver) {
 		schedules[fw.cfg.Schedules[i].Name] = &fw.cfg.Schedules[i]
 	}
 	fw.rules = make([]*Rule, len(fw.cfg.Rules))
+	seen := make(map[string]bool, len(fw.cfg.Rules))
 	for i, spec := range fw.cfg.Rules {
+		if seen[spec.ID] {
+			fw.issue("rule "+spec.ID, "rule ID declared more than once")
+		}
+		seen[spec.ID] = true
 		r := &Rule{position: i, spec: spec, loc: fw.loc}
 		r.match, r.bound, r.issues = ruleSpace(res, spec)
 		r.issues = append(r.issues, fw.ruleSemanticIssues(spec)...)

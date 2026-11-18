@@ -31,7 +31,7 @@ func (p *Planner) verify(changes []Change, intent Intent, needs []need, at time.
 	if err := p.checkScope(after, needs); err != nil {
 		return err
 	}
-	res, err := query.New(after, query.Options{Now: func() time.Time { return at }}).Query(intent.request(at))
+	res, err := p.engine(after, intent).Query(intent.request(at))
 	if err != nil {
 		return err
 	}

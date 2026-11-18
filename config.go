@@ -49,10 +49,13 @@ func (c *Config) Clone() *Config {
 	out.VirtualRouters = slices.Clone(c.VirtualRouters)
 	out.Zones = slices.Clone(c.Zones)
 	out.Interfaces = cloneEach(c.Interfaces, func(i Interface) Interface {
-		i.Addresses = slices.Clone(i.Addresses)
+		i.Addresses, i.AddressObjects = slices.Clone(i.Addresses), slices.Clone(i.AddressObjects)
 		return i
 	})
-	out.Routes = slices.Clone(c.Routes)
+	out.Routes = cloneEach(c.Routes, func(r Route) Route {
+		r.Objects = slices.Clone(r.Objects)
+		return r
+	})
 	out.Addresses = cloneEach(c.Addresses, func(a Address) Address {
 		a.Entries, a.Invalid = slices.Clone(a.Entries), slices.Clone(a.Invalid)
 		return a

@@ -20,7 +20,6 @@ var ErrUnverifiable = errors.New("design: no verifiable change")
 // Planner designs plans for one firewall. It is safe for concurrent use.
 type Planner struct {
 	fw     *firemon.Firewall
-	engine *query.Engine
 	naming Naming
 	now    func() time.Time
 }
@@ -31,12 +30,7 @@ func New(fw *firemon.Firewall, opts Options) *Planner {
 	if now == nil {
 		now = time.Now
 	}
-	return &Planner{
-		fw:     fw,
-		engine: query.New(fw, query.Options{Now: now}),
-		naming: opts.Naming.withDefaults(),
-		now:    now,
-	}
+	return &Planner{fw: fw, naming: opts.Naming.withDefaults(), now: now}
 }
 
 // need is what one zone pair must newly permit.
@@ -44,14 +38,14 @@ type need struct {
 	from, to string
 	region   traffic.Region // policy-space packets to open
 	scope    traffic.Region // policy-space packets of the intent on this pair
-	conflict traffic.Region // packets blocked by specific denies, kept denied
+	conflict traffic.Region // packets that must stay as they are: specific denies and undecidable parts
 	before   *firemon.Rule  // first deny deciding the need; nil means end
 }
 
 // Plan designs the changes that permit intent.
 func (p *Planner) Plan(intent Intent) (*Plan, error) {
 	at := p.now()
-	res, err := p.engine.Query(intent.request(at))
+	res, err := p.engine(p.fw, intent).Query(intent.request(at))
 	if err != nil {
 		return nil, err
 	}
@@ -68,15 +62,20 @@ func (p *Planner) Plan(intent Intent) (*Plan, error) {
 	}
 	cat := newCatalog(p.fw, p.naming)
 	var ruleChanges []Change
+	var opened []need
 	for _, n := range needs {
 		changes, err := p.open(n, intent, cat, at)
 		if err != nil {
-			return nil, err
+			// One zone pair that cannot be opened safely does not hide the
+			// plan for the others.
+			plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": "+err.Error())
+			continue
 		}
 		ruleChanges = append(ruleChanges, changes...)
+		opened = append(opened, n)
 	}
 	plan.Changes = append(slices.Clone(cat.created), ruleChanges...)
-	plan.Verified = p.verify(plan.Changes, intent, needs, at) == nil
+	plan.Verified = len(plan.Changes) == 0 || p.verify(plan.Changes, intent, opened, at) == nil
 	plan.Status = StatusChange
 	if len(plan.Conflicts) > 0 {
 		plan.Status = StatusConflict
@@ -85,6 +84,17 @@ func (p *Planner) Plan(intent Intent) (*Plan, error) {
 		plan.Status = StatusIndeterminate
 	}
 	return plan, nil
+}
+
+// engine evaluates fw for intent: permanent access ignores rules that
+// permit or deny only part of the time; scheduled access assumes every
+// unexpired scheduled rule is active.
+func (p *Planner) engine(fw *firemon.Firewall, intent Intent) *query.Engine {
+	mode := query.ScheduleNeverActive
+	if intent.Schedule != "" {
+		mode = query.ScheduleAlwaysActive
+	}
+	return query.New(fw, query.Options{Now: p.now, Schedules: mode})
 }
 
 func (p *Planner) blockedStatus(plan *Plan) Status {
@@ -113,7 +123,24 @@ func (p *Planner) needs(res *query.Result, intent Intent, plan *Plan) []need {
 			p.classify(n, d, intent, plan)
 		}
 	}
+	if p.fw.Semantics().PortServicesOnly {
+		for i := range out {
+			p.dropPortless(&out[i], plan)
+		}
+	}
 	return slices.DeleteFunc(out, func(n need) bool { return n.region.IsEmpty() })
+}
+
+// dropPortless removes protocols other than TCP, UDP and SCTP from a need on
+// vendors whose service objects carry only ports; such traffic is permitted
+// with application matching, which the plan reports instead of guessing.
+func (p *Planner) dropPortless(n *need, plan *Plan) {
+	ports := traffic.ProtocolService(traffic.ProtocolTCP).Union(traffic.ProtocolService(traffic.ProtocolUDP)).Union(traffic.ProtocolService(traffic.ProtocolSCTP))
+	portless := traffic.Space{Src: traffic.AnyAddress(), Dst: traffic.AnyAddress(), Service: traffic.AnyService().Subtract(ports)}
+	if rest := n.region.Intersect(portless); !rest.IsEmpty() {
+		plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": "+rest.String()+" needs an application match (no port service)")
+		n.region = n.region.SubtractRegion(rest)
+	}
 }
 
 func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan) {
@@ -141,6 +168,7 @@ func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan)
 		}
 	case query.OutcomeUnknown:
 		plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": "+d.Space.String())
+		n.conflict = n.conflict.Union(d.Space) // never opened blindly
 	case query.OutcomePermit, query.OutcomeUnset:
 	}
 }
@@ -162,10 +190,16 @@ func ruleIDs(rules []*firemon.Rule) string {
 	return strings.Join(ids, ",")
 }
 
-// catchAll reports whether a deny rule covers every source and destination.
+// catchAll reports whether a deny rule is a final "deny everything" rule:
+// every zone, every service, and every address of a family on both sides.
+// Narrower denies are deliberate and become conflicts.
 func catchAll(r *firemon.Rule) bool {
-	m := r.Match()
-	return m.Src.ContainsSet(traffic.AnyIPv4()) && m.Dst.ContainsSet(traffic.AnyIPv4())
+	m, s := r.Match(), r.Spec()
+	anyFamily := func(a traffic.AddressSet) bool {
+		return a.ContainsSet(traffic.AnyIPv4()) || a.ContainsSet(traffic.AnyIPv6())
+	}
+	return anyFamily(m.Src) && anyFamily(m.Dst) && m.Service.IsAny() &&
+		len(s.From) == 0 && len(s.To) == 0 && s.Scope == firemon.ZoneScopeAny
 }
 
 // open returns the cheapest verified changes that permit n.
@@ -207,18 +241,28 @@ type extension struct {
 	rule  *firemon.Rule
 	field Field
 	add   traffic.Space // only the field dimension is used
+	// whole is the requested set of the field on this zone pair; an
+	// existing object equal to it adds the same traffic as add.
+	whole traffic.Space
 	cost  int
 }
 
+// changes adds the missing part of the field, or one existing object
+// holding the whole target set when there is one: a /24 stays one object
+// rather than ranges around what the rule already has.
 func (x extension) changes(cat *catalog) []Change {
 	var names []string
 	switch x.field {
 	case FieldSource:
-		names = cat.addressNames(x.add.Src)
+		names = cat.wholeOr(x.whole.Src, x.add.Src)
 	case FieldDestination:
-		names = cat.addressNames(x.add.Dst)
+		names = cat.wholeOr(x.whole.Dst, x.add.Dst)
 	case FieldService:
-		names = cat.serviceNames(x.add.Service)
+		if name, ok := cat.services[x.whole.Service.String()]; ok {
+			names = []string{name}
+		} else {
+			names = cat.serviceNames(x.add.Service)
+		}
 	case FieldUnset:
 	}
 	return []Change{ExtendRule{RuleID: x.rule.ID(), Field: x.field, Names: names}}
@@ -240,11 +284,11 @@ func (p *Planner) extensions(n need, target traffic.Space, cat *catalog) []exten
 		fits := func(a, b traffic.Space) bool { return a.ContainsSpace(b) }
 		if m.Dst.ContainsSet(target.Dst) && m.Service.ContainsSet(target.Service) && fits(scope, traffic.Space{Src: scope.Src, Dst: m.Dst, Service: m.Service}) {
 			add := target.Src.Subtract(m.Src)
-			out = append(out, extension{rule: r, field: FieldSource, add: traffic.Space{Src: add}, cost: len(add.Ranges())})
+			out = append(out, extension{rule: r, field: FieldSource, add: traffic.Space{Src: add}, whole: scope, cost: len(add.Ranges())})
 		}
 		if m.Src.ContainsSet(target.Src) && m.Service.ContainsSet(target.Service) && fits(scope, traffic.Space{Src: m.Src, Dst: scope.Dst, Service: m.Service}) {
 			add := target.Dst.Subtract(m.Dst)
-			out = append(out, extension{rule: r, field: FieldDestination, add: traffic.Space{Dst: add}, cost: len(add.Ranges())})
+			out = append(out, extension{rule: r, field: FieldDestination, add: traffic.Space{Dst: add}, whole: scope, cost: len(add.Ranges())})
 		}
 		if m.Src.ContainsSet(target.Src) && m.Dst.ContainsSet(target.Dst) && fits(scope, traffic.Space{Src: m.Src, Dst: m.Dst, Service: scope.Service}) {
 			add := target.Service.Subtract(m.Service)
@@ -252,7 +296,7 @@ func (p *Planner) extensions(n need, target traffic.Space, cat *catalog) []exten
 			for range add.All() {
 				cost++
 			}
-			out = append(out, extension{rule: r, field: FieldService, add: traffic.Space{Service: add}, cost: cost})
+			out = append(out, extension{rule: r, field: FieldService, add: traffic.Space{Service: add}, whole: scope, cost: cost})
 		}
 	}
 	slices.SortStableFunc(out, func(a, b extension) int { return cmp.Compare(a.cost, b.cost) })
@@ -271,7 +315,7 @@ func extendable(r *firemon.Rule, from, to string) bool {
 func (p *Planner) newRule(n need, s traffic.Space, intent Intent, cat *catalog) AddRule {
 	index := cat.nextRule()
 	r := firemon.SecurityRule{
-		Name: p.naming.Rule(intent, index), Description: intent.Description,
+		Name: cat.unique(p.naming.Rule(intent, index)), Description: intent.Description,
 		From: []string{n.from}, To: []string{n.to}, Action: firemon.ActionPermit, Schedule: intent.Schedule,
 	}
 	for _, name := range cat.addressNames(s.Src) {

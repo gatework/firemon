@@ -21,6 +21,9 @@ var (
 	ErrDrift = errors.New("deploy: running configuration differs from the plan baseline")
 	// ErrNotApplied reports a readback that still needs changes.
 	ErrNotApplied = errors.New("deploy: readback still needs changes")
+	// ErrUnexpectedReadback reports a readback that differs from the
+	// configuration the plan predicts, for example after a device-side merge.
+	ErrUnexpectedReadback = errors.New("deploy: readback differs from the planned configuration")
 	// ErrNothingToDeploy reports a plan without changes or not verified.
 	ErrNothingToDeploy = errors.New("deploy: plan has no verified changes")
 )
@@ -120,12 +123,24 @@ func (p *checkedPlan) CheckBefore(before *firemon.Config) error {
 	return nil
 }
 
-// CheckAfter implements apply.Plan: planning the intent on the readback
-// must need no change.
-func (p *checkedPlan) CheckAfter(_, after *firemon.Config) (string, error) {
+// CheckAfter implements apply.Plan: the readback must be exactly the
+// baseline with the plan applied, and planning the intent on it must need
+// no change.
+func (p *checkedPlan) CheckAfter(before, after *firemon.Config) (string, error) {
 	fw, err := firemon.Compile(after)
 	if err != nil {
 		return "", err
+	}
+	expected := before.Clone()
+	if err := design.Apply(expected, p.plan.Changes); err != nil {
+		return "", err
+	}
+	want, err := firemon.Compile(expected)
+	if err != nil {
+		return "", err
+	}
+	if want.Fingerprint() != fw.Fingerprint() {
+		return "", ErrUnexpectedReadback
 	}
 	again, err := design.New(fw, design.Options{Now: p.now}).Plan(p.plan.Intent)
 	if err != nil {

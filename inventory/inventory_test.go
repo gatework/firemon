@@ -60,7 +60,7 @@ func lab(t *testing.T, coreRules ...firemon.SecurityRule) *inventory.Inventory {
 	dc := firewall(t,
 		[]link{{"d0", "up", "192.168.9.2/30"}, {"d1", "racks", "192.168.10.1/24"}},
 		[]route{{"0.0.0.0/0", "192.168.9.1"}})
-	inv, err := inventory.New([]inventory.Member{{"core", core}, {"edge", edge}, {"dc", dc}}, inventory.Options{Now: func() time.Time { return now }})
+	inv, err := inventory.New([]inventory.Member{{Name: "core", Firewall: core}, {Name: "edge", Firewall: edge}, {Name: "dc", Firewall: dc}}, inventory.Options{Now: func() time.Time { return now }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestInventory_Plan(t *testing.T) {
 func TestNew_RejectsDuplicates(t *testing.T) {
 	t.Parallel()
 	fw := firewall(t, []link{{"x0", "a", "10.9.0.1/24"}}, nil)
-	if _, err := inventory.New([]inventory.Member{{"a", fw}, {"a", fw}}, inventory.Options{}); err == nil {
+	if _, err := inventory.New([]inventory.Member{{Name: "a", Firewall: fw}, {Name: "a", Firewall: fw}}, inventory.Options{}); err == nil {
 		t.Fatal("want duplicate error")
 	}
 }

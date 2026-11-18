@@ -6,7 +6,8 @@
     "intrazone_action": "deny",
     "interzone_action": "deny",
     "default_virtual_router": "default",
-    "nat_order": "single"
+    "nat_order": "single",
+    "port_services_only": true
   },
   "time_zone": "UTC",
   "virtual_routers": [
@@ -49,6 +50,9 @@
       "virtual_router": "default",
       "addresses": [
         "203.0.113.2/30"
+      ],
+      "address_objects": [
+        "office uplink"
       ]
     },
     {
@@ -67,6 +71,9 @@
       "destination": "0.0.0.0/0",
       "next_hop": "203.0.113.1",
       "interface": "ethernet1/1",
+      "objects": [
+        "isp-gw"
+      ],
       "distance": 10,
       "metric": 10
     },

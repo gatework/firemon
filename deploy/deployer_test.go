@@ -25,6 +25,7 @@ type device struct {
 	text   string
 	writes []string
 	failOn string
+	extra  string // appended by the device after the last write
 }
 
 func (d *device) ReadConfiguration(context.Context) (*firemon.Config, error) {
@@ -36,6 +37,9 @@ func (d *device) Write(_ context.Context, command string) error {
 		return errors.New("device rejected command")
 	}
 	d.writes = append(d.writes, command)
+	if command == "exit" && d.extra != "" && len(d.writes) > 1 {
+		defer func() { d.text += d.extra; d.extra = "" }()
+	}
 	if command != "configure" {
 		d.text += command + "\n" // the final exit leaves configuration mode and is ignored by the parser
 	}
@@ -130,5 +134,19 @@ func TestDeployer_StopsOnRejectedCommand(t *testing.T) {
 	receipt, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Commands: commands})
 	if err == nil || receipt.State.Status == apply.StatusVerified || len(dev.writes) != 2 {
 		t.Fatalf("err %v status %s writes %d", err, receipt.State.Status, len(dev.writes))
+	}
+}
+
+// TestD7_UnexpectedReadbackFails covers a device that changes more than
+// the plan: the readback must be the baseline plus the plan exactly.
+func TestD7_UnexpectedReadbackFails(t *testing.T) {
+	t.Parallel()
+	text := fixture(t)
+	p, commands := planFor(t, text)
+	dev := &device{text: text, extra: "address \"device-added\"\n  ip 192.0.2.77/32\nexit\n"}
+	d := deploy.New(dev.open, deploy.Options{Journal: &journal{}, Now: func() time.Time { return now }})
+	_, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Commands: commands})
+	if !errors.Is(err, deploy.ErrUnexpectedReadback) {
+		t.Fatalf("got %v", err)
 	}
 }

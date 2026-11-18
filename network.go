@@ -62,6 +62,9 @@ type Interface struct {
 	// one also yields a connected route.
 	Addresses   []netip.Prefix `json:"addresses,omitempty"`
 	Description string         `json:"description,omitempty"`
+	// AddressObjects names address objects the interface addresses were
+	// taken from (PAN-OS), so they count as used.
+	AddressObjects []string `json:"address_objects,omitempty"`
 }
 
 // Route is a static route in a virtual router. Interface, NextHop or both
@@ -77,6 +80,9 @@ type Route struct {
 	NextVirtualRouter string `json:"next_virtual_router,omitempty"`
 	// Discard drops matching traffic (blackhole route).
 	Discard bool `json:"discard,omitempty"`
+	// Objects names address objects the destination or next hop was taken
+	// from (PAN-OS), so they count as used.
+	Objects []string `json:"objects,omitempty"`
 	// Distance is the administrative distance; Metric breaks ties between
 	// routes of equal distance.
 	Distance    uint32 `json:"distance,omitempty"`

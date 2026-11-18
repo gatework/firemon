@@ -104,6 +104,7 @@ func newState(loc *time.Location) *state {
 				InterzoneAction:      firemon.ActionDeny,
 				DefaultVirtualRouter: DefaultVirtualRouter,
 				NATOrder:             firemon.NATOrderSingle,
+				PortServicesOnly:     true,
 			},
 		},
 		loc:       loc,

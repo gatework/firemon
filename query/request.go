@@ -40,7 +40,24 @@ type Options struct {
 	MaxSpaces int
 	// MaxPaths bounds the number of paths one query evaluates.
 	MaxPaths int
+	// Schedules selects how rules with schedules or validity windows count.
+	Schedules ScheduleMode
 }
+
+// ScheduleMode tells how scheduled rules take part in evaluation.
+type ScheduleMode uint8
+
+// Schedule modes.
+const (
+	// ScheduleAt evaluates schedules at the request instant.
+	ScheduleAt ScheduleMode = iota
+	// ScheduleAlwaysActive treats every unexpired scheduled rule as active,
+	// for checking access that is itself scheduled.
+	ScheduleAlwaysActive
+	// ScheduleNeverActive ignores scheduled rules, for checking permanent
+	// access: a rule that permits only part of the time does not count.
+	ScheduleNeverActive
+)
 
 // Default evaluation budgets.
 const (

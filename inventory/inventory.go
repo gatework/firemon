@@ -21,6 +21,8 @@ var ErrDuplicate = errors.New("inventory: duplicate firewall name")
 type Member struct {
 	Name     string
 	Firewall *firemon.Firewall
+	// Naming is the vendor naming policy for planned objects.
+	Naming design.Naming
 }
 
 // Options configures an Inventory. The zero value evaluates at time.Now.
@@ -56,7 +58,7 @@ func New(members []Member, opts Options) (*Inventory, error) {
 		inv.members = append(inv.members, member{
 			name: m.Name, fw: m.Firewall,
 			engine:  query.New(m.Firewall, query.Options{Now: now}),
-			planner: design.New(m.Firewall, design.Options{Now: now}),
+			planner: design.New(m.Firewall, design.Options{Now: now, Naming: m.Naming}),
 		})
 	}
 	slices.SortFunc(inv.members, func(a, b member) int { return cmp.Compare(a.name, b.name) })

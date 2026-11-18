@@ -143,6 +143,9 @@ type Semantics struct {
 	// StaticNATFirst applies static mappings before dynamic destination NAT
 	// on separate-order vendors.
 	StaticNATFirst bool `json:"static_nat_first,omitempty"`
+	// PortServicesOnly reports that service objects carry only TCP, UDP or
+	// SCTP ports; other protocols need application matching (PAN-OS).
+	PortServicesOnly bool `json:"port_services_only,omitempty"`
 	// NumericRuleIDs reports that rule IDs are device-assigned numbers
 	// (Hillstone) rather than rule names (PAN-OS).
 	NumericRuleIDs bool `json:"numeric_rule_ids,omitempty"`

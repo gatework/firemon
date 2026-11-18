@@ -35,6 +35,9 @@ func newCatalog(fw *firemon.Firewall, naming Naming) *catalog {
 	for _, g := range cfg.ServiceGroups {
 		c.taken[g.Name] = true
 	}
+	for _, r := range cfg.Rules {
+		c.taken[r.ID], c.taken[r.Name] = true, true // rule names may not collide either (PAN-OS merges)
+	}
 	for name, set := range fw.Addresses() {
 		if key := set.String(); c.addresses[key] == "" {
 			c.addresses[key] = name
@@ -113,8 +116,19 @@ func serviceEntries(r traffic.ServiceRange) []firemon.ServiceEntry {
 	return out
 }
 
-// unique returns name, or name with the smallest free numeric suffix.
+// wholeOr returns one existing object equal to whole, or the objects for
+// part.
+func (c *catalog) wholeOr(whole, part traffic.AddressSet) []string {
+	if name, ok := c.addresses[whole.String()]; ok {
+		return []string{name}
+	}
+	return c.addressNames(part)
+}
+
+// unique returns the sanitized name, or that name with the smallest free
+// numeric suffix.
 func (c *catalog) unique(name string) string {
+	name = c.naming.Sanitize(name)
 	candidate := name
 	for i := 2; c.taken[candidate]; i++ {
 		candidate = name + "_" + strconv.Itoa(i)

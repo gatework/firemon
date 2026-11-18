@@ -86,3 +86,23 @@ func TestRun(t *testing.T) {
 		t.Errorf("shadowed by %v", by)
 	}
 }
+
+func TestA1_InterfaceAndRouteObjectsAreUsed(t *testing.T) {
+	t.Parallel()
+	cfg := &firemon.Config{
+		Vendor: firemon.VendorPaloAlto,
+		Addresses: []firemon.Address{
+			{Name: "uplink", Entries: []firemon.AddressEntry{firemon.PrefixEntry(netip.MustParsePrefix("203.0.113.2/32"))}},
+			{Name: "gw", Entries: []firemon.AddressEntry{firemon.HostEntry(netip.MustParseAddr("203.0.113.1"))}},
+		},
+		Interfaces: []firemon.Interface{{Name: "e1", AddressObjects: []string{"uplink"}}},
+		Routes:     []firemon.Route{{VirtualRouter: "default", Destination: netip.MustParsePrefix("0.0.0.0/0"), Interface: "e1", Objects: []string{"gw"}}},
+	}
+	fw, err := firemon.Compile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := audit.Run(fw, audit.Options{Now: func() time.Time { return now }}).Count(audit.KindUnusedAddress); n != 0 {
+		t.Fatalf("objects used by interfaces and routes reported unused: %d", n)
+	}
+}

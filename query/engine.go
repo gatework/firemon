@@ -12,11 +12,12 @@ import (
 // Engine evaluates requests against one firewall. It is immutable and safe
 // for concurrent use.
 type Engine struct {
-	fw       *firemon.Firewall
-	rules    []*firemon.Rule
-	now      func() time.Time
-	max      int
-	maxPaths int
+	fw        *firemon.Firewall
+	rules     []*firemon.Rule
+	now       func() time.Time
+	max       int
+	maxPaths  int
+	schedules ScheduleMode
 }
 
 // New returns an engine for fw.
@@ -28,6 +29,7 @@ func New(fw *firemon.Firewall, opts Options) *Engine {
 	return &Engine{
 		fw: fw, rules: fw.Rules(), now: now,
 		max: cmp.Or(opts.MaxSpaces, DefaultMaxSpaces), maxPaths: cmp.Or(opts.MaxPaths, DefaultMaxPaths),
+		schedules: opts.Schedules,
 	}
 }
 

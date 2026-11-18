@@ -18,6 +18,8 @@ type Naming struct {
 	Service func(r traffic.ServiceRange) string
 	// Rule names a new rule; index counts the rules created for one intent.
 	Rule func(i Intent, index int) string
+	// Sanitize adapts a name to the vendor's object name rules.
+	Sanitize func(name string) string
 }
 
 // DefaultNaming follows the operations convention of the Perl designer:
@@ -25,7 +27,7 @@ type Naming struct {
 // TCP_8000-8010, UDP_53, ICMP, ICMP_8, PROTO_89; rules are named after the
 // intent name or fm_<index>.
 func DefaultNaming() Naming {
-	return Naming{Address: addressName, Service: serviceName, Rule: ruleName}
+	return Naming{Address: addressName, Service: serviceName, Rule: ruleName, Sanitize: func(s string) string { return s }}
 }
 
 func (n Naming) withDefaults() Naming {
@@ -38,6 +40,9 @@ func (n Naming) withDefaults() Naming {
 	}
 	if n.Rule == nil {
 		n.Rule = d.Rule
+	}
+	if n.Sanitize == nil {
+		n.Sanitize = d.Sanitize
 	}
 	return n
 }

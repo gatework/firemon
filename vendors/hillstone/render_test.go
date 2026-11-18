@@ -1,6 +1,7 @@
 package hillstone_test
 
 import (
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,5 +84,16 @@ func TestRenderer_RoundTrip(t *testing.T) {
 	}
 	if res.Verdict != query.VerdictAllowed {
 		t.Fatalf("after rendering: %s", res.Verdict)
+	}
+}
+
+func TestRenderer_IPv6Range(t *testing.T) {
+	t.Parallel()
+	p := &design.Plan{Changes: []design.Change{design.AddAddress{Address: firemon.Address{Name: "v6r", Entries: []firemon.AddressEntry{
+		firemon.RangeEntry(netip.MustParseAddr("2001:db8::1"), netip.MustParseAddr("2001:db8::9")),
+	}}}}}
+	s, err := hillstone.Renderer{}.Render(p)
+	if err != nil || s.Commands[0] != `address "v6r" ipv6` {
+		t.Fatalf("got %v %v", s.Commands, err)
 	}
 }

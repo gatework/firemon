@@ -48,7 +48,7 @@ func (Renderer) Render(plan *design.Plan) (design.Script, error) {
 
 func renderAddress(a firemon.Address) ([]string, error) {
 	head := "address " + q(a.Name)
-	if len(a.Entries) > 0 && a.Entries[0].Kind == firemon.AddressKindPrefix && a.Entries[0].Prefix.Addr().Is6() {
+	if len(a.Entries) > 0 && (a.Entries[0].Prefix.Addr().Is6() || a.Entries[0].From.Is6()) {
 		head += " ipv6"
 	}
 	out := []string{head}
