@@ -69,6 +69,10 @@ func (ev *evaluator) taint(r *firemon.Rule) {
 	bound := r.Bound()
 	var next []piece
 	for _, pc := range ev.pieces {
+		if !addressesOverlap(pc.space, bound) {
+			next = append(next, pc)
+			continue
+		}
 		hit := pc.space.Intersect(bound)
 		if hit.IsEmpty() {
 			next = append(next, pc)
@@ -87,6 +91,10 @@ func (ev *evaluator) decide(r *firemon.Rule, o Outcome) {
 	match := r.Match()
 	var next []piece
 	for _, pc := range ev.pieces {
+		if !addressesOverlap(pc.space, match) {
+			next = append(next, pc)
+			continue
+		}
 		hit := pc.space.Intersect(match)
 		if hit.IsEmpty() {
 			next = append(next, pc)
@@ -197,4 +205,10 @@ func outcomeOf(a firemon.Action) Outcome {
 	default:
 		return OutcomeUnknown
 	}
+}
+
+// addressesOverlap is a cheap, allocation-free pre-check: spaces whose
+// sources or destinations are disjoint cannot overlap.
+func addressesOverlap(a, b traffic.Space) bool {
+	return a.Src.Overlaps(b.Src) && a.Dst.Overlaps(b.Dst)
 }

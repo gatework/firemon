@@ -15,7 +15,7 @@ var ErrInvalidAddress = errors.New("traffic: invalid address")
 // AddressSet is an immutable set of IPv4 and IPv6 addresses. The zero value
 // is the empty set.
 type AddressSet struct {
-	ips *netipx.IPSet // nil means empty
+	ips *netipx.IPSet // nil exactly when empty (see build)
 }
 
 // AnyAddress returns the set of every IPv4 and IPv6 address.
@@ -106,7 +106,7 @@ func (s AddressSet) Subtract(o AddressSet) AddressSet {
 }
 
 // IsEmpty reports whether s holds no address.
-func (s AddressSet) IsEmpty() bool { return s.ips == nil || len(s.ips.Ranges()) == 0 }
+func (s AddressSet) IsEmpty() bool { return s.ips == nil }
 
 // Equal reports whether s and o hold the same addresses.
 func (s AddressSet) Equal(o AddressSet) bool {

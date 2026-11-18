@@ -24,8 +24,11 @@ func (s Space) Intersect(o Space) Space {
 	return Space{Src: s.Src.Intersect(o.Src), Dst: s.Dst.Intersect(o.Dst), Service: s.Service.Intersect(o.Service)}
 }
 
-// Overlaps reports whether s and o share a packet.
-func (s Space) Overlaps(o Space) bool { return !s.Intersect(o).IsEmpty() }
+// Overlaps reports whether s and o share a packet. It checks the address
+// dimensions without allocating before intersecting services.
+func (s Space) Overlaps(o Space) bool {
+	return s.Src.Overlaps(o.Src) && s.Dst.Overlaps(o.Dst) && s.Service.Overlaps(o.Service)
+}
 
 // ContainsSpace reports whether every packet of o is in s.
 func (s Space) ContainsSpace(o Space) bool {
@@ -44,6 +47,12 @@ func (s Space) Equal(o Space) bool {
 // the sources outside o; then the shared sources with destinations outside
 // o; then the shared sources and destinations with services outside o.
 func (s Space) Subtract(o Space) []Space {
+	if !s.Src.Overlaps(o.Src) || !s.Dst.Overlaps(o.Dst) {
+		if s.IsEmpty() {
+			return nil
+		}
+		return []Space{s}
+	}
 	inter := s.Intersect(o)
 	if inter.IsEmpty() {
 		if s.IsEmpty() {
