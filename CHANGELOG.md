@@ -1,128 +1,33 @@
 # Changelog
 
-## Go v0.2.1 - 2026-11-08
+All notable changes are documented here, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-- Reduce graph sealing allocations by sharing catalog construction helpers,
-  allocating catalog objects together and streaming the semantic digest.
-  Preserve declaration order, diagnostics and digest bytes.
-- Replace recursive group-cycle checks with an explicit traversal stack so
-  deeply nested address and service groups remain bounded by heap capacity.
-- Validate static NAT offsets with exact 128-bit address arithmetic and an
-  overflow carry, including overlapping mappings near the IPv6 boundary.
-- Retain the v0.2.0 public APIs, source/evidence parser, exact traffic proofs,
-  snapshot semantic format 10, reconstruction format 2 and approval format 4.
-  Add cross-vendor checks that complete policy results contain no unknown traffic.
+## [Unreleased]
 
-## Go v0.2.0 - 2026-11-08
+### Changed
 
-Requires Go 1.27 or newer. Public API changes are intentional during development;
-see the [migration guide](docs/refactoring.md). The connector adapter is released
-separately as `adapter/netconnector/v0.2.0`.
+- **Breaking:** v2 rewrite. The module is rebuilt around `traffic` (exact set algebra), the `firemon` domain model and compiler, vendor packages for Hillstone and PAN-OS, and the `query`, `design` and `deploy` workflows. The v0.2 API is removed.
 
-- Reduce policy/NAT matching allocations and reuse effective partitions within
-  each risk-analysis context. Synthetic benchmarks report about 49% lower Huawei
-  policy-query time and 78% lower batch-risk time; see the
-  [measurements and verification](docs/2026-11-07-core-algorithms.md).
-- Bound cumulative nested declaration and evidence copies before allocation,
-  including unknown risk findings, and return no partial result on budget failure.
-- Avoid repeated snapshot loads when cache retention is disabled or entries are
-  evicted. Keep conditional declarations when interface/zone evidence is missing,
-  and honor explicit real/translated views with native forward verification.
-- Preserve inline source/destination literals when rendering Palo Alto NAT
-  additions, while rejecting inconsistent or unowned inline address records.
-- Split scheduled NAT aliases before discovery for real/translated queries with
-  pinned topology. Preserve exact active windows, unknown calendars and copy limits.
+### Added
 
-- Add simple source/destination/service requests, row-local input errors and
-  independent `Searcher.Query`; remove the mixed `BatchDesigner.Query` facade.
-- Cache immutable graphs and address indexes with bounded LRU and merged loads.
-  Discover both endpoints and reversible static NAT aliases while preserving
-  conditional ingress, scopes, time windows and incomplete evidence.
-- Separate native declarations from first-match hits, restore exact original
-  policy traffic through NAT, and partition finite policy/NAT schedules exactly.
-  Finite business designs require explicit services and capture-bound clock evidence.
-- Reuse exact policy pullbacks in migration ownership proofs; support reversible
-  service-port aliases and verified Huawei DNAT-port migration. Unproved native
-  inverses and SRX DNAT-port migration remain refused.
-
-- Isolate migration compiler/renderer ownership and reject cancellation after
-  rendering. Charge nested declarations before graph copies and enforce input
-  region limits consistently across public queries.
-- Use ordered interval scans for address subtraction, IPv6 intersection and
-  containment. Remove redundant Huawei/ScreenOS transaction forwarding methods.
-- Add caller contexts to `operations.DecodeBatchRequest` and `DecodeTopology`;
-  bounded JSON reads stop between reads on cancellation or repeated no progress.
-- Separate raw response history from save-result interpretation. Accept error
-  words in verified prompts and Fortinet configuration values while retaining
-  rejection evidence and requiring a complete, unambiguous automatic-save setting.
-
-- Integrate published `gatework/parser v0.1.0` for immutable text indexing and
-  `gatework/set v0.1.0` for IPv4 interval sets. Separate Hillstone document,
-  catalog and topology responsibilities while preserving parsed graphs.
-  Remove duplicate line/cursor APIs and transaction reader state. XML retains
-  fragment evidence and now enforces its physical line budget exactly.
-
-- Add bounded `firemon parse` inspection and collector backup replay with path,
-  size and checksum validation, anonymous reports and explicit service catalogs.
-- Evolve Hillstone block scopes, inline policy selectors, object headers and
-  schedule reopenings. Load observed algosec-rb service definitions without
-  embedding a device catalog or broadening ICMP type/code matches.
-- Unify PAN logical interface and route parsing for set/XML, bind topology before
-  routes, separate IPv4/IPv6 route identity, and retain IPv6 activation and service
-  protocol constraints. Unsupported application-default semantics remain unknown.
-  See the [offline corpus report](docs/2026-11-07-parser-corpus.md).
-- Rename `analysis.RequestOptimizer` to `analysis.Optimizer` and
-  `analysis.PolicyMigrator` to `analysis.Migrator`, without compatibility aliases.
-- Accept only `paloalto`, `srx`, `huawei`, `hillstone`, `fortinet`, `netscreen`
-  and `asa` at the vendor registry and connector adapter boundaries. The adapter
-  maps canonical names to connector profiles internally.
-- Remove unreachable helpers and forwarding wrappers; share bounded, strict JSON
-  I/O and native schedule preparation. Shorten internal names and use standard
-  library comparison and typed error inspection.
-- Separate declared object/policy names from internal IDs. Remove name-to-ID
-  fallbacks in command rendering, exclude unnamed values from named-object reuse,
-  and reject a PAN insertion whose existing ordering anchor has no name.
-- Check rule collisions using vendor policy identity: retain SRX zone pairs and
-  separate numbered policies/ASA ACL entries from their display labels.
-- Preserve snapshot format 10, reconstruction format 2 and approval format 4,
-  including existing JSON output, unknown evidence, exact traffic proofs and
-  durable deployment recovery. See the [module audit](docs/2026-11-07-go-cleanup.md).
-
-## Go v0.1.0 - 2026-11-07
-
-First versioned release of `github.com/gatework/firemon`. Requires Go 1.27 or newer.
-The earlier Ruby gem has a separate repository and version history.
-
-- Provide a concrete immutable firewall graph, separate StaticNAT/DynamicNAT,
-  staged parsers, snapshot persistence, exact first-match policy and packet
-  evaluation for Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA.
-- Add typed absolute/weekly calendars with capture-bound clock evidence, civil
-  timezone/DST handling and exact future proof partitions across seven drivers.
-- Support exact business-request decomposition/coalescing, scoped complete-object
-  and group reuse, bounded candidate selection, declared/effective risk evidence,
-  convergence and evidence-bound reclamation.
-- Compile atomic policy/NAT migrations with explicit context mappings, selected
-  dependency closure, source packet equivalence and target outside preservation.
-  Bind source and target snapshots into approval, reconstruction and independent
-  native readback. Unsupported selected effects return issues without a plan.
-- Provide offline CLI commands with consistent help, checked output, cancellable
-  input and exit codes, plus embeddable collection/design/deployment orchestration
-  with durable receipts and independent recovery without uncertain write replay.
-- Remove package-level native parser conveniences, forwarding APIs and historical
-  approval encodings. Current formats are snapshot semantic 10, reconstruction 2
-  and approval 4; older formats are rejected instead of silently upgraded.
-- Validate 42 directed basic policy migrations, seven recurring schedule targets
-  and 16 complete NAT migration/readback cases with synthetic captures. These do
-  not establish unrestricted vendor parity or real-device acceptance.
-
-The optional connector adapter is a separate Go module. Native capabilities and
-remaining refusals are documented in the [implementation report](docs/2026-11-07-domain-improvements.md),
-[schedule matrix](vendors/SCHEDULES.md) and [migration matrix](vendors/MIGRATION.md).
-The [performance report](docs/2026-11-07-domain-benchmarks.md) records measured
-benefits and costs without claiming production workload performance.
-
-## Ruby 0.1.0 - 2026-10-17 (separate project history)
-
-- 初始化 gem 命名空间、版本常量和基础异常。
-- 集成 Ruby 3.3、3.4、4.0 CI、gem 隔离安装验证和 GitHub Release 自动发布。
-- 当前版本为项目骨架，尚未实现设备连接或命令操作。
+- `traffic`: exact IPv4/IPv6 address, port and service sets; spaces and disjoint regions.
+- `firemon`: declarative configuration model, compiler, fingerprints, JSON round trip.
+- `vendors/hillstone` and `vendors/paloalto`: parsers (including legacy StoneOS policy blocks) and renderers with rollback.
+- `query`: ordered first-match evaluation with routing, NAT and undecidable-rule handling; address usage lookup.
+- `design`: verified change plans that reuse objects, extend rules within the intent or add rules before the deciding deny.
+- `deploy` and `adapter/netconnector`: fingerprint-checked, journaled deployment on go-netops `apply`.
+- `audit`: redundant, shadowed, disabled, expired, undecidable and permit-any rules; unused objects.
+- `adapter/filestore`: device snapshots used offline by every read command.
+- `inventory`: locating the firewalls a flow crosses (ADR 0006) and planning on each.
+- Predefined service books: embedded per-vendor defaults, device books with `--service-book`, `firemon services` (ADR 0007).
+- Review round 2: route installation and ECMP, address-family split, single-list (PAN-OS) and separate (StoneOS) NAT first-match with zone checks per routed part, schedule modes, strict catch-all denies, unique rule names, readback equality on deploy, parsers that never widen unreadable rules.
+- `intake` tolerant input, domain and application targets (ADR 0009), protected networks and HA clusters (ADR 0008), the `report` package with candidates and group aggregation (ADR 0010), `firemon check`.
+- Inventory: `role: active|backup` selects the member evaluated and planned on; `protected_zone` names the zone behind the protected networks, which act as routes to it, while the far end of a flow is reached through the peer zone (transparent firewalls); traffic with both ends behind one interface is reported as not crossing.
+- Design treats rules ahead that only narrow by application, URL category or user as a warning, not a blocker; conflicts and warnings print even without changes.
+- Policy convergence (ADR 0014): `firemon converge` reports unused objects (through a reference graph that includes QoS, DoS and PBF), rules that never take effect, broad permits and mergeable rules with their evidence and tier, and `--plan` designs the safe ones as changes verified to keep every decision, with rollback.
+- Hit counters: `firemon hits` collects rule hit counters read-only (PAN-OS; StoneOS experimental) or imports them as JSON/CSV; converge uses them for zero-hit evidence.
+- Migration (ADR 0015): `firemon migrate --to VENDOR` translates a configuration into the other vendor's commands with a fidelity report; untranslatable rules are carried over disabled.
+- NAT design (ADR 0012): `--nat snat|dnat|static` with `--nat-ip`, `--nat-port`, `--egress` on `design` and `check --design`; reuses translations that already match first, reports conflicts and missing public addresses, places new NAT rules before the rule that would match first, and designs the matching security rule.
+- First-match accuracy (ADR 0013): incomplete StoneOS rules never match, undecidable rules keep their certain part, PAN-OS interface addresses translate to the host.
+- Policy-based routing (StoneOS pbr-policy and bindings) applied before the routing table, with conditional branches for user-group entries; NAT hits report their order position, translated traffic and skipped disabled rules (ADR 0011).
+- `firemon` CLI: parse, query, usage, audit, design, deploy, collect, locate.

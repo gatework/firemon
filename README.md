@@ -1,103 +1,125 @@
 # firemon
 
-Go firewall configuration and policy automation. The approved [specification](docs/spec.md) and nine-task [execution plan](docs/plans/go-firewall.md) are implemented and verified within the documented capability boundaries. See the [requirement audit and review results](docs/verification.md) and [cross-vendor business contracts](docs/contracts.md).
+Firewall policy automation for Hillstone StoneOS and Palo Alto PAN-OS: parse a running configuration, answer "is this traffic allowed and by which rule", design the smallest verified change that permits a request, render it as device commands, and deploy it safely.
 
-The [domain refactoring and API migration guide](docs/refactoring.md) records the module audit, Perl responsibility mapping, shared contracts and development conventions.
+Module `github.com/gatework/firemon`, Go 1.26 or later.
 
-The [Go cleanup audit](docs/2026-11-07-go-cleanup.md) records the v0.2.0 API changes module by module, including shorter analysis APIs and canonical vendor inputs. The [core algorithm report](docs/2026-11-07-core-algorithms.md) documents query and risk improvements, local measurements and remaining capability limits.
-
-The [2026-11-07 implementation report](docs/2026-11-07-domain-improvements.md) describes typed weekly schedules, exact request coalescing, scoped object reuse, atomic policy/NAT migration and the removal of development compatibility APIs. [Schedule capabilities](vendors/SCHEDULES.md), [migration capabilities](vendors/MIGRATION.md) and [measured performance](docs/2026-11-07-domain-benchmarks.md) state the verified boundaries.
-
-The [parser design](docs/parser-design.md) maps Perl's content, multi-pass parsing and object catalogs into Go's Content/Builder implementation across all seven vendors. The [shared foundation report](docs/2026-11-07-parser-foundation.md) documents the published `gatework/parser` and `gatework/set` dependencies and Hillstone component ownership. [Rewrite verification](docs/parser-rewrite-verification.md) records actual Perl comparisons, preserved graph/snapshot behavior and local performance checks.
-
-The [business lifecycle](docs/business-lifecycle.md) adds frozen-inventory request batches, partial per-input planning, explicit NAT and finite schedule intent, native usage analysis, and durable selected-device execution/recovery. [Actual Perl evidence](docs/business-oracle.md) and [local verification](docs/business-verification.md) state the supported behavior and limits.
-
-The firewall graph includes interfaces, routes, zones, addresses and groups, services and groups, schedules, security rules, **StaticNAT**, **DynamicNAT**, and NAT pools. Vendor execution order is retained separately from object identity.
-
-This branch converts the original Ruby gem skeleton to Go while retaining Git history. The Ruby and Perl Algosec implementations are reference implementations, not runtime dependencies.
-
-Use the versioned core module from a Go application:
+## Install
 
 ```sh
-go get github.com/gatework/firemon@v0.2.1
+go install github.com/gatework/firemon/cmd/firemon@latest
 ```
 
-The connector adapter is a separate module with its own version tags; see its
-[installation and integration guide](adapter/netconnector/README.md). Releases
-provide Go modules and source archives; no precompiled CLI binaries are attached.
+## Command line
 
-Requires Go 1.27 or newer. Run `go test ./...` and `go vet ./...` from this directory. No database or device connection is required for offline tests. The [Go 1.27 migration notes](docs/refactoring.md#go-127-business-module-update) describe parser capacity, confirmed completion and CLI exit codes.
-
-The [benchmark matrix](docs/benchmarks.md) includes reproducible synthetic workloads for all seven parsers and queries, plus NAT, packet routing, snapshots, planning and exact traffic algorithms.
-
-The approved vendor scope is Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA. The [status matrix](docs/status.md) distinguishes implemented slices from remaining work. Parsers are `hillstone`, `paloalto` (set/XML), `asa`, `srx` (Junos display-set), `netscreen` (ScreenOS) `fortinet` (FortiOS config/edit) and `huawei` (USG current-configuration); native syntax coverage is reported per fixture.
-
-Offline example (synthetic or sanitized configuration):
-
-Use `parse` to inspect a configuration or replay a collector backup directory
-without publishing snapshots:
+The one-shot query for operators:
 
 ```sh
-go run ./cmd/firemon parse --file ./lab.cfg --vendor hillstone --complete
-go run ./cmd/firemon parse --dir ./backups --vendor hillstone --vendor paloalto
-go run ./cmd/firemon parse --dir ./backups --vendor hillstone --services ./services.json
+firemon check --inventory firemon.yaml --src "10.250.119.0 255.255.255.0，10.250.120.5-9" \
+  --dst "1.1.1.1、api.example.com" --service "443, udp 53, app:ssh" --design --name REQ-1001
 ```
 
-Directory parsing reads collector `summary.json` schema 2, verifies each selected
-file's size and SHA-256, and reports anonymous sample IDs, object counts and
-diagnostic codes/spans. Relocated exports require a matching `plan.json` entry.
-A failed capture or file produces a nonzero exit after the remaining samples are
-processed. Capture success alone does not establish completeness. `--services`
-accepts an explicitly supplied Hillstone catalog in algosec-rb's normalized JSON
-format; device declarations take precedence. See the [corpus verification and
-remaining capabilities](docs/2026-11-07-parser-corpus.md).
+It reads the addresses and services in any common form, locates the firewalls through the protected networks of `firemon.yaml` (falling back to routing), evaluates NAT and access control on each HA cluster, and prints per firewall 完全命中 / 部分命中 / 需要新增 / 被拒绝 / 无法判定, the permitting and blocking rules, the best rules to modify and why the others are not, the traffic no firewall carries, and with `--design` the verified commands and rollback. `--resolve` resolves domains so address-based rules can be decided; `--json` prints the report as data.
 
-To publish a synthetic or sanitized offline capture:
+```yaml
+# firemon.yaml
+firewalls:
+  - name: SZX9-FW01
+    cluster: SZX9-FW
+    protected:
+      - zone: INSIDE
+        networks: [10.250.0.0/16]
+  - name: SZX9-FW02
+    cluster: SZX9-FW
+```
+
+Every command reads the configuration from `--config FILE`, from a stored snapshot with `--snapshot NAME` (directory `--store`), or from the device with `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output.
 
 ```sh
-go run ./cmd/firemon import --store ./snapshots --device lab --vendor hillstone \
-  --file ./lab.cfg --complete --publication import-1
-go run ./cmd/firemon inspect --store ./snapshots --device lab
-go run ./cmd/firemon query --store ./snapshots --device lab \
-  --source 192.0.2.10/32 --destination 198.51.100.20/32 --service tcp/443 \
-  --from-zone inside --to-zone outside
+# Store a device's configuration as a snapshot; later commands use --snapshot fw1
+firemon collect --vendor hillstone --host 10.0.0.1 --user ops --name fw1
+firemon collect --list
+
+# Objects, diagnostics and rules that cannot be evaluated offline
+firemon parse --vendor hillstone --config fw1.txt
+
+# How the firewall treats traffic: zones, NAT, deciding rules, verdict (exit 3 unless allowed)
+firemon query --vendor paloalto --config pa1.txt --src 10.1.0.0/24 --dst 192.0.2.10 --service tcp/443
+
+# Which objects and rules reference an address
+firemon usage --vendor hillstone --config fw1.txt --addr 10.250.119.11
+
+# Which firewalls among all snapshots a flow crosses, each verdict, and per-firewall plans
+firemon locate --src 10.1.0.5 --dst 192.0.2.10 --service tcp/443 --design
+
+# Redundant, shadowed, expired and disabled rules, permit-any rules, unused objects
+firemon audit --vendor hillstone --config fw1.txt
+
+# Transparent (layer-2) HA clusters: protected networks act as routes to the protected zone,
+# everything else is reached through the peer zone; the active member is evaluated and planned on.
+#   firewalls:
+#     - {name: szx9-in-fw01, cluster: SZX9-IN, role: active, protected_zone: l2-trust,
+#        protected: [{networks: [10.250.0.0/16, 10.254.0.0/16]}]}
+#     - {name: szx9-in-fw02, cluster: SZX9-IN, role: backup, protected_zone: l2-trust,
+#        protected: [{networks: [10.250.0.0/16, 10.254.0.0/16]}]}
+firemon check --inventory firemon.yaml --src 10.248.30.5 --dst 10.250.116.25 --service tcp/9600 --design
+
+# Design and render the change that permits a request (no device access)
+firemon design --vendor paloalto --config pa1.txt --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 \
+  --name REQ-1001 --description "ticket 1001"
+
+# Publish a server port (DNAT) with its security rule; NAT rules match in order, so the
+# new rule goes before the rule that would otherwise match first (snat and static work alike)
+firemon design --vendor hillstone --config fw1.txt --src any --dst 10.0.5.20 --service tcp/443 \
+  --nat dnat --nat-ip 198.51.100.50 --nat-port 8443 --name REQ-1002
+
+# Policy convergence: unused objects, ineffective, broad and mergeable rules; --plan writes the
+# safe cleanups as commands verified to keep every decision, with rollback
+firemon hits --host 10.0.0.2 --user ops --vendor paloalto --name pa1   # optional: read-only hit counters
+firemon converge --snapshot pa1 --plan
+
+# Migration to another vendor: draft the mapping, fill in the ports, translate
+firemon migrate --vendor hillstone --config fw1.txt --to paloalto --init-mapping map.yaml
+firemon migrate --vendor hillstone --config fw1.txt --to paloalto --mapping map.yaml --out pa-migration
+
+# Design on the live device; with --apply push, verify and save/commit after confirmation
+firemon deploy --vendor hillstone --host 10.0.0.1 --user ops --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 --apply
 ```
 
-`--complete` asserts the capture was fully received; unsupported syntax can still make the parsed graph incomplete. Incomplete offline imports are archived without replacing current. Use `inspect --revision <revision>` to inspect an archived graph. Updates require `--expected <current-revision>` and a new publication ID. A known capture time can be supplied as `--captured-at <RFC3339>`.
+Built-in services differ by vendor, model and release. `firemon services --vendor hillstone` prints the predefined service book firemon assumes; when the device differs, save a corrected JSON book (`{"HTTP-EXT": ["tcp/8080"]}`) and pass it with `--service-book` (see ADR 0007). Names missing from the book leave the rest of a rule's service list decisive: traffic that a known service matches is decided by the rule, the rest is reported as possibly matched.
 
-For business queries, provide source and destination addresses and optionally a
-service. Device, zone, object and static NAT associations are discovered locally:
+Addresses accept `10.0.0.1`, `10.0.0.0/24`, `10.0.0.1-10.0.0.9` and `any`; services accept `tcp/443`, `udp/53`, `tcp/8000-8010`, `icmp`, `icmp/8`, `89` and `any`, comma separated. Transparent (layer-2) deployments need `--from-zone` and `--to-zone`, because zones cannot be derived from routing.
+
+## Library
+
+| Package | Role |
+|---|---|
+| `traffic` | Exact set algebra: addresses (IPv4/IPv6), services, spaces and regions |
+| `firemon` | Domain model (`Config`) and compiler (`Compile` → `Firewall`) |
+| `query` | Ordered first-match evaluation with routing and NAT |
+| `design` | Verified change plans: reuse objects, extend rules, add rules |
+| `audit` | Shadowing, redundancy and hygiene review |
+| `inventory` | Firewalls a flow crosses: protected networks, routing fallback, next-hop chains, HA clusters |
+| `intake` | Tolerant reading of operator input with coded notes |
+| `report` | Per-firewall classification, candidate rules and plans |
+| `adapter/yamlfile`, `adapter/dns` | Operator inventory file; optional domain resolution |
+| `deploy` | Fingerprint-checked, journaled deployment on go-netops `apply` |
+| `vendors/hillstone`, `vendors/paloalto` | Parsing and rendering per vendor |
+| `adapter/netconnector` | Device access through net-connector |
+| `adapter/filestore` | Snapshot directory: raw text, parsed configuration, fingerprint |
+
+See the package examples (`go doc github.com/gatework/firemon/query`) and the [ADRs](docs/adr) for the model and the semantics.
+
+## Semantics in one paragraph
+
+Rules are evaluated in device order and the first match decides, deny rules included; disabled rules and rules outside their schedule do not match. Anything that cannot be evaluated offline (domain names, application identification, dynamic groups, unknown objects) makes a rule undecidable: the query reports `indeterminate` instead of guessing. A design extends an existing rule only when the extension cannot permit anything outside the request, never overrides a specific deny unless asked (`--override`), and is verified by applying it to a copy of the configuration before it is shown.
+
+## Development
 
 ```sh
-go run ./cmd/firemon request-query --store ./snapshots \
-  --src '192.0.2.10,192.0.2.11' --dst 198.51.100.20 --service 443
+make check                                  # the full gate (STANDARD.md MOD-5)
+make fuzz                                   # fuzz the algebra and both parsers
+FIREMON_CORPUS=/path/to/backups make corpus # parse private configurations, aggregate output only
 ```
 
-A bare port means TCP; UDP uses `udp/53`. Omitted services query all services.
-Use `--at RFC3339` or `--start RFC3339 --end RFC3339` for time evaluation, or
-`--file requests.json` for independently validated rows. The reusable
-`operations.Searcher` caches immutable graphs and address indexes, reads the
-current manifest for each batch, and reevaluates time and policy decisions.
-Results distinguish declarations, first-match traffic, NAT views and conditional
-paths. `request-plan` requires established topology for inferred ingress, explicit
-service intent, and `--clocks clocks.json` for finite changes. See the
-[business request contract](docs/business-lifecycle.md) and
-[implementation and verification report](docs/2026-11-07-search.md).
-
-`query` evaluates the supplied policy address/zone context. `policy.Engine.QueryPacket` also models PAN original-address/post-DNAT-zone, ASA real-address ACL paths, SRX post-DNAT policy followed by permitted source translation, ScreenOS original-address/service policy with MIP/VIP destination-zone resolution, FortiOS VIP routing followed by policy-owned source translation, Huawei translated-destination/service policy followed by permitted source translation, and the narrow StoneOS 5.5R8 packet model documented below. `nat` preserves separate static/dynamic objects, native order and inverse/pipeline steps; uncertain versions or mapping semantics return explicit unknown/error. For SRX, ScreenOS, FortiOS and Huawei, its `--to-zone` is the destination security zone after resolving DNAT. `plan` renders supported changes for all seven implemented vendors for review.
-
-Fortinet imports accept `--vdom <name>` (default `root`). One firewall graph represents that selected VDOM; `Metadata.Context` survives snapshot loading, and the CLI uses it as the default query scope. The Go API takes `Request.Scope` explicitly. Commands are relative to the reported VDOM. The online adapter verifies and selects that existing VDOM; persistence requires verified automatic save mode. VIP identity, `match-vip` policy selection, forward port mappings and policy NAT ownership are retained. Source allocation is possible session behavior, not an exact binding. Translated service checks without sufficient native evidence and local VIP/IP-pool packet destinations stay unknown. See [native semantics](docs/native-semantics.md) for evidence and limits.
-
-Huawei captures retain native indentation and `#` section boundaries. Reopened objects replace indexed members without changing policy order. Fixed NAT servers remain `StaticNAT`; protocol/port servers and complete policy NAT actions remain `DynamicNAT`. Overlapping server maps and unproven protocol-specific reverse mappings remain unknown. Huawei semantics currently follow the local Ruby/Perl references and synthetic tests; wider version and real-device evidence remains open.
-
-ScreenOS policy NAT has an explicit `DynamicNAT.Rule()` reference to its owning security policy. Query and lifecycle proofs retain first-match ownership, including earlier ordinary permits and denies. Modifying a policy that owns NAT requires joint translation proof; the current renderer rejects those edits. MIP is a bidirectional `StaticNAT`, while VIP and DIP allocation remain `DynamicNAT` behavior. Mixed interface/policy translations in opposite directions remain unknown.
-
-The `analysis` package provides exact request optimization, bounded convergence candidate discovery, explicit zone/chain translation, compound declared/effective risk and evidence-bound rule/member usage analysis. Migration into an ACL requires explicit chain mapping; no-hit member observations do not authorize deletion. Lifecycle plans share independent readback verification with request plans. `deploy` injects transport, authorization and a durable journal, reserves the current snapshot, records receipts, confirms persistence and parses a new-session capture before publication. Recovery reads independently and never replays uncertain writes. These paths have local synthetic tests; no real-device interoperability is claimed.
-
-The embeddable `operations.Runtime` privately composes `Collector`, `Designer` and `deploy.Engine` from host-supplied options and exposes `Collect`, `Design`, `Apply` and `Recover`. A standalone `operations.NewCollector` needs only a store, `config.Parser` and a factory returning `device.Reader`; collection is independent of deployment authorization and journaling. Lifecycle evidence, time and selections are per-call requests so services can be reused safely. Collection publishes live evidence with revision CAS; design returns both the native plan and its expected revision. Apply and Recover retain exact-plan authorization, durable receipts and independent readback. The CLI and runtime share `vendors.Parser` and `vendors.Renderer`; native policy differences are selected inside the policy package. See [contracts and integration boundaries](docs/contracts.md).
-
-The optional [connector adapter](adapter/netconnector/README.md) is a separate module with pinned published dependencies: go-net-connector v0.2.0 and go-expect v0.4.0. It supplies fresh device sessions, mandatory configuration isolation lifecycle, command receipts, native persistence confirmation and running/saved capture for the seven enabled vendors. PAN requires a dedicated automation admin and an owned configuration lock; SRX uses exclusive candidate mode. Native mode and response limits are documented by the adapter. Root offline builds do not import it. CI checks the adapter both as a versioned consumer and paired with the current core.
-
-Snapshot directories contain complete source configurations. Keep them local and trusted; gob is not an untrusted interchange format. Runtime files use private permissions. The optional database projection reads published snapshot files and requires a host-supplied idempotent transactional sink.
-
-Snapshot semantic format 10 persists typed absolute/weekly schedules and calendar evidence together with VIP-to-StaticNAT/DynamicNAT and source-map-to-VIP references. Explicit interface-IP selection, scoped PAN routes and inline address/service ownership remain part of the model. An explicit interface NAT selector uses only that configured host; it cannot expand to its prefix or secondary addresses. Unreferenced inline values have no independent native declaration; named objects and values still referenced by groups or NAT remain part of the semantic digest. Older formats, including 9, are rejected; reimport the original capture into a new store. Reconstruction format 2 replays business inputs against the exact retained snapshots, and approval encoding version 4 binds the intent kind and proof. Historical encodings and convenience parser functions are not supported.
+Test layers: unit and golden tests use synthetic fixtures under `testdata/`; the corpus test runs only when `FIREMON_CORPUS` is set; nothing in the test suite connects to a device.

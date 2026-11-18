@@ -1,217 +1,86 @@
 package firemon
 
 import (
-	"cmp"
-	"iter"
 	"slices"
-	"strings"
 	"time"
 )
 
-const civilDay = 24 * time.Hour
-
-// Windows visits absolute windows by value in declaration order.
-func (s *Schedule) Windows() iter.Seq[TimeWindow] {
-	return func(yield func(TimeWindow) bool) {
-		for _, window := range s.record.Windows {
-			if !yield(window) {
-				return
-			}
-		}
-	}
+// TimeWindow is an absolute interval [Start, End). A zero Start or End is
+// unbounded on that side.
+type TimeWindow struct {
+	Start time.Time `json:"start,omitzero"`
+	End   time.Time `json:"end,omitzero"`
 }
 
-// Weekly visits independent copies of recurring periods.
-func (s *Schedule) Weekly() iter.Seq[WeeklyPeriod] {
-	return func(yield func(WeeklyPeriod) bool) {
-		for _, period := range s.record.Weekly {
-			period.Windows = slices.Clone(period.Windows)
-			if !yield(period) {
-				return
-			}
-		}
-	}
+// Contains reports whether t falls inside the window.
+func (w TimeWindow) Contains(t time.Time) bool {
+	return (w.Start.IsZero() || !t.Before(w.Start)) && (w.End.IsZero() || t.Before(w.End))
 }
 
-func (r ScheduleRecord) HasRecurrence() bool { return len(r.Weekly) != 0 }
-func (s *Schedule) HasRecurrence() bool      { return s.record.HasRecurrence() }
-
-func (s *Schedule) Timezone() string       { return s.record.Timezone }
-func (s *Schedule) WeeklyCount() int       { return len(s.record.Weekly) }
-func (s *Schedule) WeeklyWindowCount() int { return s.weeklyWindows }
-
-// Validate requires both well-formed intervals and sufficient time evidence.
-// Unsupported declarations cannot become a known schedule through validation.
-func (r ScheduleRecord) Validate() error {
-	if err := r.validateShape(); err != nil {
-		return err
-	}
-	if len(r.Unsupported) != 0 || len(r.Windows)+len(r.Weekly) == 0 {
-		return ErrScheduleTime
-	}
-	if r.HasRecurrence() {
-		if r.Calendar != CalendarCivil {
-			return ErrScheduleTime
-		}
-		if _, err := scheduleLocation(r.Timezone); err != nil {
-			return err
-		}
-	}
-	return nil
+// Recurrence is a daily time-of-day interval on selected weekdays. Start and
+// End are offsets from local midnight and End is exclusive; End before Start
+// wraps past midnight, and End equal to Start covers the whole day.
+type Recurrence struct {
+	// Days lists the weekdays the interval starts on; empty means every day.
+	Days  []time.Weekday `json:"days,omitempty"`
+	Start time.Duration  `json:"start"`
+	End   time.Duration  `json:"end"`
 }
 
-func (r ScheduleRecord) validateShape() error {
-	for _, w := range r.Windows {
-		if !w.valid() {
-			return ErrScheduleTime
-		}
+// Contains reports whether the wall-clock time of t falls inside the
+// recurrence. t must already be in the device time zone.
+func (r Recurrence) Contains(t time.Time) bool {
+	offset := time.Duration(t.Hour())*time.Hour + time.Duration(t.Minute())*time.Minute + time.Duration(t.Second())*time.Second
+	onDay := func(d time.Weekday) bool { return len(r.Days) == 0 || slices.Contains(r.Days, d) }
+	if r.Start == r.End {
+		return onDay(t.Weekday())
 	}
-	for _, p := range r.Weekly {
-		isBounded := !p.Start.IsZero() && !p.End.IsZero()
-		if len(p.Windows) == 0 || isBounded && !p.Start.Before(p.End) {
-			return ErrScheduleTime
-		}
-		for _, w := range p.Windows {
-			if !w.valid() {
-				return ErrScheduleTime
-			}
-		}
+	if r.Start < r.End {
+		return onDay(t.Weekday()) && offset >= r.Start && offset < r.End
 	}
-	return nil
+	// Wrapping interval: the evening part belongs to today, the morning part
+	// to the interval that started yesterday.
+	return (onDay(t.Weekday()) && offset >= r.Start) || (onDay((t.Weekday()+6)%7) && offset < r.End)
 }
 
-// valid reports a non-empty half-open interval between established instants.
-func (w TimeWindow) valid() bool {
-	return !w.Start.IsZero() && !w.End.IsZero() && w.Start.Before(w.End)
+// Schedule is a named time restriction. A schedule is active when any
+// absolute window or any recurrence contains the instant.
+type Schedule struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Windows     []TimeWindow `json:"windows,omitempty"`
+	Recurrences []Recurrence `json:"recurrences,omitempty"`
+	// Unsupported describes a period the parser could not model; rules using
+	// the schedule are undecidable.
+	Unsupported string `json:"unsupported,omitempty"`
 }
 
-// valid reports a non-empty half-open interval within one named weekday.
-func (w WeeklyWindow) valid() bool {
-	return validWeekday(w.Day) && w.Start >= 0 && w.Start < w.End && w.End <= civilDay
-}
-
-func validWeekday(d time.Weekday) bool { return d >= time.Sunday && d <= time.Saturday }
-
-// within reports whether at lies inside the period's optional UTC bounds.
-func (p WeeklyPeriod) within(at time.Time) bool {
-	isAfterStart := p.Start.IsZero() || !at.Before(p.Start)
-	isBeforeEnd := p.End.IsZero() || at.Before(p.End)
-	return isAfterStart && isBeforeEnd
-}
-
-// timeOfDay is the elapsed wall-clock duration since local midnight.
-func timeOfDay(local time.Time) time.Duration {
-	hour, minute, second := local.Clock()
-	return time.Duration(hour)*time.Hour +
-		time.Duration(minute)*time.Minute +
-		time.Duration(second)*time.Second +
-		time.Duration(local.Nanosecond())
-}
-
-func scheduleLocation(name string) (*time.Location, error) {
-	// The host's Local zone and filesystem paths would let the host, rather
-	// than the captured device evidence, define the schedule's civil time.
-	isHostDefined := name == "Local" || strings.HasPrefix(name, "/") || strings.Contains(name, "..")
-	if name == "" || len(name) > 128 || isHostDefined {
-		return nil, ErrScheduleTime
-	}
-	loc, err := time.LoadLocation(name)
-	if err != nil {
-		return nil, ErrScheduleTime
-	}
-	return loc, nil
-}
-
-// normalizeWeekly merges overlapping or adjacent windows within each weekday.
-// The caller owns the slice. It never joins across a midnight boundary.
-func normalizeWeekly(windows []WeeklyWindow) []WeeklyWindow {
-	slices.SortFunc(windows, func(a, b WeeklyWindow) int {
-		return cmp.Or(cmp.Compare(a.Day, b.Day), cmp.Compare(a.Start, b.Start))
-	})
-	result := windows[:0]
-	for _, w := range windows {
-		if n := len(result); n != 0 && result[n-1].Day == w.Day && w.Start <= result[n-1].End {
-			result[n-1].End = max(result[n-1].End, w.End)
-		} else {
-			result = append(result, w)
+// ActiveAt reports whether the schedule is active at t, which must already
+// be in the device time zone.
+func (s Schedule) ActiveAt(t time.Time) bool {
+	for _, w := range s.Windows {
+		if w.Contains(t) {
+			return true
 		}
 	}
-	return result
+	for _, r := range s.Recurrences {
+		if r.Contains(t) {
+			return true
+		}
+	}
+	return false
 }
 
-func normalizeWeeklyPeriods(periods []WeeklyPeriod) []WeeklyPeriod {
-	for i := range periods {
-		periods[i].Start = periods[i].Start.UTC()
-		periods[i].End = periods[i].End.UTC()
+// ExpiredAt reports whether the schedule has only absolute windows and all
+// of them ended at or before t: the schedule can never be active again.
+func (s Schedule) ExpiredAt(t time.Time) bool {
+	if len(s.Recurrences) > 0 || len(s.Windows) == 0 {
+		return false
 	}
-	slices.SortFunc(periods, func(a, b WeeklyPeriod) int {
-		if c := a.Start.Compare(b.Start); c != 0 {
-			return c
-		}
-		return a.End.Compare(b.End)
-	})
-	result := periods[:0]
-	for _, period := range periods {
-		if n := len(result); n > 0 && result[n-1].Start.Equal(period.Start) && result[n-1].End.Equal(period.End) {
-			result[n-1].Windows = append(result[n-1].Windows, period.Windows...)
-		} else {
-			result = append(result, period)
+	for _, w := range s.Windows {
+		if w.End.IsZero() || t.Before(w.End) {
+			return false
 		}
 	}
-	for i := range result {
-		result[i].Windows = normalizeWeekly(result[i].Windows)
-	}
-	return result
-}
-
-// ActiveAt evaluates the union of absolute and recurring half-open intervals.
-// Unknown evidence remains possibly active; the second value is false.
-func (s *Schedule) ActiveAt(at time.Time) (active, known bool) {
-	if !s.knownAt(at) {
-		return true, false
-	}
-	for _, window := range s.record.Windows {
-		if !at.Before(window.Start) && at.Before(window.End) {
-			return true, true
-		}
-	}
-	if s.HasRecurrence() {
-		local := at.In(s.location)
-		clock := timeOfDay(local)
-		for _, period := range s.record.Weekly {
-			if !period.within(at) {
-				continue
-			}
-			for _, window := range period.Windows {
-				if local.Weekday() == window.Day && clock >= window.Start && clock < window.End {
-					return true, true
-				}
-			}
-		}
-	}
-	return false, true
-}
-
-// ExpiredAt establishes expiry only after all declared periods have ended.
-// An unbounded recurrence never expires; an inactive or future interval is not
-// expired. Unknown declarations cannot establish expiry.
-func (s *Schedule) ExpiredAt(at time.Time) (expired, known bool) {
-	if !s.knownAt(at) {
-		return false, false
-	}
-	for _, window := range s.record.Windows {
-		if window.End.After(at) {
-			return false, true
-		}
-	}
-	for _, period := range s.record.Weekly {
-		if period.End.IsZero() || period.End.After(at) {
-			return false, true
-		}
-	}
-	return true, true
-}
-
-func (s *Schedule) knownAt(at time.Time) bool {
-	return s != nil && !at.IsZero() && s.isKnown
+	return true
 }

@@ -1,0 +1,4 @@
+{
+  "service-http": ["tcp/80", "tcp/8080"],
+  "service-https": ["tcp/443"]
+}

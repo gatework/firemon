@@ -1,0 +1,631 @@
+{
+  "vendor": "paloalto",
+  "hostname": "lab-pa1",
+  "semantics": {
+    "policy_destination": "original",
+    "intrazone_action": "deny",
+    "interzone_action": "deny",
+    "default_virtual_router": "default",
+    "nat_order": "single",
+    "port_services_only": true
+  },
+  "time_zone": "UTC",
+  "virtual_routers": [
+    {
+      "name": "default"
+    },
+    {
+      "name": "test"
+    }
+  ],
+  "zones": [
+    {
+      "name": "trust",
+      "virtual_router": "default",
+      "mode": "layer3"
+    },
+    {
+      "name": "untrust",
+      "virtual_router": "default",
+      "mode": "layer3"
+    },
+    {
+      "name": "dmz",
+      "virtual_router": "default",
+      "mode": "layer3"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "ethernet1/2",
+      "zone": "trust",
+      "virtual_router": "default",
+      "addresses": [
+        "10.0.0.1/24"
+      ]
+    },
+    {
+      "name": "ethernet1/1",
+      "zone": "untrust",
+      "virtual_router": "default",
+      "addresses": [
+        "203.0.113.2/30"
+      ],
+      "address_objects": [
+        "office uplink"
+      ]
+    },
+    {
+      "name": "ethernet1/3.100",
+      "zone": "dmz",
+      "virtual_router": "default",
+      "addresses": [
+        "172.16.0.1/24"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "name": "default",
+      "virtual_router": "default",
+      "destination": "0.0.0.0/0",
+      "next_hop": "203.0.113.1",
+      "interface": "ethernet1/1",
+      "objects": [
+        "isp-gw"
+      ],
+      "distance": 10,
+      "metric": 10
+    },
+    {
+      "name": "lab",
+      "virtual_router": "default",
+      "destination": "192.168.50.0/24",
+      "next_virtual_router": "test",
+      "distance": 10
+    }
+  ],
+  "addresses": [
+    {
+      "name": "web-01",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "172.16.0.10/32"
+        }
+      ]
+    },
+    {
+      "name": "web-02",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "172.16.0.11/32"
+        }
+      ]
+    },
+    {
+      "name": "lan",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "10.0.0.0/16"
+        }
+      ]
+    },
+    {
+      "name": "dmz-range",
+      "entries": [
+        {
+          "kind": "range",
+          "from": "172.16.0.20",
+          "to": "172.16.0.29"
+        }
+      ]
+    },
+    {
+      "name": "updates",
+      "entries": [
+        {
+          "kind": "fqdn",
+          "fqdn": "updates.example.com"
+        }
+      ]
+    },
+    {
+      "name": "public-web",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "198.51.100.80/32"
+        }
+      ]
+    },
+    {
+      "name": "isp-gw",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "203.0.113.1/32"
+        }
+      ]
+    },
+    {
+      "name": "office uplink",
+      "entries": [
+        {
+          "kind": "prefix",
+          "prefix": "203.0.113.0/30"
+        }
+      ]
+    }
+  ],
+  "address_groups": [
+    {
+      "name": "web-farm",
+      "members": [
+        "web-01",
+        "web-02",
+        "dmz-range"
+      ]
+    },
+    {
+      "name": "tagged",
+      "filter": "'prod'"
+    }
+  ],
+  "services": [
+    {
+      "name": "tcp-8080",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 8080,
+            "high": 8080
+          }
+        }
+      ]
+    },
+    {
+      "name": "tcp-multi",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 7020,
+            "high": 7020
+          }
+        },
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 15672,
+            "high": 15672
+          }
+        },
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 5672,
+            "high": 5672
+          }
+        }
+      ]
+    },
+    {
+      "name": "dns-udp",
+      "entries": [
+        {
+          "protocol": "udp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 53,
+            "high": 53
+          }
+        }
+      ]
+    },
+    {
+      "name": "TCP 8000 8010",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 1024,
+            "high": 65535
+          },
+          "dst": {
+            "low": 8000,
+            "high": 8010
+          }
+        }
+      ]
+    },
+    {
+      "name": "service-http",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 80,
+            "high": 80
+          }
+        },
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 8080,
+            "high": 8080
+          }
+        }
+      ],
+      "predefined": true
+    },
+    {
+      "name": "service-https",
+      "entries": [
+        {
+          "protocol": "tcp",
+          "src": {
+            "low": 0,
+            "high": 65535
+          },
+          "dst": {
+            "low": 443,
+            "high": 443
+          }
+        }
+      ],
+      "predefined": true
+    }
+  ],
+  "service_groups": [
+    {
+      "name": "web",
+      "members": [
+        "service-http",
+        "service-https",
+        "tcp-8080"
+      ]
+    }
+  ],
+  "schedules": [
+    {
+      "name": "change-window",
+      "windows": [
+        {
+          "start": "2026-11-01T00:00:00Z",
+          "end": "2026-12-01T00:01:00Z"
+        }
+      ]
+    },
+    {
+      "name": "office",
+      "recurrences": [
+        {
+          "days": [
+            1
+          ],
+          "start": 28800000000000,
+          "end": 64860000000000
+        }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "block-bad",
+      "name": "block-bad",
+      "from": [
+        "untrust"
+      ],
+      "source": [
+        {
+          "entry": {
+            "kind": "prefix",
+            "prefix": "192.0.2.0/24"
+          }
+        }
+      ],
+      "action": "deny"
+    },
+    {
+      "id": "web-in",
+      "name": "web-in",
+      "from": [
+        "untrust"
+      ],
+      "to": [
+        "dmz"
+      ],
+      "destination": [
+        {
+          "name": "public-web"
+        }
+      ],
+      "services": [
+        "web"
+      ],
+      "action": "permit",
+      "log": true
+    },
+    {
+      "id": "Allow updates",
+      "name": "Allow updates",
+      "from": [
+        "trust"
+      ],
+      "to": [
+        "untrust"
+      ],
+      "source": [
+        {
+          "name": "lan"
+        }
+      ],
+      "destination": [
+        {
+          "name": "updates"
+        }
+      ],
+      "services": [
+        "service-https"
+      ],
+      "action": "permit"
+    },
+    {
+      "id": "apps",
+      "name": "apps",
+      "from": [
+        "trust"
+      ],
+      "to": [
+        "untrust"
+      ],
+      "source": [
+        {
+          "name": "lan"
+        }
+      ],
+      "application_default": true,
+      "applications": [
+        "ssl",
+        "web-browsing"
+      ],
+      "action": "permit"
+    },
+    {
+      "id": "not-lan",
+      "name": "not-lan",
+      "from": [
+        "trust"
+      ],
+      "to": [
+        "untrust"
+      ],
+      "source": [
+        {
+          "name": "lan"
+        }
+      ],
+      "negate_source": true,
+      "services": [
+        "dns-udp"
+      ],
+      "action": "deny",
+      "disabled": true,
+      "schedule": "office"
+    }
+  ],
+  "static_nats": [
+    {
+      "id": "static-web",
+      "name": "static-web",
+      "real": {
+        "name": "web-02"
+      },
+      "mapped": {
+        "entry": {
+          "kind": "prefix",
+          "prefix": "198.51.100.11/32"
+        }
+      },
+      "zones": [
+        "untrust"
+      ],
+      "precedence": 3,
+      "inbound_only": true
+    }
+  ],
+  "dynamic_nats": [
+    {
+      "id": "dnat-web",
+      "name": "dnat-web",
+      "from": [
+        "untrust"
+      ],
+      "to": [
+        "untrust"
+      ],
+      "destination": [
+        {
+          "name": "public-web"
+        }
+      ],
+      "services": [
+        "service-http"
+      ],
+      "translated_destination": {
+        "mode": "address",
+        "addresses": [
+          {
+            "name": "web-01"
+          }
+        ],
+        "port": 8080
+      },
+      "precedence": 1
+    },
+    {
+      "id": "snat-out",
+      "name": "snat-out",
+      "from": [
+        "trust",
+        "dmz"
+      ],
+      "to": [
+        "untrust"
+      ],
+      "egress": "ethernet1/1",
+      "translated_source": {
+        "mode": "interface",
+        "interface": "ethernet1/1",
+        "port_translation": true
+      },
+      "precedence": 2
+    },
+    {
+      "id": "static-web",
+      "name": "static-web",
+      "from": [
+        "dmz"
+      ],
+      "to": [
+        "untrust"
+      ],
+      "source": [
+        {
+          "name": "web-02"
+        }
+      ],
+      "translated_source": {
+        "mode": "address",
+        "addresses": [
+          {
+            "entry": {
+              "kind": "prefix",
+              "prefix": "198.51.100.11/32"
+            }
+          }
+        ]
+      },
+      "precedence": 3
+    }
+  ],
+  "diagnostics": [
+    {
+      "line": 98,
+      "text": "set device-group dg1 address x ip-netmask 10.9.9.9",
+      "reason": "Panorama scope is not supported"
+    }
+  ],
+  "applications": {
+    "dns": [
+      "tcp/53",
+      "udp/53"
+    ],
+    "ftp": [
+      "tcp/21"
+    ],
+    "icmp": [
+      "icmp"
+    ],
+    "kerberos": [
+      "tcp/88",
+      "udp/88"
+    ],
+    "ldap": [
+      "tcp/389",
+      "udp/389"
+    ],
+    "ms-ds-smb": [
+      "tcp/139",
+      "tcp/445"
+    ],
+    "ms-rdp": [
+      "tcp/3389"
+    ],
+    "msrpc": [
+      "tcp/135"
+    ],
+    "mssql-db": [
+      "tcp/1433"
+    ],
+    "mysql": [
+      "tcp/3306"
+    ],
+    "netbios-dg": [
+      "udp/138"
+    ],
+    "netbios-ns": [
+      "udp/137"
+    ],
+    "netbios-ss": [
+      "tcp/139"
+    ],
+    "ntp": [
+      "udp/123"
+    ],
+    "oracle": [
+      "tcp/1521"
+    ],
+    "ping": [
+      "icmp/8"
+    ],
+    "postgres": [
+      "tcp/5432"
+    ],
+    "smtp": [
+      "tcp/25"
+    ],
+    "snmp": [
+      "udp/161"
+    ],
+    "ssh": [
+      "tcp/22"
+    ],
+    "ssl": [
+      "tcp/443"
+    ],
+    "syslog": [
+      "udp/514"
+    ],
+    "telnet": [
+      "tcp/23"
+    ],
+    "tftp": [
+      "udp/69"
+    ],
+    "web-browsing": [
+      "tcp/80"
+    ]
+  }
+}

@@ -1,254 +1,315 @@
 package paloalto
 
 import (
-	"context"
-	"slices"
+	"net/netip"
+	"strconv"
+	"strings"
 	"time"
 
-	fm "github.com/gatework/firemon"
-	"github.com/gatework/firemon/config"
-	"github.com/gatework/firemon/flow"
+	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/traffic"
 )
 
-func (p *parser) objects(ctx context.Context, s *config.Builder) error {
-	d := fm.Data{}
-	tx := s.Begin()
-	defer tx.Rollback()
-	remaining := s.Content().Limits().MaxServiceTerms
-	addresses := make(map[string]fm.AddressRecord)
-	groups := make(map[string]fm.AddressGroupRecord)
-	services := make(map[string]fm.ServiceRecord)
-	serviceGroups := make(map[string]fm.ServiceGroupRecord)
-	schedules := make(map[string]fm.ScheduleRecord)
-	scheduleKinds := make(map[string]string)
-	local := make(map[string]bool)
-	serviceParts := make(map[string]serviceDraft)
-	for _, r := range p.rows {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		w := r.words
-		if len(w) > 1 && !r.shared && slices.Contains([]string{"address", "address-group", "service", "service-group", "schedule"}, w[0]) {
-			local[w[0]+"/"+w[1]] = true
-		}
-		if len(w) == 4 && slices.Equal(w[:3], []string{"deviceconfig", "system", "timezone"}) {
-			if _, err := time.LoadLocation(w[3]); err == nil {
-				tx.Parse(r.source.Lines()...)
-			}
-		}
+// address parses: address NAME ip-netmask V | ip-range A-B | fqdn F |
+// description D | tag T.
+func (s *state) address(p *path, st statement) {
+	name := p.next()
+	apply, reset := s.claim("address", name)
+	if !apply {
+		return
 	}
-	for _, r := range p.rows {
-		if err := ctx.Err(); err != nil {
-			return err
+	i, ok := s.addresses[name]
+	if !ok {
+		i = len(s.cfg.Addresses)
+		s.addresses[name] = i
+		s.cfg.Addresses = append(s.cfg.Addresses, firemon.Address{Name: name})
+	}
+	if reset {
+		s.cfg.Addresses[i] = firemon.Address{Name: name}
+	}
+	a := &s.cfg.Addresses[i]
+	switch kind := p.next(); kind {
+	case "ip-netmask", "ip-range", "fqdn":
+		value := p.scalar()
+		e, ok := entry(kind, value)
+		if !ok {
+			s.diagnose(st, "invalid address value")
+			a.Invalid = append(a.Invalid, kind+" "+value)
+			return
 		}
-		w := r.words
-		if len(w) == 0 {
-			tx.Ignore("blank line", r.source.Lines()...)
-			continue
+		a.Entries = append(a.Entries, e)
+		if kind == "ip-netmask" {
+			s.hostBits[name] = value
 		}
-		if len(w) < 3 {
-			continue
+	case "description":
+		a.Description = p.scalar()
+	case "tag", "ip-wildcard":
+		if kind == "ip-wildcard" {
+			s.diagnose(st, "wildcard addresses are not supported")
+			a.Invalid = append(a.Invalid, "ip-wildcard "+p.scalar())
 		}
-		if r.shared && local[w[0]+"/"+w[1]] {
-			tx.Ignore("shared declaration overridden by local object", r.source.Lines()...)
-			continue
+	default:
+		s.diagnose(st, "unrecognized address attribute")
+	}
+}
+
+// entry parses the value of an address object or an inline rule operand.
+func entry(kind, value string) (firemon.AddressEntry, bool) {
+	switch kind {
+	case "ip-netmask":
+		if p, err := netip.ParsePrefix(value); err == nil {
+			return firemon.PrefixEntry(p), true
 		}
-		name, field := w[1], w[2]
-		rest := values(w[3:])
-		ok := false
-		switch w[0] {
-		case "address":
-			a, exists := addresses[name]
-			if !exists {
-				a.Object = object(name, r)
+		a, err := netip.ParseAddr(value)
+		return firemon.HostEntry(a), err == nil
+	case "ip-range":
+		from, to, ok := strings.Cut(value, "-")
+		a, err1 := netip.ParseAddr(from)
+		b, err2 := netip.ParseAddr(to)
+		return firemon.RangeEntry(a, b), ok && err1 == nil && err2 == nil && a.Is4() == b.Is4() && !b.Less(a)
+	case "fqdn":
+		return firemon.FQDNEntry(value), value != ""
+	default:
+		return firemon.AddressEntry{}, false
+	}
+}
+
+// inlineEntry classifies a rule operand that names no object: an address,
+// a prefix or a range.
+func inlineEntry(value string) (firemon.AddressEntry, bool) {
+	if strings.Contains(value, "-") {
+		return entry("ip-range", value)
+	}
+	return entry("ip-netmask", value)
+}
+
+// addressGroup parses: address-group NAME static [ MEMBERS ] |
+// dynamic filter EXPR | description D | tag T.
+func (s *state) addressGroup(p *path, st statement) {
+	name := p.next()
+	apply, reset := s.claim("address", name)
+	if !apply {
+		return
+	}
+	i, ok := s.groups[name]
+	if !ok {
+		i = len(s.cfg.AddressGroups)
+		s.groups[name] = i
+		s.cfg.AddressGroups = append(s.cfg.AddressGroups, firemon.AddressGroup{Name: name})
+	}
+	if reset {
+		s.cfg.AddressGroups[i] = firemon.AddressGroup{Name: name}
+	}
+	g := &s.cfg.AddressGroups[i]
+	switch p.next() {
+	case "static":
+		g.Members = append(g.Members, p.value()...)
+	case "dynamic":
+		if p.next() == "filter" {
+			g.Filter = p.scalar()
+		}
+		if g.Filter == "" {
+			g.Filter = "dynamic"
+		}
+	case "description":
+		g.Description = p.scalar()
+	case "tag":
+	default:
+		s.diagnose(st, "unrecognized address-group attribute")
+	}
+}
+
+// service parses: service NAME protocol tcp|udp|sctp port P[,P...]
+// [source-port P] [override ...] | description D.
+func (s *state) service(p *path, st statement) {
+	name := p.next()
+	apply, reset := s.claim("service", name)
+	if !apply {
+		return
+	}
+	i, ok := s.services[name]
+	if !ok {
+		i = len(s.cfg.Services)
+		s.services[name] = i
+		s.cfg.Services = append(s.cfg.Services, firemon.Service{Name: name})
+	}
+	if reset {
+		s.cfg.Services[i] = firemon.Service{Name: name}
+	}
+	svc := &s.cfg.Services[i]
+	switch p.next() {
+	case "protocol":
+		entries, ok := protocolEntries(p)
+		if !ok {
+			s.diagnose(st, "invalid service")
+			svc.Invalid = append(svc.Invalid, "protocol")
+			return
+		}
+		svc.Entries = append(svc.Entries, entries...)
+	case "description":
+		svc.Description = p.scalar()
+	case "tag":
+	default:
+		s.diagnose(st, "unrecognized service attribute")
+	}
+}
+
+// protocolEntries parses "tcp port 80,8000-8080 [source-port 1024-65535]".
+// A statement setting only "override" yields no entries.
+func protocolEntries(p *path) ([]firemon.ServiceEntry, bool) {
+	proto, err := traffic.ParseProtocol(p.next())
+	if err != nil {
+		return nil, false
+	}
+	var dst, src []traffic.PortRange
+	for !p.done() {
+		switch p.next() {
+		case "port":
+			if dst, err = portList(p.next()); err != nil {
+				return nil, false
 			}
-			switch field {
-			case "ip-netmask", "ip-range":
-				if len(rest) == 1 {
-					if v, err := address(rest[0]); err == nil {
-						a.Ranges = []flow.AddressRange{v}
-						ok = true
-					}
-					if field == "ip-netmask" {
-						if prefix, err := hostPrefix(rest[0]); err == nil {
-							p.prefixes[a.ID] = prefix
-						}
-					}
-				}
-			case "fqdn":
-				if len(rest) == 1 {
-					a.FQDN = rest[0]
-					ok = true
-				}
-			case "description", "tag":
-				ok = true
+		case "source-port":
+			if src, err = portList(p.next()); err != nil {
+				return nil, false
 			}
-			if !ok {
-				a.Unsupported = append(a.Unsupported, "unsupported address field")
-			}
-			addresses[name] = a
-		case "address-group":
-			g, exists := groups[name]
-			if !exists {
-				g.Object = object(name, r)
-			}
-			switch field {
-			case "static":
-				for _, member := range rest {
-					if err := ctx.Err(); err != nil {
-						return err
-					}
-					g.Members = append(g.Members, fm.AddressRef{ID: fm.ID(member)})
-				}
-				ok = true
-			case "description", "tag":
-				ok = true
-			}
-			if !ok {
-				g.Unsupported = append(g.Unsupported, "dynamic or unsupported address group")
-			}
-			groups[name] = g
-		case "service":
-			a, exists := services[name]
-			if !exists {
-				a.Object = object(name, r)
-			}
-			draft := serviceParts[name]
-			if field == "protocol" {
-				var err error
-				ok, err = draft.field(ctx, rest)
-				if err != nil {
-					return err
-				}
-			} else if field == "description" || field == "tag" {
-				ok = true
-			}
-			if !ok {
-				a.Unsupported = append(a.Unsupported, "unsupported service field")
-			}
-			services[name] = a
-			serviceParts[name] = draft
-		case "service-group":
-			g, exists := serviceGroups[name]
-			if !exists {
-				g.Object = object(name, r)
-			}
-			if field == "members" {
-				for _, member := range rest {
-					if err := ctx.Err(); err != nil {
-						return err
-					}
-					g.Members = append(g.Members, fm.ServiceRef{ID: fm.ID(member)})
-				}
-				ok = true
-			} else if field == "description" || field == "tag" {
-				ok = true
-			}
-			if !ok {
-				g.Unsupported = append(g.Unsupported, "unsupported service group")
-			}
-			serviceGroups[name] = g
-		case "schedule":
-			a, exists := schedules[name]
-			if !exists {
-				a.Object = object(name, r)
-			}
-			if field == "schedule-type" && len(rest) >= 2 {
-				kind := rest[0]
-				if kind == "recurring" {
-					kind += "/" + rest[1]
-				}
-				if previous := scheduleKinds[name]; previous == "" || previous == kind {
-					ok = parseSchedule(s, &a, rest) == nil
-					scheduleKinds[name] = kind
-				}
-			}
-			if !ok {
-				a.Unsupported = append(a.Unsupported, "unsupported schedule or missing capture clock")
-			}
-			schedules[name] = a
+		case "override":
+			p.value()
 		default:
-			continue
-		}
-		if ok {
-			tx.Parse(r.source.Lines()...)
+			return nil, false
 		}
 	}
-	for _, name := range keys(addresses) {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		d.Addresses = append(d.Addresses, addresses[name])
+	if len(src) == 0 {
+		src = []traffic.PortRange{traffic.AnyPort}
 	}
-	for _, name := range keys(groups) {
-		if err := ctx.Err(); err != nil {
-			return err
+	var out []firemon.ServiceEntry
+	for _, d := range dst {
+		for _, sp := range src {
+			out = append(out, firemon.ServiceEntry{Protocol: proto, Src: sp, Dst: d})
 		}
-		g := groups[name]
-		for i := range g.Members {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			g.Members[i].Kind = fm.AddressObject
-			if _, ok := groups[string(g.Members[i].ID)]; ok {
-				g.Members[i].Kind = fm.AddressGroupObject
-			}
-		}
-		d.AddressGroups = append(d.AddressGroups, g)
 	}
-	full := []flow.Interval{{Low: 0, High: 65535}}
-	for _, name := range keys(services) {
-		r := services[name]
-		part := serviceParts[name]
-		if len(part.src) == 0 {
-			part.src = full
-		}
-		if len(part.dst) == 0 || part.protocol == "" {
-			r.Unsupported = append(r.Unsupported, "incomplete service")
-		}
-		var err error
-		r.Terms, err = serviceTerms(ctx, part.protocol, part.src, part.dst, &remaining)
+	return out, true
+}
+
+func portList(text string) ([]traffic.PortRange, error) {
+	var out []traffic.PortRange
+	for part := range strings.SplitSeq(text, ",") {
+		r, err := traffic.ParsePortRange(part)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		d.Services = append(d.Services, r)
+		out = append(out, r)
 	}
-	builtins := map[string][]flow.Interval{"service-http": {{Low: 80, High: 80}, {Low: 8080, High: 8080}}, "service-https": {{Low: 443, High: 443}}}
-	for _, name := range keys(builtins) {
-		ports := builtins[name]
-		if _, ok := services[name]; !ok {
-			terms, err := serviceTerms(ctx, "tcp", full, ports, &remaining)
-			if err != nil {
-				return err
-			}
-			d.Services = append(d.Services, fm.ServiceRecord{Object: fm.Object{ID: fm.ID(name), Name: name}, Terms: terms})
+	return out, nil
+}
+
+// serviceGroup parses: service-group NAME members [ MEMBERS ].
+func (s *state) serviceGroup(p *path, st statement) {
+	name := p.next()
+	apply, reset := s.claim("service", name)
+	if !apply {
+		return
+	}
+	i, ok := s.svcGroups[name]
+	if !ok {
+		i = len(s.cfg.ServiceGroups)
+		s.svcGroups[name] = i
+		s.cfg.ServiceGroups = append(s.cfg.ServiceGroups, firemon.ServiceGroup{Name: name})
+	}
+	if reset {
+		s.cfg.ServiceGroups[i] = firemon.ServiceGroup{Name: name}
+	}
+	switch p.next() {
+	case "members":
+		s.cfg.ServiceGroups[i].Members = append(s.cfg.ServiceGroups[i].Members, p.value()...)
+	case "tag":
+	default:
+		s.diagnose(st, "unrecognized service-group attribute")
+	}
+}
+
+// schedule parses: schedule NAME schedule-type non-recurring
+// YYYY/MM/DD@HH:MM-YYYY/MM/DD@HH:MM | recurring daily [ HH:MM-HH:MM ] |
+// recurring weekly DAY [ HH:MM-HH:MM ].
+func (s *state) schedule(p *path, st statement) {
+	name := p.next()
+	i, ok := s.schedules[name]
+	if !ok {
+		i = len(s.cfg.Schedules)
+		s.schedules[name] = i
+		s.cfg.Schedules = append(s.cfg.Schedules, firemon.Schedule{Name: name})
+	}
+	sch := &s.cfg.Schedules[i]
+	if p.next() != "schedule-type" {
+		return
+	}
+	var ok2 bool
+	switch p.next() {
+	case "non-recurring":
+		ok2 = s.windows(sch, p.value())
+	case "recurring":
+		ok2 = recurring(sch, p)
+	}
+	if !ok2 {
+		sch.Unsupported = "unrecognized schedule"
+		s.diagnose(st, "unsupported schedule")
+	}
+}
+
+func (s *state) windows(sch *firemon.Schedule, values []string) bool {
+	for _, v := range values {
+		from, to, ok := strings.Cut(v, "-")
+		start, err1 := time.ParseInLocation("2006/1/2@15:04", from, s.loc)
+		end, err2 := time.ParseInLocation("2006/1/2@15:04", to, s.loc)
+		if !ok || err1 != nil || err2 != nil {
+			return false
+		}
+		// PAN-OS end times are inclusive to the minute.
+		sch.Windows = append(sch.Windows, firemon.TimeWindow{Start: start, End: end.Add(time.Minute)})
+	}
+	return len(values) > 0
+}
+
+func recurring(sch *firemon.Schedule, p *path) bool {
+	var days []time.Weekday
+	switch p.next() {
+	case "daily":
+	case "weekly":
+		d, ok := weekday(p.next())
+		if !ok {
+			return false
+		}
+		days = []time.Weekday{d}
+	default:
+		return false
+	}
+	values := p.value()
+	for _, v := range values {
+		from, to, ok := strings.Cut(v, "-")
+		start, ok1 := clock(from)
+		end, ok2 := clock(to)
+		if !ok || !ok1 || !ok2 {
+			return false
+		}
+		sch.Recurrences = append(sch.Recurrences, firemon.Recurrence{Days: days, Start: start, End: min(end+time.Minute, 24*time.Hour)})
+	}
+	return len(values) > 0
+}
+
+func weekday(text string) (time.Weekday, bool) {
+	for d := time.Sunday; d <= time.Saturday; d++ {
+		if strings.EqualFold(text, d.String()) {
+			return d, true
 		}
 	}
-	for _, name := range keys(serviceGroups) {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		g := serviceGroups[name]
-		for i := range g.Members {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			g.Members[i].Kind = fm.ServiceObject
-			if _, ok := serviceGroups[string(g.Members[i].ID)]; ok {
-				g.Members[i].Kind = fm.ServiceGroupObject
-			}
-		}
-		d.ServiceGroups = append(d.ServiceGroups, g)
+	return 0, false
+}
+
+func clock(text string) (time.Duration, bool) {
+	h, m, ok := strings.Cut(text, ":")
+	hh, err1 := strconv.Atoi(h)
+	mm, err2 := strconv.Atoi(m)
+	if !ok || err1 != nil || err2 != nil || hh > 24 || mm > 59 {
+		return 0, false
 	}
-	for _, name := range keys(schedules) {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		d.Schedules = append(d.Schedules, schedules[name])
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	tx.Emit(d)
-	return s.Commit(tx)
+	return time.Duration(hh)*time.Hour + time.Duration(mm)*time.Minute, true
 }

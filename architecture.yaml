@@ -1,0 +1,112 @@
+# firemon import boundaries (STANDARD.md ARC-1), enforced by archcheck in `make check`.
+# Direction: cmd -> internal/cli -> internal/bootstrap -> internal/workflow
+#            -> deploy/design/query -> firemon -> traffic; vendors and adapter point inward.
+declared:
+  - .
+  - ./traffic
+  - ./query
+  - ./design
+  - ./deploy
+  - ./audit
+  - ./hits
+  - ./converge
+  - ./migrate
+  - ./inventory
+  - ./intake
+  - ./report
+  - ./vendors/hillstone
+  - ./vendors/paloalto
+  - ./adapter/netconnector
+  - ./adapter/filestore
+  - ./adapter/yamlfile
+  - ./adapter/dns
+  - ./internal/bootstrap
+  - ./internal/workflow
+  - ./internal/cli
+  - ./cmd/firemon
+
+rules:
+  - name: domain packages stay free of I/O
+    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./hits, ./converge, ./migrate, ./inventory, ./intake, ./report, ./vendors/...]
+    deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
+           github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
+
+  - name: traffic is the base algebra
+    packages: [./traffic]
+    deny: [./...]
+
+  - name: the domain depends only on traffic
+    packages: [.]
+    only_local: [./traffic]
+
+  - name: query evaluates the domain only
+    packages: [./query]
+    only_local: [., ./traffic]
+
+  - name: design plans on the domain and the query engine
+    packages: [./design]
+    only_local: [., ./traffic, ./query]
+
+  - name: deploy orchestrates verified plans
+    packages: [./deploy]
+    only_local: [., ./traffic, ./query, ./design]
+
+  - name: audit reviews the compiled domain only
+    packages: [./audit]
+    only_local: [., ./traffic]
+
+  - name: convergence reviews the domain with evidence and plans cleanups
+    packages: [./converge]
+    only_local: [., ./traffic, ./query, ./design, ./audit, ./hits]
+
+  - name: migration translates the domain between vendors without vendor syntax
+    packages: [./migrate]
+    only_local: [., ./traffic, ./design]
+
+  - name: hit counters are domain evidence
+    packages: [./hits]
+    only_local: [.]
+
+  - name: inventory spans firewalls through query and design
+    packages: [./inventory]
+    only_local: [., ./traffic, ./query, ./design]
+
+  - name: intake reads operator input with the domain vocabulary only
+    packages: [./intake]
+    only_local: [., ./traffic]
+
+  - name: reports describe evaluations without vendor syntax
+    packages: [./report]
+    only_local: [., ./traffic, ./query, ./design, ./inventory, ./intake]
+
+  - name: vendors own device syntax and depend only on the domain
+    packages: [./vendors/...]
+    only_local: [., ./traffic, ./design, ./hits]
+
+  - name: vendors do not depend on each other
+    packages: [./vendors/hillstone]
+    deny: [./vendors/paloalto]
+
+  - name: adapters depend only on the domain
+    packages: [./adapter/netconnector, ./adapter/filestore]
+    only_local: [., ./hits]
+
+  - name: the resolver stands alone
+    packages: [./adapter/dns]
+    deny: [./...]
+
+  - name: the inventory file adapter feeds the inventory
+    packages: [./adapter/yamlfile]
+    only_local: [., ./inventory, ./migrate]
+
+  - name: only the netconnector adapter talks to devices
+    packages: [./adapter/filestore, ./adapter/yamlfile]
+    deny: [github.com/gatework/net-connector/connector, github.com/gatework/net-connector/vendors/...]
+
+  - name: workflows do not reach the command line
+    packages: [./internal/workflow, ./internal/bootstrap]
+    deny: [./internal/cli, ./cmd/..., github.com/spf13/...]
+
+  - name: commands only wire the cli package
+    packages: [./cmd/...]
+    only_local: [./internal/cli]

@@ -1,16 +1,27 @@
-# Firemon
+# firemon development notes
 
-Use golang-how-to for Go work, selecting relevant secondary skills.
+Follow [the gatework Go engineering standard](https://github.com/gatework/go-standards/blob/main/STANDARD.md) (go-standards/STANDARD.md); this file adds only what is specific to firemon. Run `make check` before every commit.
 
-Vendor scope approved by the user: Palo Alto, SRX, Huawei, Hillstone, Fortinet, Netscreen and ASA only. H3C, Topsec, Neteye and other vendors are out of scope for now.
+Before any Go coding, review, debugging or setup task, load the `samber/cc-skills-golang@golang-how-to` skill first.
 
-- Concrete immutable firewall graph; separate StaticNAT and DynamicNAT domain objects.
-- Read docs/spec.md and docs/plans/go-firewall.md before architectural changes.
-- When business semantics, algorithms or vendor behavior are unclear, inspect the actual Perl implementation and callers under `/Users/crate/Works/perl/algosec/backend/lib/Firewall`. Record the reference and verify differences; preserve Go's exact traffic, unknown-condition and change-safety proofs instead of copying historical defects.
-- Preserve pending/unknown evidence. Never turn unsupported syntax into an unrestricted match.
-- Stateful scoped parsers commit drafts and source evidence atomically. Bind interfaces before routes.
-- Snapshot files are the persistence authority. Loading never reparses or consults a database.
-- Standard-library-first, consumer-owned small interfaces, explicit context and resource limits.
-- Synthetic/sanitized fixtures only. No device credentials, actual production configurations, or private dependency source.
-- Preserve concurrent work. Commit, push, release and real device operations require explicit authorization.
-- Go tests must exercise observable behavior; verify meaningful changes with go test and go vet.
+## Maturity
+
+v2 is a rewrite and is not in production: no compatibility promise (GEN-1). The algorithm reference is the Perl implementation under `algosec/backend/lib/Firewall`; intended differences are listed in [ADR 0003](docs/adr/0003-ordered-first-match.md) and pinned by tests.
+
+## Boundaries
+
+- `traffic` is pure set algebra; the root package `firemon` is the domain model and compiler. Neither performs I/O. `architecture.yaml` enforces the direction; register every new package there first.
+- `vendors/<vendor>` owns all device syntax: parsing to `firemon.Config` and rendering design plans to commands. Nothing outside a vendor package switches on `firemon.Vendor`; vendor behaviour reaches the engine through `firemon.Semantics`.
+- `adapter/netconnector` is the only package that imports net-connector.
+- Vendors are wired explicitly in `internal/bootstrap`; no `init` registration.
+
+## Semantics that must not regress
+
+- Never widen what cannot be evaluated. Domain names, dynamic groups, application matches, unknown objects and cycles make a rule undecidable (`Rule.Decidable() == false`); evaluation treats it as a possible match and reports `Indeterminate`, never `Allowed`.
+- Rules are evaluated in device order, first match wins, deny rules included.
+- A design plan is accepted only if, applied to the configuration, it makes the intent allowed and permits nothing outside the intent.
+- Deploy is dry-run unless explicitly applied, refuses a device whose configuration fingerprint differs from the plan baseline, and never retries a partially sent script.
+
+## Data
+
+Fixtures in `testdata/` are synthetic. Real configurations stay outside the repository: point `FIREMON_CORPUS` at a directory of backups and run `make corpus`; tests print only aggregate counts.
