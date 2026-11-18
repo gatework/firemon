@@ -1,0 +1,63 @@
+# firemon
+
+Firewall policy automation for Hillstone StoneOS and Palo Alto PAN-OS: parse a running configuration, answer "is this traffic allowed and by which rule", design the smallest verified change that permits a request, render it as device commands, and deploy it safely.
+
+Module `github.com/gatework/firemon`, Go 1.26 or later.
+
+## Install
+
+```sh
+go install github.com/gatework/firemon/cmd/firemon@latest
+```
+
+## Command line
+
+Every command reads the configuration from `--config FILE`, or from the device with `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output.
+
+```sh
+# Objects, diagnostics and rules that cannot be evaluated offline
+firemon parse --vendor hillstone --config fw1.txt
+
+# How the firewall treats traffic: zones, NAT, deciding rules, verdict (exit 3 unless allowed)
+firemon query --vendor paloalto --config pa1.txt --src 10.1.0.0/24 --dst 192.0.2.10 --service tcp/443
+
+# Which objects and rules reference an address
+firemon usage --vendor hillstone --config fw1.txt --addr 10.250.119.11
+
+# Design and render the change that permits a request (no device access)
+firemon design --vendor paloalto --config pa1.txt --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 \
+  --name REQ-1001 --description "ticket 1001"
+
+# Design on the live device; with --apply push, verify and save/commit after confirmation
+firemon deploy --vendor hillstone --host 10.0.0.1 --user ops --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 --apply
+```
+
+Addresses accept `10.0.0.1`, `10.0.0.0/24`, `10.0.0.1-10.0.0.9` and `any`; services accept `tcp/443`, `udp/53`, `tcp/8000-8010`, `icmp`, `icmp/8`, `89` and `any`, comma separated. Transparent (layer-2) deployments need `--from-zone` and `--to-zone`, because zones cannot be derived from routing.
+
+## Library
+
+| Package | Role |
+|---|---|
+| `traffic` | Exact set algebra: addresses (IPv4/IPv6), services, spaces and regions |
+| `firemon` | Domain model (`Config`) and compiler (`Compile` → `Firewall`) |
+| `query` | Ordered first-match evaluation with routing and NAT |
+| `design` | Verified change plans: reuse objects, extend rules, add rules |
+| `deploy` | Fingerprint-checked, journaled deployment on go-netops `apply` |
+| `vendors/hillstone`, `vendors/paloalto` | Parsing and rendering per vendor |
+| `adapter/netconnector` | Device access through net-connector |
+
+See the package examples (`go doc github.com/gatework/firemon/query`) and the [ADRs](docs/adr) for the model and the semantics.
+
+## Semantics in one paragraph
+
+Rules are evaluated in device order and the first match decides, deny rules included; disabled rules and rules outside their schedule do not match. Anything that cannot be evaluated offline (domain names, application identification, dynamic groups, unknown objects) makes a rule undecidable: the query reports `indeterminate` instead of guessing. A design extends an existing rule only when the extension cannot permit anything outside the request, never overrides a specific deny unless asked (`--override`), and is verified by applying it to a copy of the configuration before it is shown.
+
+## Development
+
+```sh
+make check                                  # the full gate (STANDARD.md MOD-5)
+make fuzz                                   # fuzz the algebra and both parsers
+FIREMON_CORPUS=/path/to/backups make corpus # parse private configurations, aggregate output only
+```
+
+Test layers: unit and golden tests use synthetic fixtures under `testdata/`; the corpus test runs only when `FIREMON_CORPUS` is set; nothing in the test suite connects to a device.

@@ -1,17 +1,23 @@
 # firemon import boundaries (STANDARD.md ARC-1), enforced by archcheck in `make check`.
 # Direction: cmd -> internal/cli -> internal/bootstrap -> internal/workflow
-#            -> query/design/deploy -> firemon -> traffic; vendors and adapter point inward.
+#            -> deploy/design/query -> firemon -> traffic; vendors and adapter point inward.
 declared:
   - .
   - ./traffic
-  - ./vendors/hillstone
-  - ./vendors/paloalto
   - ./query
   - ./design
+  - ./deploy
+  - ./vendors/hillstone
+  - ./vendors/paloalto
+  - ./adapter/netconnector
+  - ./internal/bootstrap
+  - ./internal/workflow
+  - ./internal/cli
+  - ./cmd/firemon
 
 rules:
   - name: domain packages stay free of I/O
-    packages: [., ./traffic, ./query, ./design]
+    packages: [., ./traffic, ./query, ./design, ./deploy, ./vendors/...]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
 
@@ -23,11 +29,6 @@ rules:
     packages: [.]
     only_local: [./traffic]
 
-  - name: vendors depend only on the domain and the shared parser
-    packages: [./vendors/...]
-    only_local: [., ./traffic, ./design]
-    deny: [os, os/exec, net, net/http, github.com/gatework/net-connector/...]
-
   - name: query evaluates the domain only
     packages: [./query]
     only_local: [., ./traffic]
@@ -35,3 +36,27 @@ rules:
   - name: design plans on the domain and the query engine
     packages: [./design]
     only_local: [., ./traffic, ./query]
+
+  - name: deploy orchestrates verified plans
+    packages: [./deploy]
+    only_local: [., ./traffic, ./query, ./design]
+
+  - name: vendors own device syntax and depend only on the domain
+    packages: [./vendors/...]
+    only_local: [., ./traffic, ./design]
+
+  - name: vendors do not depend on each other
+    packages: [./vendors/hillstone]
+    deny: [./vendors/paloalto]
+
+  - name: the adapter is the only package that talks to devices
+    packages: [./adapter/netconnector]
+    only_local: [.]
+
+  - name: workflows do not reach the command line
+    packages: [./internal/workflow, ./internal/bootstrap]
+    deny: [./internal/cli, ./cmd/..., github.com/spf13/...]
+
+  - name: commands only wire the cli package
+    packages: [./cmd/...]
+    only_local: [./internal/cli]

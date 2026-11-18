@@ -3,6 +3,7 @@ include standard.mk
 
 .PHONY: fuzz corpus
 
+CHECK_EXTRA += fuzz
 
 # Short fuzz passes over the algebra and both vendor parsers.
 fuzz:
