@@ -19,10 +19,12 @@ func (e *search) discoverTargets(req Request, table *firemon.RoutingTable) (path
 		base := req
 		base.Service = e.applicationService(req.Service, app)
 		if !base.Dst.IsEmpty() {
+			e.domain, e.resolved = "", false
 			ps, lost, inc := e.discover(base, table)
 			paths, unrouted, incomplete = append(paths, tag(ps, "", false, app)...), unrouted.Union(lost), incomplete || inc
 		}
 		for _, d := range req.DstDomains {
+			e.domain, e.resolved = d, len(req.Resolved[d]) > 0
 			ps, lost, inc := e.discoverDomain(base, table, d)
 			paths, unrouted, incomplete = append(paths, tag(ps, d, len(req.Resolved[d]) > 0, app)...), unrouted.Union(lost), incomplete || inc
 		}
@@ -72,7 +74,7 @@ func (e *search) discoverDomain(req Request, table *firemon.RoutingTable, domain
 			// is one the default route forwards: not in any more specific route.
 			pc := natPiece{original: traffic.Space{Src: in.addrs, Dst: def.addrs, Service: r.Service}}
 			pc.translated = pc.original
-			for _, rt := range e.policyRoute(pc, in, domain) {
+			for _, rt := range e.policyRoute(pc, in) {
 				out := def
 				if rt.out != nil {
 					if rt.out.iface == "" {
@@ -148,21 +150,27 @@ func (e *Engine) ruleView(r *firemon.Rule, p *Path) view {
 	if p.Domain == "" {
 		return v
 	}
+	return domainView(v, r.DstDomains(), r.DecidableFor(true, p.Application != ""), p.Domain, p.DomainResolved, p.Policy.Dst)
+}
+
+// domainView adapts the view of a rule or policy route to a domain target:
+// its domain patterns match the name, its addresses match through the
+// resolution, and an unresolved name, which leaves by the default route,
+// may be any address that route forwards (dst).
+func domainView(v view, patterns traffic.DomainSet, decidableByName bool, domain string, resolved bool, dst traffic.AddressSet) view {
 	switch {
-	case r.DstDomains().Match(p.Domain):
+	case patterns.Match(domain):
 		v.match.Dst, v.bound.Dst = traffic.AnyAddress(), traffic.AnyAddress()
 		if !v.certain.IsEmpty() {
 			v.certain.Dst = traffic.AnyAddress()
 		}
-	case p.DomainResolved:
-		// The rule's addresses decide; its other domain patterns do not
-		// cover this name.
+	case resolved:
+		// The addresses decide; other domain patterns do not cover this name.
 	case v.match.Dst.ContainsSet(traffic.AnyIPv4()):
-	case v.match.Dst.IsEmpty() && !r.DstDomains().IsEmpty():
-		return view{skip: true} // domain-only rule for other names
-	case !v.match.Dst.Overlaps(p.Policy.Dst) && r.DecidableFor(true, p.Application != ""):
-		// The rule's addresses are all routed elsewhere: the name, which
-		// leaves by the default route, cannot be one of them.
+	case v.match.Dst.IsEmpty() && !patterns.IsEmpty():
+		return view{skip: true} // domain-only entry for other names
+	case !v.match.Dst.Overlaps(dst) && decidableByName:
+		// The addresses are all routed elsewhere: the name cannot be one.
 		return view{skip: true}
 	default:
 		// Addresses only: the unresolved name may or may not be one of them.

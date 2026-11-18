@@ -67,7 +67,7 @@ func ruleFindings(r *firemon.Rule, at time.Time) []Finding {
 		out = append(out, Finding{Kind: KindExpired, Rule: r.ID()})
 	}
 	if !r.Decidable() {
-		out = append(out, Finding{Kind: KindUndecidable, Rule: r.ID(), Detail: strings.Join(r.Issues(), "; ")})
+		out = append(out, Finding{Kind: KindUndecidable, Rule: r.ID(), Detail: joinIssues(r.Issues())})
 	}
 	m := r.Match()
 	if r.Action() == firemon.ActionPermit && r.Decidable() && m.Src.ContainsSet(traffic.AnyIPv4()) &&
@@ -136,4 +136,12 @@ func zones(z []string) string {
 		return "any"
 	}
 	return strings.Join(z, ",")
+}
+
+func joinIssues(issues []firemon.Issue) string {
+	parts := make([]string, len(issues))
+	for i, is := range issues {
+		parts[i] = is.Reason
+	}
+	return strings.Join(parts, "; ")
 }

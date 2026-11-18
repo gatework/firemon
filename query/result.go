@@ -145,10 +145,10 @@ type Path struct {
 	// NATUncertain names NAT rules that may apply to this path but cannot
 	// be decided (unknown zones or unresolvable objects); the path's
 	// decisions are then unknown.
-	NATUncertain []string
+	NATUncertain []NATRef
 	// NATSkipped names disabled NAT rules that would otherwise have matched
 	// before the one that applied.
-	NATSkipped []string
+	NATSkipped []NATRef
 	Decisions  []Decision
 	Verdict    Verdict
 	// Incomplete reports that the evaluation budget was exhausted.
@@ -212,3 +212,31 @@ func (c Condition) String() string {
 	}
 	return "policy route " + c.PolicyRoute + " does not match"
 }
+
+// NATRef names a NAT rule or a static mapping.
+type NATRef struct {
+	Rule   *firemon.NATRule
+	Static *firemon.StaticMapping
+}
+
+// ID returns the device identifier of the rule or mapping.
+func (r NATRef) ID() string {
+	if r.Rule != nil {
+		return r.Rule.Spec().ID
+	}
+	if r.Static != nil {
+		return r.Static.Spec().ID
+	}
+	return ""
+}
+
+// String writes "nat ID" or "static nat ID".
+func (r NATRef) String() string {
+	if r.Static != nil {
+		return "static nat " + r.ID()
+	}
+	return "nat " + r.ID()
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (r NATRef) MarshalText() ([]byte, error) { return []byte(r.String()), nil }

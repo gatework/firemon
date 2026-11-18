@@ -110,7 +110,7 @@ type Path struct {
 	PolicyRoute string            `json:"policy_route,omitempty"`
 	Conditions  []query.Condition `json:"conditions,omitempty"`
 	NAT         []NAT             `json:"nat,omitempty"`
-	NATSkipped  []string          `json:"nat_skipped,omitempty"`
+	NATSkipped  []query.NATRef    `json:"nat_skipped,omitempty"`
 	Verdict     query.Verdict     `json:"verdict"`
 }
 
@@ -133,6 +133,9 @@ type Hit struct {
 	Name    string   `json:"name,omitempty"`
 	Traffic string   `json:"traffic"`
 	Reasons []string `json:"reasons,omitempty"`
+	// Final is the outcome the rule (or the default action) gives, for
+	// the rules that decide traffic when undecidable rules do not match.
+	Final query.Outcome `json:"final,omitzero"`
 }
 
 // Build assembles the report. fws maps clusters to the evaluated firewall,
@@ -196,9 +199,10 @@ func firewallReport(c inventory.Crossing) Firewall {
 					acc.add(&acc.undecided, pr, p, traffic.Region{}, summarize(pr.Issues()))
 				}
 				if len(d.Possible) == 0 {
-					acc.add(&acc.undecided, nil, p, traffic.Region{}, p.NATUncertain)
+					acc.add(&acc.undecided, nil, p, traffic.Region{}, []string{"nat"})
 				}
-				acc.add(&acc.otherwise, d.Rule, p, d.Space, []string{d.Final.String()})
+				acc.add(&acc.otherwise, d.Rule, p, d.Space, nil)
+				acc.otherwise.final(d.Rule, d.Final)
 			case query.OutcomeUnset:
 			}
 		}
@@ -224,7 +228,23 @@ type hitList struct {
 	order   []string
 	names   map[string]string
 	reasons map[string][]string
+	finals  map[string]query.Outcome
 	traffic map[string][]labelled
+}
+
+// final records the outcome rule r gives.
+func (l *hitList) final(r *firemon.Rule, o query.Outcome) {
+	if l.finals == nil {
+		l.finals = map[string]query.Outcome{}
+	}
+	l.finals[hitID(r)] = o
+}
+
+func hitID(r *firemon.Rule) string {
+	if r == nil {
+		return "(default)"
+	}
+	return r.ID()
 }
 
 type hitSets struct {
@@ -243,17 +263,21 @@ func (hitSets) add(l *hitList, r *firemon.Rule, p query.Path, s traffic.Region, 
 	if _, ok := l.names[id]; !ok {
 		l.order = append(l.order, id)
 		l.names[id] = name
-		l.reasons[id] = reasons
+	}
+	for _, r := range reasons {
+		if !slices.Contains(l.reasons[id], r) {
+			l.reasons[id] = append(l.reasons[id], r)
+		}
 	}
 	if !s.IsEmpty() {
 		l.traffic[id] = append(l.traffic[id], labelled{p, s})
 	}
 }
 
-func (l hitList) hits() []Hit {
+func (l *hitList) hits() []Hit {
 	out := make([]Hit, 0, len(l.order))
 	for _, id := range l.order {
-		out = append(out, Hit{Rule: id, Name: l.names[id], Traffic: describeAll(l.traffic[id]), Reasons: l.reasons[id]})
+		out = append(out, Hit{Rule: id, Name: l.names[id], Traffic: describeAll(l.traffic[id]), Reasons: l.reasons[id], Final: l.finals[id]})
 	}
 	return out
 }
@@ -279,7 +303,7 @@ func describeAll(ls []labelled) string {
 // compact writes a region as one box when that box holds exactly the
 // region, which is the common case after merging pieces.
 func compact(r traffic.Region) string {
-	b := box(r)
+	b := r.Bounds()
 	if traffic.NewRegion(b).SubtractRegion(r).IsEmpty() {
 		return b.String()
 	}
@@ -287,29 +311,37 @@ func compact(r traffic.Region) string {
 }
 
 // summarize shortens a rule's issues into its kinds.
-func summarize(issues []string) []string {
+func summarize(issues []firemon.Issue) []string {
 	var out []string
 	for _, i := range issues {
-		kind := "other"
-		switch {
-		case strings.Contains(i, "fqdn"), strings.HasPrefix(i, "domain-book"):
-			kind = "domain"
-		case strings.HasPrefix(i, "application"):
-			kind = "application"
-		case strings.HasPrefix(i, "source-user"), strings.HasPrefix(i, "user"):
-			kind = "user"
-		case strings.HasPrefix(i, "category"):
-			kind = "url-category"
-		case strings.Contains(i, "schedule"):
-			kind = "schedule"
-		case strings.Contains(i, "unknown"):
-			kind = "unknown-object"
-		}
+		kind := issueLabel(i.Kind)
 		if !slices.Contains(out, kind) {
 			out = append(out, kind)
 		}
 	}
 	return out
+}
+
+// issueLabel groups issue kinds into the labels the report shows.
+func issueLabel(k firemon.IssueKind) string {
+	switch k {
+	case firemon.IssueKindDomain, firemon.IssueKindDestinationDomain:
+		return "domain"
+	case firemon.IssueKindApplication:
+		return "application"
+	case firemon.IssueKindUser:
+		return "user"
+	case firemon.IssueKindURLCategory:
+		return "url-category"
+	case firemon.IssueKindSchedule:
+		return "schedule"
+	case firemon.IssueKindObject, firemon.IssueKindZone:
+		return "unknown-object"
+	case firemon.IssueKindUnset, firemon.IssueKindAction, firemon.IssueKindUnsupported, firemon.IssueKindConfig:
+		return "other"
+	default:
+		return "other"
+	}
 }
 
 func classify(permitted, blocked, deflt, unknown bool) Status {
@@ -338,8 +370,8 @@ func pathSummary(p query.Path) Path {
 	for _, h := range p.SourceNAT {
 		out.NAT = append(out.NAT, natLine(h))
 	}
-	for _, id := range p.NATUncertain {
-		out.NAT = append(out.NAT, NAT{Rule: id, Uncertain: true})
+	for _, ref := range p.NATUncertain {
+		out.NAT = append(out.NAT, NAT{Rule: ref.ID(), Static: ref.Static != nil, Uncertain: true})
 	}
 	return out
 }

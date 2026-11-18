@@ -20,13 +20,9 @@ type Rule struct {
 	spec       SecurityRule
 	match      traffic.Space
 	bound      traffic.Space
-	issues     []string // every reason, for reporting
+	issues     []Issue // every reason the match is inexact
 	dstDomains traffic.DomainSet
 	apps       []string // normalized application names
-	// domainOnly and appOnly count issues that only destination domains or
-	// only application matching cause; a target that carries a domain or an
-	// application decides those dimensions itself.
-	domainIssues, appIssues int
 	// certain is set when Match is certainly matched even though the rule
 	// is undecidable: its unresolved parts can only add to the match.
 	certain  bool
@@ -58,7 +54,7 @@ func (r *Rule) Match() traffic.Space { return r.match }
 func (r *Rule) Bound() traffic.Space { return r.bound }
 
 // Issues returns why the match space is not exact.
-func (r *Rule) Issues() []string { return slices.Clone(r.issues) }
+func (r *Rule) Issues() []Issue { return slices.Clone(r.issues) }
 
 // Decidable reports whether the match space is exact.
 func (r *Rule) Decidable() bool { return len(r.issues) == 0 }
@@ -78,14 +74,15 @@ func (r *Rule) Certain() (traffic.Space, bool) {
 // its destination domain (domains) or its application (apps): those
 // dimensions are then matched by name instead of being unknown.
 func (r *Rule) DecidableFor(domains, apps bool) bool {
-	rest := len(r.issues)
-	if domains {
-		rest -= r.domainIssues
+	for _, is := range r.issues {
+		switch {
+		case domains && is.Kind == IssueKindDestinationDomain:
+		case apps && is.Kind == IssueKindApplication:
+		default:
+			return false
+		}
 	}
-	if apps {
-		rest -= r.appIssues
-	}
-	return rest == 0
+	return true
 }
 
 // DstDomains returns the destination domain patterns of the rule.

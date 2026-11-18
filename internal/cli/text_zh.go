@@ -94,5 +94,6 @@ var issueKindText = map[string]string{
 	"url-category":   "URL 分类",
 	"schedule":       "时间表",
 	"unknown-object": "未知对象",
+	"nat":            "NAT 无法判定",
 	"other":          "其他条件",
 }

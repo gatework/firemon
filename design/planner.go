@@ -133,7 +133,7 @@ func (p *Planner) needs(res *query.Result, intent Intent, plan *Plan) []need {
 		if len(path.NATUncertain) > 0 {
 			// The packets the rules see depend on NAT that cannot be
 			// decided: nothing on this path is opened blindly.
-			plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": NAT may apply ("+strings.Join(path.NATUncertain, ",")+")")
+			plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": NAT may apply ("+natIDs(path.NATUncertain)+")")
 			n.conflict = n.conflict.Add(path.Policy)
 			continue
 		}
@@ -225,7 +225,7 @@ func (p *Planner) open(n need, intent Intent, cat *catalog, at time.Time) ([]Cha
 	if n.from == "" || n.to == "" {
 		return nil, fmt.Errorf("design: zones of %s are unknown; set the from and to zones", n.region)
 	}
-	target := boundingBox(n.region)
+	target := n.region.Bounds()
 	for _, cand := range p.extensions(n, target, cat) {
 		mark := cat.mark()
 		changes := cand.changes(cat)
@@ -290,6 +290,7 @@ func (x extension) changes(cat *catalog) []Change {
 // dimension, cheapest first.
 func (p *Planner) extensions(n need, target traffic.Space, cat *catalog) []extension {
 	var out []extension
+	scope := n.scope.Bounds()
 	for _, r := range p.fw.Rules() {
 		if n.before != nil && r.Position() >= n.before.Position() {
 			break
@@ -298,7 +299,6 @@ func (p *Planner) extensions(n need, target traffic.Space, cat *catalog) []exten
 			continue
 		}
 		m := r.Match()
-		scope := boundingBox(n.scope)
 		fits := func(a, b traffic.Space) bool { return a.ContainsSpace(b) }
 		if m.Dst.ContainsSet(target.Dst) && m.Service.ContainsSet(target.Service) && fits(scope, traffic.Space{Src: scope.Src, Dst: m.Dst, Service: m.Service}) {
 			add := target.Src.Subtract(m.Src)
@@ -372,12 +372,10 @@ func (p *Planner) ruleID(name string, index int) string {
 }
 
 // boundingBox returns the smallest space containing every space of r.
-func boundingBox(r traffic.Region) traffic.Space {
-	var box traffic.Space
-	for _, s := range r.Spaces() {
-		box.Src = box.Src.Union(s.Src)
-		box.Dst = box.Dst.Union(s.Dst)
-		box.Service = box.Service.Union(s.Service)
+func natIDs(refs []query.NATRef) string {
+	ids := make([]string, len(refs))
+	for i, r := range refs {
+		ids[i] = r.String()
 	}
-	return box
+	return strings.Join(ids, ",")
 }

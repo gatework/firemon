@@ -2,7 +2,6 @@ package query
 
 import (
 	"cmp"
-	"net/netip"
 	"slices"
 
 	"github.com/gatework/firemon"
@@ -16,8 +15,8 @@ type natPiece struct {
 	dstHit     *NATHit
 	srcHit     *NATHit
 	mapped     *firemon.StaticMapping // inbound static mapping, for narrowing
-	uncertain  []string               // NAT rules that may have matched
-	skipped    []string               // disabled NAT rules that would have matched
+	uncertain  []NATRef               // NAT rules that may have matched
+	skipped    []NATRef               // disabled NAT rules that would have matched
 	decided    bool
 }
 
@@ -43,12 +42,7 @@ type natEntry struct {
 	priority int
 }
 
-func (n natEntry) id() string {
-	if n.rule != nil {
-		return "nat " + n.rule.Spec().ID
-	}
-	return "static nat " + n.static.Spec().ID
-}
+func (n natEntry) ref() NATRef { return NATRef{Rule: n.rule, Static: n.static} }
 
 // preEntries lists the NAT entries applied before routing: on single-order
 // vendors every rule and both directions of every static mapping, by
@@ -105,7 +99,7 @@ func (e *search) translate(base traffic.Space, in hop, table *firemon.RoutingTab
 // uncertain, and the rest stays undecided.
 func (e *Engine) matchEntry(en natEntry, pc natPiece, in hop, table *firemon.RoutingTable, req Request) []natPiece {
 	if en.rule != nil && en.rule.Spec().Disabled && en.rule.AppliesFromIgnoringState(in.zone) && pc.original.Overlaps(en.rule.Match()) {
-		pc.skipped = append(slices.Clip(pc.skipped), "nat "+en.rule.Spec().ID)
+		pc.skipped = append(slices.Clip(pc.skipped), en.ref())
 	}
 	hit, maybe, miss := e.classify(en, pc.original, in, table, req)
 	var out []natPiece
@@ -115,7 +109,7 @@ func (e *Engine) matchEntry(en natEntry, pc natPiece, in hop, table *firemon.Rou
 	for _, s := range maybe {
 		p := pc
 		p.original, p.translated = s, s
-		p.uncertain = append(slices.Clip(pc.uncertain), en.id())
+		p.uncertain = append(slices.Clip(pc.uncertain), en.ref())
 		out = append(out, p)
 	}
 	for _, s := range miss {
@@ -262,21 +256,45 @@ func (e *Engine) applyEntry(en natEntry, s traffic.Space, pc natPiece) natPiece 
 // sourceNAT applies the post-policy source NAT of separate-order vendors
 // to one path: the first matching rule per packet, after routing.
 func (e *Engine) sourceNAT(p *Path, s traffic.Space, in, out hop) {
+	if len(p.SourceNAT) > 0 {
+		return // a pre-routing rule already decided the source
+	}
 	remaining := traffic.NewRegion(s)
+	statics := func() {
+		for _, m := range e.fw.StaticNATs() {
+			if remaining.IsEmpty() {
+				return
+			}
+			remaining = e.sourceStatic(p, m, remaining, s, in, out)
+		}
+	}
+	if e.fw.Semantics().StaticNATFirst {
+		statics()
+	}
 	for _, n := range e.fw.NATRulesFor(firemon.NATKindSource) {
 		if remaining.IsEmpty() {
 			return
 		}
 		remaining = e.sourceNATRule(p, n, remaining, in, out)
 	}
-	for _, m := range e.fw.StaticNATs() {
-		if !m.Spec().InboundOnly && m.InVirtualRouter(in.vr) && m.AppliesOutbound(in.zone, out.zone) {
-			part := remaining.Intersect(traffic.Space{Src: m.Real(), Dst: traffic.AnyAddress(), Service: traffic.AnyService()})
-			if !part.IsEmpty() {
-				p.SourceNAT = append(p.SourceNAT, NATHit{Static: m, Side: firemon.NATKindSource, Translated: m.ToMapped(s.Src), Position: -1, Space: part})
-			}
-		}
+	if !e.fw.Semantics().StaticNATFirst {
+		statics()
 	}
+}
+
+// sourceStatic applies the outbound direction of one static mapping, first
+// match like the rules: the sources it maps leave the rest.
+func (e *Engine) sourceStatic(p *Path, m *firemon.StaticMapping, remaining traffic.Region, s traffic.Space, in, out hop) traffic.Region {
+	if m.Spec().InboundOnly || !m.InVirtualRouter(in.vr) || !m.AppliesOutbound(in.zone, out.zone) {
+		return remaining
+	}
+	inside := traffic.Space{Src: m.Real(), Dst: traffic.AnyAddress(), Service: traffic.AnyService()}
+	part := remaining.Intersect(inside)
+	if part.IsEmpty() {
+		return remaining
+	}
+	p.SourceNAT = append(p.SourceNAT, NATHit{Static: m, Side: firemon.NATKindSource, Translated: m.ToMapped(s.Src.Intersect(m.Real())), Position: -1, Space: part})
+	return remaining.Subtract(inside)
 }
 
 // sourceNATRule applies one source NAT rule to the untranslated rest of a
@@ -292,12 +310,12 @@ func (e *Engine) sourceNATRule(p *Path, n *firemon.NATRule, remaining traffic.Re
 		return remaining
 	case spec.Disabled:
 		if applies == appliesYes && !remaining.Intersect(n.Match()).IsEmpty() {
-			p.NATSkipped = append(p.NATSkipped, "nat "+spec.ID)
+			p.NATSkipped = append(p.NATSkipped, NATRef{Rule: n})
 		}
 		return remaining
 	case applies == appliesMaybe || !n.Decidable():
 		if !remaining.Intersect(n.Bound()).IsEmpty() {
-			p.NATUncertain = append(p.NATUncertain, "nat "+spec.ID)
+			p.NATUncertain = append(p.NATUncertain, NATRef{Rule: n})
 		}
 		return remaining
 	}
@@ -317,11 +335,7 @@ func (e *Engine) sourceNATRule(p *Path, n *firemon.NATRule, remaining traffic.Re
 
 func (e *Engine) interfaceAddresses(name string) traffic.AddressSet {
 	ifc, _ := e.fw.Interface(name)
-	var out traffic.AddressSet
-	for _, p := range ifc.Addresses {
-		out = out.Union(traffic.NewAddressSet(netip.PrefixFrom(p.Addr(), p.Addr().BitLen())))
-	}
-	return out
+	return ifc.HostAddresses()
 }
 
 // withPort rewrites every port-carrying destination range of s to port;

@@ -193,9 +193,9 @@ func printFirewall(p *printer, f report.Firewall) {
 		}
 		p.f("  待确认流量：%s\n  可能先命中的策略：%s\n", f.UndecidedTraffic, strings.Join(names, "，"))
 		for _, h := range f.Otherwise {
-			outcome := "放通"
-			if len(h.Reasons) > 0 && h.Reasons[0] != "permit" {
-				outcome = "拒绝"
+			outcome := "拒绝"
+			if h.Final == query.OutcomePermit {
+				outcome = "放通"
 			}
 			p.f("  若这些策略都不命中：由 %s %s %s\n", h.Rule, h.Name, outcome)
 		}
@@ -239,8 +239,8 @@ func printPath(p *printer, path report.Path) {
 	for _, c := range path.Conditions {
 		p.f("    前提：%s\n", conditionText(c))
 	}
-	for _, id := range path.NATSkipped {
-		p.f("    已跳过禁用的 %s\n", id)
+	for _, ref := range path.NATSkipped {
+		p.f("    已跳过禁用的 NAT 规则 %s\n", ref.ID())
 	}
 	for _, n := range path.NAT {
 		if n.Uncertain {

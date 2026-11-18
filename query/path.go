@@ -27,7 +27,7 @@ func (e *search) discover(req Request, table *firemon.RoutingTable) (paths []Pat
 			inTable := e.tableOf(in.vr, table)
 			base := traffic.Space{Src: in.addrs, Dst: fam.Dst, Service: fam.Service}
 			for _, pc := range e.translate(base, in, inTable, fam) {
-				for _, rt := range e.policyRoute(pc, in, "") {
+				for _, rt := range e.policyRoute(pc, in) {
 					outs, lost := e.routedEgress(fam, inTable, rt)
 					unrouted = unrouted.Union(lost)
 					for _, out := range outs {

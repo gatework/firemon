@@ -8,6 +8,10 @@ type search struct {
 	*Engine
 	paths      int
 	incomplete bool
+	// domain is the destination domain of the target being discovered,
+	// resolved when its addresses are known; policy routes match it.
+	domain   string
+	resolved bool
 }
 
 // admit counts one more path, or reports that the budget is spent.

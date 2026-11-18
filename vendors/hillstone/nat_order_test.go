@@ -130,7 +130,7 @@ func TestNAT_FirstMatchInOrder(t *testing.T) {
 			if h.Rule.Spec().ID != tt.rule || h.Position != tt.position || h.Translated.String() != tt.translated {
 				t.Fatalf("NAT %s at %d -> %s", h.Rule.Spec().ID, h.Position, h.Translated)
 			}
-			if tt.skippedRule != "" && (len(p.NATSkipped) != 1 || p.NATSkipped[0] != tt.skippedRule) {
+			if tt.skippedRule != "" && (len(p.NATSkipped) != 1 || p.NATSkipped[0].String() != tt.skippedRule) {
 				t.Fatalf("skipped %v", p.NATSkipped)
 			}
 		})

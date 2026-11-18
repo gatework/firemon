@@ -117,7 +117,7 @@ func assess(r *firemon.Rule, pn pairNeed) (Candidate, bool) {
 	if r.Action() != firemon.ActionPermit || r.Ignored() || !r.Applies(pn.from, pn.to) {
 		return Candidate{}, false
 	}
-	need, scope, m := box(pn.need), box(pn.scope), r.Match()
+	need, scope, m := pn.need.Bounds(), pn.scope.Bounds(), r.Match()
 	c := Candidate{
 		Rule: r.ID(), Name: spec.Name, From: pn.from, To: pn.to, position: r.Position(),
 		Src: m.Src.Relation(need.Src), Dst: m.Dst.Relation(need.Dst), Service: m.Service.Relation(need.Service),
@@ -172,14 +172,6 @@ func reasons(r *firemon.Rule, pn pairNeed, covers int, wider bool) []Reason {
 }
 
 // box returns the smallest space containing every space of r.
-func box(r traffic.Region) traffic.Space {
-	var b traffic.Space
-	for _, s := range r.Spaces() {
-		b.Src, b.Dst, b.Service = b.Src.Union(s.Src), b.Dst.Union(s.Dst), b.Service.Union(s.Service)
-	}
-	return b
-}
-
 func compareBool(a, b bool) int {
 	switch {
 	case a == b:

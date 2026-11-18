@@ -119,7 +119,7 @@ func buildRoutingTables(cfg *Config, ifaces map[string]Interface) (map[string]*R
 	}
 	var issues []Issue
 	for _, e := range pending {
-		issues = append(issues, Issue{Object: "route " + e.route.Destination.String(), Reason: "not installed: no route reaches next hop " + e.route.NextHop.String()})
+		issues = append(issues, Issue{Kind: IssueKindConfig, Object: "route " + e.route.Destination.String(), Reason: "not installed: no route reaches next hop " + e.route.NextHop.String()})
 	}
 	for _, t := range tables {
 		slices.SortStableFunc(t.entries, func(a, b routeEntry) int {

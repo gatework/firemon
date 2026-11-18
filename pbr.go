@@ -44,8 +44,7 @@ type PBRRule struct {
 	dstDomains traffic.DomainSet
 	iface      string
 	zone       string
-	issues     []string
-	domainOnly int
+	issues     []Issue
 }
 
 // Position returns the zero-based position in the policy routes of the
@@ -69,16 +68,17 @@ func (p *PBRRule) DstDomains() traffic.DomainSet { return p.dstDomains }
 func (p *PBRRule) Egress() (iface, zone string) { return p.iface, p.zone }
 
 // Issues returns why the match is not exact.
-func (p *PBRRule) Issues() []string { return slices.Clone(p.issues) }
+func (p *PBRRule) Issues() []Issue { return slices.Clone(p.issues) }
 
 // DecidableFor reports whether the match is exact, ignoring destination
 // domains when the target names its domain.
 func (p *PBRRule) DecidableFor(domains bool) bool {
-	n := len(p.issues)
-	if domains {
-		n -= p.domainOnly
+	for _, is := range p.issues {
+		if !domains || is.Kind != IssueKindDestinationDomain {
+			return false
+		}
 	}
-	return n == 0
+	return true
 }
 
 // PolicyRoutesFor returns the enabled policy routes that apply to traffic
@@ -116,9 +116,10 @@ func (fw *Firewall) compilePolicyRoutes(res *resolver) {
 			p.bound.Service = traffic.AnyService()
 		}
 		p.dstDomains = dst.domains
-		p.issues = slices.Concat(src.allProblems(), dst.problems, svc.allProblems(), spec.Unsupported)
-		p.domainOnly = len(dst.domainProblems)
-		p.issues = append(p.issues, dst.domainProblems...)
+		p.issues = slices.Concat(
+			issuesOf(IssueKindObject, src.problems), issuesOf(IssueKindDomain, src.domainProblems),
+			issuesOf(IssueKindObject, dst.problems), issuesOf(IssueKindDestinationDomain, dst.domainProblems),
+			issuesOf(IssueKindObject, svc.problems), unsupportedIssues(spec.Unsupported))
 		p.iface = spec.Interface
 		if p.iface == "" && spec.NextHop.IsValid() {
 			if t, ok := fw.tables[spec.VirtualRouter]; ok {
@@ -127,10 +128,10 @@ func (fw *Firewall) compilePolicyRoutes(res *resolver) {
 		}
 		p.zone = fw.interfaces[p.iface].Zone
 		if p.iface == "" {
-			p.issues = append(p.issues, "next hop "+spec.NextHop.String()+" unreachable")
+			p.issues = append(p.issues, Issue{Kind: IssueKindConfig, Reason: "next hop " + spec.NextHop.String() + " unreachable"})
 		}
-		for _, reason := range p.issues {
-			fw.issue("policy route "+spec.Policy+"/"+spec.ID, reason)
+		for _, is := range p.issues {
+			fw.issues = append(fw.issues, Issue{Kind: is.Kind, Object: "policy route " + spec.Policy + "/" + spec.ID, Reason: is.Reason})
 		}
 		fw.pbr = append(fw.pbr, p)
 	}

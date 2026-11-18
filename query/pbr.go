@@ -22,7 +22,7 @@ type routed struct {
 // cannot be decided offline (user groups, unresolved domains) splits the
 // traffic into a branch that takes it, conditioned on the entry matching,
 // and a branch that does not.
-func (e *search) policyRoute(pc natPiece, in hop, domain string) []routed {
+func (e *search) policyRoute(pc natPiece, in hop) []routed {
 	rules := e.fw.PolicyRoutesFor(in.zone, in.iface)
 	work := []routed{{piece: pc}}
 	if len(rules) == 0 {
@@ -38,7 +38,7 @@ func (e *search) policyRoute(pc natPiece, in hop, domain string) []routed {
 		}
 		var next []routed
 		for _, w := range work {
-			taken, rest := e.applyPolicyRoute(r, w, domain)
+			taken, rest := e.applyPolicyRoute(r, w, e.domain, e.resolved)
 			done = append(done, taken...)
 			next = append(next, rest...)
 		}
@@ -80,16 +80,16 @@ func fold(parts []routed) []routed {
 }
 
 // applyPolicyRoute splits one undecided part by one entry.
-func (e *Engine) applyPolicyRoute(r *firemon.PBRRule, w routed, domain string) (taken, rest []routed) {
+func (e *Engine) applyPolicyRoute(r *firemon.PBRRule, w routed, domain string, resolved bool) (taken, rest []routed) {
 	s := w.piece.translated
-	match, bound := r.Match(), r.Bound()
-	decidable := r.DecidableFor(domain != "")
-	if domain != "" && r.DstDomains().Match(domain) {
-		match.Dst, bound.Dst = traffic.AnyAddress(), traffic.AnyAddress()
-	} else if domain != "" && !match.Dst.ContainsSet(traffic.AnyIPv4()) {
-		decidable = false // an unresolved name may or may not be one of the addresses
-		bound.Dst = traffic.AnyAddress()
+	v := view{match: r.Match(), bound: r.Bound(), decidable: r.DecidableFor(domain != "")}
+	if domain != "" {
+		v = domainView(v, r.DstDomains(), r.DecidableFor(true), domain, resolved, s.Dst)
 	}
+	if v.skip {
+		return nil, []routed{w}
+	}
+	match, bound, decidable := v.match, v.bound, v.decidable
 	id := r.Spec().Policy + "/" + r.Spec().ID
 	iface, zone := r.Egress()
 	out := &hop{vr: r.Spec().VirtualRouter, zone: zone, iface: iface, prefixLen: -1}

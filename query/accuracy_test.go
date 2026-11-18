@@ -68,3 +68,34 @@ func TestH7_UnresolvedDomainFromIPv6Source(t *testing.T) {
 		t.Fatalf("an IPv6 client reaches the name by the IPv6 default route: %+v", res.Paths)
 	}
 }
+
+func TestM1_SourceDomainStaysUndecidableForDomainTargets(t *testing.T) {
+	t.Parallel()
+	r := permit("1", "", "", "", "")
+	r.Source = []firemon.AddressRef{firemon.NamedAddress("cdn")}
+	r.Destination = []firemon.AddressRef{firemon.NamedAddress("cdn")}
+	fw, err := firemon.Compile(lab(firemon.AddressStageOriginal, r))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule, _ := fw.Rule("1")
+	if rule.DecidableFor(true, false) {
+		t.Fatal("a source FQDN is not decided by the destination domain of the target")
+	}
+}
+
+func TestM3_StaticSourceNATIsFirstMatch(t *testing.T) {
+	t.Parallel()
+	cfg := lab(firemon.AddressStageTranslated, permit("1", "", "", "", ""))
+	cfg.StaticNATs = []firemon.StaticNAT{
+		{ID: "1", VirtualRouter: "vr", Real: inline("10.0.0.9/32"), Mapped: inline("198.51.100.9/32")},
+		{ID: "2", VirtualRouter: "vr", Real: inline("10.0.0.0/24"), Mapped: inline("198.51.100.0/24")},
+	}
+	res := queryOne(t, cfg, req(t, "10.0.0.9", "8.8.8.8", "tcp/443"))
+	if len(res.Paths) != 1 || len(res.Paths[0].SourceNAT) != 1 {
+		t.Fatalf("one mapping translates each source: %+v", res.Paths)
+	}
+	if h := res.Paths[0].SourceNAT[0]; h.Static.Spec().ID != "1" || h.Translated.String() != "198.51.100.9" {
+		t.Fatalf("the first mapping wins: %s -> %s", h.Static.Spec().ID, h.Translated)
+	}
+}

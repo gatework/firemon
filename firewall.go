@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"iter"
 	"maps"
-	"net/netip"
 	"slices"
 	"strings"
 	"time"
@@ -16,15 +15,6 @@ import (
 
 // ErrInvalidConfig reports a configuration that cannot be compiled at all.
 var ErrInvalidConfig = errors.New("firemon: invalid configuration")
-
-// Issue records a construct that compiled but cannot be evaluated exactly.
-type Issue struct {
-	Object string `json:"object"`
-	Reason string `json:"reason"`
-}
-
-// String writes "object: reason".
-func (i Issue) String() string { return i.Object + ": " + i.Reason }
 
 // Firewall is a compiled, immutable firewall. It is safe for concurrent use.
 type Firewall struct {
@@ -239,14 +229,12 @@ func (fw *Firewall) compileRules(res *resolver) {
 		}
 		seen[spec.ID] = true
 		r := &Rule{position: i, spec: spec, loc: fw.loc}
-		var dstDomainIssues []string
 		var certain bool
-		r.match, r.bound, r.issues, r.dstDomains, dstDomainIssues, certain = ruleSpace(res, spec)
-		appIssues := appIssues(spec)
-		r.domainIssues, r.appIssues = len(dstDomainIssues), len(appIssues)
+		r.match, r.bound, r.issues, r.dstDomains, certain = ruleSpace(res, spec)
+		apps := appIssues(spec)
 		semantic := fw.ruleSemanticIssues(spec)
-		r.issues = slices.Concat(r.issues, dstDomainIssues, appIssues, semantic)
-		r.certain = certain && len(appIssues) == 0 && len(semantic) == 0
+		r.issues = slices.Concat(r.issues, apps, semantic)
+		r.certain = certain && len(apps) == 0 && len(semantic) == 0
 		for _, a := range spec.Applications {
 			r.apps = append(r.apps, strings.ToLower(a))
 		}
@@ -254,24 +242,24 @@ func (fw *Firewall) compileRules(res *resolver) {
 			r.schedule = schedules[spec.Schedule]
 			switch {
 			case r.schedule == nil:
-				r.issues, r.certain = append(r.issues, "unknown schedule "+quote(spec.Schedule)), false
+				r.issues, r.certain = append(r.issues, Issue{Kind: IssueKindSchedule, Reason: "unknown schedule " + quote(spec.Schedule)}), false
 			case r.schedule.Unsupported != "":
-				r.issues, r.certain = append(r.issues, "unsupported schedule "+quote(spec.Schedule)), false
+				r.issues, r.certain = append(r.issues, Issue{Kind: IssueKindSchedule, Reason: "unsupported schedule " + quote(spec.Schedule)}), false
 			}
 		}
 		for _, z := range slices.Concat(spec.From, spec.To) {
 			if _, ok := fw.zones[z]; !ok {
-				r.issues, r.certain = append(r.issues, "unknown zone "+quote(z)), false
+				r.issues, r.certain = append(r.issues, Issue{Kind: IssueKindZone, Reason: "unknown zone " + quote(z)}), false
 			}
 		}
 		r.issues = slices.Compact(r.issues)
 		if spec.Incomplete != "" {
 			// The device ignores the rule, so its match is exact: nothing.
 			r.issues = nil
-			fw.issue("rule "+spec.ID, "incomplete, never matches: "+spec.Incomplete)
+			fw.issues = append(fw.issues, Issue{Kind: IssueKindConfig, Object: "rule " + spec.ID, Reason: "incomplete, never matches: " + spec.Incomplete})
 		}
-		for _, reason := range r.issues {
-			fw.issue("rule "+spec.ID, reason)
+		for _, is := range r.issues {
+			fw.issues = append(fw.issues, Issue{Kind: is.Kind, Object: "rule " + spec.ID, Reason: is.Reason})
 		}
 		fw.rules[i] = r
 	}
@@ -279,7 +267,7 @@ func (fw *Firewall) compileRules(res *resolver) {
 
 // ruleSpace resolves a rule's operands into its exact match space, an
 // upper bound of what it can match, and the reasons the match is inexact.
-func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, issues []string, dstDomains traffic.DomainSet, dstDomainIssues []string, certain bool) {
+func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, issues []Issue, dstDomains traffic.DomainSet, certain bool) {
 	src, dst := res.operands(spec.Source), res.operands(spec.Destination)
 	svc := res.serviceList(spec.Services)
 	if len(spec.ServiceEntries) > 0 {
@@ -307,7 +295,10 @@ func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, is
 	if !svc.exact() || spec.ApplicationDefault {
 		bound.Service = traffic.AnyService()
 	}
-	issues = slices.Concat(src.problems, src.domainProblems, dst.problems, svc.problems, svc.domainProblems, spec.Unsupported)
+	issues = slices.Concat(
+		issuesOf(IssueKindObject, src.problems), issuesOf(IssueKindDomain, src.domainProblems),
+		issuesOf(IssueKindObject, dst.problems), issuesOf(IssueKindObject, svc.problems),
+		unsupportedIssues(spec.Unsupported))
 	// match is certainly matched when every dimension only understates the
 	// true set and no other criterion narrows the rule. A negated inexact
 	// dimension turns an understatement into an overstatement.
@@ -315,30 +306,29 @@ func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, is
 		!spec.ApplicationDefault && (!spec.NegateSource || src.exact()) && (!spec.NegateDestination || dst.exact())
 	if spec.NegateDestination && !dst.domains.IsEmpty() {
 		// A negated domain cannot be matched by name either.
-		return match, bound, append(issues, dst.domainProblems...), traffic.DomainSet{}, nil, certain
+		return match, bound, append(issues, issuesOf(IssueKindDomain, dst.domainProblems)...), traffic.DomainSet{}, certain
 	}
-	return match, bound, issues, dst.domains, dst.domainProblems, certain
+	return match, bound, append(issues, issuesOf(IssueKindDestinationDomain, dst.domainProblems)...), dst.domains, certain
 }
 
 // appIssues are the reasons application matching makes a rule inexact for
 // targets that do not name an application.
-func appIssues(spec SecurityRule) []string {
-	var out []string
+func appIssues(spec SecurityRule) []Issue {
+	var out []Issue
 	if len(spec.Applications) > 0 {
-		out = append(out, "application match "+strings.Join(spec.Applications, ","))
+		out = append(out, Issue{Kind: IssueKindApplication, Reason: "application match " + strings.Join(spec.Applications, ",")})
 	}
 	if spec.ApplicationDefault {
-		out = append(out, "application-default service")
+		out = append(out, Issue{Kind: IssueKindApplication, Reason: "application-default service"})
 	}
 	return out
 }
 
-func (fw *Firewall) ruleSemanticIssues(spec SecurityRule) []string {
-	var out []string
+func (fw *Firewall) ruleSemanticIssues(spec SecurityRule) []Issue {
 	if spec.Action != ActionPermit && spec.Action != ActionDeny {
-		out = append(out, "unknown action")
+		return []Issue{{Kind: IssueKindAction, Reason: "unknown action"}}
 	}
-	return out
+	return nil
 }
 
 func (fw *Firewall) compileNAT(res *resolver) {
@@ -392,10 +382,7 @@ func (fw *Firewall) translation(res *resolver, t Translation, issues []string) (
 		if t.Interface == "" {
 			return traffic.AddressSet{}, issues // the egress interface, known only per packet
 		}
-		var out traffic.AddressSet
-		for _, p := range fw.interfaces[t.Interface].Addresses {
-			out = out.Union(traffic.NewAddressSet(netip.PrefixFrom(p.Addr(), p.Addr().BitLen())))
-		}
+		out := fw.interfaces[t.Interface].HostAddresses()
 		if out.IsEmpty() {
 			issues = append(issues, "interface "+quote(t.Interface)+" has no address")
 		}
@@ -408,7 +395,7 @@ func (fw *Firewall) translation(res *resolver, t Translation, issues []string) (
 }
 
 func (fw *Firewall) issue(object, reason string) {
-	fw.issues = append(fw.issues, Issue{Object: object, Reason: reason})
+	fw.issues = append(fw.issues, Issue{Kind: IssueKindConfig, Object: object, Reason: reason})
 }
 
 func exactObjects[T any](objects map[string]resolved[T]) iter.Seq2[string, T] {

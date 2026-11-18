@@ -1,6 +1,10 @@
 package firemon
 
-import "net/netip"
+import (
+	"net/netip"
+
+	"github.com/gatework/firemon/traffic"
+)
 
 // VirtualRouter is a routing context (Hillstone vrouter, PAN-OS
 // virtual-router). Interfaces, zones and routes belong to exactly one.
@@ -88,4 +92,13 @@ type Route struct {
 	Distance    uint32 `json:"distance,omitempty"`
 	Metric      uint32 `json:"metric,omitempty"`
 	Description string `json:"description,omitempty"`
+}
+
+// HostAddresses returns the interface's own addresses as host routes.
+func (i Interface) HostAddresses() traffic.AddressSet {
+	var out traffic.AddressSet
+	for _, p := range i.Addresses {
+		out = out.Union(traffic.NewAddressSet(netip.PrefixFrom(p.Addr(), p.Addr().BitLen())))
+	}
+	return out
 }

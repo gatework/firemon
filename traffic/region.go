@@ -96,6 +96,16 @@ func (r Region) Len() int { return len(r.spaces) }
 // Spaces returns a copy of the disjoint spaces of r.
 func (r Region) Spaces() []Space { return slices.Clone(r.spaces) }
 
+// Bounds returns the smallest space containing the region: the union of
+// its spaces in each dimension.
+func (r Region) Bounds() Space {
+	var b Space
+	for _, s := range r.spaces {
+		b.Src, b.Dst, b.Service = b.Src.Union(s.Src), b.Dst.Union(s.Dst), b.Service.Union(s.Service)
+	}
+	return b
+}
+
 // String writes the spaces separated by "; ".
 func (r Region) String() string {
 	if r.IsEmpty() {
