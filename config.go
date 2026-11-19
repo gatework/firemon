@@ -16,7 +16,7 @@ type Diagnostic struct {
 // ModelVersion numbers the shape of Config and what its fingerprint
 // covers. It changes whenever either does: a configuration stored by an
 // older version is parsed again from its text rather than trusted.
-const ModelVersion = 2
+const ModelVersion = 3
 
 // Config is the declarative configuration of one firewall as produced by a
 // vendor parser. Order is significant for Rules, DynamicNATs and

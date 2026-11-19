@@ -29,7 +29,14 @@ type evaluator struct {
 	path      *Path
 	pieces    []piece
 	decisions []Decision
-	max       int
+	// spaces gathers the pieces of each decision, made a region once in
+	// finish: appending to a region one piece at a time copies it each
+	// time, quadratic on wide requests split into many pieces.
+	spaces [][]traffic.Space
+	// spare is the other piece buffer: split fills it and swaps, so a
+	// long rule list does not allocate a new list for every rule.
+	spare []piece
+	max   int
 }
 
 // evaluate runs ordered first-match over p.Policy and fills its decisions
@@ -116,7 +123,8 @@ func (ev *evaluator) split(s traffic.Space, onHit func(pc piece, hit traffic.Spa
 			continue
 		}
 		if !changed {
-			next = append(make([]piece, 0, len(ev.pieces)+4), ev.pieces[:i]...)
+			next = ev.spare[:0]
+			next = append(next, ev.pieces[:i]...)
 			changed = true
 		}
 		next = append(next, onHit(pc, hit)...)
@@ -125,7 +133,10 @@ func (ev *evaluator) split(s traffic.Space, onHit func(pc piece, hit traffic.Spa
 		}
 	}
 	if changed {
-		ev.pieces = next
+		// The old list becomes the spare; clear it so the pieces it held
+		// can be collected.
+		clear(ev.pieces)
+		ev.spare, ev.pieces = ev.pieces[:0], next
 	}
 }
 
@@ -137,6 +148,9 @@ func (ev *evaluator) finish(o Outcome) {
 			continue
 		}
 		ev.record(nil, o, pc.possible, pc.space)
+	}
+	for i := range ev.decisions {
+		ev.decisions[i].Space = traffic.DisjointRegion(ev.spaces[i]...) // pieces of one partition never overlap
 	}
 	ev.path.Decisions = ev.decisions
 }
@@ -150,11 +164,12 @@ func (ev *evaluator) record(r *firemon.Rule, final Outcome, possible []*firemon.
 	for i := range ev.decisions {
 		d := &ev.decisions[i]
 		if d.Rule == r && d.Outcome == o && d.Final == final && slices.Equal(d.Possible, possible) {
-			d.Space = d.Space.AppendDisjoint(s) // pieces of one partition never overlap
+			ev.spaces[i] = append(ev.spaces[i], s)
 			return
 		}
 	}
-	ev.decisions = append(ev.decisions, Decision{Rule: r, Outcome: o, Final: final, Space: traffic.NewRegion(s), Possible: slices.Clone(possible)})
+	ev.decisions = append(ev.decisions, Decision{Rule: r, Outcome: o, Final: final, Possible: slices.Clone(possible)})
+	ev.spaces = append(ev.spaces, []traffic.Space{s})
 }
 
 // Deciders returns the possible rules that would change the outcome if

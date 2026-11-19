@@ -2,6 +2,7 @@ package cli
 
 import (
 	"cmp"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -75,8 +76,14 @@ func zonesHint(name string, rep report.Report, single bool) string {
 func conclusion(rep report.Report) string {
 	switch {
 	case rep.Status != report.StatusUnset:
+		undecidedParts := rep.Status == report.StatusIndeterminate || slices.ContainsFunc(rep.Firewalls, undecided)
+		if undecidedParts && planned(rep) {
+			// Same reading as the exit code: the verified plan permits the
+			// request whatever the undecidable rules do.
+			return "需要新增策略（无法离线判定的部分，由已验证的方案确保放通）"
+		}
 		verdict := text(statusText, rep.Status, rep.Status.String())
-		if rep.Status != report.StatusIndeterminate && slices.ContainsFunc(rep.Firewalls, undecided) {
+		if rep.Status != report.StatusIndeterminate && undecidedParts {
 			verdict += "（部分流量需确认）"
 		}
 		return verdict
@@ -120,6 +127,9 @@ func printFirewall(p *printer, f report.Firewall, v reportView) {
 // firewallVerdict is the verdict with its reason: what blocks the request
 // when nothing permits it.
 func firewallVerdict(f report.Firewall) string {
+	if (f.Status == report.StatusIndeterminate || undecided(f)) && settledByPlan(f) && len(f.Plan.Changes) > 0 {
+		return "需要新增策略（无法离线判定的部分，由已验证的方案确保放通）"
+	}
 	verdict := text(statusText, f.Status, f.Status.String())
 	switch f.Status {
 	case report.StatusBlocked:
@@ -144,7 +154,7 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 		if ok {
 			position = "（第 " + itoa(d.Position) + " 条）"
 		}
-		p.f("  %s  %s\n", mark, h.Traffic)
+		p.f("  %s  %s\n", mark, trafficText(h.Traffic))
 		p.f("      %s：%s%s\n", what, hitLabel(h.Rule, h.Name), position)
 		switch {
 		case !ok:
@@ -177,8 +187,37 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 		rule("✗ 被拒绝", "拒绝策略", h)
 	}
 	if f.Defaulted != "" {
-		p.f("  ✗ 无放通策略  %s\n      没有策略放通，默认拒绝\n", f.Defaulted)
+		p.f("  ✗ 无放通策略  %s\n      没有策略放通，默认拒绝\n", trafficText(f.Defaulted))
 	}
+}
+
+// partOf is the report's summary of traffic in many pieces.
+var partOf = regexp.MustCompile(`part of (.+?) \((\d+) pieces\)`)
+
+// trafficText writes a traffic description in Chinese.
+func trafficText(s string) string {
+	parts := strings.Split(s, "; ")
+	for i, part := range parts {
+		parts[i] = protocolNumbers(part)
+	}
+	return partOf.ReplaceAllString(strings.Join(parts, "; "), "$1 中的部分流量（共 $2 段，-v 或 --json 查看命中策略的定义）")
+}
+
+// protocolNumbers writes the protocols without a name in the service of
+// "src -> dst service" as ip/N, the form the input takes ("47" alone
+// reads as a port).
+func protocolNumbers(part string) string {
+	i := strings.LastIndexByte(part, ' ')
+	if i < 0 || !strings.Contains(part, " -> ") {
+		return part
+	}
+	items := strings.Split(part[i+1:], ",")
+	for j, item := range items {
+		if item != "" && strings.Trim(item, "0123456789") == "" {
+			items[j] = "ip/" + item
+		}
+	}
+	return part[:i+1] + strings.Join(items, ",")
 }
 
 // timeBound describes when a rule is in force, for a rule bound to a
@@ -216,7 +255,7 @@ func printUndecided(p *printer, f report.Firewall) {
 		}
 		names = append(names, hitLabel(h.Rule, h.Name)+"（"+actionWord(h.Action)+"，"+strings.Join(kinds, "、")+"）")
 	}
-	p.f("  需确认：%s\n", f.UndecidedTraffic)
+	p.f("  需确认：%s\n", trafficText(f.UndecidedTraffic))
 	p.f("    可能先命中并改变结论：%s\n", strings.Join(names, "，"))
 	for _, h := range f.Otherwise {
 		outcome := "拒绝"

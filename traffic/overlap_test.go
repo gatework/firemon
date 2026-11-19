@@ -27,7 +27,7 @@ func TestAddressSet_OverlapsMatchesPairwise(t *testing.T) {
 	}
 	for range 20000 {
 		a, b := set(), set()
-		want := !a.IsEmpty() && !b.IsEmpty() && a.ips.Overlaps(b.ips)
+		want := !a.IsEmpty() && !b.IsEmpty() && ipSet(a).Overlaps(ipSet(b))
 		if got := a.Overlaps(b); got != want {
 			t.Fatalf("%s overlaps %s: %v, want %v", a, b, got, want)
 		}

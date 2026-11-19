@@ -61,11 +61,28 @@ func (p *Parser) Parse(text string) (*firemon.Config, error) {
 		s.dispatch(st)
 	}
 	for _, l := range strays {
+		// "show system info" saved with the configuration: "key: value"
+		// lines; sw-version is the software version set output lacks.
+		if key, value, ok := systemInfo(l.Text); ok {
+			if key == "sw-version" {
+				s.cfg.Version = value
+			}
+			continue
+		}
 		s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Line: l.Number, Text: strings.TrimSpace(l.Text), Reason: "not a set statement"})
 	}
 	cfg := s.finish()
 	cfg.Applications = p.applications()
 	return cfg, nil
+}
+
+// systemInfo reads a "key: value" line of "show system info".
+func systemInfo(line string) (key, value string, ok bool) {
+	key, value, ok = strings.Cut(strings.TrimSpace(line), ": ")
+	if !ok || key == "" || strings.Trim(key, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
+		return "", "", false
+	}
+	return key, strings.TrimSpace(value), true
 }
 
 // draft collects the attribute paths of one named rule in statement order.
@@ -93,6 +110,7 @@ type state struct {
 	ifaceRefs map[string][]string // interface -> address object names used as its IP
 	hostBits  map[string]string   // address object -> unmasked ip-netmask value
 	routeDrop map[string]string   // static route key -> why it does not forward
+	external  map[string]string   // external list or region name -> its kind
 	security  *rulebook
 	nat       *rulebook
 	pbf       *rulebook
@@ -132,6 +150,7 @@ func newState(loc *time.Location) *state {
 		ifaceRefs: map[string][]string{},
 		hostBits:  map[string]string{},
 		routeDrop: map[string]string{},
+		external:  map[string]string{},
 		security:  newRulebook(),
 		nat:       newRulebook(),
 		pbf:       newRulebook(),
@@ -208,6 +227,10 @@ func (s *state) dispatch(st statement) {
 		if section == "system" && key == "hostname" {
 			s.cfg.Hostname = p.scalar()
 		}
+	case "external-list", "region":
+		// Contents the device fetches or knows by country: named here so
+		// that rules using them say what they match.
+		s.external[p.next()] = head
 	case "device-group", "template":
 		s.diagnose(st, "Panorama scope is not supported")
 	}

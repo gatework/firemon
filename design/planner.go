@@ -48,6 +48,9 @@ type need struct {
 	// bypass are the deny rules the new rules go before: definite denies
 	// and denies that match applications, URL categories or users first.
 	bypass []*firemon.Rule
+	// opens and keeps gather the disjoint pieces of one path for region
+	// and conflict, merged once the path is classified.
+	opens, keeps []traffic.Space
 }
 
 // Plan designs the changes that permit intent and, when it asks for one,
@@ -196,9 +199,15 @@ func (p *Planner) needs(res *query.Result, intent Intent, plan *Plan) []need {
 			n.conflict = n.conflict.Add(path.Policy)
 			continue
 		}
+		// The decisions of one path are disjoint: they are gathered on a
+		// scratch need without overlap checks and merged once per path.
+		scratch := need{from: n.from, to: n.to, before: n.before, bypass: n.bypass}
 		for _, d := range path.Decisions {
-			p.classify(n, d, intent, plan)
+			p.classify(&scratch, d, intent, plan)
 		}
+		n.region = n.region.Union(traffic.DisjointRegion(scratch.opens...))
+		n.conflict = n.conflict.Union(traffic.DisjointRegion(scratch.keeps...))
+		n.before, n.bypass = scratch.before, scratch.bypass
 	}
 	if p.fw.Semantics().PortServicesOnly {
 		for i := range out {
@@ -241,20 +250,20 @@ func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan)
 	}
 	switch outcome {
 	case query.OutcomeDefault:
-		n.region = n.region.Union(d.Space)
+		n.opens = append(n.opens, d.Space.Spaces()...)
 		p.narrowDenies(n, d, intent, plan)
 	case query.OutcomeDeny:
 		if !catchAll(d.Rule) && !intent.Override {
-			n.conflict = n.conflict.Union(d.Space)
+			n.keeps = append(n.keeps, d.Space.Spaces()...)
 			plan.Conflicts = append(plan.Conflicts, Conflict{RuleID: d.Rule.ID(), From: n.from, To: n.to, Space: d.Space, Text: d.Space.String()})
 			return
 		}
-		n.region = n.region.Union(d.Space)
+		n.opens = append(n.opens, d.Space.Spaces()...)
 		n.goBefore(d.Rule)
 		p.narrowDenies(n, d, intent, plan)
 	case query.OutcomeUnknown:
 		plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": "+d.Space.String())
-		n.conflict = n.conflict.Union(d.Space) // never opened blindly
+		n.keeps = append(n.keeps, d.Space.Spaces()...) // never opened blindly
 	case query.OutcomePermit, query.OutcomeUnset:
 	}
 }

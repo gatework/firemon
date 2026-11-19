@@ -47,6 +47,9 @@ type AddressEntry struct {
 	From   netip.Addr   `json:"from,omitzero"`
 	To     netip.Addr   `json:"to,omitzero"`
 	FQDN   string       `json:"fqdn,omitempty"`
+	// VirtualRouter is the routing context the device resolves FQDN in
+	// (StoneOS host "name" vrouter "vr"); empty means the default.
+	VirtualRouter string `json:"virtual_router,omitempty"`
 	// Exclude removes the entry from the object instead of adding it.
 	Exclude bool `json:"exclude,omitempty"`
 }

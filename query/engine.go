@@ -102,8 +102,9 @@ func (e *Engine) Query(req Request) (*Result, error) {
 	if res.Incomplete {
 		outcomes[OutcomeUnknown] = true
 	}
+	// Paths are independent: each evaluation writes only its own path.
+	Each(len(res.Paths), func(i int) { e.evaluate(&res.Paths[i], at) })
 	for i := range res.Paths {
-		e.evaluate(&res.Paths[i], at)
 		res.Incomplete = res.Incomplete || res.Paths[i].Incomplete
 		for _, d := range res.Paths[i].Decisions {
 			outcomes[d.Outcome] = true

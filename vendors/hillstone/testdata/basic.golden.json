@@ -129,7 +129,8 @@
       "entries": [
         {
           "kind": "fqdn",
-          "fqdn": "*.cdn.example.com"
+          "fqdn": "*.cdn.example.com",
+          "virtual_router": "trust-vr"
         }
       ]
     },

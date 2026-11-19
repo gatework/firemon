@@ -2,6 +2,7 @@ package report
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/gatework/firemon"
@@ -216,19 +217,31 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 
 // decidedSpaces bounds, per rule, the traffic it decides on the crossing.
 func decidedSpaces(c inventory.Crossing) map[string]traffic.Space {
-	regions := map[string]traffic.Region{}
+	spaces := map[string][]traffic.Space{} // bounded only: overlaps do not matter
 	for _, p := range c.Paths {
 		for _, d := range p.Decisions {
 			if d.Rule != nil {
-				regions[d.Rule.ID()] = regions[d.Rule.ID()].Union(d.Space)
+				spaces[d.Rule.ID()] = append(spaces[d.Rule.ID()], d.Space.Spaces()...)
 			}
 		}
 	}
-	out := make(map[string]traffic.Space, len(regions))
-	for id, r := range regions {
-		out[id] = r.Bounds()
+	out := make(map[string]traffic.Space, len(spaces))
+	for id, ss := range spaces {
+		out[id] = bounds(ss)
 	}
 	return out
+}
+
+// bounds is the smallest space holding every space, which may overlap.
+func bounds(spaces []traffic.Space) traffic.Space {
+	srcs, dsts := make([]traffic.AddressSet, len(spaces)), make([]traffic.AddressSet, len(spaces))
+	var box traffic.Space
+	for i, s := range spaces {
+		srcs[i], dsts[i] = s.Src, s.Dst
+		box.Service = box.Service.Union(s.Service)
+	}
+	box.Src, box.Dst = traffic.UnionAll(srcs...), traffic.UnionAll(dsts...)
+	return box
 }
 
 // decidingRules are the rules that decide part of the request: they
@@ -266,14 +279,17 @@ func firewallReport(c inventory.Crossing) Firewall {
 	if !c.Unrouted.IsEmpty() {
 		f.Unrouted = c.Unrouted.String()
 	}
-	var permitted, blocked, deflt, unknown traffic.Region
+	// Only whether anything is permitted or undecided matters: those are
+	// not accumulated, as overlap checks across many paths are costly.
+	var blocked, deflt traffic.Region
+	var permitted, unknown bool
 	var acc hitSets
 	for _, p := range c.Paths {
 		f.Paths = append(f.Paths, pathSummary(p))
 		for _, d := range p.Decisions {
 			switch d.Outcome {
 			case query.OutcomePermit:
-				permitted = permitted.Union(d.Space)
+				permitted = permitted || !d.Space.IsEmpty()
 				acc.add(&acc.permitted, d.Rule, p, d.Space, nil)
 			case query.OutcomeDeny:
 				blocked = blocked.Union(d.Space)
@@ -281,7 +297,7 @@ func firewallReport(c inventory.Crossing) Firewall {
 			case query.OutcomeDefault:
 				deflt = deflt.Union(d.Space)
 			case query.OutcomeUnknown:
-				unknown = unknown.Union(d.Space)
+				unknown = unknown || !d.Space.IsEmpty()
 				acc.unknown = append(acc.unknown, labelled{p, d.Space})
 				// Only the rules that would change the outcome matter: a
 				// deny that might match first cannot block traffic that is
@@ -308,7 +324,7 @@ func firewallReport(c inventory.Crossing) Firewall {
 	if rest := blocked.Union(deflt); !rest.IsEmpty() {
 		f.Remaining = rest.String()
 	}
-	f.Status = classify(!permitted.IsEmpty(), !blocked.IsEmpty(), !deflt.IsEmpty() || f.Unrouted != "", !unknown.IsEmpty() || c.Incomplete)
+	f.Status = classify(permitted, !blocked.IsEmpty(), !deflt.IsEmpty() || f.Unrouted != "", unknown || c.Incomplete)
 	return f
 }
 
@@ -390,18 +406,53 @@ func (l *hitList) action(r *firemon.Rule) {
 // domain name on unresolved domain paths.
 func describeAll(ls []labelled) string {
 	var parts []string
-	var plain traffic.Region
+	var plain []traffic.Space // the regions of several paths overlap
 	for _, x := range ls {
 		if x.path.Domain != "" && !x.path.DomainResolved {
 			parts = append(parts, describe(x.r, x.path))
 			continue
 		}
-		plain = plain.Union(x.r)
+		plain = append(plain, x.r.Spaces()...)
 	}
-	if !plain.IsEmpty() {
-		parts = append([]string{compact(plain)}, parts...)
+	if len(plain) > 0 {
+		parts = append([]string{compactSpaces(plain)}, parts...)
 	}
 	return strings.Join(slices.Compact(parts), "; ")
+}
+
+// maxListedSpaces bounds the pieces a traffic description merges and lists.
+const maxListedSpaces = 32
+
+// compactSpaces writes the union of spaces that may overlap: one box when
+// the box is exactly their union, which is the common case, without
+// merging them first; the merged region otherwise.
+func compactSpaces(spaces []traffic.Space) string {
+	// Paths of several zone pairs often decide the very same space.
+	seen := map[string]bool{}
+	spaces = slices.DeleteFunc(slices.Clone(spaces), func(s traffic.Space) bool {
+		key := s.String()
+		if seen[key] {
+			return true
+		}
+		seen[key] = true
+		return false
+	})
+	box := bounds(spaces)
+	if slices.ContainsFunc(spaces, func(s traffic.Space) bool { return s.ContainsSpace(box) }) {
+		return box.String()
+	}
+	if len(spaces) > maxListedSpaces {
+		// Thousands of pieces read as noise and cost quadratic time to
+		// merge: say they lie within the box, which is exact, and how many.
+		return "part of " + box.String() + " (" + strconv.Itoa(len(spaces)) + " pieces)"
+	}
+	rest := traffic.NewRegion(box)
+	for _, s := range spaces {
+		if rest = rest.Subtract(s); rest.IsEmpty() {
+			return box.String()
+		}
+	}
+	return traffic.NewRegion(spaces...).String()
 }
 
 // compact writes a region as one box when that box holds exactly the

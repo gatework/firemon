@@ -61,9 +61,14 @@ func (c Candidate) key() design.CandidateKey {
 
 // pairNeed is what one zone pair still needs and the request scope there.
 type pairNeed struct {
-	from, to    string
-	need, scope traffic.Region
-	firstDeny   int // position of the first deny deciding part of the request; -1 when none
+	from, to string
+	// need and scope gather the spaces to open and the request on the
+	// pair; only their bounds are used, so overlaps do not matter.
+	need, scope []traffic.Space
+	// needBounds and scopeBounds bound need and scope, computed once for
+	// every rule assessed against the pair.
+	needBounds, scopeBounds traffic.Space
+	firstDeny               int // position of the first deny deciding part of the request; -1 when none
 }
 
 // candidates ranks the permit rules that could be modified to carry the
@@ -104,18 +109,22 @@ func needsByPair(paths []query.Path) []pairNeed {
 			i = len(out) - 1
 		}
 		n := &out[i]
-		n.scope = n.scope.Add(p.Policy)
+		n.scope = append(n.scope, p.Policy)
 		for _, d := range p.Decisions {
 			if d.Outcome != query.OutcomeDeny && d.Outcome != query.OutcomeDefault {
 				continue
 			}
-			n.need = n.need.Union(d.Space)
+			n.need = append(n.need, d.Space.Spaces()...)
 			if d.Rule != nil && (n.firstDeny < 0 || d.Rule.Position() < n.firstDeny) {
 				n.firstDeny = d.Rule.Position()
 			}
 		}
 	}
-	return slices.DeleteFunc(out, func(n pairNeed) bool { return n.need.IsEmpty() })
+	out = slices.DeleteFunc(out, func(n pairNeed) bool { return len(n.need) == 0 })
+	for i := range out {
+		out[i].needBounds, out[i].scopeBounds = bounds(out[i].need), bounds(out[i].scope)
+	}
+	return out
 }
 
 // assess relates one rule to one zone pair's need.
@@ -129,7 +138,7 @@ func assess(r *firemon.Rule, pn pairNeed) (Candidate, bool) {
 		// the request's addresses or ports to it would not carry it.
 		return Candidate{}, false
 	}
-	need, scope, m := pn.need.Bounds(), pn.scope.Bounds(), r.Match()
+	need, scope, m := pn.needBounds, pn.scopeBounds, r.Match()
 	c := Candidate{
 		Rule: r.ID(), Name: spec.Name, From: pn.from, To: pn.to, position: r.Position(), logs: spec.Log.Enabled(),
 		Src: m.Src.Relation(need.Src), Dst: m.Dst.Relation(need.Dst), Service: m.Service.Relation(need.Service),

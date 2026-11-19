@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/adapter/filestore"
@@ -110,4 +111,24 @@ func detectVendor(path string) string {
 	default:
 		return ""
 	}
+}
+
+// deviceTimezone returns the IANA time zone a configuration sets for the
+// device (PAN-OS "deviceconfig system timezone"), when it is valid.
+func deviceTimezone(path string) string {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for line := range strings.SplitSeq(string(raw), "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "set deviceconfig system timezone ")
+		if !ok {
+			continue
+		}
+		tz := strings.Trim(strings.TrimSpace(rest), `"`)
+		if _, err := time.LoadLocation(tz); err == nil {
+			return tz
+		}
+	}
+	return ""
 }

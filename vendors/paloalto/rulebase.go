@@ -71,10 +71,8 @@ func (s *state) securityAttribute(r *firemon.SecurityRule, attr []string) {
 		r.From = append(r.From, anyless(values)...)
 	case "to":
 		r.To = append(r.To, anyless(values)...)
-	case "source":
-		r.Source = append(r.Source, s.operands(values)...)
-	case "destination":
-		r.Destination = append(r.Destination, s.operands(values)...)
+	case "source", "destination":
+		s.addressAttribute(r, key, values)
 	case "service":
 		for _, v := range anyless(values) {
 			if v == "application-default" {
@@ -264,6 +262,41 @@ func (s *state) operands(values []string) []firemon.AddressRef {
 		out = append(out, firemon.NamedAddress(v))
 	}
 	return out
+}
+
+// addressAttribute reads a rule's source or destination.
+func (s *state) addressAttribute(r *firemon.SecurityRule, key string, values []string) {
+	if key == "source" {
+		r.Source = append(r.Source, s.operands(values)...)
+	} else {
+		r.Destination = append(r.Destination, s.operands(values)...)
+	}
+	s.externalOperands(r, values)
+}
+
+// externalOperands notes the operands that are external lists or regions:
+// their addresses are not in the configuration, so the side stays
+// undecidable (they do not resolve) and the rule says why.
+func (s *state) externalOperands(r *firemon.SecurityRule, values []string) {
+	for _, v := range anyless(values) {
+		if kind := s.externalKind(v); kind != "" {
+			r.Unsupported = append(r.Unsupported, kind+" "+v)
+		}
+	}
+}
+
+// externalKind is "external-list" or "region" for such a name; a
+// two-letter code no object defines is a predefined region.
+func (s *state) externalKind(name string) string {
+	if kind, ok := s.external[name]; ok {
+		return kind
+	}
+	_, isAddr := s.addresses[name]
+	_, isGroup := s.groups[name]
+	if !isAddr && !isGroup && len(name) == 2 && strings.ToUpper(name) == name && strings.Trim(name, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") == "" {
+		return "region"
+	}
+	return ""
 }
 
 func securityAction(text string) firemon.Action {

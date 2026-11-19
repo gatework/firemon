@@ -26,3 +26,14 @@ func TestNew(t *testing.T) {
 		}
 	}
 }
+
+func TestWithVersion(t *testing.T) {
+	t.Parallel()
+	info := "hostname: pa1\nip-address: 192.0.2.1\nsw-version: 10.2.4\nmodel: PA-3220\n"
+	if got := netconnector.WithVersion("set deviceconfig system hostname pa1\n", info); got != "sw-version: 10.2.4\nset deviceconfig system hostname pa1\n" {
+		t.Fatalf("got %q", got)
+	}
+	if got := netconnector.WithVersion("set x\n", "error: unknown command\n"); got != "set x\n" {
+		t.Fatalf("no version: got %q", got)
+	}
+}

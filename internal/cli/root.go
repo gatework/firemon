@@ -102,6 +102,9 @@ type options struct {
 	// inventoryFile is the YAML operator inventory with protected networks.
 	inventoryFile string
 	timezone      string
+	// timezoneDefault reports no time zone chosen by flag, environment or
+	// settings: a configuration that names its own is read in it.
+	timezoneDefault bool
 	// logSetting is the log forwarding profile of new rules (settings file).
 	logSetting string
 	device     deviceFlags
@@ -151,6 +154,11 @@ func (o *options) platform() (bootstrap.Platform, error) {
 	v, err := vendor("--vendor", name)
 	if err != nil {
 		return bootstrap.Platform{}, err
+	}
+	if o.timezoneDefault && o.file != "" {
+		if tz := deviceTimezone(o.file); tz != "" {
+			o.timezone = tz
+		}
 	}
 	loc, err := time.LoadLocation(o.timezone)
 	if err != nil {

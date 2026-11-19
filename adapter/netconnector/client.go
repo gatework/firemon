@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gatework/go-netops/apply"
 	"github.com/gatework/net-connector/connector"
@@ -56,10 +57,34 @@ func (c *Client) RunningConfig(ctx context.Context) (string, error) {
 	var text string
 	err := c.with(ctx, func(ctx context.Context, op *connector.Operation) error {
 		var err error
-		text, err = runningConfig(ctx, op)
-		return err
+		if text, err = runningConfig(ctx, op); err != nil {
+			return err
+		}
+		if c.vendor == firemon.VendorPaloAlto {
+			// Set output carries no software version; "show system info"
+			// does. Best effort: without it the version is unknown.
+			res, err := op.ExecuteCommand(ctx, connector.Command{Text: "show system info", Source: "firemon"}, connector.ExecuteOptions{})
+			if err == nil {
+				if info, err := res.JoinedOutput(); err == nil {
+					text = WithVersion(text, info)
+				}
+			}
+		}
+		return nil
 	})
 	return text, err
+}
+
+// WithVersion puts the sw-version line of "show system info" output at
+// the head of a PAN-OS set configuration, where the parser reads it; text
+// is unchanged when info has none.
+func WithVersion(text, info string) string {
+	for line := range strings.SplitSeq(info, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "sw-version:"); ok && strings.TrimSpace(v) != "" {
+			return "sw-version: " + strings.TrimSpace(v) + "\n" + text
+		}
+	}
+	return text
 }
 
 // Open implements deploy.Opener: it lends one session for the whole run.

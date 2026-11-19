@@ -170,17 +170,39 @@ func ParseServiceSet(text string) (ServiceSet, error) {
 // Union returns the tuples in s or o.
 func (s ServiceSet) Union(o ServiceSet) ServiceSet { return ServiceSet{p: s.p.union(o.p)} }
 
-// Intersect returns the tuples in both s and o.
-func (s ServiceSet) Intersect(o ServiceSet) ServiceSet { return ServiceSet{p: s.p.intersect(o.p)} }
+// anyService is every tuple, for the fast paths below.
+var anyService = AnyService()
+
+// Intersect returns the tuples in both s and o. Rules often match any
+// service: that case returns the other set as it is.
+func (s ServiceSet) Intersect(o ServiceSet) ServiceSet {
+	switch {
+	case s.IsEmpty() || o.IsEmpty():
+		return ServiceSet{}
+	case s.IsAny():
+		return o
+	case o.IsAny():
+		return s
+	}
+	return ServiceSet{p: s.p.intersect(o.p)}
+}
 
 // Subtract returns the tuples in s that are not in o.
-func (s ServiceSet) Subtract(o ServiceSet) ServiceSet { return ServiceSet{p: s.p.subtract(o.p)} }
+func (s ServiceSet) Subtract(o ServiceSet) ServiceSet {
+	switch {
+	case s.IsEmpty() || o.IsEmpty():
+		return s
+	case o.IsAny():
+		return ServiceSet{}
+	}
+	return ServiceSet{p: s.p.subtract(o.p)}
+}
 
 // IsEmpty reports whether s holds no tuple.
 func (s ServiceSet) IsEmpty() bool { return len(s.p) == 0 }
 
 // IsAny reports whether s holds every tuple.
-func (s ServiceSet) IsAny() bool { return s.Equal(AnyService()) }
+func (s ServiceSet) IsAny() bool { return len(s.p) == 1 && s.p.equal(anyService.p) }
 
 // Equal reports whether s and o hold the same tuples.
 func (s ServiceSet) Equal(o ServiceSet) bool { return s.p.equal(o.p) }

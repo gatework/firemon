@@ -328,9 +328,25 @@ func (e *Engine) sourceNATRule(p *Path, n *firemon.NATRule, remaining traffic.Re
 		if t.IsEmpty() {
 			t = e.interfaceAddresses(out.iface)
 		}
+		t = familyOf(t, hit.Bounds().Src)
 		p.SourceNAT = append(p.SourceNAT, NATHit{Rule: n, Side: firemon.NATKindSource, Translated: t, Position: n.Position(), Space: hit})
 	}
 	return remaining.Subtract(n.Match())
+}
+
+// familyOf keeps the translated addresses of the families the sources
+// use: an IPv4 packet is never translated to an interface's IPv6 address.
+func familyOf(translated, src traffic.AddressSet) traffic.AddressSet {
+	var keep traffic.AddressSet
+	for _, fam := range []traffic.AddressSet{traffic.AnyIPv4(), traffic.AnyIPv6()} {
+		if src.Overlaps(fam) {
+			keep = keep.Union(fam)
+		}
+	}
+	if out := translated.Intersect(keep); !out.IsEmpty() {
+		return out
+	}
+	return translated // a pool of the other family is the configuration's to explain
 }
 
 func (e *Engine) interfaceAddresses(name string) traffic.AddressSet {

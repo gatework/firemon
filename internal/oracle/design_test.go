@@ -27,11 +27,11 @@ type device struct {
 	readback func(cmds []string) (*firemon.Config, error)
 }
 
-func loadDevice(t *testing.T, path string) (device, bool) {
-	t.Helper()
+func loadDevice(tb testing.TB, path string) (device, bool) {
+	tb.Helper()
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	text := string(raw)
 	if !strings.HasSuffix(text, "\n") {
@@ -58,10 +58,10 @@ func loadDevice(t *testing.T, path string) (device, bool) {
 		return device{}, false
 	}
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	if d.fw, err = firemon.Compile(cfg); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	return d, true
 }

@@ -17,9 +17,9 @@ var ErrInvalidAddress = errors.New("traffic: invalid address")
 // AddressSet is an immutable set of IPv4 and IPv6 addresses. The zero value
 // is the empty set.
 type AddressSet struct {
-	ips *netipx.IPSet // nil exactly when empty (see build)
-	// rs are the set's ranges, sorted and disjoint, kept so that overlap
-	// tests walk both sets once instead of pairing every range.
+	// rs are the set's ranges in canonical form: sorted, disjoint and
+	// merged (no two adjacent), empty exactly when the set is. Every
+	// operation walks them in linear time; equal sets have equal ranges.
 	rs []netipx.IPRange
 }
 
@@ -90,68 +90,158 @@ func ParseAddressSet(text string) (AddressSet, error) {
 
 // Union returns the addresses in s or o.
 func (s AddressSet) Union(o AddressSet) AddressSet {
-	var b netipx.IPSetBuilder
-	s.addTo(&b)
-	o.addTo(&b)
-	return build(&b)
+	switch {
+	case len(o.rs) == 0:
+		return s
+	case len(s.rs) == 0:
+		return o
+	}
+	return UnionAll(s, o)
 }
 
 // UnionAll returns the union of sets, built once rather than pairwise.
 func UnionAll(sets ...AddressSet) AddressSet {
-	var b netipx.IPSetBuilder
+	var all []netipx.IPRange
 	for _, s := range sets {
-		s.addTo(&b)
+		all = append(all, s.rs...)
 	}
-	return build(&b)
+	slices.SortFunc(all, func(a, b netipx.IPRange) int { return a.From().Compare(b.From()) })
+	return AddressSet{rs: merged(all)}
+}
+
+// merged coalesces ranges sorted by start into canonical form.
+func merged(rs []netipx.IPRange) []netipx.IPRange {
+	var out []netipx.IPRange
+	for _, r := range rs {
+		if n := len(out); n > 0 {
+			last := out[n-1]
+			if !last.To().Less(r.From()) || last.To().Next() == r.From() {
+				if last.To().Less(r.To()) {
+					out[n-1] = netipx.IPRangeFrom(last.From(), r.To())
+				}
+				continue
+			}
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // Intersect returns the addresses in both s and o.
 func (s AddressSet) Intersect(o AddressSet) AddressSet {
-	if s.IsEmpty() || o.IsEmpty() {
+	switch {
+	case s.IsEmpty() || o.IsEmpty() || !s.Overlaps(o):
 		return AddressSet{}
+	case covers(o.rs, s.rs):
+		return s
+	case covers(s.rs, o.rs):
+		return o
 	}
-	var b netipx.IPSetBuilder
-	b.AddSet(s.ips)
-	b.Intersect(o.ips)
-	return build(&b)
+	// Pieces of distinct ranges of a merged list stay apart: the result
+	// is canonical as built.
+	var out []netipx.IPRange
+	a, b := s.rs, o.rs
+	for i, j := 0, 0; i < len(a) && j < len(b); {
+		lo, hi := maxAddr(a[i].From(), b[j].From()), minAddr(a[i].To(), b[j].To())
+		if !hi.Less(lo) {
+			out = append(out, netipx.IPRangeFrom(lo, hi))
+		}
+		if a[i].To().Less(b[j].To()) {
+			i++
+		} else {
+			j++
+		}
+	}
+	return AddressSet{rs: out}
 }
 
 // Subtract returns the addresses in s that are not in o.
 func (s AddressSet) Subtract(o AddressSet) AddressSet {
-	if s.IsEmpty() || o.IsEmpty() {
+	switch {
+	case s.IsEmpty() || o.IsEmpty() || !s.Overlaps(o):
 		return s
+	case covers(o.rs, s.rs):
+		return AddressSet{}
 	}
-	var b netipx.IPSetBuilder
-	b.AddSet(s.ips)
-	b.RemoveSet(o.ips)
-	return build(&b)
+	var out []netipx.IPRange
+	b, j := o.rs, 0
+	for _, r := range s.rs {
+		for j < len(b) && b[j].To().Less(r.From()) {
+			j++
+		}
+		cur, done := r.From(), false
+		for k := j; k < len(b) && !r.To().Less(b[k].From()); k++ {
+			if cur.Less(b[k].From()) {
+				out = append(out, netipx.IPRangeFrom(cur, b[k].From().Prev()))
+			}
+			if !b[k].To().Less(r.To()) {
+				done = true
+				break
+			}
+			cur = maxAddr(cur, b[k].To().Next())
+		}
+		if !done {
+			out = append(out, netipx.IPRangeFrom(cur, r.To()))
+		}
+	}
+	return AddressSet{rs: out}
+}
+
+func maxAddr(a, b netip.Addr) netip.Addr {
+	if a.Less(b) {
+		return b
+	}
+	return a
+}
+
+func minAddr(a, b netip.Addr) netip.Addr {
+	if a.Less(b) {
+		return a
+	}
+	return b
 }
 
 // IsEmpty reports whether s holds no address.
-func (s AddressSet) IsEmpty() bool { return s.ips == nil }
+func (s AddressSet) IsEmpty() bool { return len(s.rs) == 0 }
 
 // Equal reports whether s and o hold the same addresses.
-func (s AddressSet) Equal(o AddressSet) bool {
-	if s.IsEmpty() || o.IsEmpty() {
-		return s.IsEmpty() == o.IsEmpty()
-	}
-	return s.ips.Equal(o.ips)
-}
+func (s AddressSet) Equal(o AddressSet) bool { return slices.Equal(s.rs, o.rs) }
 
 // Contains reports whether addr is in s. IPv4-mapped IPv6 addresses are
 // treated as IPv4.
 func (s AddressSet) Contains(addr netip.Addr) bool {
-	return s.ips != nil && s.ips.Contains(addr.Unmap())
+	addr = addr.Unmap()
+	i, _ := slices.BinarySearchFunc(s.rs, addr, func(r netipx.IPRange, a netip.Addr) int { return r.To().Compare(a) })
+	return i < len(s.rs) && !addr.Less(s.rs[i].From())
 }
 
 // ContainsSet reports whether every address of o is in s.
-func (s AddressSet) ContainsSet(o AddressSet) bool { return o.Subtract(s).IsEmpty() }
+func (s AddressSet) ContainsSet(o AddressSet) bool { return o.IsEmpty() || covers(s.rs, o.rs) }
+
+// covers reports whether every range of b lies within a range of a. Both
+// are sorted, disjoint and merged (adjacent ranges are one), so a range of
+// b inside a's union lies inside one range of a; one walk, no allocation.
+func covers(a, b []netipx.IPRange) bool {
+	i := 0
+	for _, r := range b {
+		for i < len(a) && a[i].To().Less(r.From()) {
+			i++
+		}
+		if i == len(a) || r.From().Less(a[i].From()) || a[i].To().Less(r.To()) {
+			return false
+		}
+	}
+	return true
+}
 
 // Overlaps reports whether s and o share at least one address.
 func (s AddressSet) Overlaps(o AddressSet) bool {
 	// Both range lists are sorted and disjoint: advance whichever range
 	// ends first until two ranges meet, in linear time.
 	a, b := s.rs, o.rs
+	if len(a) == 0 || len(b) == 0 || a[len(a)-1].To().Less(b[0].From()) || b[len(b)-1].To().Less(a[0].From()) {
+		return false // the spans do not meet: most pairs end here
+	}
 	for i, j := 0, 0; i < len(a) && j < len(b); {
 		switch {
 		case a[i].To().Less(b[j].From()):
@@ -172,10 +262,11 @@ func (s AddressSet) Relation(o AddressSet) Relation {
 
 // Prefixes returns the minimal list of prefixes covering s, in address order.
 func (s AddressSet) Prefixes() []netip.Prefix {
-	if s.ips == nil {
-		return nil
+	var out []netip.Prefix
+	for _, r := range s.rs {
+		out = r.AppendPrefixes(out)
 	}
-	return s.ips.Prefixes()
+	return out
 }
 
 // Ranges returns the minimal list of ranges covering s, in address order.
@@ -202,8 +293,8 @@ func (s AddressSet) String() string {
 	if s.Equal(AnyAddress()) {
 		return "any"
 	}
-	parts := make([]string, 0, len(s.Ranges()))
-	for _, r := range s.Ranges() {
+	parts := make([]string, 0, len(s.rs))
+	for _, r := range s.rs {
 		parts = append(parts, FormatRange(r))
 	}
 	return strings.Join(parts, ",")
@@ -224,14 +315,14 @@ func FormatRange(r netipx.IPRange) string {
 }
 
 func (s AddressSet) addTo(b *netipx.IPSetBuilder) {
-	if s.ips != nil {
-		b.AddSet(s.ips)
+	for _, r := range s.rs {
+		b.AddRange(r)
 	}
 }
 
 func addAddressText(b *netipx.IPSetBuilder, item string) error {
 	if strings.EqualFold(item, "any") {
-		b.AddSet(AnyAddress().ips)
+		AnyAddress().addTo(b)
 		return nil
 	}
 	if from, to, ok := strings.Cut(item, "-"); ok {
@@ -265,11 +356,7 @@ func build(b *netipx.IPSetBuilder) AddressSet {
 	if err != nil {
 		panic("traffic: invalid address set: " + err.Error())
 	}
-	rs := ips.Ranges()
-	if len(rs) == 0 {
-		return AddressSet{}
-	}
-	return AddressSet{ips: ips, rs: rs}
+	return AddressSet{rs: ips.Ranges()}
 }
 
 // unmapPrefix turns an IPv4-mapped IPv6 prefix (::ffff:a.b.c.d/96+n) into
