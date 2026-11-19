@@ -84,6 +84,14 @@ func migrateLoop(t *testing.T, d device) (compared, explained int, failures []st
 				compared++
 				continue
 			}
+			// A deny is never weakened: what a source deny rule blocks the
+			// target does not permit, whatever the fidelity of the rules.
+			if denied := vs.Rule != nil && vs.Action() == firemon.ActionDeny; denied && vt.Action() == firemon.ActionPermit &&
+				!slices.Contains(res.DisabledDenies, ruleID(vs.Rule)) {
+				failures = append(failures, fmt.Sprintf("packet %v: denied by source rule %s, permitted on the target by %s (from %s)",
+					pkt, name(vs.Rule), name(vt.Rule), origin[ruleID(vt.Rule)]))
+				continue
+			}
 			if why := explain(d.fw, pkt, vs, vt, exact, origin); why != "" {
 				explained++
 				continue
