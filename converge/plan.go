@@ -324,19 +324,32 @@ func verify(fw *firemon.Firewall, changes []design.Change, affected []*firemon.R
 		}
 	}
 	zones := zoneNames(cfg)
-	modes := []query.ScheduleMode{query.ScheduleAt}
-	if scheduled(fw) {
-		// Schedules only change a decision when some rule has one.
-		modes = append(modes, query.ScheduleAlwaysActive, query.ScheduleNeverActive)
+	type engines struct{ before, after *query.Engine }
+	modes := map[query.ScheduleMode]engines{}
+	for _, mode := range []query.ScheduleMode{query.ScheduleAt, query.ScheduleAlwaysActive, query.ScheduleNeverActive} {
+		modes[mode] = engines{query.New(fw, query.Options{Schedules: mode}), query.New(after, query.Options{Schedules: mode})}
 	}
-	for _, mode := range modes {
-		before := query.New(fw, query.Options{Schedules: mode})
-		now := query.New(after, query.Options{Schedules: mode})
-		if err := parallel(affected, func(r *firemon.Rule) error { return sameDecisions(before, now, r, zones, at) }); err != nil {
-			return err
+	timed := slices.Concat(scheduledRules(fw), scheduledRules(after))
+	return parallel(affected, func(r *firemon.Rule) error {
+		// The schedule modes treat only rules with a schedule or a
+		// validity window differently: when none of them can match the
+		// rule's traffic, every mode decides it alike and one suffices.
+		check := []query.ScheduleMode{query.ScheduleAt}
+		if slices.ContainsFunc(timed, func(s *firemon.Rule) bool { return s.Bound().Overlaps(r.Match()) }) {
+			check = append(check, query.ScheduleAlwaysActive, query.ScheduleNeverActive)
 		}
-	}
-	return nil
+		for _, mode := range check {
+			if err := sameDecisions(modes[mode].before, modes[mode].after, r, zones, at); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// scheduledRules are the rules with a schedule or a validity window.
+func scheduledRules(fw *firemon.Firewall) []*firemon.Rule {
+	return slices.DeleteFunc(fw.Rules(), func(r *firemon.Rule) bool { return !r.Scheduled() })
 }
 
 // sameDecisions compares the decisions of rule r's traffic before and
@@ -378,16 +391,6 @@ func parallel(rules []*firemon.Rule, check func(*firemon.Rule) error) error {
 		}
 	}
 	return nil
-}
-
-// scheduled reports whether some rule has a schedule or validity window.
-func scheduled(fw *firemon.Firewall) bool {
-	for _, r := range fw.Rules() {
-		if r.Scheduled() {
-			return true
-		}
-	}
-	return false
 }
 
 type zonePair struct{ from, to string }
@@ -443,5 +446,27 @@ func sameRegion(a, b traffic.Region) bool {
 	if x, y := a.Spaces(), b.Spaces(); slices.EqualFunc(x, y, traffic.Space.Equal) {
 		return true
 	}
-	return a.SubtractRegion(b).IsEmpty() && b.SubtractRegion(a).IsEmpty()
+	return regionCovers(b, a) && regionCovers(a, b)
+}
+
+// regionCovers reports whether every packet of inner is in outer, space by
+// space: a space is done as soon as the outer spaces that touch it have
+// taken it all.
+func regionCovers(outer, inner traffic.Region) bool {
+	spaces := outer.Spaces()
+	for _, s := range inner.Spaces() {
+		rest := traffic.NewRegion(s)
+		for _, o := range spaces {
+			if !o.Overlaps(s) {
+				continue
+			}
+			if rest = rest.Subtract(o); rest.IsEmpty() {
+				break
+			}
+		}
+		if !rest.IsEmpty() {
+			return false
+		}
+	}
+	return true
 }
