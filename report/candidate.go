@@ -50,11 +50,14 @@ type Candidate struct {
 	Recommended bool             `json:"recommended,omitempty"`
 	Reasons     []Reason         `json:"reasons,omitempty"`
 	position    int
+	logs        bool
 }
 
-// bothEnds reports whether the rule already covers the request's sources
-// and destinations.
-func (c Candidate) bothEnds() bool { return c.Src.Covers() && c.Dst.Covers() }
+// key ranks the candidate the way the planner ranks the rules it may
+// extend.
+func (c Candidate) key() design.CandidateKey {
+	return design.CandidateKey{BothEnds: c.Src.Covers() && c.Dst.Covers(), Logs: c.logs, Position: c.position}
+}
 
 // pairNeed is what one zone pair still needs and the request scope there.
 type pairNeed struct {
@@ -66,11 +69,11 @@ type pairNeed struct {
 // candidates ranks the permit rules that could be modified to carry the
 // remaining traffic of the paths.
 func candidates(fw *firemon.Firewall, paths []query.Path, plan *design.Plan) []Candidate {
-	recommended := ""
+	recommended := map[string]bool{} // the rules the plan extends, one per zone pair
 	if plan != nil {
 		for _, ch := range plan.Changes {
 			if x, ok := ch.(design.ExtendRule); ok {
-				recommended = x.RuleID
+				recommended[x.RuleID] = true
 			}
 		}
 	}
@@ -80,16 +83,14 @@ func candidates(fw *firemon.Firewall, paths []query.Path, plan *design.Plan) []C
 			// A rule after the deny that decides the request never sees
 			// it: changing it would not help.
 			if c, ok := assess(r, pn); ok && !slices.Contains(c.Reasons, ReasonAfterDeny) {
-				c.Recommended = c.Rule == recommended
+				c.Recommended = recommended[c.Rule]
 				out = append(out, c)
 			}
 		}
 	}
 	slices.SortStableFunc(out, func(a, b Candidate) int {
-		// A rule that already holds both ends of the request serves the
-		// same systems: adding the port to it is how operators extend.
 		return cmp.Or(compareBool(b.Recommended, a.Recommended), compareBool(b.Extendable, a.Extendable),
-			compareBool(b.bothEnds(), a.bothEnds()), cmp.Compare(b.Covers, a.Covers), cmp.Compare(len(a.Reasons), len(b.Reasons)), cmp.Compare(a.position, b.position))
+			design.CompareCandidates(a.key(), b.key()), cmp.Compare(b.Covers, a.Covers), cmp.Compare(len(a.Reasons), len(b.Reasons)))
 	})
 	return out[:min(len(out), MaxCandidates)]
 }
@@ -130,7 +131,7 @@ func assess(r *firemon.Rule, pn pairNeed) (Candidate, bool) {
 	}
 	need, scope, m := pn.need.Bounds(), pn.scope.Bounds(), r.Match()
 	c := Candidate{
-		Rule: r.ID(), Name: spec.Name, From: pn.from, To: pn.to, position: r.Position(),
+		Rule: r.ID(), Name: spec.Name, From: pn.from, To: pn.to, position: r.Position(), logs: spec.Log.Enabled(),
 		Src: m.Src.Relation(need.Src), Dst: m.Dst.Relation(need.Dst), Service: m.Service.Relation(need.Service),
 	}
 	if c.Src == traffic.RelationDisjoint && c.Dst == traffic.RelationDisjoint && c.Service == traffic.RelationDisjoint {

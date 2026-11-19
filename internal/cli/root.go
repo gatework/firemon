@@ -101,8 +101,10 @@ type options struct {
 	// inventoryFile is the YAML operator inventory with protected networks.
 	inventoryFile string
 	timezone      string
-	device        deviceFlags
-	json          bool
+	// logSetting is the log forwarding profile of new rules (settings file).
+	logSetting string
+	device     deviceFlags
+	json       bool
 }
 
 func newRoot(ctx context.Context, deps *Deps) *cobra.Command {

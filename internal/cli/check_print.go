@@ -65,6 +65,9 @@ func printFirewall(p *printer, f report.Firewall, v reportView) {
 			printPath(p, path)
 		}
 	}
+	if !v.verbose {
+		printNATSummary(p, f.Paths)
+	}
 	printExisting(p, f, v.verbose)
 	if f.Status == report.StatusPartialMatch && f.Remaining != "" {
 		p.f("  未放通：%s\n", f.Remaining)
@@ -132,8 +135,8 @@ func printExisting(p *printer, f report.Firewall, verbose bool) {
 			printRuleDetail(p, d)
 			continue
 		}
-		p.f("          区域 %s → %s；源 %s；目的 %s；服务 %s%s\n", zoneList(d.From), zoneList(d.To),
-			objectsBrief(d.Source, d.NegateSource), objectsBrief(d.Destination, d.NegateDest), objectsBrief(d.Services, false), appsBrief(d.Applications))
+		p.f("          区域 %s → %s；源 %s；目的 %s；服务 %s%s；%s\n", zoneList(d.From), zoneList(d.To),
+			objectsBrief(d.Source, d.NegateSource), objectsBrief(d.Destination, d.NegateDest), objectsBrief(d.Services, false), appsBrief(d.Applications), logText(d.Log))
 	}
 }
 
@@ -295,11 +298,34 @@ func actionWord(a firemon.Action) string {
 	}
 }
 
+// logText says what a rule logs.
+func logText(l firemon.Logging) string {
+	var parts []string
+	if l.Start {
+		parts = append(parts, "会话开始")
+	}
+	if l.End {
+		parts = append(parts, "会话结束")
+	}
+	if l.Deny {
+		parts = append(parts, "拒绝")
+	}
+	if len(parts) == 0 {
+		return "未开启日志"
+	}
+	out := "日志 " + strings.Join(parts, "+")
+	if l.Setting != "" {
+		out += "（转发配置 " + l.Setting + "）"
+	}
+	return out
+}
+
 // printRuleDetail writes a rule as configured with its objects expanded.
 func printRuleDetail(p *printer, r report.RuleDetail) {
 	if r.Disabled {
 		p.f("      已禁用\n")
 	}
+	p.f("      %s\n", logText(r.Log))
 	p.f("      区域：%s → %s\n", zoneList(r.From), zoneList(r.To))
 	printObjects(p, "源地址", r.Source, r.NegateSource)
 	printObjects(p, "目的地址", r.Destination, r.NegateDest)
@@ -458,4 +484,26 @@ func basisLine(bs []report.Basis) string {
 		parts = append(parts, end+" "+b.Addresses+" 属于"+where)
 	}
 	return strings.Join(parts, "；")
+}
+
+// printNATSummary writes the translations the request goes through: they
+// change which rules match it. Paths in -v show the rest.
+func printNATSummary(p *printer, paths []report.Path) {
+	var seen []string
+	for _, path := range paths {
+		for _, n := range path.NAT {
+			line := "NAT 规则 " + n.Rule + " 可能生效，无法离线判定"
+			if !n.Uncertain {
+				order := ""
+				if n.Position > 0 {
+					order = "（第 " + itoa(n.Position) + " 条）"
+				}
+				line = text(natSideText, n.Side, n.Side.String()) + " " + n.Rule + order + "：" + cmp.Or(n.Traffic, "-") + " → " + n.Translated
+			}
+			if !slices.Contains(seen, line) {
+				seen = append(seen, line)
+				p.f("  %s\n", line)
+			}
+		}
+	}
 }

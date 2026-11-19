@@ -2,6 +2,7 @@ package converge_test
 
 import (
 	"net/netip"
+	"slices"
 	"testing"
 	"time"
 
@@ -30,7 +31,8 @@ func TestDuplicateObjects(t *testing.T) {
 	if rep.Count(converge.CategoryDuplicateObject) != 1 {
 		t.Fatalf("web and Host_192.0.2.10 hold the same host: %+v", rep.Findings)
 	}
-	f := rep.Findings[len(rep.Findings)-1]
+	i := slices.IndexFunc(rep.Findings, func(f converge.Finding) bool { return f.Category == converge.CategoryDuplicateObject })
+	f := rep.Findings[i]
 	if f.Tier != converge.TierReview || len(f.Objects) != 2 {
 		t.Fatalf("finding %+v", f)
 	}

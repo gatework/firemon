@@ -11,6 +11,8 @@ set rulebase security rules req-42 application any
 set rulebase security rules req-42 service [ TCP_8000-8010 TCP_8443 ]
 set rulebase security rules req-42 action allow
 set rulebase security rules req-42 description "ticket 42"
+set rulebase security rules req-42 log-start yes
+set rulebase security rules req-42 log-end yes
 # rollback
 delete rulebase security rules req-42
 delete service TCP_8443

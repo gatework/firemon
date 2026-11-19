@@ -1359,7 +1359,9 @@
         "web"
       ],
       "action": "permit",
-      "log": true
+      "logging": {
+        "end": true
+      }
     },
     {
       "id": "7",

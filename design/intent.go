@@ -27,6 +27,11 @@ type Intent struct {
 	Override bool
 	// NAT asks for a translation with the access; nil plans access only.
 	NAT *NATIntent
+	// NoLog leaves new rules without logging; by default they log the
+	// session at start and end.
+	NoLog bool
+	// LogSetting names the log forwarding profile of new rules (PAN-OS).
+	LogSetting string
 }
 
 func (i Intent) request(at time.Time) query.Request {

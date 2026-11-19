@@ -235,8 +235,14 @@ func ruleOptions(r firemon.SecurityRule) []string {
 	if r.Group != "" {
 		out = append(out, "  aggregate-rule "+r.Group)
 	}
-	if r.Log {
+	if r.Log.Start {
+		out = append(out, "  log session-start")
+	}
+	if r.Log.End {
 		out = append(out, "  log session-end")
+	}
+	if r.Log.Deny {
+		out = append(out, "  log policy-deny")
 	}
 	if r.Disabled {
 		out = append(out, "  disable")

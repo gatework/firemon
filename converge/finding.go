@@ -38,6 +38,9 @@ const (
 	// CategoryDuplicateObject: objects of one kind with equal contents
 	// under different names; rules could refer to one of them.
 	CategoryDuplicateObject
+	// CategoryNoLog: a permit rule that logs nothing; its traffic leaves
+	// no trace for audits and troubleshooting.
+	CategoryNoLog
 )
 
 // String returns the category name.
@@ -67,6 +70,8 @@ func (c Category) String() string {
 		return "broad"
 	case CategoryZeroHit:
 		return "zero-hit"
+	case CategoryNoLog:
+		return "no-log"
 	case CategoryDuplicateObject:
 		return "duplicate-object"
 	default:

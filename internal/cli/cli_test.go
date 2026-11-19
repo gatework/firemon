@@ -284,7 +284,7 @@ func TestRun_CheckFullMatch(t *testing.T) {
 	code, out, errOut := run(t, "", "check", "--vendor", "hillstone", "--config", hillstoneConf, "--timezone", "UTC",
 		"--src", "198.51.100.9", "--dst", "172.16.0.10", "--service", "tcp/443")
 	want := "结论：完全命中\n\n■ lab-fw1：完全命中\n  已有策略：\n    放通  策略 1 web-in（第 2 条）：198.51.100.9 -> 172.16.0.10 tcp/443\n" +
-		"          区域 untrust → dmz；源 任意；目的 web-servers（172.16.0.10、172.16.0.20-172.16.0.29）；服务 web（tcp/80、tcp/443、tcp/8080）\n  处置：无需变更\n"
+		"          区域 untrust → dmz；源 任意；目的 web-servers（172.16.0.10、172.16.0.20-172.16.0.29）；服务 web（tcp/80、tcp/443、tcp/8080）；日志 会话结束\n  处置：无需变更\n"
 	if code != cli.ExitOK || out != want {
 		t.Fatalf("code %d\n%s%s", code, out, errOut)
 	}

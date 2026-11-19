@@ -18,19 +18,20 @@ type RuleDetail struct {
 	Name string `json:"name,omitempty"`
 	// Position is the one-based place in the rule list: rules match in
 	// order, the first that matches decides.
-	Position     int            `json:"position"`
-	Action       firemon.Action `json:"action"`
-	From         []string       `json:"from,omitempty"`
-	To           []string       `json:"to,omitempty"`
-	Source       []Object       `json:"source,omitempty"`
-	Destination  []Object       `json:"destination,omitempty"`
-	NegateSource bool           `json:"negate_source,omitempty"`
-	NegateDest   bool           `json:"negate_destination,omitempty"`
-	Services     []Object       `json:"services,omitempty"`
-	Applications []string       `json:"applications,omitempty"`
-	Schedule     *Object        `json:"schedule,omitempty"`
-	Disabled     bool           `json:"disabled,omitempty"`
-	Description  string         `json:"description,omitempty"`
+	Position     int             `json:"position"`
+	Action       firemon.Action  `json:"action"`
+	From         []string        `json:"from,omitempty"`
+	To           []string        `json:"to,omitempty"`
+	Source       []Object        `json:"source,omitempty"`
+	Destination  []Object        `json:"destination,omitempty"`
+	NegateSource bool            `json:"negate_source,omitempty"`
+	NegateDest   bool            `json:"negate_destination,omitempty"`
+	Services     []Object        `json:"services,omitempty"`
+	Applications []string        `json:"applications,omitempty"`
+	Schedule     *Object         `json:"schedule,omitempty"`
+	Disabled     bool            `json:"disabled,omitempty"`
+	Log          firemon.Logging `json:"logging,omitzero"`
+	Description  string          `json:"description,omitempty"`
 }
 
 // Object is a named object or an inline value. Values are its own
@@ -64,7 +65,7 @@ func details(fw *firemon.Firewall, ids []string, decided map[string]traffic.Spac
 		d := RuleDetail{
 			Rule: s.ID, Name: s.Name, Position: r.Position() + 1, Action: s.Action,
 			From: s.From, To: s.To, NegateSource: s.NegateSource, NegateDest: s.NegateDestination,
-			Applications: s.Applications, Disabled: s.Disabled, Description: s.Description,
+			Applications: s.Applications, Disabled: s.Disabled, Description: s.Description, Log: s.Log,
 		}
 		hit := decided[s.ID]
 		for _, a := range s.Source {

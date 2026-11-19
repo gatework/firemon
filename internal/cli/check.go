@@ -33,6 +33,7 @@ type checkFlags struct {
 	plan, resolve, verbose bool
 	noDesign               bool
 	vr, at, schedule       string
+	noLog                  bool
 	override               bool
 }
 
@@ -75,6 +76,7 @@ func newCheckCmd(o *options) *cobra.Command {
 	fl.StringVar(&f.vr, "virtual-router", "", "虚拟路由器（默认使用厂商默认值）")
 	fl.StringVar(&f.at, "at", "", "按该时刻（RFC 3339）判断时间计划（默认当前时间）")
 	fl.StringVar(&f.schedule, "schedule", "", "新建策略使用的已有时间计划")
+	fl.BoolVar(&f.noLog, "no-log", false, "新建策略不开启日志（默认记录会话开始和结束）")
 	fl.BoolVar(&f.override, "override", false, "已不需要：被拒绝策略挡住时新策略会放在其前并提示确认")
 	_ = fl.MarkHidden("override")
 	fl.StringVar(&f.name, "name", "", "新建策略名称，例如工单号")
@@ -124,6 +126,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	if f.plan && !in.Dst.IsEmpty() {
 		intent := design.Intent{
 			Src: in.Src, Dst: in.Dst, Service: in.Service, FromZone: f.fromZone, ToZone: f.toZone, VirtualRouter: f.vr, Schedule: f.schedule,
+			NoLog: f.noLog, LogSetting: o.logSetting,
 			// A deny that blocks the request is passed: the new rule goes
 			// before it, and the report asks to confirm that is intended.
 			Name: f.name, Description: f.description, Override: true, NAT: nat,

@@ -32,6 +32,7 @@ func newDeployCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			in.logSetting = o.logSetting
 			intent, err := in.intent(platform.Services)
 			if err != nil {
 				return err
@@ -40,7 +41,7 @@ func newDeployCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := printProposal(cmd, o.json, prop); err != nil {
+			if err := printProposal(cmd, o.json, prop, loaded.Firewall); err != nil {
 				return err
 			}
 			if !apply || len(prop.Plan.Changes) == 0 {

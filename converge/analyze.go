@@ -101,6 +101,7 @@ func Analyze(fw *firemon.Firewall, opts Options) Report {
 	r.Findings = append(r.Findings, broad(fw, flagged, counters, minWindow)...)
 	r.Findings = append(r.Findings, zeroHits(fw, flagged, counters, minWindow)...)
 	r.Findings = append(r.Findings, duplicateObjects(fw, cfg)...)
+	r.Findings = append(r.Findings, noLog(fw, flagged)...)
 	position := map[string]int{}
 	for _, rule := range fw.Rules() {
 		position[rule.ID()] = rule.Position()
@@ -201,7 +202,7 @@ func demoteUnrestorable(cfg *firemon.Config, findings []Finding) {
 					f.Detail = "the rule has criteria the model does not hold: a rollback could not restore it exactly"
 				}
 			}
-		case CategoryUnset, CategoryEmptyObject, CategoryShadowed, CategoryMergeable, CategoryBroad, CategoryZeroHit, CategoryDuplicateObject:
+		case CategoryUnset, CategoryEmptyObject, CategoryShadowed, CategoryMergeable, CategoryBroad, CategoryZeroHit, CategoryDuplicateObject, CategoryNoLog:
 		}
 	}
 }
@@ -295,6 +296,22 @@ func unreadNames(cfg *firemon.Config) map[string]bool {
 		for _, q := range strings.Split(d.Text, `"`)[1:] {
 			out[q] = true // quoted names with spaces
 		}
+	}
+	return out
+}
+
+// noLog lists the effective permit rules that log nothing: reviewing them
+// is the operator's call, nothing is changed.
+func noLog(fw *firemon.Firewall, flagged map[string]bool) []Finding {
+	var out []Finding
+	for _, r := range fw.Rules() {
+		if r.Ignored() || flagged[r.ID()] || r.Action() != firemon.ActionPermit || r.Spec().Log.Enabled() {
+			continue
+		}
+		out = append(out, Finding{
+			ID: CategoryNoLog.String() + ":" + r.ID(), Category: CategoryNoLog, Tier: TierReview, Evidence: EvidenceStatic,
+			Rules: []string{r.ID()},
+		})
 	}
 	return out
 }

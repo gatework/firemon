@@ -170,7 +170,7 @@ func (b *builder) add(f Finding) error {
 				return err
 			}
 		}
-	case CategoryUnset, CategoryEmptyObject, CategoryShadowed, CategoryBroad, CategoryZeroHit, CategoryDuplicateObject:
+	case CategoryUnset, CategoryEmptyObject, CategoryShadowed, CategoryBroad, CategoryZeroHit, CategoryDuplicateObject, CategoryNoLog:
 		return fmt.Errorf("%w: %s", ErrNotSafe, f.ID)
 	}
 	return nil

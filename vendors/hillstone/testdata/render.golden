@@ -21,6 +21,8 @@ rule id 11
   service "UDP_53"
   name "req-42"
   description "ticket 42"
+  log session-start
+  log session-end
 exit
 # rollback
 no rule id 11
