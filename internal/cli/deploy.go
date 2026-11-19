@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/gatework/firemon/adapter/filestore"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/gatework/firemon/adapter/filestore"
 	"github.com/gatework/firemon/internal/bootstrap"
 	"github.com/gatework/firemon/internal/workflow"
 )

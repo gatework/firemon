@@ -326,7 +326,7 @@ func (s *state) undo(w *words) {
 func Capabilities() firemon.Capabilities {
 	return firemon.Capabilities{
 		ExcludeEntries: true, MixedAddressObjects: true, GroupEntries: true, WildcardFQDN: true,
-		MultiProtocolServices: true, RuleWindows: true, InlineServices: true, InlineFQDN: true, NumericRuleIDs: true,
+		MultiProtocolServices: true, RuleWindows: true, InlineServices: true, InlineFQDN: true, NumericRuleIDs: true, LogDeny: true,
 		MaxNameLength: 95,
 	}
 }

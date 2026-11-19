@@ -148,6 +148,18 @@ func (inv *Inventory) Firewall(cluster string) *firemon.Firewall {
 	return nil
 }
 
+// Primary returns the name of the member a cluster is evaluated and
+// changed on: its active member, else the first by name.
+func (inv *Inventory) Primary(cluster string) string {
+	if m := inv.primary(cluster); m != nil {
+		return m.name
+	}
+	return ""
+}
+
+// Members returns the names of a cluster's members.
+func (inv *Inventory) Members(cluster string) []string { return inv.clusterMembers(cluster) }
+
 // primary returns the member a cluster is evaluated on.
 func (inv *Inventory) primary(cluster string) *member {
 	i := slices.IndexFunc(inv.members, func(m member) bool { return m.cluster == cluster && m.active })

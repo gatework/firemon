@@ -319,3 +319,21 @@ func TestRun_NAT(t *testing.T) {
 		t.Errorf("an inside source rule listed for a public address:\n%s", out)
 	}
 }
+
+// block denies traffic on every firewall with a verified rule placed
+// before the first rule that may match it.
+func TestRun_Block(t *testing.T) {
+	t.Parallel()
+	code, out, errOut := run(t, "", "block", "--config", paloaltoConf, "--dst", "172.16.0.10", "--service", "443")
+	for _, w := range []string{"需新增封堵策略", "新增策略 B-20261117-001", "set rulebase security rules B-20261117-001 action deny", "move rulebase security rules B-20261117-001 before"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing %q (code %d)\n%s%s", w, code, out, errOut)
+		}
+	}
+	if code != cli.ExitNotAllowed {
+		t.Errorf("a verified block is ready: code %d", code)
+	}
+	if code, _, _ := run(t, "", "block", "--config", paloaltoConf); code != cli.ExitUsage {
+		t.Errorf("block without an address: code %d", code)
+	}
+}

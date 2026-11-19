@@ -3,6 +3,7 @@ package design
 import (
 	"time"
 
+	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/query"
 	"github.com/gatework/firemon/traffic"
 )
@@ -54,6 +55,9 @@ type Options struct {
 	// extended rule from which they are aggregated into a group; negative
 	// disables grouping.
 	GroupThreshold int
+	// Capabilities are what the vendor's rules express; block rules log
+	// denied packets where LogDeny says so.
+	Capabilities firemon.Capabilities
 }
 
 // DefaultGroupThreshold aggregates three or more objects into a group.
