@@ -35,7 +35,7 @@ const (
 func (s Status) String() string {
 	switch s {
 	case StatusUnset:
-		return "unset"
+		return "no-firewall" // the request crosses no firewall of the inventory
 	case StatusFullMatch:
 		return "full-match"
 	case StatusPartialMatch:
@@ -53,6 +53,14 @@ func (s Status) String() string {
 
 // MarshalText implements encoding.TextMarshaler.
 func (s Status) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+
+// Settled reports a request that crosses no firewall because both ends
+// sit in the same zone of the firewalls they reach: no rule is involved.
+// Ends no firewall claims are not settled: the inventory may miss them.
+func (r Report) Settled() bool {
+	return r.Status == StatusUnset && len(r.Inside) > 0 && r.Excluded.Src == "" && r.Excluded.Dst == "" &&
+		len(r.ZonesNeeded) == 0 && len(r.Ambiguous) == 0
+}
 
 // Report is the answer to one request.
 type Report struct {
@@ -178,7 +186,7 @@ type Hit struct {
 // Build assembles the report. fws maps clusters to the evaluated firewall,
 // for candidate analysis; plans are optional.
 func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firewall, plans []inventory.ClusterPlan) Report {
-	r := Report{Notes: notes, Ambiguous: t.Ambiguous, ZonesNeeded: t.ZonesNeeded}
+	r := Report{Notes: notes, Ambiguous: t.Ambiguous, ZonesNeeded: t.ZonesNeeded, Firewalls: []Firewall{}}
 	for _, in := range t.Inside {
 		r.Inside = append(r.Inside, Inside{Cluster: in.Cluster, Zone: in.Zone, Traffic: in.Src.String() + " -> " + in.Dst.String()})
 	}

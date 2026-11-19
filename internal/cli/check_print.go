@@ -28,13 +28,13 @@ type reportView struct {
 // paths, NAT, input notes, inferences and candidates.
 func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 	p := &printer{w: cmd.OutOrStdout()}
-	p.f("结论：%s\n", text(statusText, rep.Status, rep.Status.String()))
+	p.f("结论：%s\n", conclusion(rep))
 	if v.verbose && len(rep.Notes) > 0 {
 		p.f("\n输入说明：\n")
 		printNotes(p, rep.Notes)
 	}
 	if rep.Excluded.Src != "" || rep.Excluded.Dst != "" {
-		p.f("\n不经过任何防火墙（已剔除）：源 %s  目的 %s\n", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst))
+		p.f("\n不在任何防火墙的受保护网段内（库存未覆盖，或确实不经过防火墙）：源 %s  目的 %s\n", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst))
 	}
 	for _, in := range rep.Inside {
 		p.f("不经过防火墙：%s（两端都在 %s 的 %s 一侧）\n", in.Traffic, in.Cluster, in.Zone)
@@ -52,6 +52,25 @@ func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 		printFirewall(p, f, v)
 	}
 	return p.err
+}
+
+// conclusion is the verdict over every firewall; a request that crosses
+// none is settled only when both ends sit in one zone.
+func conclusion(rep report.Report) string {
+	switch {
+	case rep.Status != report.StatusUnset:
+		verdict := text(statusText, rep.Status, rep.Status.String())
+		if rep.Status != report.StatusIndeterminate && slices.ContainsFunc(rep.Firewalls, undecided) {
+			verdict += "（部分流量需确认）"
+		}
+		return verdict
+	case rep.Settled():
+		return "无需策略：不经过防火墙"
+	case rep.Excluded.Src != "" || rep.Excluded.Dst != "":
+		return "需确认：请求不经过库存中的任何防火墙，请检查库存的 zones 是否覆盖源和目的"
+	default:
+		return "需确认：请求不经过防火墙的策略检查"
+	}
 }
 
 func printFirewall(p *printer, f report.Firewall, v reportView) {
@@ -212,7 +231,11 @@ func printAction(p *printer, f report.Firewall, v reportView) {
 		}
 		p.f("  处置：%s，在 %s 上执行%s（已验证：只放通本次请求）\n", actionSummary(cp.Plan), cp.Firewall, haNote(f.Members, cp.Firewall))
 		if ids := passedDenies(cp.Plan, v.fws[f.Cluster]); len(ids) > 0 {
-			p.f("    ⚠ 放在拒绝策略 %s 之前，会绕过它们：请确认符合安全要求\n", strings.Join(ids, "、"))
+			them := "它"
+			if len(ids) > 1 {
+				them = "它们"
+			}
+			p.f("    ⚠ 放在拒绝策略 %s 之前，会绕过%s：请确认符合安全要求\n", strings.Join(ids, "、"), them)
 		}
 		n := 0
 		for _, c := range cp.Plan.Changes {

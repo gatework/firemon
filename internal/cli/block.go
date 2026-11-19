@@ -24,7 +24,7 @@ func newBlockCmd(o *options) *cobra.Command {
 			"源、目的省略表示任意，服务省略表示全部：\n" +
 			"  firemon block --dst 203.0.113.66                 封堵访问某个地址的全部流量\n" +
 			"  firemon block --src 198.51.100.7 --service 445   封堵某个地址访问 445 端口\n" +
-			"退出码：0 已全部封堵，3 有已验证的封堵方案待执行，4 需确认。",
+			"退出码：0 已全部封堵，3 有已验证的封堵方案待执行，4 需确认，2 输入、参数或文件错误，1 运行错误。",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return &usageError{errors.New("不接受位置参数：请用 --src、--dst、--service")}

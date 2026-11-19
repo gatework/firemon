@@ -46,7 +46,7 @@ func newCheckCmd(o *options) *cobra.Command {
 			"并设计经过验证的变更与命令（--no-design 只查询；被拒绝策略挡住时新策略放在其前并提示确认）。\n" +
 			"-v 显示路径、NAT、输入说明、候选策略和对象完整展开：\n" +
 			"  firemon search --src 10.248.30.5 --dst 10.250.116.25 --service 9600\n" +
-			"退出码：0 完全命中，3 有已验证的方案待执行，4 需确认，2 用法错误。",
+			"退出码：0 完全命中或无需策略，3 需新增或修改（已给出验证过的方案；--no-design 时未设计），4 需确认，2 输入、参数或文件错误，1 运行错误。",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return &usageError{fmt.Errorf("不接受位置参数 %q：请用 --src 源地址 --dst 目的地址 --service 服务", args)}
@@ -169,14 +169,17 @@ func checkExit(rep report.Report, designed bool) error {
 	case report.StatusFullMatch:
 		return nil
 	case report.StatusUnset:
-		return errUndecided // no firewall on the way: nothing to change
+		if rep.Settled() {
+			return nil // both ends in one zone: no rule decides it
+		}
+		return errUndecided // ends the inventory does not cover
 	case report.StatusIndeterminate, report.StatusPartialMatch, report.StatusNeedNew, report.StatusBlocked:
 		if len(rep.Firewalls) == 0 {
 			return errUndecided // firewalls the request may cross were not evaluated
 		}
 	}
 	if !designed {
-		if rep.Status == report.StatusIndeterminate {
+		if rep.Status == report.StatusIndeterminate || slices.ContainsFunc(rep.Firewalls, undecided) {
 			return errUndecided
 		}
 		return errNotAllowed
@@ -193,6 +196,10 @@ func checkExit(rep report.Report, designed bool) error {
 	}
 	return errNotAllowed
 }
+
+// undecided reports a firewall where rules that cannot be evaluated
+// offline may decide part of the request.
+func undecided(f report.Firewall) bool { return len(f.Undecided) > 0 }
 
 // checkFleet loads the inventory: one firewall from --config or --snapshot,
 // or the whole snapshot store.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -136,6 +137,11 @@ func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
 // platform resolves the vendor and time zone flags.
 func (o *options) platform() (bootstrap.Platform, error) {
 	name := o.vendor
+	if o.file != "" {
+		if _, err := os.Stat(o.file); err != nil {
+			return bootstrap.Platform{}, &usageError{err} // say the file is missing, not that its vendor is unknown
+		}
+	}
 	if name == "" && o.file != "" {
 		name = detectVendor(o.file) // a configuration says which vendor wrote it
 	}
