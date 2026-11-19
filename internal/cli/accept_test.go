@@ -29,7 +29,7 @@ func TestAccept_Matrix(t *testing.T) {
 		{"range source, default deny", []string{"search", "--src", "10.0.0.5-10.0.0.9", "--dst", "8.8.8.8", "--service", "tcp/80"}, cli.ExitNotAllowed, "默认拒绝", ""},
 		{"undecided without design", []string{"search", "--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/443", "--no-design"}, cli.ExitUndecided, "需确认", ""},
 		{"undecided settled by a plan", []string{"search", "--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/443"}, cli.ExitNotAllowed, "由已验证的方案确保放通", "结论：需确认"},
-		{"time-bound hit", []string{"search", "--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/22", "--at", "2026-11-20T10:00:00+08:00"}, cli.ExitOK, "限时策略", ""},
+		{"time-bound hit", []string{"search", "--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/22", "--at", "2026-11-20T10:00:00+08:00", "--timezone", "Asia/Shanghai"}, cli.ExitOK, "限时策略", ""},
 		{"NAT translates to the packet family", []string{"search", "--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/443"}, cli.ExitNotAllowed, "源 NAT 1", "2001:db8:1::2"},
 		// Input that is not answered rather than answered in part.
 		{"unknown application", []string{"search", "--src", "10.0.0.5", "--dst", "172.16.0.10", "--service", "app:nosuch"}, cli.ExitUsage, "未知应用", ""},
