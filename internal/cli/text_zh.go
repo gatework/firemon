@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"cmp"
 	"regexp"
 	"strings"
 
@@ -22,18 +21,12 @@ import (
 // English identifier.
 
 var statusText = map[report.Status]string{
-	report.StatusUnset:         "未经过任何防火墙",
-	report.StatusFullMatch:     "已放通",
-	report.StatusPartialMatch:  "部分放通",
-	report.StatusNeedNew:       "需新增策略",
-	report.StatusBlocked:       "需新增策略（被拒绝策略挡住）",
+	report.StatusUnset:         "不经过任何防火墙",
+	report.StatusFullMatch:     "完全命中",
+	report.StatusPartialMatch:  "部分命中",
+	report.StatusNeedNew:       "需要新增策略",
+	report.StatusBlocked:       "需要新增策略",
 	report.StatusIndeterminate: "需确认",
-}
-
-var actionText = map[firemon.Action]string{
-	firemon.ActionPermit: "放通",
-	firemon.ActionDeny:   "拒绝",
-	firemon.ActionUnset:  "动作未知",
 }
 
 var verdictText = map[query.Verdict]string{
@@ -245,7 +238,10 @@ func changeText(c design.Change) string {
 	case design.AddServiceGroup:
 		return "新增服务组 " + x.Group.Name + "，成员 " + strings.Join(x.Group.Members, "、")
 	case design.AddRule:
-		return "新增策略 " + cmp.Or(x.Rule.Name, x.Rule.ID) + "（ID " + x.Rule.ID + "，" + where(x.Before) + "）"
+		if x.Rule.Name == "" || x.Rule.Name == x.Rule.ID {
+			return "新增策略 " + x.Rule.ID + "（" + where(x.Before) + "）"
+		}
+		return "新增策略 " + x.Rule.Name + "（ID " + x.Rule.ID + "，" + where(x.Before) + "）"
 	case design.ExtendRule:
 		return "策略 " + x.RuleID + " 的" + fieldText2[x.Field] + "增加 " + strings.Join(x.Names, "、")
 	case design.ReduceRule:
