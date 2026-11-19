@@ -11,10 +11,11 @@ import (
 
 func newServicesCmd(o *options) *cobra.Command {
 	return &cobra.Command{
-		Use:   "services",
-		Short: "打印厂商实际生效的预定义服务表",
-		Long: "打印 firemon 对 --vendor 采用的预定义服务：内置默认值，再用 --service-book 覆盖。\n" +
-			"不同型号和版本的内置服务有差异；请与设备对照，把修正后的 JSON 保存下来并用 --service-book 指定。",
+		Use:     "predefined-service",
+		Aliases: []string{"services"},
+		Short:   "打印厂商实际生效的预定义服务表",
+		Long: "打印 firemon 对 --vendor 采用的预定义服务：内置默认值，再用 --predefined-service 覆盖。\n" +
+			"不同型号和版本的内置服务有差异；请与设备对照，把修正后的 JSON 保存下来并用 --predefined-service 指定。",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			p, err := o.platform()
@@ -39,7 +40,7 @@ func newServicesCmd(o *options) *cobra.Command {
 	}
 }
 
-// serviceBook reads --service-book; nil means the vendor default.
+// serviceBook reads --predefined-service; nil means the vendor default.
 func (o *options) serviceBook() (firemon.ServiceBook, error) {
 	if o.book == "" {
 		return nil, nil //nolint:nilnil // a nil book selects the vendor default

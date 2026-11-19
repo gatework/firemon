@@ -21,6 +21,8 @@ type Settings struct {
 	Inventory string `yaml:"inventory,omitempty"`
 	// Timezone is the IANA zone of the devices' schedules.
 	Timezone string `yaml:"timezone,omitempty"`
+	// LogSetting is the log forwarding profile new PAN-OS rules use.
+	LogSetting string `yaml:"log_setting,omitempty"`
 }
 
 // LoadSettings reads a settings file; a missing file is the zero value.

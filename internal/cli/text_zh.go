@@ -125,6 +125,7 @@ var categoryText = map[converge.Category]string{
 	converge.CategoryBroad:           "过宽放通",
 	converge.CategoryZeroHit:         "零命中策略",
 	converge.CategoryDuplicateObject: "重复对象（内容相同、名称不同）",
+	converge.CategoryNoLog:           "放通但未开启日志的策略",
 }
 
 var tierText = map[converge.Tier]string{
@@ -196,6 +197,7 @@ var planNotes = []struct {
 	{regexp.MustCompile(`^(.*): rules (.*) that match applications, URL categories or users may still decide part of it first$`), "$1：按应用、URL 分类或用户匹配的策略 $2 可能先命中其中一部分"},
 	{regexp.MustCompile(`^(.*): deny rules (.*) that match applications, URL categories or users still come first$`), "$1：按应用、URL 分类或用户匹配的拒绝策略 $2 仍排在新策略之前"},
 	{regexp.MustCompile(`^unrouted destinations (.*)$`), "目的 $1 无路由"},
+	{regexp.MustCompile(`^rule (.*) does not log its sessions; consider enabling logging$`), "策略 $1 未开启日志，建议一并开启"},
 	{regexp.MustCompile(`^(.*): NAT may apply \((.*)\)$`), "$1：NAT 规则 $2 可能生效，无法判定"},
 	{regexp.MustCompile(`^(.*): (.*) needs an application match \(no port service\)$`), "$1：$2 需要按应用匹配（没有对应的端口服务）"},
 }

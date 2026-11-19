@@ -49,7 +49,8 @@ func (s *state) rulebase(p *path, st statement) {
 // buildSecurityRules materializes the security rule drafts in order.
 func (s *state) buildSecurityRules() {
 	for _, d := range s.security.drafts {
-		r := firemon.SecurityRule{ID: d.name, Name: d.name}
+		// PAN-OS logs at session end unless the rule says log-end no.
+		r := firemon.SecurityRule{ID: d.name, Name: d.name, Log: firemon.Logging{End: true}}
 		for _, attr := range d.attrs {
 			s.securityAttribute(&r, attr)
 		}
@@ -103,8 +104,12 @@ func (s *state) securityAttribute(r *firemon.SecurityRule, attr []string) {
 		case "interzone":
 			r.Scope = firemon.ZoneScopeInter
 		}
-	case "log-start", "log-end":
-		r.Log = r.Log || yes(values)
+	case "log-start":
+		r.Log.Start = yes(values)
+	case "log-end":
+		r.Log.End = yes(values)
+	case "log-setting":
+		r.Log.Setting = strings.Join(values, " ")
 	case "group-tag":
 		r.Group = strings.Join(values, " ")
 	case "source-user", "category", "source-hip", "destination-hip", "source-imei", "source-imsi", "source-nw-slice":

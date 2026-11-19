@@ -57,11 +57,13 @@ type claim struct {
 	ownership     Ownership
 }
 
-// owned is a part of an address set and its owner.
+// owned is a part of an address set and its owner, with the networks of
+// the claims that gave it.
 type owned struct {
 	cluster, zone string
 	set           traffic.AddressSet
 	ownership     Ownership
+	networks      []string
 }
 
 // buildClaims turns declared protections into claims and, for clusters
@@ -117,7 +119,7 @@ func (inv *Inventory) owners(s traffic.AddressSet) (parts []owned, unowned traff
 			if hit.IsEmpty() {
 				continue
 			}
-			parts = appendOwned(parts, owned{cluster: c.cluster, zone: c.zone, set: hit, ownership: c.ownership})
+			parts = appendOwned(parts, owned{cluster: c.cluster, zone: c.zone, set: hit, ownership: c.ownership, networks: []string{c.set.String()}})
 			taken = taken.Union(hit)
 			if !slices.Contains(clusters, c.cluster) {
 				clusters = append(clusters, c.cluster)
@@ -139,6 +141,11 @@ func appendOwned(parts []owned, o owned) []owned {
 		return append(parts, o)
 	}
 	parts[i].set = parts[i].set.Union(o.set)
+	for _, n := range o.networks {
+		if !slices.Contains(parts[i].networks, n) {
+			parts[i].networks = append(parts[i].networks, n)
+		}
+	}
 	return parts
 }
 

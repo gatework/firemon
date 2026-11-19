@@ -355,7 +355,10 @@
           }
         }
       ],
-      "action": "deny"
+      "action": "deny",
+      "logging": {
+        "end": true
+      }
     },
     {
       "id": "web-in",
@@ -375,7 +378,9 @@
         "web"
       ],
       "action": "permit",
-      "log": true
+      "logging": {
+        "end": true
+      }
     },
     {
       "id": "Allow updates",
@@ -399,7 +404,10 @@
       "services": [
         "service-https"
       ],
-      "action": "permit"
+      "action": "permit",
+      "logging": {
+        "end": true
+      }
     },
     {
       "id": "apps",
@@ -420,7 +428,10 @@
         "ssl",
         "web-browsing"
       ],
-      "action": "permit"
+      "action": "permit",
+      "logging": {
+        "end": true
+      }
     },
     {
       "id": "not-lan",
@@ -442,6 +453,9 @@
       ],
       "action": "deny",
       "disabled": true,
+      "logging": {
+        "end": true
+      },
       "schedule": "office"
     }
   ],

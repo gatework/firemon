@@ -89,6 +89,20 @@ func (z ZoneScope) Allows(from, to string) bool {
 // as broad as z.
 func (z ZoneScope) Covers(o ZoneScope) bool { return o == ZoneScopeAny || z == o }
 
+// Logging is what a rule logs.
+type Logging struct {
+	// Start and End log the session at its start and end.
+	Start bool `json:"start,omitempty"`
+	End   bool `json:"end,omitempty"`
+	// Deny logs packets the rule denies (StoneOS policy-deny).
+	Deny bool `json:"deny,omitempty"`
+	// Setting is the log forwarding profile (PAN-OS log-setting).
+	Setting string `json:"setting,omitempty"`
+}
+
+// Enabled reports whether the rule logs anything.
+func (l Logging) Enabled() bool { return l.Start || l.End || l.Deny }
+
 // SecurityRule is one entry of the ordered security rulebase. Empty zone,
 // address, service and application lists mean "any".
 type SecurityRule struct {
@@ -115,9 +129,9 @@ type SecurityRule struct {
 	ApplicationDefault bool     `json:"application_default,omitempty"`
 	Applications       []string `json:"applications,omitempty"`
 
-	Action   Action `json:"action"`
-	Disabled bool   `json:"disabled,omitempty"`
-	Log      bool   `json:"log,omitempty"`
+	Action   Action  `json:"action"`
+	Disabled bool    `json:"disabled,omitempty"`
+	Log      Logging `json:"logging,omitzero"`
 	// Schedule names a Schedule; Window is an inline validity period
 	// (Hillstone start-time/expire-time).
 	Schedule string     `json:"schedule,omitempty"`

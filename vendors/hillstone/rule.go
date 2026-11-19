@@ -164,7 +164,14 @@ func (s *state) ruleAttribute(r *firemon.SecurityRule, kw string, w *words) bool
 			r.Window.End = t
 		}
 	case "log":
-		r.Log = true
+		switch w.next() {
+		case "session-start":
+			r.Log.Start = true
+		case "policy-deny":
+			r.Log.Deny = true
+		default: // session-end, and a bare log
+			r.Log.End = true
+		}
 	case "service-rule":
 		e, ok := inlineService(w)
 		if !ok {
@@ -305,6 +312,15 @@ func removeAttribute(r *firemon.SecurityRule, w *words) {
 		r.Schedule = ""
 	case "disable":
 		r.Disabled = false
+	case "log":
+		switch value {
+		case "session-start":
+			r.Log.Start = false
+		case "policy-deny":
+			r.Log.Deny = false
+		default:
+			r.Log.End = false
+		}
 	}
 }
 

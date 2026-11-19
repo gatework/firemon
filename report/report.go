@@ -81,11 +81,14 @@ type Firewall struct {
 	Firewall  string              `json:"firewall"`
 	Members   []string            `json:"members"`
 	Ownership inventory.Ownership `json:"ownership"`
-	Paths     []Path              `json:"paths"`
-	Status    Status              `json:"status"`
-	Permitted []Hit               `json:"permitted,omitempty"`
-	Blocked   []Hit               `json:"blocked,omitempty"`
-	Undecided []Hit               `json:"undecided,omitempty"`
+	// Basis says which ends of the request fall in networks the firewall
+	// owns: why the request reaches it.
+	Basis     []Basis `json:"basis,omitempty"`
+	Paths     []Path  `json:"paths"`
+	Status    Status  `json:"status"`
+	Permitted []Hit   `json:"permitted,omitempty"`
+	Blocked   []Hit   `json:"blocked,omitempty"`
+	Undecided []Hit   `json:"undecided,omitempty"`
 	// UndecidedTraffic is the traffic the undecided rules may decide.
 	UndecidedTraffic string `json:"undecided_traffic,omitempty"`
 	// Otherwise are the rules (or the default action) that decide the
@@ -106,6 +109,15 @@ type Firewall struct {
 	// part of the request crossing the firewall; filled by the caller,
 	// which knows the vendor.
 	Scripts []design.Script `json:"scripts,omitempty"`
+}
+
+// Basis is one end of the request a firewall owns.
+type Basis struct {
+	Source    bool                `json:"source"`
+	Addresses string              `json:"addresses"`
+	Zone      string              `json:"zone,omitempty"`
+	Networks  []string            `json:"networks,omitempty"`
+	Ownership inventory.Ownership `json:"ownership"`
 }
 
 // Path summarizes one path through a firewall.
@@ -185,6 +197,10 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 		r.Firewalls = append(r.Firewalls, f)
 		r.Status = max(r.Status, f.Status)
 	}
+	if len(r.ZonesNeeded) > 0 {
+		// A firewall the request may cross could not be evaluated.
+		r.Status = max(r.Status, StatusIndeterminate)
+	}
 	return r
 }
 
@@ -233,6 +249,9 @@ func firewallReport(c inventory.Crossing) Firewall {
 	f := Firewall{
 		Cluster: c.Cluster, Firewall: c.Firewall, Members: c.Members, Ownership: c.Ownership,
 		Incomplete: c.Incomplete,
+	}
+	for _, b := range c.Basis {
+		f.Basis = append(f.Basis, Basis{Source: b.Source, Addresses: b.Addresses.String(), Zone: b.Zone, Networks: b.Networks, Ownership: b.Ownership})
 	}
 	if !c.Unrouted.IsEmpty() {
 		f.Unrouted = c.Unrouted.String()

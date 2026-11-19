@@ -15,7 +15,8 @@ type intentFlags struct {
 	trafficFlags
 	nat                         natFlags
 	name, description, schedule string
-	override                    bool
+	override, noLog             bool
+	logSetting                  string
 }
 
 func (i *intentFlags) register(cmd *cobra.Command) {
@@ -24,7 +25,9 @@ func (i *intentFlags) register(cmd *cobra.Command) {
 	f.StringVar(&i.name, "name", "", "新建策略的名称，例如工单号（默认 fm_<序号>）")
 	f.StringVar(&i.description, "description", "", "新建策略的描述")
 	f.StringVar(&i.schedule, "schedule", "", "新建策略使用的已有时间计划")
-	f.BoolVar(&i.override, "override", false, "允许新策略放在挡住请求的具体拒绝策略之前，而不是报告冲突")
+	f.BoolVar(&i.override, "override", false, "已不需要：被拒绝策略挡住时新策略会放在其前并提示确认")
+	_ = f.MarkHidden("override")
+	f.BoolVar(&i.noLog, "no-log", false, "新建策略不开启日志（默认记录会话开始和结束）")
 	i.nat.register(f)
 }
 
@@ -40,7 +43,9 @@ func (i *intentFlags) intent(book firemon.ServiceBook) (design.Intent, error) {
 	return design.Intent{
 		Src: t.src, Dst: t.dst, Service: t.service,
 		FromZone: i.fromZone, ToZone: i.toZone, VirtualRouter: i.vr,
-		Name: i.name, Description: i.description, Schedule: i.schedule, Override: i.override, NAT: nat,
+		// As search: a deny that blocks the request is passed with a warning.
+		Name: i.name, Description: i.description, Schedule: i.schedule, Override: true, NAT: nat,
+		NoLog: i.noLog, LogSetting: i.logSetting,
 	}, nil
 }
 
@@ -50,7 +55,7 @@ type proposalView struct {
 	Script     design.Script `json:"script"`
 }
 
-func printProposal(cmd *cobra.Command, asJSON bool, prop workflow.Proposal) error {
+func printProposal(cmd *cobra.Command, asJSON bool, prop workflow.Proposal, fw *firemon.Firewall) error {
 	changes := make([]string, len(prop.Plan.Changes))
 	for i, c := range prop.Plan.Changes {
 		changes[i] = c.String()
@@ -102,6 +107,9 @@ func printProposal(cmd *cobra.Command, asJSON bool, prop workflow.Proposal) erro
 		p.f("注意：%s\n", planNote(w))
 	}
 	if len(changes) > 0 {
+		for _, w := range passedDenies(plan, fw) {
+			p.f("⚠ 新策略放在拒绝策略 %s 之前，将绕过它：请确认该放通符合安全要求\n", w)
+		}
 		p.f("\n变更：\n  %s\n", strings.Join(changes, "\n  "))
 		p.f("\n命令：\n%s\n", strings.Join(prop.Script.Commands, "\n"))
 		p.f("\n回退命令：\n%s\n", strings.Join(prop.Script.Rollback, "\n"))

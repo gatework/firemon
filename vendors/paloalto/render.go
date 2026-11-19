@@ -180,8 +180,17 @@ func ruleOptions(p string, r firemon.SecurityRule) []string {
 	if r.Group != "" {
 		out = append(out, p+"group-tag "+name(r.Group))
 	}
-	if r.Log {
+	if r.Log.Start {
+		out = append(out, p+"log-start yes")
+	}
+	// log-end defaults to yes on PAN-OS: always say which.
+	if r.Log.End {
 		out = append(out, p+"log-end yes")
+	} else {
+		out = append(out, p+"log-end no")
+	}
+	if r.Log.Setting != "" {
+		out = append(out, p+"log-setting "+name(r.Log.Setting))
 	}
 	if r.Disabled {
 		out = append(out, p+"disabled yes")

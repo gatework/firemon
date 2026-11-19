@@ -26,6 +26,18 @@ type Firewall struct {
 	// for the entries of Protected that name no zone of their own.
 	ProtectedZone string      `yaml:"protected_zone,omitempty"`
 	Protected     []Protected `yaml:"protected,omitempty"`
+	// Zones bind networks to the firewall's zones: protected zones are the
+	// networks the firewall protects; the others tell where the far end of
+	// a request is (for example untrust 0.0.0.0/0).
+	Zones []Zone `yaml:"zones,omitempty"`
+}
+
+// Zone binds networks to one zone of a firewall.
+type Zone struct {
+	Zone      string   `yaml:"zone"`
+	Protected bool     `yaml:"protected,omitempty"`
+	Networks  []string `yaml:"networks"`
+	Exclude   []string `yaml:"exclude,omitempty"`
 }
 
 // Active reports whether the firewall is its cluster's active member.
@@ -76,7 +88,7 @@ func Parse(raw []byte) (*File, error) {
 		if fw.Role != "" && fw.Role != "active" && fw.Role != "backup" {
 			return nil, fmt.Errorf("yamlfile: firewall %q: role %q: use active or backup", fw.Name, fw.Role)
 		}
-		if _, err := fw.protections(); err != nil {
+		if _, err := fw.bindings(); err != nil {
 			return nil, err
 		}
 	}
@@ -96,9 +108,49 @@ func (f *File) Protections(context.Context) ([]inventory.Protection, error) {
 	return out, nil
 }
 
+// ZoneBindings returns every firewall's zone bindings: its zones, and its
+// protected networks (the older form) as protected zones.
+func (f *File) ZoneBindings() ([]inventory.ZoneBinding, error) {
+	var out []inventory.ZoneBinding
+	for _, fw := range f.Firewalls {
+		bs, err := fw.bindings()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, bs...)
+	}
+	return out, nil
+}
+
 // SnapshotOf returns the snapshot name of a firewall: its snapshot field,
 // or its name.
 func (fw Firewall) SnapshotOf() string { return cmp.Or(fw.Snapshot, fw.Name) }
+
+func (fw Firewall) bindings() ([]inventory.ZoneBinding, error) {
+	ps, err := fw.protections()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]inventory.ZoneBinding, 0, len(ps)+len(fw.Zones))
+	for _, p := range ps {
+		out = append(out, inventory.ZoneBinding{Firewall: p.Firewall, Zone: p.Zone, Networks: p.Networks, Exclude: p.Exclude, Protected: true})
+	}
+	for _, z := range fw.Zones {
+		if z.Zone == "" {
+			return nil, fmt.Errorf("yamlfile: firewall %q: a zone binding needs a zone", fw.Name)
+		}
+		nets, err := prefixes(fw.Name, z.Networks)
+		if err != nil {
+			return nil, err
+		}
+		excl, err := prefixes(fw.Name, z.Exclude)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, inventory.ZoneBinding{Firewall: fw.Name, Zone: z.Zone, Networks: nets, Exclude: excl, Protected: z.Protected})
+	}
+	return out, nil
+}
 
 func (fw Firewall) protections() ([]inventory.Protection, error) {
 	var out []inventory.Protection

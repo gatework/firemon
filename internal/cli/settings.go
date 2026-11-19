@@ -31,6 +31,7 @@ func (o *options) resolveDefaults(cmd *cobra.Command) error {
 	if err != nil {
 		return &usageError{err}
 	}
+	o.logSetting = settings.LogSetting
 	flags := cmd.Flags()
 	if !flags.Changed("inventory") {
 		o.inventoryFile = expandHome(cmp.Or(getenv(envInventory), settings.Inventory))

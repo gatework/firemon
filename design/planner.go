@@ -1,7 +1,6 @@
 package design
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -127,6 +126,13 @@ func (p *Planner) planAccess(intent Intent) (*Plan, error) {
 		}
 		ruleChanges = append(ruleChanges, changes...)
 		opened = append(opened, n)
+		for _, c := range changes {
+			if x, ok := c.(ExtendRule); ok {
+				if r, ok := p.fw.Rule(x.RuleID); ok && !r.Spec().Log.Enabled() {
+					plan.Warnings = append(plan.Warnings, "rule "+x.RuleID+" does not log its sessions; consider enabling logging")
+				}
+			}
+		}
 	}
 	plan.Changes = append(slices.Clone(cat.created), ruleChanges...)
 	plan.Verified = true
@@ -387,8 +393,12 @@ func (p *Planner) extensions(n need, target traffic.Space, cat *catalog) []exten
 			out = append(out, extension{rule: r, field: FieldService, add: traffic.Space{Service: add}, whole: scope, cost: cost})
 		}
 	}
-	slices.SortStableFunc(out, func(a, b extension) int { return cmp.Compare(a.cost, b.cost) })
+	slices.SortStableFunc(out, func(a, b extension) int { return CompareCandidates(a.key(), b.key()) })
 	return out
+}
+
+func (x extension) key() CandidateKey {
+	return CandidateKey{BothEnds: x.field == FieldService, Logs: x.rule.Spec().Log.Enabled(), Cost: x.cost, Position: x.rule.Position()}
 }
 
 // extendable reports whether growing r cannot affect other zone pairs and
@@ -405,6 +415,13 @@ func (p *Planner) newRule(n need, s traffic.Space, intent Intent, cat *catalog) 
 	r := firemon.SecurityRule{
 		Name: cat.unique(p.naming.Rule(intent, index)), Description: intent.Description,
 		From: []string{n.from}, To: []string{n.to}, Action: firemon.ActionPermit, Schedule: intent.Schedule,
+	}
+	// Best practice: a rule says why it exists and logs its sessions.
+	if r.Description == "" {
+		r.Description = r.Name + " 由 firemon 于 " + p.now().Format("2006-01-02") + " 创建"
+	}
+	if !intent.NoLog {
+		r.Log = firemon.Logging{Start: true, End: true, Setting: intent.LogSetting}
 	}
 	for _, name := range cat.groupAddresses(cat.addressNames(s.Src), s.Src, p.naming.Group(r.Name, FieldSource)) {
 		r.Source = append(r.Source, firemon.NamedAddress(name))
