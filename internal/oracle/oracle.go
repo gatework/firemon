@@ -4,6 +4,9 @@
 // regions of traffic by splitting them: tests compare the two on boundary
 // packets of every rule to prove the engine's first-match decisions.
 //
+// A query that names no application judges rules restricted to
+// applications by those applications' standard ports, as the engine does.
+//
 // The oracle answers the policy question only: the packet is given as the
 // security rules see it (after any translation) together with its zones.
 package oracle
@@ -68,7 +71,7 @@ func Decide(fw *firemon.Firewall, p Packet, at time.Time) Verdict {
 	svc := p.Service()
 	var v Verdict
 	for _, r := range fw.Rules() {
-		if r.Ignored() || !applies(r, p.From, p.To) || r.InactiveAt(at) {
+		if r.Ignored() || !applies(r, p.From, p.To) || r.InactiveAt(at) || offAppPorts(fw, r, svc) {
 			continue
 		}
 		scheduleKnown := r.ActiveAt(at) // InactiveAt is false: active, or unreadable
@@ -86,6 +89,27 @@ func Decide(fw *firemon.Firewall, p Packet, at time.Time) Verdict {
 		v.Default = fw.Semantics().IntrazoneAction
 	}
 	return v
+}
+
+// offAppPorts reports whether a rule that matches any service but only
+// some applications certainly misses the packet: every application has
+// standard ports in the firewall's book and the packet uses none of them,
+// so it is taken not to be one of those applications.
+func offAppPorts(fw *firemon.Firewall, r *firemon.Rule, svc traffic.ServiceSet) bool {
+	apps := r.Applications()
+	if len(apps) == 0 || r.ApplicationDefault() || !r.Bound().Service.IsAny() {
+		return false
+	}
+	for _, a := range apps {
+		ports, ok := fw.ApplicationPorts(a)
+		if !ok {
+			return false // unknown ports: the rule may match any port
+		}
+		if ports.ContainsSet(svc) {
+			return false
+		}
+	}
+	return true
 }
 
 // applies reports whether a rule is written for the zone pair: an empty

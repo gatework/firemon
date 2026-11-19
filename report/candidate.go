@@ -25,8 +25,6 @@ const (
 	ReasonZoneAny Reason = "zone-any"
 	// ReasonScheduled: the rule is time-limited.
 	ReasonScheduled Reason = "scheduled"
-	// ReasonApplications: the rule matches by application.
-	ReasonApplications Reason = "applications"
 	// ReasonUndecidable: the rule's match cannot be evaluated exactly.
 	ReasonUndecidable Reason = "undecidable"
 	// ReasonAfterDeny: a deny before the rule decides the traffic first.
@@ -53,6 +51,10 @@ type Candidate struct {
 	Reasons     []Reason         `json:"reasons,omitempty"`
 	position    int
 }
+
+// bothEnds reports whether the rule already covers the request's sources
+// and destinations.
+func (c Candidate) bothEnds() bool { return c.Src.Covers() && c.Dst.Covers() }
 
 // pairNeed is what one zone pair still needs and the request scope there.
 type pairNeed struct {
@@ -82,8 +84,10 @@ func candidates(fw *firemon.Firewall, paths []query.Path, plan *design.Plan) []C
 		}
 	}
 	slices.SortStableFunc(out, func(a, b Candidate) int {
+		// A rule that already holds both ends of the request serves the
+		// same systems: adding the port to it is how operators extend.
 		return cmp.Or(compareBool(b.Recommended, a.Recommended), compareBool(b.Extendable, a.Extendable),
-			cmp.Compare(b.Covers, a.Covers), cmp.Compare(len(a.Reasons), len(b.Reasons)), cmp.Compare(a.position, b.position))
+			compareBool(b.bothEnds(), a.bothEnds()), cmp.Compare(b.Covers, a.Covers), cmp.Compare(len(a.Reasons), len(b.Reasons)), cmp.Compare(a.position, b.position))
 	})
 	return out[:min(len(out), MaxCandidates)]
 }
@@ -115,6 +119,11 @@ func needsByPair(paths []query.Path) []pairNeed {
 func assess(r *firemon.Rule, pn pairNeed) (Candidate, bool) {
 	spec := r.Spec()
 	if r.Action() != firemon.ActionPermit || r.Ignored() || !r.Applies(pn.from, pn.to) {
+		return Candidate{}, false
+	}
+	if len(r.Applications()) > 0 {
+		// It matches only traffic identified as its applications: adding
+		// the request's addresses or ports to it would not carry it.
 		return Candidate{}, false
 	}
 	need, scope, m := pn.need.Bounds(), pn.scope.Bounds(), r.Match()
@@ -158,9 +167,6 @@ func reasons(r *firemon.Rule, pn pairNeed, covers int, wider bool) []Reason {
 	}
 	if r.Scheduled() {
 		out = append(out, ReasonScheduled)
-	}
-	if len(spec.Applications) > 0 {
-		out = append(out, ReasonApplications)
 	}
 	if !r.Decidable() {
 		out = append(out, ReasonUndecidable)

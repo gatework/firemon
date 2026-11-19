@@ -258,11 +258,11 @@ func printFirewall(p *printer, f report.Firewall) {
 	}
 	hits := func(title string, hs []report.Hit) {
 		for _, h := range hs {
-			p.f("  %s %s %s：%s\n", title, h.Rule, h.Name, h.Traffic)
+			p.f("  %s：%s，%s\n", title, hitLabel(h.Rule, h.Name), h.Traffic)
 		}
 	}
-	hits("放通策略", f.Permitted)
-	hits("拒绝策略", f.Blocked)
+	hits("放通", f.Permitted)
+	hits("拒绝", f.Blocked)
 	if len(f.Undecided) > 0 {
 		names := make([]string, 0, len(f.Undecided))
 		for _, h := range f.Undecided {
@@ -270,15 +270,15 @@ func printFirewall(p *printer, f report.Firewall) {
 			for i, k := range h.Reasons {
 				kinds[i] = text(issueKindText, k, k)
 			}
-			names = append(names, h.Rule+" "+h.Name+"（"+strings.Join(kinds, "、")+"）")
+			names = append(names, hitLabel(h.Rule, h.Name)+"（"+actionWord(h.Action)+"，"+strings.Join(kinds, "、")+"）")
 		}
-		p.f("  待确认流量：%s\n  可能先命中的策略：%s\n", f.UndecidedTraffic, strings.Join(names, "，"))
+		p.f("  待确认流量：%s\n  可能先命中并改变结论的策略：%s\n", f.UndecidedTraffic, strings.Join(names, "，"))
 		for _, h := range f.Otherwise {
 			outcome := "拒绝"
 			if h.Final == query.OutcomePermit {
 				outcome = "放通"
 			}
-			p.f("  若这些策略都不命中：由 %s %s %s\n", h.Rule, h.Name, outcome)
+			p.f("  若这些策略都不命中：由%s%s\n", hitLabel(h.Rule, h.Name), outcome)
 		}
 	}
 	if f.Remaining != "" {
@@ -288,9 +288,9 @@ func printFirewall(p *printer, f report.Firewall) {
 		p.f("  无路由（被丢弃）的目的：%s\n", f.Unrouted)
 	}
 	if f.Incomplete {
-		p.f("  评估超出预算被截断，结论仅覆盖已评估部分，按无法判定处理\n")
+		p.f("  评估超出预算被截断，结论仅覆盖已评估部分，按需确认处理\n")
 	}
-
+	printRuleDetails(p, f.Rules)
 	for _, c := range f.Candidates {
 		mark := "候选"
 		if c.Recommended {
@@ -300,8 +300,108 @@ func printFirewall(p *printer, f report.Firewall) {
 		for i, r := range c.Reasons {
 			reasons[i] = text(reasonText, r, string(r))
 		}
-		p.f("  %s %s %s：源%s 目的%s 服务%s %s\n", mark, c.Rule, c.Name, text(relationText, c.Src, c.Src.String()),
-			text(relationText, c.Dst, c.Dst.String()), text(relationText, c.Service, c.Service.String()), strings.Join(reasons, "；"))
+		p.f("  %s %s：源%s，目的%s，服务%s；%s\n", mark, hitLabel(c.Rule, c.Name), text(relationText, c.Src, c.Src.String()),
+			text(relationText, c.Dst, c.Dst.String()), text(relationText, c.Service, c.Service.String()), cmp.Or(strings.Join(reasons, "；"), "可直接扩展"))
+	}
+}
+
+// hitLabel names a rule as "策略 ID 名称", or the default action.
+func hitLabel(id, name string) string {
+	if id == "(default)" || id == "" {
+		return "默认动作"
+	}
+	if name == "" || name == id {
+		return "策略 " + id
+	}
+	return "策略 " + id + " " + name
+}
+
+func actionWord(a firemon.Action) string {
+	switch a {
+	case firemon.ActionPermit:
+		return "命中则放通"
+	case firemon.ActionDeny:
+		return "命中则拦截"
+	case firemon.ActionUnset:
+		return "动作未知"
+	default:
+		return "动作未知"
+	}
+}
+
+// printRuleDetails writes the definitions of the deciding rules with
+// their objects expanded, to compare with the device configuration.
+func printRuleDetails(p *printer, rules []report.RuleDetail) {
+	if len(rules) == 0 {
+		return
+	}
+	p.f("  命中的已有策略（配置原文，对象已展开）：\n")
+	for _, r := range rules {
+		state := ""
+		if r.Disabled {
+			state = "，已禁用"
+		}
+		p.f("    %s（第 %d 条，%s%s）\n", hitLabel(r.Rule, r.Name), r.Position, text(actionText, r.Action, r.Action.String()), state)
+		p.f("      区域：%s → %s\n", zoneList(r.From), zoneList(r.To))
+		printObjects(p, "源地址", r.Source, r.NegateSource)
+		printObjects(p, "目的地址", r.Destination, r.NegateDest)
+		printObjects(p, "服务", r.Services, false)
+		if len(r.Applications) > 0 {
+			p.f("      应用：%s\n", strings.Join(r.Applications, "、"))
+		}
+		if r.Schedule != nil {
+			printObjects(p, "时间计划", []report.Object{*r.Schedule}, false)
+		}
+		if r.Description != "" {
+			p.f("      描述：%s\n", r.Description)
+		}
+	}
+}
+
+func zoneList(zs []string) string {
+	if len(zs) == 0 {
+		return "任意"
+	}
+	return strings.Join(zs, "、")
+}
+
+// printObjects writes one dimension of a rule: "任意" when it names
+// nothing, else each object with its values and members indented below.
+func printObjects(p *printer, title string, objs []report.Object, negate bool) {
+	prefix := ""
+	if negate {
+		prefix = "除以下以外的全部："
+	}
+	if len(objs) == 0 {
+		p.f("      %s：任意\n", title)
+		return
+	}
+	p.f("      %s：%s\n", title, prefix)
+	for _, o := range objs {
+		printObject(p, o, 8)
+	}
+}
+
+func printObject(p *printer, o report.Object, indent int) {
+	pad := strings.Repeat(" ", indent)
+	switch {
+	case o.Missing:
+		p.f("%s%s（配置中未定义）\n", pad, o.Name)
+	case o.Name == "":
+		p.f("%s%s\n", pad, strings.Join(o.Values, "、"))
+	case len(o.Members) == 0 && len(o.Values) == 1 && o.Values[0] == o.Name:
+		p.f("%s%s\n", pad, o.Name) // named after its only value
+	case len(o.Members) == 0:
+		p.f("%s%s = %s\n", pad, o.Name, cmp.Or(strings.Join(o.Values, "、"), "（空）"))
+	default:
+		line := pad + o.Name + "（组）"
+		if len(o.Values) > 0 {
+			line += " = " + strings.Join(o.Values, "、")
+		}
+		p.f("%s\n", line)
+		for _, m := range o.Members {
+			printObject(p, m, indent+2)
+		}
 	}
 }
 
@@ -319,6 +419,23 @@ func printPath(p *printer, path report.Path) {
 	}
 	for _, c := range path.Conditions {
 		p.f("    前提：%s\n", conditionText(c))
+	}
+	if len(path.AppPorts) > 0 {
+		var apps []string
+		for _, a := range path.AppPorts {
+			for _, n := range a.Applications {
+				if !slices.Contains(apps, n) {
+					apps = append(apps, n)
+				}
+			}
+		}
+		shown := apps[:min(len(apps), 8)]
+		more := ""
+		if len(apps) > len(shown) {
+			more = " 等"
+		}
+		p.f("    按端口推断：%d 条应用识别策略（%s%s）的应用标准端口不含本次服务，按不命中处理；如该端口实际承载这些应用，请用 --service app:<应用名> 查询\n",
+			len(path.AppPorts), strings.Join(shown, "、"), more)
 	}
 	for _, ref := range path.NATSkipped {
 		p.f("    已跳过禁用的 NAT 规则 %s\n", ref.ID())
@@ -371,7 +488,7 @@ func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, pla
 		}
 		p.f("  ▶ 处置：在 %s 上执行以下命令%s（已验证：只放通本次请求）\n", cp.Firewall, haNote(f.Members, cp.Firewall))
 		for _, c := range cp.Plan.Changes {
-			p.f("    · %s\n", c)
+			p.f("    · %s\n", changeText(c))
 		}
 		for _, c := range script.Commands {
 			p.f("    %s\n", c)

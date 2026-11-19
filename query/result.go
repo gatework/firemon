@@ -149,8 +149,12 @@ type Path struct {
 	// NATSkipped names disabled NAT rules that would otherwise have matched
 	// before the one that applied.
 	NATSkipped []NATRef
-	Decisions  []Decision
-	Verdict    Verdict
+	// AppPorts are the application rules judged by their applications'
+	// standard ports: the request names no application, so traffic outside
+	// those ports is taken not to be that application.
+	AppPorts  []AppPorts
+	Decisions []Decision
+	Verdict   Verdict
 	// Incomplete reports that the evaluation budget was exhausted.
 	Incomplete bool
 }
@@ -212,6 +216,14 @@ func (c Condition) String() string {
 		return "policy route " + c.PolicyRoute + " matches"
 	}
 	return "policy route " + c.PolicyRoute + " does not match"
+}
+
+// AppPorts records that a rule restricted to applications, with any
+// service, was evaluated on the applications' standard ports only.
+type AppPorts struct {
+	Rule *firemon.Rule
+	// Ports are the standard ports of the rule's applications.
+	Ports traffic.ServiceSet
 }
 
 // NATRef names a NAT rule or a static mapping.

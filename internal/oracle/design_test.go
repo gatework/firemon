@@ -209,6 +209,9 @@ func neighbours(p oracle.Packet) []oracle.Packet {
 			out = append(out, q)
 		}
 	}
+	if !p.Protocol.HasPorts() {
+		return out // ports do not exist: the neighbour would be the packet
+	}
 	if p.DstPort > 0 {
 		q := p
 		q.DstPort--

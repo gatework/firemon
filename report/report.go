@@ -95,10 +95,13 @@ type Firewall struct {
 	// Unrouted is the destination part the firewall has no route for.
 	Unrouted string `json:"unrouted,omitempty"`
 	// Incomplete reports a cut-short evaluation.
-	Incomplete  bool         `json:"incomplete,omitempty"`
-	ZonesNeeded bool         `json:"zones_needed,omitempty"`
-	Candidates  []Candidate  `json:"candidates,omitempty"`
-	Plan        *design.Plan `json:"plan,omitempty"`
+	Incomplete  bool        `json:"incomplete,omitempty"`
+	ZonesNeeded bool        `json:"zones_needed,omitempty"`
+	Candidates  []Candidate `json:"candidates,omitempty"`
+	// Rules are the definitions of the rules that decide the request,
+	// objects expanded, for comparing with the device.
+	Rules []RuleDetail `json:"rules,omitempty"`
+	Plan  *design.Plan `json:"plan,omitempty"`
 	// Scripts are the commands and rollback of the verified plans, one per
 	// part of the request crossing the firewall; filled by the caller,
 	// which knows the vendor.
@@ -117,7 +120,19 @@ type Path struct {
 	Conditions  []query.Condition `json:"conditions,omitempty"`
 	NAT         []NAT             `json:"nat,omitempty"`
 	NATSkipped  []query.NATRef    `json:"nat_skipped,omitempty"`
-	Verdict     query.Verdict     `json:"verdict"`
+	// AppPorts are the application rules judged by their applications'
+	// standard ports, which do not include the request's.
+	AppPorts []AppPorts    `json:"app_ports,omitempty"`
+	Verdict  query.Verdict `json:"verdict"`
+}
+
+// AppPorts is an application rule taken not to match the request because
+// the request's ports are not its applications' standard ports.
+type AppPorts struct {
+	Rule         string   `json:"rule"`
+	Name         string   `json:"name,omitempty"`
+	Applications []string `json:"applications"`
+	Ports        string   `json:"ports"`
 }
 
 // NAT is one translation applied on a path.
@@ -139,6 +154,8 @@ type Hit struct {
 	Name    string   `json:"name,omitempty"`
 	Traffic string   `json:"traffic"`
 	Reasons []string `json:"reasons,omitempty"`
+	// Action is what an undecided rule would do if it matched.
+	Action firemon.Action `json:"action,omitzero"`
 	// Final is the outcome the rule (or the default action) gives, for
 	// the rules that decide traffic when undecidable rules do not match.
 	Final query.Outcome `json:"final,omitzero"`
@@ -161,6 +178,7 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 		f := firewallReport(c)
 		f.Plan = planFor(plans, c.Cluster)
 		f.Status = max(f.Status, natStatus(f.Plan))
+		f.Rules = details(fws[c.Cluster], decidingRules(f))
 		if fw := fws[c.Cluster]; fw != nil && f.Status != StatusFullMatch && f.Status != StatusUnset {
 			f.Candidates = candidates(fw, c.Paths, f.Plan)
 		}
@@ -168,6 +186,20 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 		r.Status = max(r.Status, f.Status)
 	}
 	return r
+}
+
+// decidingRules are the rules that decide part of the request: they
+// permit or block it, or decide it when undecidable rules do not match.
+func decidingRules(f Firewall) []string {
+	var out []string
+	for _, hs := range [][]Hit{f.Permitted, f.Blocked, f.Otherwise} {
+		for _, h := range hs {
+			if h.Rule != hitID(nil) && !slices.Contains(out, h.Rule) {
+				out = append(out, h.Rule)
+			}
+		}
+	}
+	return out
 }
 
 func planFor(plans []inventory.ClusterPlan, cluster string) *design.Plan {
@@ -205,8 +237,12 @@ func firewallReport(c inventory.Crossing) Firewall {
 			case query.OutcomeUnknown:
 				unknown = unknown.Union(d.Space)
 				acc.unknown = append(acc.unknown, labelled{p, d.Space})
-				for _, pr := range d.Possible {
+				// Only the rules that would change the outcome matter: a
+				// deny that might match first cannot block traffic that is
+				// denied anyway.
+				for _, pr := range d.Deciders() {
 					acc.add(&acc.undecided, pr, p, traffic.Region{}, summarize(pr.Issues()))
+					acc.undecided.action(pr)
 				}
 				if len(d.Possible) == 0 {
 					acc.add(&acc.undecided, nil, p, traffic.Region{}, []string{"nat"})
@@ -239,6 +275,7 @@ type hitList struct {
 	names   map[string]string
 	reasons map[string][]string
 	finals  map[string]query.Outcome
+	actions map[string]firemon.Action
 	traffic map[string][]labelled
 }
 
@@ -287,9 +324,17 @@ func (hitSets) add(l *hitList, r *firemon.Rule, p query.Path, s traffic.Region, 
 func (l *hitList) hits() []Hit {
 	out := make([]Hit, 0, len(l.order))
 	for _, id := range l.order {
-		out = append(out, Hit{Rule: id, Name: l.names[id], Traffic: describeAll(l.traffic[id]), Reasons: l.reasons[id], Final: l.finals[id]})
+		out = append(out, Hit{Rule: id, Name: l.names[id], Traffic: describeAll(l.traffic[id]), Reasons: l.reasons[id], Final: l.finals[id], Action: l.actions[id]})
 	}
 	return out
+}
+
+// action records what rule r does when it matches.
+func (l *hitList) action(r *firemon.Rule) {
+	if l.actions == nil {
+		l.actions = map[string]firemon.Action{}
+	}
+	l.actions[hitID(r)] = r.Action()
 }
 
 // describeAll merges the regions of each path and writes them, using the
@@ -377,6 +422,10 @@ func pathSummary(p query.Path) Path {
 	out := Path{
 		From: p.From, To: p.To, Ingress: p.Ingress, Egress: p.Egress, Domain: p.Domain, Application: p.Application,
 		PolicyRoute: p.PolicyRoute, Conditions: p.Conditions, NATSkipped: p.NATSkipped, Verdict: p.Verdict,
+	}
+	for _, a := range p.AppPorts {
+		spec := a.Rule.Spec()
+		out.AppPorts = append(out.AppPorts, AppPorts{Rule: spec.ID, Name: spec.Name, Applications: spec.Applications, Ports: a.Ports.String()})
 	}
 	if h := p.DestinationNAT; h != nil {
 		out.NAT = append(out.NAT, natLine(*h))
