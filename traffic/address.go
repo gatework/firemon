@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 
@@ -17,6 +18,9 @@ var ErrInvalidAddress = errors.New("traffic: invalid address")
 // is the empty set.
 type AddressSet struct {
 	ips *netipx.IPSet // nil exactly when empty (see build)
+	// rs are the set's ranges, sorted and disjoint, kept so that overlap
+	// tests walk both sets once instead of pairing every range.
+	rs []netipx.IPRange
 }
 
 // AnyAddress returns the set of every IPv4 and IPv6 address.
@@ -145,7 +149,20 @@ func (s AddressSet) ContainsSet(o AddressSet) bool { return o.Subtract(s).IsEmpt
 
 // Overlaps reports whether s and o share at least one address.
 func (s AddressSet) Overlaps(o AddressSet) bool {
-	return !s.IsEmpty() && !o.IsEmpty() && s.ips.Overlaps(o.ips)
+	// Both range lists are sorted and disjoint: advance whichever range
+	// ends first until two ranges meet, in linear time.
+	a, b := s.rs, o.rs
+	for i, j := 0, 0; i < len(a) && j < len(b); {
+		switch {
+		case a[i].To().Less(b[j].From()):
+			i++
+		case b[j].To().Less(a[i].From()):
+			j++
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 // Relation classifies s against o.
@@ -163,10 +180,7 @@ func (s AddressSet) Prefixes() []netip.Prefix {
 
 // Ranges returns the minimal list of ranges covering s, in address order.
 func (s AddressSet) Ranges() []netipx.IPRange {
-	if s.ips == nil {
-		return nil
-	}
-	return s.ips.Ranges()
+	return slices.Clone(s.rs)
 }
 
 // Single returns the only address of s, or false when s is not one address.
@@ -251,10 +265,11 @@ func build(b *netipx.IPSetBuilder) AddressSet {
 	if err != nil {
 		panic("traffic: invalid address set: " + err.Error())
 	}
-	if len(ips.Ranges()) == 0 {
+	rs := ips.Ranges()
+	if len(rs) == 0 {
 		return AddressSet{}
 	}
-	return AddressSet{ips: ips}
+	return AddressSet{ips: ips, rs: rs}
 }
 
 // unmapPrefix turns an IPv4-mapped IPv6 prefix (::ffff:a.b.c.d/96+n) into

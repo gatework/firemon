@@ -49,6 +49,19 @@ func (r Region) AppendDisjoint(s Space) Region {
 	return Region{spaces: append(slices.Clip(r.spaces), s)}
 }
 
+// DisjointRegion returns the region of spaces the caller guarantees to be
+// pairwise disjoint, such as the pieces of one partition, without Add's
+// subtraction. Empty spaces are dropped.
+func DisjointRegion(spaces ...Space) Region {
+	out := make([]Space, 0, len(spaces))
+	for _, s := range spaces {
+		if !s.IsEmpty() {
+			out = append(out, s)
+		}
+	}
+	return Region{spaces: out}
+}
+
 // Union returns the packets in r or o.
 func (r Region) Union(o Region) Region {
 	for _, s := range o.spaces {
@@ -128,10 +141,18 @@ func (r Region) String() string {
 	return strings.Join(parts, "; ")
 }
 
+// subtractAll returns spaces minus s. Spaces s does not touch are shared,
+// not copied: when s touches none, the input itself is returned, which
+// regions may do since they never modify their spaces.
 func subtractAll(spaces []Space, s Space) []Space {
-	var out []Space
-	for _, x := range spaces {
-		out = append(out, x.Subtract(s)...)
+	first := slices.IndexFunc(spaces, s.Overlaps)
+	if first < 0 {
+		return spaces
+	}
+	out := make([]Space, first, len(spaces)+2)
+	copy(out, spaces[:first])
+	for _, x := range spaces[first:] {
+		out = x.appendSubtract(out, s)
 	}
 	return out
 }

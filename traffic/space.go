@@ -46,35 +46,34 @@ func (s Space) Equal(o Space) bool {
 // Subtract returns s minus o as at most three disjoint spaces:
 // the sources outside o; then the shared sources with destinations outside
 // o; then the shared sources and destinations with services outside o.
-func (s Space) Subtract(o Space) []Space {
-	if !s.Src.Overlaps(o.Src) || !s.Dst.Overlaps(o.Dst) {
-		if s.IsEmpty() {
-			return nil
-		}
-		return []Space{s}
-	}
-	inter := s.Intersect(o)
-	if inter.IsEmpty() {
-		if s.IsEmpty() {
-			return nil
-		}
-		return []Space{s}
-	}
-	pieces := [...]Space{
-		{Src: s.Src.Subtract(o.Src), Dst: s.Dst, Service: s.Service},
-		{Src: inter.Src, Dst: s.Dst.Subtract(o.Dst), Service: s.Service},
-		{Src: inter.Src, Dst: inter.Dst, Service: s.Service.Subtract(o.Service)},
-	}
-	out := make([]Space, 0, len(pieces))
-	for _, p := range pieces {
-		if !p.IsEmpty() {
-			out = append(out, p)
-		}
-	}
-	return out
-}
+func (s Space) Subtract(o Space) []Space { return s.appendSubtract(nil, o) }
 
 // String writes "src -> dst service".
 func (s Space) String() string {
 	return s.Src.String() + " -> " + s.Dst.String() + " " + s.Service.String()
+}
+
+// appendSubtract appends s minus o to dst, so that subtracting from many
+// spaces fills one slice.
+func (s Space) appendSubtract(dst []Space, o Space) []Space {
+	if s.IsEmpty() {
+		return dst
+	}
+	if !s.Src.Overlaps(o.Src) || !s.Dst.Overlaps(o.Dst) || !s.Service.Overlaps(o.Service) {
+		return append(dst, s)
+	}
+	inter := s.Intersect(o)
+	if inter.IsEmpty() {
+		return append(dst, s)
+	}
+	for _, p := range [...]Space{
+		{Src: s.Src.Subtract(o.Src), Dst: s.Dst, Service: s.Service},
+		{Src: inter.Src, Dst: s.Dst.Subtract(o.Dst), Service: s.Service},
+		{Src: inter.Src, Dst: inter.Dst, Service: s.Service.Subtract(o.Service)},
+	} {
+		if !p.IsEmpty() {
+			dst = append(dst, p)
+		}
+	}
+	return dst
 }

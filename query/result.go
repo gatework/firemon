@@ -157,13 +157,14 @@ type Path struct {
 
 // Region returns the policy-space region with the given outcome.
 func (p *Path) Region(o Outcome) traffic.Region {
-	var out traffic.Region
+	var spaces []traffic.Space
 	for _, d := range p.Decisions {
 		if d.Outcome == o {
-			out = out.Union(d.Space)
+			spaces = append(spaces, d.Space.Spaces()...)
 		}
 	}
-	return out
+	// Decisions are pieces of one partition of the path: disjoint.
+	return traffic.DisjointRegion(spaces...)
 }
 
 // Result is the evaluation of one request.

@@ -1,6 +1,7 @@
 package hillstone
 
 import (
+	"cmp"
 	"slices"
 	"strings"
 
@@ -233,15 +234,6 @@ func anyZones(zones []string) []string {
 	return zones
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
 // incomplete returns which required part a rule lacks. StoneOS only
 // enforces a rule that has an action, a source, a destination and a
 // service or application; the running configuration still lists rules
@@ -322,7 +314,7 @@ func (s *state) becomeGroup(r firemon.SecurityRule, wasRule bool) {
 	if wasRule {
 		s.dropRule(r.ID)
 	}
-	name := firstNonEmpty(r.Name, "rule group "+r.ID)
+	name := cmp.Or(r.Name, "rule group "+r.ID)
 	s.ruleGroup[r.ID] = name
 	s.cfg.RuleGroups = append(s.cfg.RuleGroups, firemon.RuleGroup{ID: r.ID, Name: name})
 }
