@@ -61,19 +61,19 @@ var reasonText = map[report.Reason]string{
 }
 
 var noteText = map[intake.Code]string{
-	intake.CodeMasked:            "已清除主机位",
-	intake.CodeMask:              "地址+掩码已转换为网段",
-	intake.CodeShortRange:        "简写范围已展开",
-	intake.CodeWildcard:          "通配地址已转换为网段",
-	intake.CodeDomain:            "按域名策略匹配",
-	intake.CodeDefaultTCP:        "未写协议，按 TCP 处理",
-	intake.CodeInheritedProtocol: "沿用前一项的协议",
-	intake.CodeServiceName:       "按服务名解析",
-	intake.CodeApplication:       "按应用识别匹配",
-	intake.CodeDuplicate:         "重复或已被覆盖，已忽略",
-	intake.CodeInvalid:           "无法识别",
+	intake.CodeMasked:             "已清除主机位",
+	intake.CodeMask:               "地址+掩码已转换为网段",
+	intake.CodeShortRange:         "简写范围已展开",
+	intake.CodeWildcard:           "通配地址已转换为网段",
+	intake.CodeDomain:             "按域名策略匹配",
+	intake.CodeDefaultTCP:         "未写协议，按 TCP 处理",
+	intake.CodeInheritedProtocol:  "沿用前一项的协议",
+	intake.CodeServiceName:        "按服务名解析",
+	intake.CodeApplication:        "按应用识别匹配",
+	intake.CodeDuplicate:          "重复或已被覆盖，已忽略",
+	intake.CodeInvalid:            "无法识别",
 	intake.CodeUnknownApplication: "未知应用：配置和预定义应用表中都没有",
-	intake.CodeUnsupported:       "此处不支持，已忽略",
+	intake.CodeUnsupported:        "此处不支持，已忽略",
 }
 
 var fieldText = map[intake.Field]string{
@@ -121,7 +121,7 @@ var categoryText = map[converge.Category]string{
 	converge.CategoryDisabled:        "已禁用策略",
 	converge.CategoryExpired:         "已过期策略",
 	converge.CategoryRedundant:       "冗余策略（被同动作策略完全覆盖）",
-	converge.CategoryShadowed:        "被遮蔽策略（被相反动作策略完全覆盖）",
+	converge.CategoryShadowed:        "被覆盖策略（被前面相反动作的策略完全覆盖）",
 	converge.CategoryMergeable:       "可合并策略",
 	converge.CategoryBroad:           "过宽放通",
 	converge.CategoryZeroHit:         "零命中策略",
@@ -209,7 +209,7 @@ func planNote(s string) string {
 			return n.re.ReplaceAllString(s, n.repl)
 		}
 	}
-	return s
+	return zhReason(s)
 }
 
 // changeText describes a planned change in Chinese.

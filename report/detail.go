@@ -18,22 +18,22 @@ type RuleDetail struct {
 	Name string `json:"name,omitempty"`
 	// Position is the one-based place in the rule list: rules match in
 	// order, the first that matches decides.
-	Position     int             `json:"position"`
-	Action       firemon.Action  `json:"action"`
-	From         []string        `json:"from,omitempty"`
-	To           []string        `json:"to,omitempty"`
-	Source       []Object        `json:"source,omitempty"`
-	Destination  []Object        `json:"destination,omitempty"`
-	NegateSource bool            `json:"negate_source,omitempty"`
-	NegateDest   bool            `json:"negate_destination,omitempty"`
-	Services     []Object        `json:"services,omitempty"`
-	Applications []string        `json:"applications,omitempty"`
-	Schedule     *Object         `json:"schedule,omitempty"`
+	Position     int            `json:"position"`
+	Action       firemon.Action `json:"action"`
+	From         []string       `json:"from,omitempty"`
+	To           []string       `json:"to,omitempty"`
+	Source       []Object       `json:"source,omitempty"`
+	Destination  []Object       `json:"destination,omitempty"`
+	NegateSource bool           `json:"negate_source,omitempty"`
+	NegateDest   bool           `json:"negate_destination,omitempty"`
+	Services     []Object       `json:"services,omitempty"`
+	Applications []string       `json:"applications,omitempty"`
+	Schedule     *Object        `json:"schedule,omitempty"`
 	// Window is the rule's own validity period, when it has one.
-	Window string `json:"window,omitempty"`
-	Disabled     bool            `json:"disabled,omitempty"`
-	Log          firemon.Logging `json:"logging,omitzero"`
-	Description  string          `json:"description,omitempty"`
+	Window      string          `json:"window,omitempty"`
+	Disabled    bool            `json:"disabled,omitempty"`
+	Log         firemon.Logging `json:"logging,omitzero"`
+	Description string          `json:"description,omitempty"`
 }
 
 // Object is a named object or an inline value. Values are its own

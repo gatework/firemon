@@ -382,7 +382,7 @@ func printNATOutcome(p *printer, n *design.NATOutcome) {
 		line += "（复用已有 NAT 地址）"
 	}
 	if n.Reason != "" {
-		line += "：" + n.Reason
+		line += "：" + zhReason(n.Reason)
 	}
 	p.f("%s\n", line)
 }

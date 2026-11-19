@@ -163,7 +163,7 @@ func printMigration(p *printer, from, to firemon.Vendor, res migrate.Result) {
 				p.f("\n■ %s\n", text(fidelityText, fid, fid.String()))
 				first = false
 			}
-			p.f("  %s %s → %s：%s\n", text(itemKindText, it.Kind, it.Kind.String()), it.Source, orDash(strings.Join(it.Target, ",")), it.Reason)
+			p.f("  %s %s → %s：%s\n", text(itemKindText, it.Kind, it.Kind.String()), it.Source, orDash(strings.Join(it.Target, ",")), orDash(zhReason(it.Reason)))
 		}
 	}
 }

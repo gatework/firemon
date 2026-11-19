@@ -28,7 +28,7 @@ func newAuditCmd(o *options) *cobra.Command {
 				if subject == "" {
 					subject = f.Object
 				}
-				detail := f.Detail
+				detail := zhReason(f.Detail)
 				if len(f.By) > 0 {
 					detail = "被策略 " + strings.Join(f.By, ",") + " 覆盖"
 				}

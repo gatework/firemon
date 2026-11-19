@@ -9,8 +9,8 @@ import (
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/design"
-	"github.com/gatework/firemon/internal/bootstrap"
 	"github.com/gatework/firemon/intake"
+	"github.com/gatework/firemon/internal/bootstrap"
 	"github.com/gatework/firemon/inventory"
 	"github.com/gatework/firemon/query"
 	"github.com/gatework/firemon/report"
