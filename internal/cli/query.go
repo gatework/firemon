@@ -13,7 +13,7 @@ func newQueryCmd(o *options) *cobra.Command {
 	var t trafficFlags
 	cmd := &cobra.Command{
 		Use:   "query",
-		Short: "Show how the firewall treats traffic: paths, NAT, deciding rules and verdict",
+		Short: "单台防火墙的流量判定：路径、NAT、命中策略与结论",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			loaded, platform, err := o.load(cmd.Context())
@@ -58,27 +58,24 @@ func printQuery(cmd *cobra.Command, asJSON bool, res *query.Result) error {
 		}{res.Verdict, unrouted(res.Unrouted), views})
 	}
 	p := &printer{w: cmd.OutOrStdout()}
-	p.f("verdict: %s\n", res.Verdict)
+	p.f("结论：%s\n", text(verdictText, res.Verdict, res.Verdict.String()))
 	if !res.Unrouted.IsEmpty() {
-		p.f("unrouted: %s\n", res.Unrouted)
+		p.f("无路由的目的：%s\n", res.Unrouted)
 	}
 	for _, v := range views {
-		p.f("\n%s -> %s  (%s -> %s)  %s\n", v.From, v.To, v.Ingress, v.Egress, v.Verdict)
-		if v.DestinationNAT != "" {
-			p.f("  %s\n", v.DestinationNAT)
-		}
-		for _, s := range v.SourceNAT {
-			p.f("  %s\n", s)
+		p.f("\n路径 %s → %s（%s → %s）：%s\n", v.From, v.To, orDash(v.Ingress), orDash(v.Egress), text(verdictText, v.Verdict, v.Verdict.String()))
+		for _, n := range natLines(v.path) {
+			p.f("  %s\n", n)
 		}
 		rows := make([][]string, 0, len(v.Decisions))
 		for _, d := range v.Decisions {
 			possible := ""
 			if len(d.Possible) > 0 {
-				possible = "maybe " + strconv.Itoa(len(d.Possible)) + " undecidable rule(s) first"
+				possible = "前面可能有 " + strconv.Itoa(len(d.Possible)) + " 条无法离线判定的策略先命中"
 			}
-			rows = append(rows, []string{"  " + d.Rule, d.Outcome.String(), d.Space, possible})
+			rows = append(rows, []string{"  " + defaultLabel(d.Rule), text(outcomeText, d.Outcome, d.Outcome.String()), d.Space, possible})
 		}
-		p.table("  RULE\tOUTCOME\tTRAFFIC\tNOTE", rows)
+		p.table("  策略\t结果\t流量\t备注", rows)
 	}
 	return p.err
 }
@@ -95,7 +92,7 @@ func newUsageCmd(o *options) *cobra.Command {
 	var withAny bool
 	cmd := &cobra.Command{
 		Use:   "usage",
-		Short: "List the address objects and rules that reference an address",
+		Short: "列出引用某个地址的地址对象和策略",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := traffic.ParseAddressSet(addr)
@@ -132,18 +129,18 @@ func newUsageCmd(o *options) *cobra.Command {
 			for _, ob := range objects {
 				orows = append(orows, []string{ob.Name, ob.Relation})
 			}
-			p.table("OBJECT\tRELATION", orows)
+			p.table("对象\t关系", orows)
 			rrows := make([][]string, 0, len(rules))
 			for _, r := range rules {
 				rrows = append(rrows, []string{r.Rule, r.Source, r.Destination})
 			}
 			p.f("\n")
-			p.table("RULE\tSOURCE\tDESTINATION", rrows)
+			p.table("策略\t源\t目的", rrows)
 			return p.err
 		},
 	}
-	cmd.Flags().StringVar(&addr, "addr", "", "address, prefix or range to look up")
-	cmd.Flags().BoolVar(&withAny, "include-any", false, "also list rules that match any address on a side")
+	cmd.Flags().StringVar(&addr, "addr", "", "要查找的地址、网段或范围")
+	cmd.Flags().BoolVar(&withAny, "include-any", false, "同时列出源或目的为任意地址的策略")
 	return cmd
 }
 

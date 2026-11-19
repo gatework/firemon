@@ -2,6 +2,7 @@ package query
 
 import (
 	"net/netip"
+	"slices"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/traffic"
@@ -147,10 +148,37 @@ func (e *Engine) ruleView(r *firemon.Rule, p *Path) view {
 			}
 		}
 	}
+	if p.Application == "" {
+		if ports, ok := e.appPorts[r]; ok {
+			v = appPortsView(v, r, ports, p)
+			if v.skip {
+				return v
+			}
+		}
+	}
 	if p.Domain == "" {
 		return v
 	}
 	return domainView(v, r.DstDomains(), r.DecidableFor(true, p.Application != ""), p.Domain, p.DomainResolved, p.Policy.Dst)
+}
+
+// appPortsView narrows a rule that matches any service but only some
+// applications to those applications' standard ports, for a target that
+// names no application: traffic on other ports is taken not to be the
+// application. Within the ports the rule stays a possible match, since a
+// port alone does not identify an application. The path records the
+// rule when the narrowing changed what it might match.
+func appPortsView(v view, r *firemon.Rule, ports traffic.ServiceSet, p *Path) view {
+	if v.bound.Overlaps(p.Policy) && !p.Policy.Service.Intersect(v.bound.Service).Subtract(ports).IsEmpty() &&
+		!slices.ContainsFunc(p.AppPorts, func(a AppPorts) bool { return a.Rule == r }) {
+		p.AppPorts = append(p.AppPorts, AppPorts{Rule: r, Ports: ports})
+	}
+	v.bound.Service = v.bound.Service.Intersect(ports)
+	v.match.Service = v.match.Service.Intersect(ports)
+	if v.bound.IsEmpty() {
+		return view{skip: true}
+	}
+	return v
 }
 
 // domainView adapts the view of a rule or policy route to a domain target:

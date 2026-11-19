@@ -157,6 +157,19 @@ func (ev *evaluator) record(r *firemon.Rule, final Outcome, possible []*firemon.
 	ev.decisions = append(ev.decisions, Decision{Rule: r, Outcome: o, Final: final, Space: traffic.NewRegion(s), Possible: slices.Clone(possible)})
 }
 
+// Deciders returns the possible rules that would change the outcome if
+// they matched: permits when the final outcome is not a permit, denies
+// when it is. The others agree with the decision and cannot change it.
+func (d Decision) Deciders() []*firemon.Rule {
+	var out []*firemon.Rule
+	for _, r := range d.Possible {
+		if !agree(d.Final, []*firemon.Rule{r}) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // agree reports whether every possible rule would give the same result as
 // the final outcome, so the uncertainty does not change the verdict.
 func agree(final Outcome, possible []*firemon.Rule) bool {

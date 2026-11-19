@@ -19,15 +19,14 @@ func newDeployCmd(o *options) *cobra.Command {
 	var journalRoot string
 	cmd := &cobra.Command{
 		Use:   "deploy",
-		Short: "Design a change on the live device and, with --apply, push, verify and save it",
-		Long: "deploy reads the running configuration, designs and renders the change, and prints it.\n" +
-			"Nothing is sent unless --apply is given and confirmed. With --apply the device must still\n" +
-			"match the configuration the plan was designed on; every write is journaled, nothing is\n" +
-			"retried, and the configuration is read back and checked before it is saved or committed.",
+		Short: "在设备上设计变更；加 --apply 时下发、核对并保存",
+		Long: "读取设备运行配置，设计并渲染变更，然后打印出来。\n" +
+			"不加 --apply 并确认时不会向设备发送任何命令。加 --apply 时，设备配置必须仍与设计时一致；\n" +
+			"每次写入都记日志，不自动重试；保存或提交前会回读配置并核对。",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if o.file != "" || o.snapshot != "" {
-				return &usageError{errors.New("deploy reads the device; do not set --config or --snapshot")}
+				return &usageError{errors.New("deploy 直接读取设备，不要指定 --config 或 --snapshot")}
 			}
 			loaded, platform, err := o.load(cmd.Context())
 			if err != nil {
@@ -48,19 +47,19 @@ func newDeployCmd(o *options) *cobra.Command {
 				return nil
 			}
 			if !prop.Plan.Verified {
-				return errors.New("the plan is not verified; refusing to deploy")
+				return errors.New("方案未通过验证，拒绝下发")
 			}
 			if !yes && !confirm(cmd) {
-				return errors.New("not confirmed; nothing was sent")
+				return errors.New("未确认，没有发送任何命令")
 			}
 			return o.push(cmd, platform, prop, journalRoot)
 		},
 	}
 	in.register(cmd)
 	f := cmd.Flags()
-	f.BoolVar(&apply, "apply", false, "send the change to the device (default: dry run)")
-	f.BoolVar(&yes, "yes", false, "do not ask for confirmation with --apply")
-	f.StringVar(&journalRoot, "journal", defaultJournalRoot(), "directory for deployment journals")
+	f.BoolVar(&apply, "apply", false, "把变更下发到设备（默认只演练）")
+	f.BoolVar(&yes, "yes", false, "加 --apply 时不再询问确认")
+	f.StringVar(&journalRoot, "journal", defaultJournalRoot(), "下发日志目录")
 	return cmd
 }
 
@@ -75,9 +74,9 @@ func (o *options) push(cmd *cobra.Command, platform bootstrap.Platform, prop wor
 	}
 	receipt, err := workflow.Apply(cmd.Context(), client, platform, prop, journal, o.deps.Now)
 	p := &printer{w: cmd.OutOrStdout()}
-	p.f("\ndeployment %s, journal %s\n", receipt.State.Status, dir)
+	p.f("\n下发结果：%s，日志 %s\n", receipt.State.Status, dir)
 	if err != nil {
-		p.f("rollback commands are listed above; nothing will be retried automatically\n")
+		p.f("回退命令见上方；不会自动重试\n")
 		return errors.Join(err, p.err)
 	}
 	return p.err
@@ -85,7 +84,7 @@ func (o *options) push(cmd *cobra.Command, platform bootstrap.Platform, prop wor
 
 func confirm(cmd *cobra.Command) bool {
 	p := &printer{w: cmd.OutOrStdout()}
-	p.f("\nsend these commands to the device? type yes to continue: ")
+	p.f("\n确认把以上命令下发到设备？输入 yes 继续：")
 	line, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
 	return (err == nil || line != "") && strings.TrimSpace(line) == "yes"
 }

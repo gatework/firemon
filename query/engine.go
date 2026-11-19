@@ -20,6 +20,9 @@ type Engine struct {
 	schedules ScheduleMode
 	bridges   bool // some zone forwards at layer 2
 	pre       []natEntry
+	// appPorts are the standard ports of the applications of the rules that
+	// match any service with applications all known to the port book.
+	appPorts map[*firemon.Rule]traffic.ServiceSet
 }
 
 // New returns an engine for fw.
@@ -34,7 +37,36 @@ func New(fw *firemon.Firewall, opts Options) *Engine {
 		schedules: opts.Schedules, bridges: fw.Bridges(),
 	}
 	e.pre = e.preEntries()
+	e.appPorts = applicationPorts(fw, e.rules)
 	return e
+}
+
+// applicationPorts collects, for every rule that matches any service but
+// only some applications, the union of those applications' standard ports;
+// a rule naming an application the book does not know is left out and
+// stays a possible match on every port.
+func applicationPorts(fw *firemon.Firewall, rules []*firemon.Rule) map[*firemon.Rule]traffic.ServiceSet {
+	out := map[*firemon.Rule]traffic.ServiceSet{}
+	for _, r := range rules {
+		apps := r.Applications()
+		if len(apps) == 0 || r.ApplicationDefault() || !r.Bound().Service.IsAny() {
+			continue
+		}
+		var ports traffic.ServiceSet
+		known := true
+		for _, a := range apps {
+			p, ok := fw.ApplicationPorts(a)
+			if !ok {
+				known = false
+				break
+			}
+			ports = ports.Union(p)
+		}
+		if known {
+			out[r] = ports
+		}
+	}
+	return out
 }
 
 // positiveOr returns v, or def when v is not positive.

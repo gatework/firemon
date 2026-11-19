@@ -21,13 +21,13 @@ type trafficFlags struct {
 
 func (t *trafficFlags) register(cmd *cobra.Command) {
 	f := cmd.Flags()
-	f.StringVar(&t.src, "src", "", "source addresses: 10.0.0.1, 10.0.0.0/24, 10.0.0.1-10.0.0.9, any (comma separated)")
-	f.StringVar(&t.dst, "dst", "", "destination addresses")
-	f.StringVar(&t.service, "service", "", "services: tcp/443, udp/53, tcp/8000-8010, icmp, any (comma separated)")
-	f.StringVar(&t.fromZone, "from-zone", "", "source zone (default: from routing)")
-	f.StringVar(&t.toZone, "to-zone", "", "destination zone (default: from routing)")
-	f.StringVar(&t.vr, "virtual-router", "", "routing context (default: the vendor default)")
-	f.StringVar(&t.at, "at", "", "evaluate schedules at this RFC 3339 instant (default: now)")
+	f.StringVar(&t.src, "src", "", "源地址：10.0.0.1、10.0.0.0/24、10.0.0.1-10.0.0.9、any，逗号分隔")
+	f.StringVar(&t.dst, "dst", "", "目的地址，写法同 --src")
+	f.StringVar(&t.service, "service", "", "服务：tcp/443、udp/53、tcp/8000-8010、icmp、any，逗号分隔")
+	f.StringVar(&t.fromZone, "from-zone", "", "源区域（默认按路由确定）")
+	f.StringVar(&t.toZone, "to-zone", "", "目的区域（默认按路由确定）")
+	f.StringVar(&t.vr, "virtual-router", "", "虚拟路由器（默认使用厂商默认值）")
+	f.StringVar(&t.at, "at", "", "按该时刻（RFC 3339）判断时间计划（默认当前时间）")
 }
 
 // parsed is the validated traffic.
@@ -44,7 +44,7 @@ type parsed struct {
 func (t *trafficFlags) parse(book firemon.ServiceBook) (parsed, error) {
 	var p parsed
 	if t.src == "" || t.dst == "" || t.service == "" {
-		return p, &usageError{errors.New("--src, --dst and --service are required")}
+		return p, &usageError{errors.New("需要 --src 源地址、--dst 目的地址和 --service 服务")}
 	}
 	in, err := intake.Parse(t.src, t.dst, t.service, intake.Options{Services: book})
 	if err != nil {

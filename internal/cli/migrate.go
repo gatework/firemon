@@ -2,7 +2,6 @@ package cli
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,11 +23,9 @@ func newMigrateCmd(o *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate",
 		Short: "策略迁移：把一个厂商的配置翻译成另一个厂商的完整配置与翻译报告",
-		Long: "migrate translates the configuration (--config, --snapshot or the device) into commands for the\n" +
-			"vendor --to: network, objects, schedules, rules in order and NAT. --mapping names zones, interfaces,\n" +
-			"virtual routers, predefined services and applications on the target; --init-mapping writes a skeleton\n" +
-			"to fill in. Every item is reported as exact, approximate (with the difference) or untranslatable;\n" +
-			"untranslatable rules are carried over disabled. Nothing is sent to any device.",
+		Long: "把配置（--config、--snapshot 或设备）翻译成目标厂商 --to 的命令：网络、对象、时间计划、按顺序的策略和 NAT。\n" +
+			"--mapping 指定目标上的区域、接口、虚拟路由器、预定义服务和应用名称；--init-mapping 生成待填写的骨架。\n" +
+			"每一项都标为精确、近似（附差异）或无法翻译；无法翻译的策略以禁用状态带过去。不会向任何设备发送命令。",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return o.migrate(cmd, f)
@@ -43,9 +40,9 @@ func newMigrateCmd(o *options) *cobra.Command {
 }
 
 func (o *options) migrate(cmd *cobra.Command, f migrateFlags) error {
-	to, err := firemon.ParseVendor(f.to)
+	to, err := vendor("--to", f.to)
 	if err != nil {
-		return &usageError{fmt.Errorf("--to: %w", err)}
+		return err
 	}
 	loaded, src, err := o.load(cmd.Context())
 	if err != nil {

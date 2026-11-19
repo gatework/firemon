@@ -16,7 +16,12 @@ import (
 //go:embed predefined_services.json
 var predefinedServices []byte
 
-// predefinedApps maps application names to their default ports.
+// predefinedApps maps application names to their standard ports (IANA and
+// StoneOS defaults). A query that names no application takes traffic
+// outside an application's ports not to be that application, so the book
+// errs wide: a port listed too many only keeps a rule a possible match,
+// while a port missing would wrongly rule it out. Applications without
+// well-known ports are absent and stay possible on every port.
 //
 //go:embed predefined_apps.json
 var predefinedApps []byte

@@ -50,16 +50,16 @@ func TestRun(t *testing.T) {
 		code int
 		want string
 	}{
-		{"parse", []string{"parse", "--vendor", "hillstone", "--config", hillstoneConf}, cli.ExitOK, "rules              5"},
+		{"parse", []string{"parse", "--vendor", "hillstone", "--config", hillstoneConf}, cli.ExitOK, "策略                5"},
 		{"query allowed", []string{"query", "--vendor", "hillstone", "--config", hillstoneConf, "--timezone", "UTC",
-			"--src", "198.51.100.9", "--dst", "172.16.0.10", "--service", "tcp/443"}, cli.ExitOK, "verdict: allowed"},
+			"--src", "198.51.100.9", "--dst", "172.16.0.10", "--service", "tcp/443"}, cli.ExitOK, "结论：放通"},
 		{"query denied", []string{"query", "--vendor", "paloalto", "--config", paloaltoConf,
 			"--src", "192.0.2.7", "--dst", "198.51.100.80", "--service", "tcp/443"}, cli.ExitNotAllowed, "block-bad"},
 		{"usage", []string{"usage", "--vendor", "paloalto", "--config", paloaltoConf, "--addr", "172.16.0.10"}, cli.ExitOK, "web-01"},
 		{"design", []string{"design", "--vendor", "paloalto", "--config", paloaltoConf,
 			"--src", "10.0.7.0/24", "--dst", "172.16.0.40", "--service", "tcp/8443", "--from-zone", "trust", "--to-zone", "dmz", "--name", "req"},
 			cli.ExitOK, "set rulebase security rules req action allow"},
-		{"audit", []string{"audit", "--vendor", "hillstone", "--config", hillstoneConf}, cli.ExitOK, "unused-address"},
+		{"audit", []string{"audit", "--vendor", "hillstone", "--config", hillstoneConf}, cli.ExitOK, "未使用的地址对象"},
 		{"unknown vendor", []string{"parse", "--vendor", "acme", "--config", hillstoneConf}, cli.ExitUsage, ""},
 		{"deploy rejects files", []string{"deploy", "--vendor", "hillstone", "--config", hillstoneConf,
 			"--src", "10.0.0.1", "--dst", "10.0.0.2", "--service", "tcp/22"}, cli.ExitUsage, ""},
@@ -99,7 +99,7 @@ func TestRun_CollectThenQuerySnapshot(t *testing.T) {
 	t.Parallel()
 	store := t.TempDir() + "/snapshots"
 	code, out, errOut := run(t, "", "collect", "--vendor", "paloalto", "--config", paloaltoConf, "--store", store, "--name", "pa1")
-	if code != cli.ExitOK || !strings.Contains(out, "stored pa1") {
+	if code != cli.ExitOK || !strings.Contains(out, "已保存快照 pa1") {
 		t.Fatalf("collect: %d\n%s%s", code, out, errOut)
 	}
 	code, out, errOut = run(t, "", "collect", "--list", "--store", store)
@@ -108,7 +108,7 @@ func TestRun_CollectThenQuerySnapshot(t *testing.T) {
 	}
 	code, out, errOut = run(t, "", "query", "--snapshot", "pa1", "--store", store,
 		"--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "udp/53")
-	if code != cli.ExitNotAllowed || !strings.Contains(out, "trust -> untrust") {
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "路径 trust → untrust") {
 		t.Fatalf("query snapshot: %d\n%s%s", code, out, errOut)
 	}
 	code, _, _ = run(t, "", "deploy", "--snapshot", "pa1", "--store", store, "--src", "10.0.0.1", "--dst", "10.0.0.2", "--service", "tcp/22")
@@ -129,7 +129,7 @@ func TestRun_Locate(t *testing.T) {
 		}
 	}
 	code, out, errOut := run(t, "", "locate", "--store", store, "--design", "--src", "10.0.0.5", "--dst", "172.16.0.40", "--service", "tcp/8443", "--name", "req")
-	if code != cli.ExitNotAllowed || !strings.Contains(out, "plan: change, verified true") {
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "方案：需要变更，已验证：是") {
 		t.Fatalf("locate: %d\n%s%s", code, out, errOut)
 	}
 }

@@ -10,7 +10,7 @@ func newParseCmd(o *options) *cobra.Command {
 	var full bool
 	cmd := &cobra.Command{
 		Use:   "parse",
-		Short: "Parse and compile a configuration; report objects, diagnostics and undecidable rules",
+		Short: "解析并编译配置，报告对象统计、无法解析的行和无法离线判定的策略",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			loaded, _, err := o.load(cmd.Context())
@@ -25,18 +25,18 @@ func newParseCmd(o *options) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), s)
 			}
 			p := &printer{w: cmd.OutOrStdout()}
-			p.f("vendor %s  hostname %s  version %s  fingerprint %s\n", s.Vendor, s.Hostname, s.Version, s.Fingerprint[:16])
-			p.table("OBJECT\tCOUNT", s.rows())
+			p.f("厂商 %s  主机名 %s  版本 %s  指纹 %s\n", s.Vendor, s.Hostname, s.Version, s.Fingerprint[:16])
+			p.table("对象\t数量", s.rows())
 			for _, d := range s.Diagnostics {
-				p.f("diagnostic line %d: %s: %s\n", d.Line, d.Reason, d.Text)
+				p.f("第 %d 行未能解析（%s）：%s\n", d.Line, d.Reason, d.Text)
 			}
 			for _, i := range s.Issues {
-				p.f("issue %s\n", i)
+				p.f("无法离线判定：%s\n", i)
 			}
 			return p.err
 		},
 	}
-	cmd.Flags().BoolVar(&full, "dump", false, "print the whole parsed configuration as JSON")
+	cmd.Flags().BoolVar(&full, "dump", false, "以 JSON 输出完整的解析结果")
 	return cmd
 }
 
@@ -76,7 +76,7 @@ func summarize(cfg *firemon.Config, fw *firemon.Firewall) summary {
 func (s summary) rows() [][]string {
 	rows := make([][]string, 0, len(countOrder))
 	for _, k := range countOrder {
-		rows = append(rows, []string{k, itoa(s.Counts[k])})
+		rows = append(rows, []string{text(countText, k, k), itoa(s.Counts[k])})
 	}
 	return rows
 }

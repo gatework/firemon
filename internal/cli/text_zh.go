@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"cmp"
 	"regexp"
+	"strings"
 
 	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/audit"
 	"github.com/gatework/firemon/converge"
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/intake"
@@ -27,11 +30,17 @@ var statusText = map[report.Status]string{
 	report.StatusIndeterminate: "需确认",
 }
 
+var actionText = map[firemon.Action]string{
+	firemon.ActionPermit: "放通",
+	firemon.ActionDeny:   "拒绝",
+	firemon.ActionUnset:  "动作未知",
+}
+
 var verdictText = map[query.Verdict]string{
 	query.VerdictAllowed:       "放通",
 	query.VerdictDenied:        "拒绝",
 	query.VerdictPartial:       "部分放通",
-	query.VerdictIndeterminate: "无法判定",
+	query.VerdictIndeterminate: "需确认",
 }
 
 var ownershipText = map[inventory.Ownership]string{
@@ -54,7 +63,6 @@ var reasonText = map[report.Reason]string{
 	report.ReasonWider:             "其余维度宽于需求，扩展会放通需求外流量",
 	report.ReasonZoneAny:           "区域为 any，修改会影响其他区域",
 	report.ReasonScheduled:         "带时间表",
-	report.ReasonApplications:      "按应用匹配",
 	report.ReasonUndecidable:       "含无法离线判定的条件",
 	report.ReasonAfterDeny:         "位于拒绝策略之后，修改无效",
 }
@@ -206,4 +214,125 @@ func planNote(s string) string {
 		}
 	}
 	return s
+}
+
+// changeText describes a planned change in Chinese.
+func changeText(c design.Change) string {
+	where := func(before string) string {
+		if before == "" {
+			return "放在末尾"
+		}
+		return "放在策略 " + before + " 之前"
+	}
+	entries := func(es []firemon.AddressEntry) string {
+		parts := make([]string, len(es))
+		for i, e := range es {
+			parts[i] = e.String()
+		}
+		return strings.Join(parts, "、")
+	}
+	switch x := c.(type) {
+	case design.AddAddress:
+		return "新增地址对象 " + x.Address.Name + " = " + entries(x.Address.Entries)
+	case design.AddAddressGroup:
+		return "新增地址组 " + x.Group.Name + "，成员 " + strings.Join(x.Group.Members, "、")
+	case design.AddService:
+		parts := make([]string, len(x.Service.Entries))
+		for i, e := range x.Service.Entries {
+			parts[i] = e.String()
+		}
+		return "新增服务对象 " + x.Service.Name + " = " + strings.Join(parts, "、")
+	case design.AddServiceGroup:
+		return "新增服务组 " + x.Group.Name + "，成员 " + strings.Join(x.Group.Members, "、")
+	case design.AddRule:
+		return "新增策略 " + cmp.Or(x.Rule.Name, x.Rule.ID) + "（ID " + x.Rule.ID + "，" + where(x.Before) + "）"
+	case design.ExtendRule:
+		return "策略 " + x.RuleID + " 的" + fieldText2[x.Field] + "增加 " + strings.Join(x.Names, "、")
+	case design.ReduceRule:
+		return "策略 " + x.RuleID + " 的" + fieldText2[x.Field] + "去掉 " + strings.Join(x.Names, "、")
+	default:
+		return otherChangeText(c)
+	}
+}
+
+// otherChangeText describes cleanup, NAT and network changes.
+func otherChangeText(c design.Change) string {
+	where := func(before string) string {
+		if before == "" {
+			return "放在末尾"
+		}
+		return "放在策略 " + before + " 之前"
+	}
+	switch x := c.(type) {
+	case design.DeleteRule:
+		return "删除策略 " + x.Rule.ID
+	case design.DeleteAddress:
+		return "删除地址对象 " + x.Address.Name
+	case design.DeleteAddressGroup:
+		return "删除地址组 " + x.Group.Name
+	case design.DeleteService:
+		return "删除服务对象 " + x.Service.Name
+	case design.DeleteServiceGroup:
+		return "删除服务组 " + x.Group.Name
+	case design.DeleteSchedule:
+		return "删除时间计划 " + x.Schedule.Name
+	case design.AddSchedule:
+		return "新增时间计划 " + x.Schedule.Name
+	case design.AddNAT:
+		return "新增 NAT 规则 " + x.Rule.ID + "（" + where(x.Before) + "，NAT 按顺序首条命中）"
+	case design.AddStaticNAT:
+		return "新增静态 NAT " + x.Mapping.Real.String() + " ↔ " + x.Mapping.Mapped.String()
+	case design.AddZone:
+		return "新增安全区域 " + x.Zone.Name
+	case design.AddInterface:
+		return "配置接口 " + x.Interface.Name
+	case design.AddRoute:
+		return "新增静态路由 " + x.Route.Destination.String()
+	case design.AddVirtualRouter:
+		return "新增虚拟路由器 " + x.VirtualRouter.Name
+	default:
+		return c.String()
+	}
+}
+
+var auditKindText = map[audit.Kind]string{
+	audit.KindRedundant:      "冗余策略",
+	audit.KindShadowed:       "被覆盖的策略",
+	audit.KindDisabled:       "已禁用的策略",
+	audit.KindExpired:        "已过期的策略",
+	audit.KindUndecidable:    "无法离线判定的策略",
+	audit.KindPermitAny:      "全放通策略",
+	audit.KindUnusedAddress:  "未使用的地址对象",
+	audit.KindUnusedService:  "未使用的服务对象",
+	audit.KindUnusedSchedule: "未使用的时间计划",
+	audit.KindIncomplete:     "不完整的策略",
+	audit.KindNeverMatches:   "永不命中的策略",
+	audit.KindEmptyObject:    "空对象",
+}
+
+var planStatusText = map[design.Status]string{
+	design.StatusNoChange:      "无需变更",
+	design.StatusChange:        "需要变更",
+	design.StatusConflict:      "有冲突",
+	design.StatusIndeterminate: "无法判定",
+}
+
+var outcomeText = map[query.Outcome]string{
+	query.OutcomePermit:  "放通",
+	query.OutcomeDeny:    "拒绝",
+	query.OutcomeDefault: "默认拒绝",
+	query.OutcomeUnknown: "无法判定",
+}
+
+var countText = map[string]string{
+	"zones": "安全区域", "interfaces": "接口", "routes": "路由", "addresses": "地址对象",
+	"address_groups": "地址组", "services": "服务对象", "service_groups": "服务组", "schedules": "时间计划",
+	"rules": "策略", "undecidable_rules": "无法离线判定的策略", "static_nats": "静态 NAT", "dynamic_nats": "动态 NAT",
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "是"
+	}
+	return "否"
 }
