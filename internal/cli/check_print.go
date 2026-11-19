@@ -40,12 +40,12 @@ func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 		p.f("源与目的同在 %s 的 %s 区域一侧，不经过该防火墙：%s\n", in.Cluster, in.Zone, in.Traffic)
 	}
 	for _, name := range rep.ZonesNeeded {
-		p.f("提示：%s 有透明模式（二层）接口，经二层转发的流量无法按路由定位，请用 --from-zone/--to-zone 指定区域\n", name)
+		p.f("提示：%s 是透明模式（二层），另一端不在任何绑定的网段里，无法判断它在哪个安全区域：请在库存的 zones 中为该区域绑定网段（例如 l2-untrust: 0.0.0.0/0），或用 --from-zone/--to-zone 指定\n", name)
 	}
 	for _, a := range rep.Ambiguous {
 		p.f("归属不唯一（多个防火墙同等声明，均已检查）：%s\n", a)
 	}
-	if len(rep.Firewalls) == 0 && rep.Excluded.Src == "" && rep.Excluded.Dst == "" && len(rep.Inside) == 0 {
+	if len(rep.Firewalls) == 0 && rep.Excluded.Src == "" && rep.Excluded.Dst == "" && len(rep.Inside) == 0 && len(rep.ZonesNeeded) == 0 {
 		p.f("\n该流量不经过防火墙的策略检查：源和目的在防火墙同一侧（从同一接口进出），或没有到达目的的路由\n")
 	}
 	for _, f := range rep.Firewalls {
@@ -56,6 +56,9 @@ func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 
 func printFirewall(p *printer, f report.Firewall, v reportView) {
 	p.f("\n■ %s：%s\n", f.Cluster, firewallVerdict(f))
+	if line := basisLine(f.Basis); line != "" {
+		p.f("  命中依据：%s\n", line)
+	}
 	if v.verbose {
 		p.f("  成员：%s（%s）\n", strings.Join(f.Members, "、"), text(ownershipText, f.Ownership, f.Ownership.String()))
 		for _, path := range f.Paths {
@@ -426,4 +429,33 @@ func printObject(p *printer, o report.Object, indent int) {
 			printObject(p, m, indent+2)
 		}
 	}
+}
+
+// basisLine says why the request reaches the firewall: which end falls
+// in which protected zone and networks.
+func basisLine(bs []report.Basis) string {
+	parts := make([]string, 0, len(bs))
+	for _, b := range bs {
+		if !slices.ContainsFunc(b.Networks, func(n string) bool { return n != "0.0.0.0/0" && n != "::/0" }) {
+			continue // a firewall named on the command line answers for every address
+		}
+		end := "目的"
+		if b.Source {
+			end = "源"
+		}
+		where := ""
+		switch b.Ownership {
+		case inventory.OwnershipDeclared:
+			where = "受保护网段 " + strings.Join(b.Networks, "、")
+			if b.Zone != "" {
+				where = "受保护区域 " + b.Zone + "（" + strings.Join(b.Networks, "、") + "）"
+			}
+		case inventory.OwnershipDerived:
+			where = "本墙路由覆盖的网段 " + strings.Join(b.Networks, "、")
+		case inventory.OwnershipTransit, inventory.OwnershipZones, inventory.OwnershipUnset:
+			continue
+		}
+		parts = append(parts, end+" "+b.Addresses+" 属于"+where)
+	}
+	return strings.Join(parts, "；")
 }

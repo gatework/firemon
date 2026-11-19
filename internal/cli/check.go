@@ -174,6 +174,9 @@ func checkExit(rep report.Report, designed bool) error {
 	case report.StatusUnset:
 		return errUndecided // no firewall on the way: nothing to change
 	case report.StatusIndeterminate, report.StatusPartialMatch, report.StatusNeedNew, report.StatusBlocked:
+		if len(rep.Firewalls) == 0 {
+			return errUndecided // firewalls the request may cross were not evaluated
+		}
 	}
 	if !designed {
 		if rep.Status == report.StatusIndeterminate {

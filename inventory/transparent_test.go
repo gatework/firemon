@@ -53,9 +53,23 @@ func TestTransparentClusters_ProtectedZonesLocateBothSides(t *testing.T) {
 		}
 		return p
 	}
+	protections := []inventory.Protection{prot("szx9-in-fw01", "10.250.0.0/16", "10.254.0.0/16"), prot("szx8-in-fw01", "10.248.0.0/16")}
+	// Without a binding for the far side a transparent firewall cannot
+	// tell where the other end is, and says so.
+	bare, err := inventory.New(members, inventory.Options{Now: func() time.Time { return now }, Protections: protections})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr, err := bare.Locate(request("10.248.30.5", "10.250.116.25", "tcp/9600")); err != nil || len(tr.Crossings) != 0 || len(tr.ZonesNeeded) != 2 {
+		t.Fatalf("far side unbound: %v %v zones needed %v", names(tr), err, tr.ZonesNeeded)
+	}
+	untrust := func(fw string) inventory.ZoneBinding {
+		return inventory.ZoneBinding{Firewall: fw, Zone: "l2-untrust", Networks: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}}
+	}
 	inv, err := inventory.New(members, inventory.Options{
 		Now:         func() time.Time { return now },
-		Protections: []inventory.Protection{prot("szx9-in-fw01", "10.250.0.0/16", "10.254.0.0/16"), prot("szx8-in-fw01", "10.248.0.0/16")},
+		Protections: protections,
+		Zones:       []inventory.ZoneBinding{untrust("szx9-in-fw01"), untrust("szx8-in-fw01")},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +81,7 @@ func TestTransparentClusters_ProtectedZonesLocateBothSides(t *testing.T) {
 	got := names(tr)
 	want := []string{"szx8-in-fw01(l2-trust>l2-untrust)", "szx9-in-fw01(l2-untrust>l2-trust)"}
 	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] || tr.Verdict.String() != "allowed" {
-		t.Fatalf("each cluster on its active member, the far end through the peer zone: %v %s", got, tr.Verdict)
+		t.Fatalf("each cluster on its active member, the far end through its bound zone: %v %s", got, tr.Verdict)
 	}
 	same, err := inv.Locate(request("10.250.1.1", "10.254.1.1", "tcp/22"))
 	if err != nil {
@@ -89,6 +103,10 @@ func TestInventory_PlanOnlyCrossedParts(t *testing.T) {
 		Protections: []inventory.Protection{
 			{Firewall: "szx9-in-fw01", Zone: "l2-trust", Networks: []netip.Prefix{netip.MustParsePrefix("10.250.0.0/16"), netip.MustParsePrefix("10.254.0.0/16")}},
 			{Firewall: "szx8-in-fw01", Zone: "l2-trust", Networks: []netip.Prefix{netip.MustParsePrefix("10.248.0.0/16")}},
+		},
+		Zones: []inventory.ZoneBinding{
+			{Firewall: "szx9-in-fw01", Zone: "l2-untrust", Networks: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}},
+			{Firewall: "szx8-in-fw01", Zone: "l2-untrust", Networks: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}},
 		},
 	})
 	if err != nil {

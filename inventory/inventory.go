@@ -40,6 +40,19 @@ type Protection struct {
 	Exclude  []netip.Prefix
 }
 
+// ZoneBinding binds networks to a zone of a firewall. Protected bindings
+// are the networks the firewall protects: a request whose source or
+// destination falls in them crosses it. Every binding, protected or not,
+// tells which zone an address is in on that firewall, for example
+// untrust = 0.0.0.0/0.
+type ZoneBinding struct {
+	Firewall  string
+	Zone      string
+	Networks  []netip.Prefix
+	Exclude   []netip.Prefix
+	Protected bool
+}
+
 // Options configures an Inventory. The zero value evaluates at time.Now
 // and derives every ownership from routing.
 type Options struct {
@@ -47,12 +60,16 @@ type Options struct {
 	// Protections are the declared protected networks; members of clusters
 	// without any are owned by routing instead.
 	Protections []Protection
+	// Zones bind networks to zones; the protected ones are protections.
+	Zones []ZoneBinding
 }
 
 // Inventory is an immutable set of firewalls, safe for concurrent use.
 type Inventory struct {
-	members   []member
-	claims    []claim
+	members []member
+	claims  []claim
+	// bindings are each cluster's zone bindings, longest prefix first.
+	bindings  map[string][]binding
 	byAddress map[netip.Addr][]string // interface address -> clusters
 	now       func() time.Time
 }
@@ -93,11 +110,20 @@ func New(members []Member, opts Options) (*Inventory, error) {
 			}
 		}
 	}
-	claims, err := inv.buildClaims(opts.Protections)
+	protections := slices.Clone(opts.Protections)
+	for _, z := range opts.Zones {
+		if z.Protected {
+			protections = append(protections, Protection{Firewall: z.Firewall, Zone: z.Zone, Networks: z.Networks, Exclude: z.Exclude})
+		}
+	}
+	claims, err := inv.buildClaims(protections)
 	if err != nil {
 		return nil, err
 	}
 	inv.claims = claims
+	if inv.bindings, err = inv.buildBindings(protections, opts.Zones); err != nil {
+		return nil, err
+	}
 	return inv, nil
 }
 

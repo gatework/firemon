@@ -1,6 +1,8 @@
 package yamlfile_test
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/gatework/firemon/adapter/yamlfile"
@@ -43,5 +45,35 @@ func TestParse_Rejects(t *testing.T) {
 		if _, err := yamlfile.Parse([]byte(in)); err == nil {
 			t.Errorf("want error for %q", in)
 		}
+	}
+}
+
+func TestParse_ZoneBindings(t *testing.T) {
+	t.Parallel()
+	f, err := yamlfile.Parse([]byte(`firewalls:
+  - name: fw1
+    protected_zone: trust
+    protected: [{networks: [10.1.0.0/16]}]
+    zones:
+      - {zone: dmz, protected: true, networks: [172.16.0.0/24]}
+      - {zone: untrust, networks: [0.0.0.0/0], exclude: [10.0.0.0/8]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs, err := f.ZoneBindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, len(bs))
+	for i, b := range bs {
+		got[i] = fmt.Sprintf("%s %v %v %v", b.Zone, b.Protected, b.Networks, b.Exclude)
+	}
+	want := []string{"trust true [10.1.0.0/16] []", "dmz true [172.16.0.0/24] []", "untrust false [0.0.0.0/0] [10.0.0.0/8]"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("bindings %q", got)
+	}
+	if _, err := yamlfile.Parse([]byte("firewalls:\n  - name: fw1\n    zones: [{networks: [10.0.0.0/8]}]\n")); err == nil {
+		t.Fatal("a binding without a zone is refused")
 	}
 }

@@ -1,11 +1,17 @@
 package cli
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"io"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/adapter/filestore"
 	"github.com/gatework/firemon/adapter/yamlfile"
 	"github.com/gatework/firemon/internal/bootstrap"
@@ -25,7 +31,7 @@ func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[strin
 	if err != nil {
 		return nil, nil, err
 	}
-	fleet, protections, err := o.fleet(cmd, store)
+	fleet, zones, err := o.fleet(cmd, store)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -48,17 +54,58 @@ func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[strin
 			Active: fm.active,
 		})
 	}
-	inv, err := inventory.New(members, inventory.Options{Now: o.deps.Now, Protections: protections})
+	warnInventory(cmd.ErrOrStderr(), fleet, members, zones)
+	inv, err := inventory.New(members, inventory.Options{Now: o.deps.Now, Zones: zones})
 	return inv, platforms, err
 }
 
-func (o *options) fleet(cmd *cobra.Command, store *filestore.Store) ([]fleetMember, []inventory.Protection, error) {
+// warnInventory points out inventory mistakes that make answers wrong
+// without failing: a bound zone the firewall does not have, several active
+// members in a cluster, members of a cluster that bind differently.
+func warnInventory(w io.Writer, fleet []fleetMember, members []inventory.Member, zones []inventory.ZoneBinding) {
+	fws := map[string]*firemon.Firewall{}
+	for _, m := range members {
+		fws[m.Name] = m.Firewall
+	}
+	byMember := map[string][]string{}
+	for _, z := range zones {
+		if fw := fws[z.Firewall]; fw != nil && z.Zone != "" {
+			if _, ok := fw.Zone(z.Zone); !ok {
+				fmt.Fprintf(w, "提示：库存中 %s 绑定的区域 %s 在其快照中不存在，按该区域判定的结论可能不准\n", z.Firewall, z.Zone)
+			}
+		}
+		key := fmt.Sprintf("%s %v %v %v", z.Zone, z.Protected, z.Networks, z.Exclude)
+		byMember[z.Firewall] = append(byMember[z.Firewall], key)
+	}
+	active := map[string][]string{}
+	first := map[string]string{}
+	for _, fm := range fleet {
+		c := cmp.Or(fm.cluster, fm.name)
+		if fm.active {
+			active[c] = append(active[c], fm.name)
+		}
+		keys := slices.Sorted(slices.Values(byMember[fm.name]))
+		sig := strings.Join(keys, ";")
+		if prev, ok := first[c]; !ok {
+			first[c] = fm.name
+		} else if other := strings.Join(slices.Sorted(slices.Values(byMember[prev])), ";"); sig != other {
+			fmt.Fprintf(w, "提示：集群 %s 的成员 %s 与 %s 的区域绑定不一致，按主成员的判定\n", c, fm.name, prev)
+		}
+	}
+	for _, c := range slices.Sorted(maps.Keys(active)) {
+		if len(active[c]) > 1 {
+			fmt.Fprintf(w, "提示：集群 %s 有多个 active 成员（%s），按名称取第一个\n", c, strings.Join(active[c], "、"))
+		}
+	}
+}
+
+func (o *options) fleet(cmd *cobra.Command, store *filestore.Store) ([]fleetMember, []inventory.ZoneBinding, error) {
 	if o.inventoryFile != "" {
 		f, err := yamlfile.Load(o.inventoryFile)
 		if err != nil {
 			return nil, nil, inventoryError(err, o.inventoryFile)
 		}
-		protections, err := f.Protections(cmd.Context())
+		zones, err := f.ZoneBindings()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -66,7 +113,7 @@ func (o *options) fleet(cmd *cobra.Command, store *filestore.Store) ([]fleetMemb
 		for _, fw := range f.Firewalls {
 			out = append(out, fleetMember{name: fw.Name, cluster: fw.Cluster, snapshot: fw.SnapshotOf(), active: fw.Active()})
 		}
-		return out, protections, nil
+		return out, zones, nil
 	}
 	snaps, err := store.List(cmd.Context())
 	if err != nil {

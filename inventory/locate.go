@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"slices"
 
+	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/query"
 	"github.com/gatework/firemon/traffic"
@@ -27,6 +28,8 @@ type Crossing struct {
 	Firewall  string
 	Members   []string
 	Ownership Ownership
+	// Basis says which ends of the request the cluster owns, and why.
+	Basis []Basis
 	// Parts are the parts assigned to the cluster; Crossed are those whose
 	// traffic goes through the firewall, the only ones a design changes.
 	Parts    []Part
@@ -103,6 +106,52 @@ func (inv *Inventory) Locate(req query.Request) (Trace, error) {
 type assignment struct {
 	ownership Ownership
 	parts     []Part
+	basis     []Basis
+}
+
+// Basis says why a request reaches a cluster: an end of it falls in
+// networks the cluster owns.
+type Basis struct {
+	// Source is true for the source end, false for the destination.
+	Source    bool
+	Addresses traffic.AddressSet
+	Zone      string
+	// Networks are the owned networks the addresses fall in.
+	Networks  []string
+	Ownership Ownership
+}
+
+// basisOf is the basis an owned end gives its cluster.
+func basisOf(o owned, source bool) Basis {
+	return Basis{Source: source, Addresses: o.set, Zone: o.zone, Networks: o.networks, Ownership: o.ownership}
+}
+
+// works holds each cluster's assignment.
+type works map[string]*assignment
+
+// add assigns a part to a cluster, keeping its strongest ownership and
+// merging the bases by end and zone.
+func (w works) add(cluster string, o Ownership, p Part, basis ...Basis) {
+	a := w[cluster]
+	if a == nil {
+		a = &assignment{ownership: o}
+		w[cluster] = a
+	}
+	a.ownership = min(a.ownership, o)
+	a.parts = append(a.parts, p)
+	for _, b := range basis {
+		i := slices.IndexFunc(a.basis, func(x Basis) bool { return x.Source == b.Source && x.Zone == b.Zone && x.Ownership == b.Ownership })
+		if i < 0 {
+			a.basis = append(a.basis, b)
+			continue
+		}
+		a.basis[i].Addresses = a.basis[i].Addresses.Union(b.Addresses)
+		for _, n := range b.Networks {
+			if !slices.Contains(a.basis[i].Networks, n) {
+				a.basis[i].Networks = append(a.basis[i].Networks, n)
+			}
+		}
+	}
 }
 
 // assign splits req into parts per cluster.
@@ -119,16 +168,8 @@ func (inv *Inventory) assign(req query.Request, t *Trace) (map[string]*assignmen
 	if len(req.DstDomains) > 0 {
 		dstParts = append(dstParts, owned{}) // domains: owned by no firewall
 	}
-	work := map[string]*assignment{}
-	add := func(cluster string, o Ownership, p Part) {
-		a := work[cluster]
-		if a == nil {
-			a = &assignment{ownership: o}
-			work[cluster] = a
-		}
-		a.ownership = min(a.ownership, o)
-		a.parts = append(a.parts, p)
-	}
+	work := works{}
+	add := work.add
 	for _, sp := range srcParts {
 		for _, dp := range dstParts {
 			p := Part{Src: sp.set, Dst: dp.set}
@@ -152,32 +193,51 @@ func (inv *Inventory) assign(req query.Request, t *Trace) (map[string]*assignmen
 	return work, nil
 }
 
-func (inv *Inventory) assignPair(sp, dp owned, p Part, vr string, add func(string, Ownership, Part)) {
+// assignPair assigns one source part and one destination part to the
+// clusters that own them and to the transit clusters between. On each
+// cluster an end's zone is the zone its addresses are bound to there,
+// else the declared zone of its owner, else the firewall's routing
+// decides; a layer-2 firewall without a binding for an end asks for one.
+func (inv *Inventory) assignPair(sp, dp owned, p Part, vr string, add func(string, Ownership, Part, ...Basis)) {
 	if sp.cluster != "" {
-		sp1 := p
+		from := ""
 		if sp.ownership == OwnershipDeclared {
-			sp1.FromZone = sp.zone
+			from = sp.zone
 		}
-		switch {
-		case dp.cluster == sp.cluster && dp.ownership == OwnershipDeclared:
-			sp1.ToZone = dp.zone
-		case dp.cluster != sp.cluster:
-			sp1.ToZone = inv.outside(sp.cluster) // the destination is elsewhere
+		if dp.cluster == sp.cluster && dp.ownership == OwnershipDeclared {
+			q := p
+			q.FromZone, q.ToZone = from, dp.zone
+			add(sp.cluster, sp.ownership, q, basisOf(sp, true), basisOf(dp, false))
+		} else {
+			for _, z := range inv.zonesOf(sp.cluster, dp.set) {
+				q := p
+				q.Dst, q.FromZone, q.ToZone = z.set, from, z.zone
+				add(sp.cluster, sp.ownership, q, basisOf(sp, true))
+			}
 		}
-		add(sp.cluster, sp.ownership, sp1)
 		for _, transit := range inv.chain(sp.cluster, p, vr) {
-			if transit != dp.cluster {
-				add(transit, OwnershipTransit, p)
+			if transit == dp.cluster {
+				continue
+			}
+			for _, zs := range inv.zonesOf(transit, p.Src) {
+				for _, zd := range inv.zonesOf(transit, p.Dst) {
+					q := p
+					q.Src, q.Dst, q.FromZone, q.ToZone = zs.set, zd.set, zs.zone, zd.zone
+					add(transit, OwnershipTransit, q)
+				}
 			}
 		}
 	}
 	if dp.cluster != "" && dp.cluster != sp.cluster {
-		dp1 := p
+		to := ""
 		if dp.ownership == OwnershipDeclared {
-			dp1.ToZone = dp.zone
+			to = dp.zone
 		}
-		dp1.FromZone = inv.outside(dp.cluster) // the source is elsewhere
-		add(dp.cluster, dp.ownership, dp1)
+		for _, z := range inv.zonesOf(dp.cluster, sp.set) {
+			q := p
+			q.Src, q.FromZone, q.ToZone = z.set, z.zone, to
+			add(dp.cluster, dp.ownership, q, basisOf(dp, false))
+		}
 	}
 }
 
@@ -234,7 +294,7 @@ func (inv *Inventory) nextHops(m *member, dst traffic.AddressSet, vr string) []s
 // keeps the paths that cross the firewall.
 func (inv *Inventory) evaluate(cluster string, a *assignment, req query.Request) (Crossing, error) {
 	m := inv.primary(cluster)
-	c := Crossing{Cluster: cluster, Firewall: m.name, Members: inv.clusterMembers(cluster), Ownership: a.ownership, Parts: a.parts}
+	c := Crossing{Cluster: cluster, Firewall: m.name, Members: inv.clusterMembers(cluster), Ownership: a.ownership, Parts: a.parts, Basis: a.basis}
 	for _, p := range a.parts {
 		if p.FromZone != "" && p.FromZone == p.ToZone && m.fw.ZoneInterfaces(p.FromZone) == 1 {
 			// Both ends behind one interface: the traffic does not cross.
@@ -244,6 +304,12 @@ func (inv *Inventory) evaluate(cluster string, a *assignment, req query.Request)
 		r := req
 		r.Src, r.Dst, r.DstDomains = p.Src, p.Dst, p.DstDomains
 		r.FromZone, r.ToZone = cmp.Or(p.FromZone, req.FromZone), cmp.Or(p.ToZone, req.ToZone)
+		if halfBridged(m.fw, r.FromZone, r.ToZone) {
+			// One end is in a layer-2 zone and nothing binds the other:
+			// routing (management only) cannot tell where it is.
+			c.ZonesNeeded = true
+			continue
+		}
 		res, err := m.engine.Query(r)
 		if err != nil {
 			return Crossing{}, fmt.Errorf("inventory: %s: %w", m.name, err)
@@ -371,37 +437,6 @@ func (inv *Inventory) bridgesMayCarry(t *Trace) {
 	}
 }
 
-// outside returns the zone on the other side of a cluster's protected
-// networks: the only other zone of the same mode with an interface. The
-// protected networks act as routes to their zone and everything else is
-// reached through this one, which is how a transparent firewall, whose
-// routing only covers management, is located. Empty when not unique, then
-// routing decides.
-func (inv *Inventory) outside(cluster string) string {
-	m := inv.primary(cluster)
-	if m == nil {
-		return ""
-	}
-	protected := map[string]bool{}
-	for _, c := range inv.claims {
-		if c.cluster == cluster && c.ownership == OwnershipDeclared && c.zone != "" {
-			protected[c.zone] = true
-		}
-	}
-	if len(protected) != 1 {
-		return ""
-	}
-	var inside string
-	for z := range protected {
-		inside = z
-	}
-	zone, ok := m.fw.Zone(inside)
-	if !ok {
-		return ""
-	}
-	return m.fw.PeerZone(zone)
-}
-
 // Inside is traffic both of whose ends are behind one interface of a
 // cluster's zone.
 type Inside struct {
@@ -414,4 +449,14 @@ type Inside struct {
 // locate it without routing.
 func (inv *Inventory) declared(cluster string) bool {
 	return slices.ContainsFunc(inv.claims, func(c claim) bool { return c.cluster == cluster && c.ownership == OwnershipDeclared })
+}
+
+// halfBridged reports a part with one end in a layer-2 zone and the other
+// end's zone unknown.
+func halfBridged(fw *firemon.Firewall, from, to string) bool {
+	if (from == "") == (to == "") {
+		return false
+	}
+	z, ok := fw.Zone(cmp.Or(from, to))
+	return ok && z.Mode == firemon.ZoneModeLayer2
 }
