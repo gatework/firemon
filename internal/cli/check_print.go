@@ -37,7 +37,7 @@ func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 		p.f("\n不经过任何防火墙（已剔除）：源 %s  目的 %s\n", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst))
 	}
 	for _, in := range rep.Inside {
-		p.f("源与目的同在 %s 的 %s 区域一侧，不经过该防火墙：%s\n", in.Cluster, in.Zone, in.Traffic)
+		p.f("不经过防火墙：%s（两端都在 %s 的 %s 一侧）\n", in.Traffic, in.Cluster, in.Zone)
 	}
 	for _, name := range rep.ZonesNeeded {
 		p.f("提示：%s 是透明模式（二层），另一端不在任何绑定的网段里，无法判断它在哪个安全区域：请在库存的 zones 中为该区域绑定网段（例如 l2-untrust: 0.0.0.0/0），或用 --from-zone/--to-zone 指定\n", name)
@@ -68,10 +68,7 @@ func printFirewall(p *printer, f report.Firewall, v reportView) {
 	if !v.verbose {
 		printNATSummary(p, f.Paths)
 	}
-	printExisting(p, f, v.verbose)
-	if f.Status == report.StatusPartialMatch && f.Remaining != "" {
-		p.f("  未放通：%s\n", f.Remaining)
-	}
+	printFlows(p, f, v.verbose)
 	if f.Unrouted != "" {
 		p.f("  无路由（会被丢弃）的目的：%s\n", f.Unrouted)
 	}
@@ -103,40 +100,34 @@ func firewallVerdict(f report.Firewall) string {
 	return verdict
 }
 
-// printExisting lists the existing rules that decide the request: one
-// line each with what it does to which part, then its definition.
-func printExisting(p *printer, f report.Firewall, verbose bool) {
-	type hit struct {
-		action string
-		h      report.Hit
-	}
-	var hits []hit
-	for _, h := range f.Permitted {
-		hits = append(hits, hit{"放通", h})
-	}
-	for _, h := range f.Blocked {
-		hits = append(hits, hit{"拒绝", h})
-	}
-	if len(hits) == 0 {
-		return
-	}
-	p.f("  已有策略：\n")
-	for _, x := range hits {
-		d, ok := ruleDetail(f.Rules, x.h.Rule)
+// printFlows lists the request flow by flow: what is permitted and by
+// which rule, what a rule denies, and what nothing permits.
+func printFlows(p *printer, f report.Firewall, verbose bool) {
+	rule := func(mark, what string, h report.Hit) {
+		d, ok := ruleDetail(f.Rules, h.Rule)
 		position := ""
 		if ok {
 			position = "（第 " + itoa(d.Position) + " 条）"
 		}
-		p.f("    %s  %s%s：%s\n", x.action, hitLabel(x.h.Rule, x.h.Name), position, x.h.Traffic)
-		if !ok {
-			continue
-		}
-		if verbose {
+		p.f("  %s  %s\n", mark, h.Traffic)
+		p.f("      %s：%s%s\n", what, hitLabel(h.Rule, h.Name), position)
+		switch {
+		case !ok:
+		case verbose:
 			printRuleDetail(p, d)
-			continue
+		default:
+			p.f("      区域 %s → %s；源 %s；目的 %s；服务 %s%s；%s\n", zoneList(d.From), zoneList(d.To),
+				objectsBrief(d.Source, d.NegateSource), objectsBrief(d.Destination, d.NegateDest), objectsBrief(d.Services, false), appsBrief(d.Applications), logText(d.Log))
 		}
-		p.f("          区域 %s → %s；源 %s；目的 %s；服务 %s%s；%s\n", zoneList(d.From), zoneList(d.To),
-			objectsBrief(d.Source, d.NegateSource), objectsBrief(d.Destination, d.NegateDest), objectsBrief(d.Services, false), appsBrief(d.Applications), logText(d.Log))
+	}
+	for _, h := range f.Permitted {
+		rule("✓ 已放通", "放通策略", h)
+	}
+	for _, h := range f.Blocked {
+		rule("✗ 被拒绝", "拒绝策略", h)
+	}
+	if f.Defaulted != "" {
+		p.f("  ✗ 无放通策略  %s\n      没有策略放通，默认拒绝\n", f.Defaulted)
 	}
 }
 
@@ -219,19 +210,24 @@ func printAction(p *printer, f report.Firewall, v reportView) {
 			p.f("  处置：需确认，方案无法生成命令：%v\n", err)
 			continue
 		}
-		p.f("  处置：在 %s 上执行以下命令%s（已验证：只放通本次请求）\n", cp.Firewall, haNote(f.Members, cp.Firewall))
+		p.f("  处置：%s，在 %s 上执行%s（已验证：只放通本次请求）\n", actionSummary(cp.Plan), cp.Firewall, haNote(f.Members, cp.Firewall))
 		for _, w := range passedDenies(cp.Plan, v.fws[f.Cluster]) {
-			p.f("    ⚠ 新策略放在拒绝策略 %s 之前，将绕过它：请确认该放通符合安全要求\n", w)
+			p.f("    ⚠ 放在拒绝策略 %s 之前，会绕过它：请确认符合安全要求\n", w)
 		}
+		n := 0
 		for _, c := range cp.Plan.Changes {
-			p.f("    · %s\n", changeText(c))
+			if line := ruleChangeText(c); line != "" || v.verbose {
+				n++
+				p.f("    %d. %s\n", n, cmp.Or(line, changeText(c)))
+			}
 		}
+		p.f("    命令：\n")
 		for _, c := range script.Commands {
-			p.f("    %s\n", c)
+			p.f("      %s\n", c)
 		}
-		p.f("    回退命令：\n")
+		p.f("    回退：\n")
 		for _, c := range script.Rollback {
-			p.f("    %s\n", c)
+			p.f("      %s\n", c)
 		}
 	}
 	switch {
@@ -505,5 +501,53 @@ func printNATSummary(p *printer, paths []report.Path) {
 				p.f("  %s\n", line)
 			}
 		}
+	}
+}
+
+// actionSummary says in a few words what the plan changes.
+func actionSummary(plan *design.Plan) string {
+	var added, extended, nat int
+	for _, c := range plan.Changes {
+		switch c.(type) {
+		case design.AddRule:
+			added++
+		case design.ExtendRule:
+			extended++
+		case design.AddNAT, design.AddStaticNAT:
+			nat++
+		}
+	}
+	var parts []string
+	if added > 0 {
+		parts = append(parts, "新增 "+itoa(added)+" 条策略")
+	}
+	if extended > 0 {
+		parts = append(parts, "修改 "+itoa(extended)+" 条已有策略")
+	}
+	if nat > 0 {
+		parts = append(parts, "新增 "+itoa(nat)+" 条 NAT")
+	}
+	return cmp.Or(strings.Join(parts, "，"), "变更")
+}
+
+// ruleChangeText describes a change to the rules in one line, with what
+// the rule matches; object changes are left to the commands.
+func ruleChangeText(c design.Change) string {
+	switch x := c.(type) {
+	case design.AddRule:
+		r := x.Rule
+		names := func(refs []firemon.AddressRef) string {
+			out := make([]string, 0, len(refs))
+			for _, a := range refs {
+				out = append(out, cmp.Or(a.Name, a.String()))
+			}
+			return cmp.Or(strings.Join(out, "、"), "任意")
+		}
+		return changeText(c) + "：" + zoneList(r.From) + " → " + zoneList(r.To) + "，源 " + names(r.Source) + "，目的 " + names(r.Destination) +
+			"，服务 " + cmp.Or(strings.Join(r.Services, "、"), "任意")
+	case design.ExtendRule, design.AddNAT, design.AddStaticNAT:
+		return changeText(c)
+	default:
+		return ""
 	}
 }
