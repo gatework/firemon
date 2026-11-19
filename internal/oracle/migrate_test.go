@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/gatework/firemon/internal/bootstrap"
 	"github.com/gatework/firemon/internal/oracle"
 	"github.com/gatework/firemon/migrate"
+	"github.com/gatework/firemon/query"
+	"github.com/gatework/firemon/traffic"
 )
 
 // migrateLoop translates a configuration to the other vendor, reads the
@@ -91,7 +94,58 @@ func migrateLoop(t *testing.T, d device) (compared, explained int, failures []st
 			}
 		}
 	}
+	natExact := map[string]bool{}
+	for _, it := range res.Items {
+		if it.Kind == migrate.ItemKindNAT {
+			natExact[it.Source] = it.Fidelity == migrate.FidelityExact
+		}
+	}
+	failures = append(failures, natAgrees(d.fw, back, natExact)...)
 	return compared, explained, failures
+}
+
+// natAgrees checks that every internal server a source NAT entry
+// translated exactly publishes at the same public addresses on the target,
+// by looking the server up both before and after.
+func natAgrees(src, dst *firemon.Firewall, exact map[string]bool) []string {
+	before := query.New(src, query.Options{Now: func() time.Time { return at }})
+	after := query.New(dst, query.Options{Now: func() time.Time { return at }})
+	published := func(e *query.Engine, addr traffic.AddressSet) []string {
+		var out []string
+		for _, u := range e.NATLookup(addr, traffic.ServiceSet{}) {
+			if u.Role == query.NATRolePublished && u.State == query.NATStateActive {
+				if s := u.Match.Dst.String(); !slices.Contains(out, s) {
+					out = append(out, s)
+				}
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	var failures []string
+	check := func(id string, inside traffic.AddressSet) {
+		if !exact[id] {
+			return
+		}
+		if _, ok := inside.Single(); !ok {
+			return
+		}
+		b, a := published(before, inside), published(after, inside)
+		if !slices.Equal(a, b) {
+			failures = append(failures, fmt.Sprintf("nat %s: %s published at %v, after migration at %v", id, inside, b, a))
+		}
+	}
+	for _, r := range src.NATRulesFor(firemon.NATKindDestination) {
+		if !r.Spec().Disabled && r.Decidable() && !r.Exempts() {
+			check(r.Spec().ID, r.Translated(firemon.NATKindDestination))
+		}
+	}
+	for _, m := range src.StaticNATs() {
+		if m.Enabled() {
+			check(m.Spec().ID, m.Real())
+		}
+	}
+	return failures
 }
 
 // explain returns why a differing decision is expected: a rule that takes
