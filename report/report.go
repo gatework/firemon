@@ -99,6 +99,10 @@ type Firewall struct {
 	ZonesNeeded bool         `json:"zones_needed,omitempty"`
 	Candidates  []Candidate  `json:"candidates,omitempty"`
 	Plan        *design.Plan `json:"plan,omitempty"`
+	// Scripts are the commands and rollback of the verified plans, one per
+	// part of the request crossing the firewall; filled by the caller,
+	// which knows the vendor.
+	Scripts []design.Script `json:"scripts,omitempty"`
 }
 
 // Path summarizes one path through a firewall.
@@ -157,7 +161,7 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 		f := firewallReport(c)
 		f.Plan = planFor(plans, c.Cluster)
 		f.Status = max(f.Status, natStatus(f.Plan))
-		if fw := fws[c.Cluster]; fw != nil && (f.Status == StatusPartialMatch || f.Status == StatusNeedNew || f.Status == StatusBlocked) {
+		if fw := fws[c.Cluster]; fw != nil && f.Status != StatusFullMatch && f.Status != StatusUnset {
 			f.Candidates = candidates(fw, c.Paths, f.Plan)
 		}
 		r.Firewalls = append(r.Firewalls, f)
@@ -350,14 +354,18 @@ func issueLabel(k firemon.IssueKind) string {
 	}
 }
 
+// classify names the result: a part certainly permitted with any other
+// part (denied or undecided) is partial, since the request is not fully
+// served either way; undecided traffic with nothing permitted needs a
+// person.
 func classify(permitted, blocked, deflt, unknown bool) Status {
 	switch {
-	case unknown:
-		return StatusIndeterminate
-	case permitted && !blocked && !deflt:
+	case permitted && !blocked && !deflt && !unknown:
 		return StatusFullMatch
 	case permitted:
 		return StatusPartialMatch
+	case unknown:
+		return StatusIndeterminate
 	case blocked:
 		return StatusBlocked
 	default:

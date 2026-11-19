@@ -67,6 +67,9 @@ func renderSchedule(s firemon.Schedule) ([]string, error) {
 		out = append(out, "  description "+q(s.Description))
 	}
 	for _, w := range s.Windows {
+		if w.End.IsZero() {
+			return nil, fmt.Errorf("hillstone: schedule %q: an absolute window needs an end", s.Name)
+		}
 		line := "  absolute"
 		if !w.Start.IsZero() {
 			line += " start " + stoneTime(w.Start)

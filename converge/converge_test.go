@@ -35,3 +35,27 @@ func TestDuplicateObjects(t *testing.T) {
 		t.Fatalf("finding %+v", f)
 	}
 }
+
+// A rule with criteria the model does not hold cannot be restored by a
+// rollback, so deleting it is for review even when it is disabled.
+func TestAnalyze_UnrestorableRuleIsReview(t *testing.T) {
+	t.Parallel()
+	cfg := &firemon.Config{
+		Vendor: firemon.VendorHillstone,
+		Rules: []firemon.SecurityRule{
+			{ID: "1", Action: firemon.ActionPermit, Disabled: true, Unsupported: []string{"user alice"}},
+			{ID: "2", Action: firemon.ActionPermit, Disabled: true},
+		},
+	}
+	fw, err := firemon.Compile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep := converge.Analyze(fw, converge.Options{Now: func() time.Time { return time.Unix(0, 0) }})
+	for id, want := range map[string]converge.Tier{"1": converge.TierReview, "2": converge.TierSafe} {
+		f, ok := rep.Find("disabled:" + id)
+		if !ok || f.Tier != want {
+			t.Errorf("rule %s: %+v, want tier %s", id, f, want)
+		}
+	}
+}

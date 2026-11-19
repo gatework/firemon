@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -81,13 +82,15 @@ func (o *options) converge(cmd *cobra.Command, f convergeFlags) error {
 	p := &printer{w: cmd.OutOrStdout()}
 	printConverge(p, rep)
 	if plan != nil {
-		printCleanupPlan(p, plan, script)
+		printCleanupPlan(p, plan, &script)
 	}
 	return p.err
 }
 
+// scriptOrNil returns the script of a verified plan: commands of a plan
+// whose verification failed must never be handed out.
 func scriptOrNil(plan *design.Plan, s design.Script) *design.Script {
-	if plan == nil {
+	if plan == nil || !plan.Verified {
 		return nil
 	}
 	return &s
@@ -167,10 +170,12 @@ func findingText(f converge.Finding) string {
 	return strings.Join(parts, "；")
 }
 
-func printCleanupPlan(p *printer, plan *design.Plan, script design.Script) {
+func printCleanupPlan(p *printer, plan *design.Plan, script *design.Script) {
 	p.f("\n变更方案（%d 项，有效策略不变已验证：%v）\n", len(plan.Changes), plan.Verified)
-	if plan.VerifyError != "" {
-		p.f("  验证未通过：%s（不要下发）\n", plan.VerifyError)
+	if !plan.Verified {
+		// Never print commands that are not proven to keep every decision.
+		p.f("  验证未通过：%s。不输出命令；请缩小 --select 范围后重试。\n", cmp.Or(plan.VerifyError, "未验证"))
+		return
 	}
 	if len(script.Commands) == 0 {
 		return
@@ -191,23 +196,11 @@ func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
 	if err != nil {
 		return err
 	}
-	clusters := map[string][]fleetMember{}
-	var order []string
-	for _, m := range fleet {
-		c := cmp.Or(m.cluster, m.name)
-		if _, ok := clusters[c]; !ok {
-			order = append(order, c)
-		}
-		clusters[c] = append(clusters[c], m)
-	}
-	slices.Sort(order)
+	clusters := groupClusters(fleet)
 	p := &printer{w: cmd.OutOrStdout()}
-	for _, c := range order {
+	var out []clusterReview
+	for _, c := range slices.Sorted(maps.Keys(clusters)) {
 		members := clusters[c]
-		// The active member first, then by name: it is the one reviewed.
-		slices.SortFunc(members, func(a, b fleetMember) int {
-			return cmp.Or(compareActive(a, b), strings.Compare(a.name, b.name))
-		})
 		snap, err := store.Load(cmd.Context(), members[0].snapshot)
 		if err != nil {
 			return fmt.Errorf("cluster %s: %w", c, err)
@@ -225,22 +218,66 @@ func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
 			return err
 		}
 		rep := converge.Analyze(loaded.Firewall, converge.Options{Now: o.deps.Now, Hits: counters, MinWindow: f.minWindow})
-		p.f("\n══ %s（成员 %s）\n", c, memberNames(members))
-		printConverge(p, rep)
-		if !f.plan {
+		review := clusterReview{Cluster: c, Members: memberList(members), Report: rep}
+		if f.plan {
+			plan, err := converge.Plan(loaded.Firewall, rep, converge.Selection{IDs: f.selection}, converge.PlanOptions{Now: o.deps.Now, Naming: platform.Naming})
+			if err != nil {
+				return &usageError{fmt.Errorf("cluster %s: %w", c, err)}
+			}
+			script, err := platform.Render(plan)
+			if err != nil {
+				return err
+			}
+			review.Plan, review.Script = plan, scriptOrNil(plan, script)
+		}
+		if o.json {
+			out = append(out, review)
 			continue
 		}
-		plan, err := converge.Plan(loaded.Firewall, rep, converge.Selection{IDs: f.selection}, converge.PlanOptions{Now: o.deps.Now, Naming: platform.Naming})
-		if err != nil {
-			return &usageError{fmt.Errorf("cluster %s: %w", c, err)}
+		p.f("\n══ %s（成员 %s，在 %s 上执行，备机通过 HA 同步）\n", c, memberNames(members), members[0].name)
+		printConverge(p, rep)
+		if review.Plan != nil {
+			printCleanupPlan(p, review.Plan, cmp.Or(review.Script, &design.Script{}))
 		}
-		script, err := platform.Render(plan)
-		if err != nil {
-			return err
-		}
-		printCleanupPlan(p, plan, script)
+	}
+	if o.json {
+		return writeJSON(cmd.OutOrStdout(), out)
 	}
 	return p.err
+}
+
+// groupClusters groups fleet members by cluster, each cluster's active
+// member first, then by name: the first is the one reviewed.
+func groupClusters(fleet []fleetMember) map[string][]fleetMember {
+	clusters := map[string][]fleetMember{}
+	for _, m := range fleet {
+		c := cmp.Or(m.cluster, m.name)
+		clusters[c] = append(clusters[c], m)
+	}
+	for _, members := range clusters {
+		slices.SortFunc(members, func(a, b fleetMember) int {
+			return cmp.Or(compareActive(a, b), strings.Compare(a.name, b.name))
+		})
+	}
+	return clusters
+}
+
+// clusterReview is the JSON form of one cluster's review.
+type clusterReview struct {
+	converge.Report
+	Cluster string `json:"cluster"`
+	// Members are the cluster's members, the reviewed (active) one first.
+	Members []string       `json:"members"`
+	Plan    *design.Plan   `json:"plan,omitempty"`
+	Script  *design.Script `json:"script,omitempty"`
+}
+
+func memberList(ms []fleetMember) []string {
+	out := make([]string, len(ms))
+	for i, m := range ms {
+		out[i] = m.name
+	}
+	return out
 }
 
 // clusterHits merges the latest counters of the members that have any;

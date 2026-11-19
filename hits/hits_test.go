@@ -39,8 +39,11 @@ func TestMerge_HAMembers(t *testing.T) {
 	if c, _ := m.Counter("1"); c.Hits != 2 || !c.LastHit.Equal(now.Add(-2*day)) {
 		t.Fatalf("rule 1 %+v: the standby member's hits count", c)
 	}
-	if !m.Since.Equal(now.Add(-40*day)) || len(m.Counters) != 3 {
-		t.Fatalf("merged %+v", m)
+	if !m.Since.Equal(now.Add(-40*day)) || !m.Taken.Equal(now.Add(-time.Hour)) || len(m.Counters) != 2 {
+		t.Fatalf("merged %+v: the window is what every member observed; rule 3 (one member, no hit) is left out", m)
+	}
+	if m.Judge("3", 30*day) != hits.VerdictUnknown {
+		t.Fatal("a rule one member did not report is not judged unused")
 	}
 }
 

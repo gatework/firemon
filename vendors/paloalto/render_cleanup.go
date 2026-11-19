@@ -53,9 +53,9 @@ func renderAddressGroup(g firemon.AddressGroup) ([]string, error) {
 	case len(g.Entries) > 0:
 		return nil, fmt.Errorf("paloalto: address group %q has inline entries", g.Name)
 	case g.Filter != "":
-		return []string{"set address-group " + name(g.Name) + " dynamic filter " + quoteFilter(g.Filter)}, nil
+		return append([]string{"set address-group " + name(g.Name) + " dynamic filter " + quoteFilter(g.Filter)}, describe("set address-group "+name(g.Name), g.Description)...), nil
 	}
-	return []string{"set address-group " + name(g.Name) + " static " + bracket(g.Members)}, nil
+	return append([]string{"set address-group " + name(g.Name) + " static " + bracket(g.Members)}, describe("set address-group "+name(g.Name), g.Description)...), nil
 }
 
 // quoteFilter quotes a dynamic group filter expression.
@@ -80,8 +80,8 @@ func renderSchedule(s firemon.Schedule) ([]string, error) {
 	case len(s.Windows) > 0:
 		var ws []string
 		for _, w := range s.Windows {
-			if w.Start.IsZero() {
-				return nil, fmt.Errorf("paloalto: schedule %q: a window needs a start", s.Name)
+			if w.Start.IsZero() || w.End.IsZero() {
+				return nil, fmt.Errorf("paloalto: schedule %q: a window needs a start and an end", s.Name)
 			}
 			ws = append(ws, w.Start.Format("2006/01/02@15:04")+"-"+w.End.Add(-time.Minute).Format("2006/01/02@15:04"))
 		}

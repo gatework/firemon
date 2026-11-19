@@ -27,9 +27,12 @@ type Crossing struct {
 	Firewall  string
 	Members   []string
 	Ownership Ownership
-	Parts     []Part
-	Paths     []query.Path
-	Src, Dst  traffic.AddressSet
+	// Parts are the parts assigned to the cluster; Crossed are those whose
+	// traffic goes through the firewall, the only ones a design changes.
+	Parts    []Part
+	Crossed  []Part
+	Paths    []query.Path
+	Src, Dst traffic.AddressSet
 	// Unrouted is the destination part the firewall has no route for.
 	Unrouted traffic.AddressSet
 	// Incomplete reports that a budget cut the evaluation short: the
@@ -233,7 +236,7 @@ func (inv *Inventory) evaluate(cluster string, a *assignment, req query.Request)
 	m := inv.primary(cluster)
 	c := Crossing{Cluster: cluster, Firewall: m.name, Members: inv.clusterMembers(cluster), Ownership: a.ownership, Parts: a.parts}
 	for _, p := range a.parts {
-		if p.FromZone != "" && p.FromZone == p.ToZone && m.fw.ZoneInterfaces(p.FromZone) <= 1 {
+		if p.FromZone != "" && p.FromZone == p.ToZone && m.fw.ZoneInterfaces(p.FromZone) == 1 {
 			// Both ends behind one interface: the traffic does not cross.
 			c.Inside = append(c.Inside, Inside{Cluster: cluster, Zone: p.FromZone, Src: p.Src, Dst: p.Dst})
 			continue
@@ -256,6 +259,7 @@ func (inv *Inventory) evaluate(cluster string, a *assignment, req query.Request)
 			}
 		}
 		if crossing {
+			c.Crossed = append(c.Crossed, p)
 			c.Unrouted = c.Unrouted.Union(res.Unrouted)
 		}
 	}
@@ -291,10 +295,17 @@ func (inv *Inventory) Plan(intent design.Intent) ([]ClusterPlan, error) {
 	if err != nil {
 		return nil, err
 	}
+	return inv.PlanTrace(t, intent)
+}
+
+// PlanTrace is Plan on a trace Locate already computed for intent: only
+// the parts that cross a firewall are designed, so traffic that stays
+// behind one interface or is not routed through the firewall gets no rule.
+func (inv *Inventory) PlanTrace(t Trace, intent design.Intent) ([]ClusterPlan, error) {
 	var out []ClusterPlan
 	for _, c := range t.Crossings {
 		m := inv.primary(c.Cluster)
-		for _, p := range c.Parts {
+		for _, p := range c.Crossed {
 			part := intent
 			part.Src, part.Dst = p.Src, p.Dst
 			part.FromZone, part.ToZone = cmp.Or(p.FromZone, intent.FromZone), cmp.Or(p.ToZone, intent.ToZone)

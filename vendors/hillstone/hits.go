@@ -23,7 +23,9 @@ const HitCountCommand = "show policy"
 var ErrNoHitCounters = errors.New("hillstone: no rule hit counters in the output")
 
 var (
-	hitRuleID = regexp.MustCompile(`(?i)\b(?:rule\s*id|policy\s*id|id)\s*[:=]?\s*(\d+)\b`)
+	// hitRuleID matches a rule header at the start of a line, so that ids
+	// of other things (vsys id, schedule id) never name the rule.
+	hitRuleID = regexp.MustCompile(`(?i)^\s*(?:rule|policy)\s*id\s*[:=]?\s*(\d+)\b`)
 	hitCount  = regexp.MustCompile(`(?i)\bhit[\s_-]*count(?:s)?\s*[:=]?\s*(\d+)\b`)
 )
 

@@ -47,14 +47,7 @@ func (s Snapshot) Counter(rule string) (Counter, bool) {
 // the snapshot; zero when the start is unknown.
 func (s Snapshot) Window(rule string) time.Duration {
 	c, _ := s.Counter(rule)
-	start := s.Since
-	if c.Reset.After(start) {
-		start = c.Reset
-	}
-	if start.IsZero() || !s.Taken.After(start) {
-		return 0
-	}
-	return s.Taken.Sub(start)
+	return s.window(c)
 }
 
 // Verdict is what the counters say about one rule.
@@ -94,36 +87,29 @@ func (v Verdict) MarshalText() ([]byte, error) { return []byte(v.String()), nil 
 // Judge tells whether a rule was used, requiring at least minWindow of
 // observation before calling it unused.
 func (s Snapshot) Judge(rule string, minWindow time.Duration) Verdict {
-	c, ok := s.Counter(rule)
-	switch {
-	case !ok:
-		return VerdictUnknown
-	case c.Hits > 0:
-		return VerdictUsed
-	case s.Window(rule) >= minWindow:
-		return VerdictUnused
-	default:
-		return VerdictUnknown
-	}
+	return s.Indexed().Judge(rule, minWindow)
 }
 
 // Merge combines the snapshots of HA members into one: hits add up, the
-// latest last hit and the earliest first hit win, and the window is the
-// one every member observed (the latest start). Counters only one member
-// has are kept as they are.
+// latest last hit and the earliest first hit win. The window is the one
+// every member observed: from the latest start to the earliest reading. A
+// rule some member has no counter for is left out, so it is never judged
+// unused on part of the cluster.
 func Merge(firewall string, snaps ...Snapshot) Snapshot {
 	out := Snapshot{Firewall: firewall}
 	by := map[string]*Counter{}
+	seen := map[string]int{}
 	var order []string
-	for _, s := range snaps {
+	for i, s := range snaps {
 		out.Vendor = cmp.Or(out.Vendor, s.Vendor)
-		if s.Taken.After(out.Taken) {
+		if i == 0 || s.Taken.Before(out.Taken) {
 			out.Taken = s.Taken
 		}
 		if s.Since.After(out.Since) {
 			out.Since = s.Since
 		}
 		for _, c := range s.Counters {
+			seen[c.Rule]++
 			m, ok := by[c.Rule]
 			if !ok {
 				cc := c
@@ -140,7 +126,9 @@ func Merge(firewall string, snaps ...Snapshot) Snapshot {
 		}
 	}
 	for _, r := range order {
-		out.Counters = append(out.Counters, *by[r])
+		if seen[r] == len(snaps) || by[r].Hits > 0 {
+			out.Counters = append(out.Counters, *by[r]) // a hit anywhere is a use
+		}
 	}
 	return out
 }
@@ -150,4 +138,57 @@ func latest(a, b time.Time) time.Time {
 		return b
 	}
 	return a
+}
+
+// Index answers counter lookups for many rules in constant time.
+type Index struct {
+	snap Snapshot
+	at   map[string]int
+}
+
+// Indexed returns an index of the snapshot's counters.
+func (s Snapshot) Indexed() Index {
+	at := make(map[string]int, len(s.Counters))
+	for i, c := range s.Counters {
+		if _, dup := at[c.Rule]; !dup {
+			at[c.Rule] = i
+		}
+	}
+	return Index{snap: s, at: at}
+}
+
+// Counter returns the counter of a rule.
+func (x Index) Counter(rule string) (Counter, bool) {
+	i, ok := x.at[rule]
+	if !ok {
+		return Counter{}, false
+	}
+	return x.snap.Counters[i], true
+}
+
+// Judge is Snapshot.Judge through the index.
+func (x Index) Judge(rule string, minWindow time.Duration) Verdict {
+	c, ok := x.Counter(rule)
+	switch {
+	case !ok:
+		return VerdictUnknown
+	case c.Hits > 0:
+		return VerdictUsed
+	case x.snap.window(c) >= minWindow:
+		return VerdictUnused
+	default:
+		return VerdictUnknown
+	}
+}
+
+// window is how long counter c has observed as of the snapshot.
+func (s Snapshot) window(c Counter) time.Duration {
+	start := s.Since
+	if c.Reset.After(start) {
+		start = c.Reset
+	}
+	if start.IsZero() || !s.Taken.After(start) {
+		return 0
+	}
+	return s.Taken.Sub(start)
 }

@@ -12,17 +12,27 @@ go install github.com/gatework/firemon/cmd/firemon@latest
 
 ## Command line
 
-The one-shot query for operators:
+The everyday question is source, destination and service:
 
 ```sh
-firemon check --inventory firemon.yaml --src "10.250.119.0 255.255.255.0，10.250.120.5-9" \
-  --dst "1.1.1.1、api.example.com" --service "443, udp 53, app:ssh" --design --name REQ-1001
+export FIREMON_INVENTORY=~/firemon/firemon.yaml   # or set it once in the settings file
+firemon check --src 10.248.30.5 --dst 10.250.116.25 --service 9600 --name REQ-1001
+firemon check --src "10.250.119.0 255.255.255.0，10.250.120.5-9" --dst "1.1.1.1、api.example.com" --service "443, udp 53, app:ssh"
 ```
 
-It reads the addresses and services in any common form, locates the firewalls through the protected networks of `firemon.yaml` (falling back to routing), evaluates NAT and access control on each HA cluster, and prints per firewall 完全命中 / 部分命中 / 需要新增 / 被拒绝 / 无法判定, the permitting and blocking rules, the best rules to modify and why the others are not, the traffic no firewall carries, and with `--design` the verified commands and rollback. `--resolve` resolves domains so address-based rules can be decided; `--json` prints the report as data.
+It reads the addresses and services in any common form, locates the firewalls through the protected networks of the inventory (falling back to routing), evaluates NAT and access control on each HA cluster, and answers per firewall 已放通 / 部分放通 / 需新增策略 / 需确认, with the permitting and blocking rules, the best rules to modify, the traffic no firewall carries, and the action: nothing to do, or the verified commands and rollback to run on the active member (the backup receives them by HA). `--no-design` only queries; `--resolve` resolves domains so address-based rules can be decided; `--json` prints the report, commands included. Exit status: 0 allowed, 3 a verified change is ready, 4 needs a person, 2 usage.
+
+Defaults come, in order, from the flags, the environment (`FIREMON_STORE`, `FIREMON_INVENTORY`, `FIREMON_TIMEZONE`), the inventory's `store:` (relative to the inventory file), and the settings file `~/.config/firemon/config.yaml` (or `FIREMON_CONFIG`):
+
+```yaml
+# ~/.config/firemon/config.yaml
+inventory: ~/firemon/firemon.yaml
+timezone: Asia/Shanghai
+```
 
 ```yaml
 # firemon.yaml
+store: snapshots        # snapshot directory, next to this file
 firewalls:
   - name: SZX9-FW01
     cluster: SZX9-FW
@@ -62,7 +72,7 @@ firemon audit --vendor hillstone --config fw1.txt
 #        protected: [{networks: [10.250.0.0/16, 10.254.0.0/16]}]}
 #     - {name: szx9-in-fw02, cluster: SZX9-IN, role: backup, protected_zone: l2-trust,
 #        protected: [{networks: [10.250.0.0/16, 10.254.0.0/16]}]}
-firemon check --inventory firemon.yaml --src 10.248.30.5 --dst 10.250.116.25 --service tcp/9600 --design
+firemon check --inventory firemon.yaml --src 10.248.30.5 --dst 10.250.116.25 --service tcp/9600
 
 # Design and render the change that permits a request (no device access)
 firemon design --vendor paloalto --config pa1.txt --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 \
@@ -119,7 +129,7 @@ Rules are evaluated in device order and the first match decides, deny rules incl
 ```sh
 make check                                  # the full gate (STANDARD.md MOD-5)
 make fuzz                                   # fuzz the algebra and both parsers
-FIREMON_CORPUS=/path/to/backups make corpus # parse private configurations, aggregate output only
+FIREMON_CORPUS=/path/to/backups make corpus # parse and prove on private configurations, aggregate output only
 ```
 
-Test layers: unit and golden tests use synthetic fixtures under `testdata/`; the corpus test runs only when `FIREMON_CORPUS` is set; nothing in the test suite connects to a device.
+Test layers: unit and golden tests use synthetic fixtures under `testdata/`; the corpus tests run only when `FIREMON_CORPUS` is set; nothing in the test suite connects to a device. `internal/oracle` decides single packets by reading the rules top down, independently of the query engine, and `make corpus` proves the core algorithms on every configuration with it: the engine's first-match decisions on the boundary packets of every rule, designs that permit exactly the request and read back as predicted, cleanups that keep every decision and roll back exactly, and migrations that decide like the source.

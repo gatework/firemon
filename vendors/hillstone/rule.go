@@ -1,6 +1,7 @@
 package hillstone
 
 import (
+	"cmp"
 	"slices"
 	"strings"
 
@@ -66,6 +67,12 @@ func (s *state) ruleIn(b block, head *words, from, to []string) {
 		return
 	}
 	r := firemon.SecurityRule{ID: head.next()}
+	if _, isGroup := s.ruleGroup[r.ID]; isGroup {
+		// A later block for a rule-group header changes the header; it
+		// never becomes a rule.
+		s.groupHeader(b, r.ID)
+		return
+	}
 	existing, merge := s.ruleIndex[r.ID]
 	if merge {
 		// A later block for the same rule changes it, as on the device.
@@ -104,9 +111,7 @@ func (s *state) ruleIn(b block, head *words, from, to []string) {
 		s.mark(l)
 	}
 	if header {
-		name := firstNonEmpty(r.Name, "rule group "+r.ID)
-		s.ruleGroup[r.ID] = name
-		s.cfg.RuleGroups = append(s.cfg.RuleGroups, firemon.RuleGroup{ID: r.ID, Name: name})
+		s.becomeGroup(r, merge)
 		return
 	}
 	if len(r.From) == 0 {
@@ -229,15 +234,6 @@ func anyZones(zones []string) []string {
 	return zones
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
 // incomplete returns which required part a rule lacks. StoneOS only
 // enforces a rule that has an action, a source, a destination and a
 // service or application; the running configuration still lists rules
@@ -309,5 +305,63 @@ func removeAttribute(r *firemon.SecurityRule, w *words) {
 		r.Schedule = ""
 	case "disable":
 		r.Disabled = false
+	}
+}
+
+// becomeGroup records a rule-group header; a rule turned into one is no
+// longer a rule.
+func (s *state) becomeGroup(r firemon.SecurityRule, wasRule bool) {
+	if wasRule {
+		s.dropRule(r.ID)
+	}
+	name := cmp.Or(r.Name, "rule group "+r.ID)
+	s.ruleGroup[r.ID] = name
+	s.cfg.RuleGroups = append(s.cfg.RuleGroups, firemon.RuleGroup{ID: r.ID, Name: name})
+}
+
+// groupHeader applies a later block of a rule-group header: only its name
+// matters.
+func (s *state) groupHeader(b block, id string) {
+	for _, l := range b.body {
+		w := newWords(l.Text)
+		if w.next() != "name" {
+			s.mark(l)
+			continue
+		}
+		name := w.next()
+		s.ruleGroup[id] = name
+		for i := range s.cfg.RuleGroups {
+			if s.cfg.RuleGroups[i].ID == id {
+				s.cfg.RuleGroups[i].Name = name
+			}
+		}
+		s.mark(l)
+	}
+}
+
+// dropRule removes a rule and reindexes the rules after it.
+func (s *state) dropRule(id string) {
+	i, ok := s.ruleIndex[id]
+	if !ok {
+		return
+	}
+	s.cfg.Rules = slices.Delete(s.cfg.Rules, i, i+1)
+	delete(s.ruleIndex, id)
+	for j := i; j < len(s.cfg.Rules); j++ {
+		s.ruleIndex[s.cfg.Rules[j].ID] = j
+	}
+}
+
+// dropGroup removes a rule-group header; its member rules stay, ungrouped.
+func (s *state) dropGroup(id string) {
+	if _, ok := s.ruleGroup[id]; !ok {
+		return
+	}
+	delete(s.ruleGroup, id)
+	s.cfg.RuleGroups = slices.DeleteFunc(s.cfg.RuleGroups, func(g firemon.RuleGroup) bool { return g.ID == id })
+	for i := range s.cfg.Rules {
+		if s.cfg.Rules[i].Group == id {
+			s.cfg.Rules[i].Group = ""
+		}
 	}
 }

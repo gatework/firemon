@@ -1,10 +1,13 @@
 package converge
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gatework/firemon"
@@ -21,6 +24,13 @@ var (
 	ErrUnknownFinding = errors.New("converge: unknown finding")
 	// ErrPolicyChanged reports a cleanup that would change a decision.
 	ErrPolicyChanged = errors.New("converge: cleanup changes the effective policy")
+	// ErrStaleReport reports a report of another configuration.
+	ErrStaleReport = errors.New("converge: the report is of another configuration")
+	// ErrDuplicateRuleIDs reports rule changes on a configuration whose
+	// rule IDs are not unique, so that an ID names no single rule.
+	ErrDuplicateRuleIDs = errors.New("converge: rule IDs are not unique")
+	// ErrUnknownRule reports a finding that names a rule fw lacks.
+	ErrUnknownRule = errors.New("converge: unknown rule")
 )
 
 // Selection picks findings to plan; empty selects every Safe finding.
@@ -47,9 +57,15 @@ func Plan(fw *firemon.Firewall, rep Report, sel Selection, opts PlanOptions) (*d
 	if now == nil {
 		now = time.Now
 	}
+	if rep.Baseline != "" && rep.Baseline != fw.Fingerprint() {
+		return nil, ErrStaleReport
+	}
 	chosen, err := selectFindings(rep, sel)
 	if err != nil {
 		return nil, err
+	}
+	if len(rep.DuplicateRuleIDs) > 0 && slices.ContainsFunc(chosen, func(f Finding) bool { return len(f.Rules) > 0 }) {
+		return nil, fmt.Errorf("%w: %s", ErrDuplicateRuleIDs, strings.Join(rep.DuplicateRuleIDs, ","))
 	}
 	b := newBuilder(fw, opts.Naming)
 	for _, f := range chosen {
@@ -71,7 +87,7 @@ func Plan(fw *firemon.Firewall, rep Report, sel Selection, opts PlanOptions) (*d
 	}
 	// A failed verification is a result: the plan is returned unverified
 	// with the reason, never deployed.
-	verr := verify(fw, plan.Changes, b.affected, b.deletedObjects, now())
+	verr := verify(fw, plan.Changes, b.affected, b.merged, now())
 	plan.Verified = verr == nil
 	if verr != nil {
 		plan.VerifyError = verr.Error()
@@ -105,14 +121,20 @@ func selectFindings(rep Report, sel Selection) ([]Finding, error) {
 // builder collects changes in a deployable order: new objects, rule
 // extensions, rule deletions, then object deletions (groups first).
 type builder struct {
-	fw             *firemon.Firewall
-	cfg            *firemon.Config
-	cat            *design.Catalog
-	extend         []design.Change
-	deleteRules    map[string]bool
-	deleteObjects  []design.Change
-	affected       []*firemon.Rule // rules whose traffic must keep its decisions
-	deletedObjects []string
+	fw            *firemon.Firewall
+	cfg           *firemon.Config
+	cat           *design.Catalog
+	extend        []design.Change
+	deleteRules   map[string]bool
+	deleteObjects []objectDeletion
+	affected      []*firemon.Rule // rules whose traffic must keep its decisions
+	merged        []mergeCheck
+}
+
+// mergeCheck is what the kept rule of a merge must match afterwards.
+type mergeCheck struct {
+	keep string
+	want traffic.Region
 }
 
 func newBuilder(fw *firemon.Firewall, naming design.Naming) *builder {
@@ -123,13 +145,22 @@ func (b *builder) add(f Finding) error {
 	switch f.Category {
 	case CategoryRedundant:
 		for _, id := range f.Rules {
-			r, _ := b.fw.Rule(id)
-			b.affected = append(b.affected, r)
+			r, ok := b.fw.Rule(id)
+			if !ok {
+				return fmt.Errorf("%w %q", ErrUnknownRule, id)
+			}
+			b.affect(r)
 			b.deleteRules[id] = true
 		}
 	case CategoryNeverMatches, CategoryIncomplete, CategoryDisabled, CategoryExpired:
 		for _, id := range f.Rules {
-			b.deleteRules[id] = true // matches nothing now or ever
+			if _, ok := b.fw.Rule(id); !ok {
+				return fmt.Errorf("%w %q", ErrUnknownRule, id)
+			}
+			// The engine ignores the rule in every schedule mode (disabled,
+			// incomplete, expired for good, or an empty match): deleting
+			// it changes no decision, so there is nothing to verify.
+			b.deleteRules[id] = true
 		}
 	case CategoryMergeable:
 		return b.merge(f.Merge)
@@ -149,13 +180,18 @@ func (b *builder) add(f Finding) error {
 func (b *builder) merge(m *Merge) error {
 	keep, ok := b.fw.Rule(m.Keep)
 	if !ok {
-		return fmt.Errorf("converge: merge into unknown rule %q", m.Keep)
+		return fmt.Errorf("%w %q", ErrUnknownRule, m.Keep)
 	}
 	var addr traffic.AddressSet
 	var svc traffic.ServiceSet
+	want := traffic.NewRegion(keep.Match())
 	for _, id := range m.Remove {
-		r, _ := b.fw.Rule(id)
-		b.affected = append(b.affected, r)
+		r, ok := b.fw.Rule(id)
+		if !ok {
+			return fmt.Errorf("%w %q", ErrUnknownRule, id)
+		}
+		b.affect(r)
+		want = want.Add(r.Match())
 		b.deleteRules[id] = true
 		switch m.Field {
 		case design.FieldSource:
@@ -167,7 +203,8 @@ func (b *builder) merge(m *Merge) error {
 		case design.FieldUnset:
 		}
 	}
-	b.affected = append(b.affected, keep)
+	b.affect(keep)
+	b.merged = append(b.merged, mergeCheck{keep: m.Keep, want: want})
 	var names []string
 	switch m.Field {
 	case design.FieldSource, design.FieldDestination:
@@ -219,9 +256,21 @@ func (b *builder) deleteObject(o firemon.ObjectRef) error {
 	if ch == nil {
 		return fmt.Errorf("converge: unknown object %s", o)
 	}
-	b.deleteObjects = append(b.deleteObjects, ch)
-	b.deletedObjects = append(b.deletedObjects, o.Name)
+	b.deleteObjects = append(b.deleteObjects, objectDeletion{ref: o, change: ch})
 	return nil
+}
+
+// affect records a rule whose traffic must keep its decisions, once.
+func (b *builder) affect(r *firemon.Rule) {
+	if !slices.Contains(b.affected, r) {
+		b.affected = append(b.affected, r)
+	}
+}
+
+// objectDeletion is a deletion with the object it removes.
+type objectDeletion struct {
+	ref    firemon.ObjectRef
+	change design.Change
 }
 
 // changes returns the changes in order. Each deleted rule records the next
@@ -240,13 +289,26 @@ func (b *builder) changes() []design.Change {
 		}
 		out = append(out, design.DeleteRule{Rule: r, Next: next})
 	}
-	return append(out, b.deleteObjects...)
+	// Objects go in the reference graph's order, whatever order they were
+	// selected in: users before the groups' members.
+	order := map[firemon.ObjectRef]int{}
+	for i, o := range b.fw.References().Unused() {
+		order[o] = i
+	}
+	slices.SortStableFunc(b.deleteObjects, func(x, y objectDeletion) int { return cmp.Compare(order[x.ref], order[y.ref]) })
+	for _, d := range b.deleteObjects {
+		out = append(out, d.change)
+	}
+	return out
 }
 
 // verify applies the changes and compares the decisions before and after,
-// for each changed rule's traffic on every zone pair the rule applies to.
-// A cleanup only moves or removes the decisions of that traffic.
-func verify(fw *firemon.Firewall, changes []design.Change, affected []*firemon.Rule, deleted []string, at time.Time) error {
+// for each changed rule's traffic on every zone pair the rule applies to,
+// with schedules as they are now, all active and all inactive: a cleanup
+// only moves or removes the decisions of that traffic. A merged rule must
+// match exactly what it and the rules merged into it matched. Deleting an
+// object something still uses fails in Apply, as on the device.
+func verify(fw *firemon.Firewall, changes []design.Change, affected []*firemon.Rule, merged []mergeCheck, at time.Time) error {
 	cfg := fw.Config()
 	if err := design.Apply(cfg, changes); err != nil {
 		return err
@@ -255,29 +317,77 @@ func verify(fw *firemon.Firewall, changes []design.Change, affected []*firemon.R
 	if err != nil {
 		return err
 	}
-	for _, is := range after.Issues() {
-		for _, name := range deleted {
-			if strings.Contains(is.Reason, `"`+name+`"`) {
-				return fmt.Errorf("converge: %s still refers to deleted %q", is.Object, name)
-			}
+	for _, m := range merged {
+		r, ok := after.Rule(m.keep)
+		if !ok || !sameRegion(traffic.NewRegion(r.Match()), m.want) {
+			return fmt.Errorf("%w: merged rule %s does not match exactly what it replaces", ErrPolicyChanged, m.keep)
 		}
 	}
-	before, now := query.New(fw, query.Options{}), query.New(after, query.Options{})
 	zones := zoneNames(cfg)
-	for _, r := range affected {
-		for _, pair := range pairsOf(r, zones) {
-			a, b := before.Evaluate(pair.from, pair.to, r.Match(), at), now.Evaluate(pair.from, pair.to, r.Match(), at)
-			if a.Incomplete || b.Incomplete {
-				return fmt.Errorf("converge: verification of rule %s exceeded the budget", r.ID())
-			}
-			for _, o := range []query.Outcome{query.OutcomePermit, query.OutcomeDeny, query.OutcomeDefault, query.OutcomeUnknown} {
-				if !sameRegion(a.Region(o), b.Region(o)) {
-					return fmt.Errorf("%w: rule %s, %s -> %s", ErrPolicyChanged, r.ID(), pair.from, pair.to)
-				}
+	modes := []query.ScheduleMode{query.ScheduleAt}
+	if scheduled(fw) {
+		// Schedules only change a decision when some rule has one.
+		modes = append(modes, query.ScheduleAlwaysActive, query.ScheduleNeverActive)
+	}
+	for _, mode := range modes {
+		before := query.New(fw, query.Options{Schedules: mode})
+		now := query.New(after, query.Options{Schedules: mode})
+		if err := parallel(affected, func(r *firemon.Rule) error { return sameDecisions(before, now, r, zones, at) }); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// sameDecisions compares the decisions of rule r's traffic before and
+// after on every zone pair r applies to.
+func sameDecisions(before, after *query.Engine, r *firemon.Rule, zones []string, at time.Time) error {
+	for _, pair := range pairsOf(r, zones) {
+		a, b := before.Evaluate(pair.from, pair.to, r.Match(), at), after.Evaluate(pair.from, pair.to, r.Match(), at)
+		if a.Incomplete || b.Incomplete {
+			return fmt.Errorf("converge: verification of rule %s exceeded the budget", r.ID())
+		}
+		for _, o := range []query.Outcome{query.OutcomePermit, query.OutcomeDeny, query.OutcomeDefault, query.OutcomeUnknown} {
+			if !sameRegion(a.Region(o), b.Region(o)) {
+				return fmt.Errorf("%w: rule %s, %s -> %s", ErrPolicyChanged, r.ID(), pair.from, pair.to)
 			}
 		}
 	}
 	return nil
+}
+
+// parallel runs check for every rule on a bounded number of goroutines and
+// returns the first error in rule order, so the result does not depend on
+// scheduling. The engines are safe for concurrent use.
+func parallel(rules []*firemon.Rule, check func(*firemon.Rule) error) error {
+	errs := make([]error, len(rules))
+	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
+	var wg sync.WaitGroup
+	for i, r := range rules {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			errs[i] = check(r)
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// scheduled reports whether some rule has a schedule or validity window.
+func scheduled(fw *firemon.Firewall) bool {
+	for _, r := range fw.Rules() {
+		if r.Scheduled() {
+			return true
+		}
+	}
+	return false
 }
 
 type zonePair struct{ from, to string }

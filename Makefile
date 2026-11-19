@@ -16,7 +16,10 @@ fuzz:
 	$(GO) test -run '^$$' -fuzz '^FuzzTranslate$$' -fuzztime=10s ./migrate
 	$(GO) test -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=10s ./intake
 
-# Parses the private configuration corpus named by FIREMON_CORPUS (TST-3).
+# Parses the private configuration corpus named by FIREMON_CORPUS (TST-3)
+# and proves the core algorithms on it: the query engine against the
+# first-match oracle, and design, convergence and migration closed loops.
 corpus:
 	@test -n "$(FIREMON_CORPUS)" || { echo "set FIREMON_CORPUS to a directory of device configurations"; exit 1; }
 	$(GO) test -count=1 -run Corpus -v ./vendors/... | grep -E '^(=== RUN|--- |\s+corpus_test|ok|FAIL)'
+	$(GO) test -count=1 -timeout 40m -run Corpus ./migrate ./internal/oracle
