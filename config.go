@@ -13,6 +13,11 @@ type Diagnostic struct {
 	Reason string `json:"reason"`
 }
 
+// ModelVersion numbers the shape of Config and what its fingerprint
+// covers. It changes whenever either does: a configuration stored by an
+// older version is parsed again from its text rather than trusted.
+const ModelVersion = 2
+
 // Config is the declarative configuration of one firewall as produced by a
 // vendor parser. Order is significant for Rules, DynamicNATs and
 // StaticNATs; other lists are kept in declaration order.

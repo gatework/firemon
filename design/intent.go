@@ -25,6 +25,10 @@ type Intent struct {
 	// Override places new rules above specific deny rules that block the
 	// intent instead of reporting them as conflicts.
 	Override bool
+	// OverrideNAT publishes a new NAT rule in front of one that already
+	// publishes the same public address and port to another server. It is
+	// separate from Override: taking an address over is never implied.
+	OverrideNAT bool
 	// NAT asks for a translation with the access; nil plans access only.
 	NAT *NATIntent
 	// NoLog leaves new rules without logging; by default they log the

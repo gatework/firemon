@@ -15,7 +15,7 @@ type intentFlags struct {
 	trafficFlags
 	nat                         natFlags
 	name, description, schedule string
-	override, noLog             bool
+	noLog                       bool
 	logSetting                  string
 }
 
@@ -25,8 +25,6 @@ func (i *intentFlags) register(cmd *cobra.Command) {
 	f.StringVar(&i.name, "name", "", "新建策略的名称，例如工单号（默认 fm_<序号>）")
 	f.StringVar(&i.description, "description", "", "新建策略的描述")
 	f.StringVar(&i.schedule, "schedule", "", "新建策略使用的已有时间计划")
-	f.BoolVar(&i.override, "override", false, "已不需要：被拒绝策略挡住时新策略会放在其前并提示确认")
-	_ = f.MarkHidden("override")
 	f.BoolVar(&i.noLog, "no-log", false, "新建策略不开启日志（默认记录会话开始和结束）")
 	i.nat.register(f)
 }
@@ -98,7 +96,7 @@ func printProposal(cmd *cobra.Command, asJSON bool, prop workflow.Proposal, fw *
 		p.f("\n")
 	}
 	for _, c := range plan.Conflicts {
-		p.f("冲突：策略 %s 拒绝 %s → %s 的 %s（确认后加 --override 把新策略放在它之前）\n", c.RuleID, c.From, c.To, c.Text)
+		p.f("冲突：策略 %s 拒绝 %s → %s 的 %s\n", c.RuleID, c.From, c.To, c.Text)
 	}
 	for _, u := range plan.Unknown {
 		p.f("无法设计：%s\n", planNote(u))

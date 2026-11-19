@@ -34,17 +34,13 @@ type checkFlags struct {
 	noDesign               bool
 	vr, at, schedule       string
 	noLog                  bool
-	override               bool
 }
 
 func newCheckCmd(o *options) *cobra.Command {
 	var f checkFlags
 	cmd := &cobra.Command{
-		Use: "search --src SRC --dst DST --service SERVICE",
-		// The former check, query, design and locate commands asked the
-		// same question; their names still work.
-		Aliases: []string{"check", "query", "design", "locate"},
-		Short:   "查询有没有策略、要不要新增：定位防火墙，给出结论、命中的策略和变更命令",
+		Use:   "search --src SRC --dst DST --service SERVICE",
+		Short: "查询有没有策略、要不要新增：定位防火墙，给出结论、命中的策略和变更命令",
 		Long: "源、目的、服务可以用常见的各种写法输入。在快照中定位经过的防火墙（--inventory 提供 HA 集群和受保护网段），\n" +
 			"逐台检查 NAT 与访问控制，给出 完全命中 / 部分命中 / 需要新增策略 / 需确认，列出命中的已有策略，\n" +
 			"并设计经过验证的变更与命令（--no-design 只查询；被拒绝策略挡住时新策略放在其前并提示确认）。\n" +
@@ -77,8 +73,6 @@ func newCheckCmd(o *options) *cobra.Command {
 	fl.StringVar(&f.at, "at", "", "按该时刻（RFC 3339）判断时间计划（默认当前时间）")
 	fl.StringVar(&f.schedule, "schedule", "", "新建策略使用的已有时间计划")
 	fl.BoolVar(&f.noLog, "no-log", false, "新建策略不开启日志（默认记录会话开始和结束）")
-	fl.BoolVar(&f.override, "override", false, "已不需要：被拒绝策略挡住时新策略会放在其前并提示确认")
-	_ = fl.MarkHidden("override")
 	fl.StringVar(&f.name, "name", "", "新建策略名称，例如工单号")
 	fl.StringVar(&f.description, "description", "", "新建策略描述")
 	fl.BoolVar(&f.plan, "design", true, "为每台防火墙设计变更方案与命令")

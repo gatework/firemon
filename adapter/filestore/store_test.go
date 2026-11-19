@@ -2,11 +2,14 @@ package filestore_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/adapter/filestore"
 	"github.com/gatework/firemon/vendors/hillstone"
 )
@@ -61,5 +64,40 @@ func TestStore_Errors(t *testing.T) {
 	}
 	if _, err := s.Load(t.Context(), "../etc"); !errors.Is(err, filestore.ErrInvalidName) {
 		t.Errorf("traversal: %v", err)
+	}
+}
+
+// A snapshot stored by another model version is reported stale, with its
+// metadata, so the caller parses the raw text again.
+func TestStore_StaleModel(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "vendors", "hillstone", "testdata", "basic.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := hillstone.New(hillstone.Options{}).Parse(string(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(t.TempDir(), "snapshots")
+	s, err := filestore.New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Save(t.Context(), filestore.Snapshot{Device: "fw1", Config: cfg, Raw: string(raw)}); err != nil {
+		t.Fatal(err)
+	}
+	meta := filepath.Join(root, "fw1", "meta.json")
+	body, err := os.ReadFile(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := strings.Replace(string(body), fmt.Sprintf(`"model": %d`, firemon.ModelVersion), `"model": 1`, 1)
+	if err := os.WriteFile(meta, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := s.Load(t.Context(), "fw1")
+	if !errors.Is(err, filestore.ErrStale) || snap.Vendor != firemon.VendorHillstone {
+		t.Fatalf("stale snapshot: %v %+v", err, snap)
 	}
 }

@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -84,7 +86,7 @@ func (o *options) loadSnapshot(ctx context.Context) (workflow.Loaded, bootstrap.
 	if err != nil {
 		return workflow.Loaded{}, bootstrap.Platform{}, err
 	}
-	snap, err := store.Load(ctx, o.snapshot)
+	snap, err := o.loadStored(ctx, store, o.snapshot)
 	if err != nil {
 		return workflow.Loaded{}, bootstrap.Platform{}, snapshotError(err, o.snapshot, o.store)
 	}
@@ -107,4 +109,38 @@ func defaultStore() string {
 		return "firemon-snapshots"
 	}
 	return filepath.Join(dir, "firemon", "snapshots")
+}
+
+// loadStored loads a snapshot; one stored by another firemon version is
+// parsed again from its collected text and saved, so upgrades never strand
+// the store.
+func (o *options) loadStored(ctx context.Context, store *filestore.Store, name string) (filestore.Snapshot, error) {
+	snap, err := store.Load(ctx, name)
+	if !errors.Is(err, filestore.ErrStale) {
+		return snap, err
+	}
+	raw, err := store.Raw(ctx, name)
+	if err != nil {
+		return filestore.Snapshot{}, err
+	}
+	loc, err := time.LoadLocation(cmp.Or(o.timezone, "Local"))
+	if err != nil {
+		return filestore.Snapshot{}, &usageError{err}
+	}
+	p, err := bootstrap.Lookup(snap.Vendor, loc, nil)
+	if err != nil {
+		return filestore.Snapshot{}, err
+	}
+	cfg, err := p.Parse(raw)
+	if err != nil {
+		return filestore.Snapshot{}, fmt.Errorf("重新解析快照 %s：%w", name, err)
+	}
+	snap.Config, snap.Raw = cfg, raw
+	saved, err := store.Save(ctx, snap)
+	if err != nil {
+		return filestore.Snapshot{}, err
+	}
+	fmt.Fprintf(o.deps.Stderr, "提示：快照 %s 由旧版本保存，已按当前版本从原始配置重新解析并更新\n", name)
+	saved.Config = cfg
+	return saved, nil
 }

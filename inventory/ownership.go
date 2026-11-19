@@ -70,6 +70,7 @@ type owned struct {
 // without declarations, derives claims from non-default routes.
 func (inv *Inventory) buildClaims(protections []Protection) ([]claim, error) {
 	declared := map[string]bool{}
+	protectedZones := map[string][]string{} // cluster -> its protected zones
 	var out []claim
 	for _, p := range protections {
 		m := inv.memberNamed(p.Firewall)
@@ -77,6 +78,9 @@ func (inv *Inventory) buildClaims(protections []Protection) ([]claim, error) {
 			return nil, fmt.Errorf("inventory: protection for unknown firewall %q", p.Firewall)
 		}
 		declared[m.cluster] = true
+		if p.Zone != "" && !slices.Contains(protectedZones[m.cluster], p.Zone) {
+			protectedZones[m.cluster] = append(protectedZones[m.cluster], p.Zone)
+		}
 		excluded := traffic.NewAddressSet(p.Exclude...)
 		for _, n := range p.Networks {
 			set := traffic.NewAddressSet(n).Subtract(excluded)
@@ -84,7 +88,12 @@ func (inv *Inventory) buildClaims(protections []Protection) ([]claim, error) {
 		}
 	}
 	for _, m := range inv.members {
-		if declared[m.cluster] {
+		// A cluster that declares protected networks also owns what its
+		// routes reach through its protected zones; routes into other zones
+		// (management, the outside) make no claim. A cluster that declares
+		// nothing owns what all its routes reach.
+		zones, isDeclared := protectedZones[m.cluster], declared[m.cluster]
+		if isDeclared && len(zones) == 0 {
 			continue
 		}
 		table, ok := m.fw.RoutingTable(m.fw.Semantics().DefaultVirtualRouter)
@@ -93,9 +102,14 @@ func (inv *Inventory) buildClaims(protections []Protection) ([]claim, error) {
 		}
 		egress, _ := table.Lookup(traffic.AnyAddress())
 		for _, e := range egress {
-			if b := e.Route.Destination.Bits(); b > 0 && e.Interface != "" && !inv.towardOther(m.cluster, e.Route.NextHop) {
-				out = append(out, claim{cluster: m.cluster, set: e.Addresses, bits: b, ownership: OwnershipDerived})
+			b := e.Route.Destination.Bits()
+			if b == 0 || e.Interface == "" || inv.towardOther(m.cluster, e.Route.NextHop) {
+				continue
 			}
+			if isDeclared && !slices.Contains(zones, e.Zone) {
+				continue
+			}
+			out = append(out, claim{cluster: m.cluster, zone: e.Zone, set: e.Addresses, bits: b, ownership: OwnershipDerived})
 		}
 	}
 	// Declared claims win over derived ones; within each, longest prefix.

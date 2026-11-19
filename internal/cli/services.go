@@ -11,9 +11,8 @@ import (
 
 func newServicesCmd(o *options) *cobra.Command {
 	return &cobra.Command{
-		Use:     "predefined-service",
-		Aliases: []string{"services"},
-		Short:   "打印厂商实际生效的预定义服务表",
+		Use:   "predefined-service",
+		Short: "打印厂商实际生效的预定义服务表",
 		Long: "打印 firemon 对 --vendor 采用的预定义服务：内置默认值，再用 --predefined-service 覆盖。\n" +
 			"不同型号和版本的内置服务有差异；请与设备对照，把修正后的 JSON 保存下来并用 --predefined-service 指定。",
 		Args: cobra.NoArgs,
