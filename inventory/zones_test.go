@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/inventory"
 )
 
@@ -77,5 +78,68 @@ func TestInventory_ZoneBindingsLocateTheFarEnd(t *testing.T) {
 	}
 	if len(tr.Crossings) != 0 || tr.Excluded.Src.IsEmpty() {
 		t.Errorf("neither end protected: %v excluded %+v", names(tr), tr.Excluded)
+	}
+}
+
+// Two parts crossing one firewall are designed as one change: numbered on,
+// objects created once, and the whole change applies to the firewall.
+func TestInventory_PlanAggregatesAFirewall(t *testing.T) {
+	t.Parallel()
+	fw := bridge(t)
+	inv, err := inventory.New([]inventory.Member{{Name: "fw1", Firewall: fw, Active: true}}, inventory.Options{
+		Now: func() time.Time { return now },
+		Zones: []inventory.ZoneBinding{
+			{Firewall: "fw1", Zone: "l2-trust", Networks: []netip.Prefix{netip.MustParsePrefix("10.250.0.0/16")}, Protected: true},
+			{Firewall: "fw1", Zone: "l2-untrust", Networks: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := request("10.250.1.1,8.8.4.4", "8.8.8.8,10.250.2.2", "tcp/443")
+	plans, err := inv.Plan(design.Intent{Src: req.Src, Dst: req.Dst, Service: req.Service})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plans) != 1 || len(plans[0].Parts) != 2 {
+		t.Fatalf("one plan for the firewall's two parts: %+v", plans)
+	}
+	ids, names := map[string]bool{}, map[string]bool{}
+	for _, c := range plans[0].Plan.Changes {
+		if add, ok := c.(design.AddRule); ok {
+			if ids[add.Rule.ID] || names[add.Rule.Name] {
+				t.Fatalf("rule %s %s repeated: %v", add.Rule.ID, add.Rule.Name, plans[0].Plan.Changes)
+			}
+			ids[add.Rule.ID], names[add.Rule.Name] = true, true
+		}
+	}
+	if len(ids) != 2 {
+		t.Fatalf("a rule per direction: %v", plans[0].Plan.Changes)
+	}
+	cfg := fw.Config()
+	if err := design.Apply(cfg, plans[0].Plan.Changes); err != nil {
+		t.Fatalf("the change applies as one: %v", err)
+	}
+}
+
+// Networks of equal length that different firewalls declare are not
+// ambiguous; only addresses two firewalls both declare are.
+func TestInventory_AmbiguousOnlyWhenShared(t *testing.T) {
+	t.Parallel()
+	bind := func(fw, n string) inventory.ZoneBinding {
+		return inventory.ZoneBinding{Firewall: fw, Zone: "l2-trust", Networks: []netip.Prefix{netip.MustParsePrefix(n)}, Protected: true}
+	}
+	members := []inventory.Member{{Name: "a", Firewall: bridge(t)}, {Name: "b", Firewall: bridge(t)}}
+	inv, err := inventory.New(members, inventory.Options{Now: func() time.Time { return now }, Zones: []inventory.ZoneBinding{bind("a", "10.248.0.0/16"), bind("b", "10.250.0.0/16"), bind("b", "10.99.0.0/24"), bind("a", "10.99.0.0/24")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, err := inv.Locate(request("10.248.1.1,10.250.1.1", "8.8.8.8", "tcp/443"))
+	if err != nil || len(tr.Ambiguous) != 0 {
+		t.Fatalf("different networks: ambiguous %v %v", tr.Ambiguous, err)
+	}
+	tr, err = inv.Locate(request("10.99.0.5", "8.8.8.8", "tcp/443"))
+	if err != nil || len(tr.Ambiguous) != 1 || tr.Ambiguous[0] != "10.99.0.5" {
+		t.Fatalf("a shared network: ambiguous %v %v", tr.Ambiguous, err)
 	}
 }

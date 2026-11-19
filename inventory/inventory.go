@@ -80,6 +80,7 @@ type member struct {
 	fw            *firemon.Firewall
 	engine        *query.Engine
 	planner       *design.Planner
+	naming        design.Naming
 }
 
 // New returns an inventory of members. Members are ordered by name;
@@ -98,6 +99,7 @@ func New(members []Member, opts Options) (*Inventory, error) {
 			name: m.Name, cluster: cmp.Or(m.Cluster, m.Name), fw: m.Firewall, active: m.Active,
 			engine:  query.New(m.Firewall, query.Options{Now: now}),
 			planner: design.New(m.Firewall, design.Options{Now: now, Naming: m.Naming}),
+			naming:  m.Naming,
 		})
 	}
 	slices.SortFunc(inv.members, func(a, b member) int { return cmp.Compare(a.name, b.name) })

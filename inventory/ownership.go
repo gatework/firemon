@@ -125,8 +125,8 @@ func (inv *Inventory) owners(s traffic.AddressSet) (parts []owned, unowned traff
 	remaining := s
 	for i := 0; i < len(inv.claims) && !remaining.IsEmpty(); {
 		j := i
-		var taken traffic.AddressSet
-		var clusters []string
+		var taken, shared traffic.AddressSet
+		byCluster := map[string]traffic.AddressSet{}
 		for ; j < len(inv.claims) && inv.claims[j].ownership == inv.claims[i].ownership && inv.claims[j].bits == inv.claims[i].bits; j++ {
 			c := inv.claims[j]
 			hit := remaining.Intersect(c.set)
@@ -135,12 +135,17 @@ func (inv *Inventory) owners(s traffic.AddressSet) (parts []owned, unowned traff
 			}
 			parts = appendOwned(parts, owned{cluster: c.cluster, zone: c.zone, set: hit, ownership: c.ownership, networks: []string{c.set.String()}})
 			taken = taken.Union(hit)
-			if !slices.Contains(clusters, c.cluster) {
-				clusters = append(clusters, c.cluster)
+			// Only addresses two clusters both claim are ambiguous; equal
+			// prefixes of different networks are not.
+			for other, set := range byCluster {
+				if other != c.cluster {
+					shared = shared.Union(set.Intersect(hit))
+				}
 			}
+			byCluster[c.cluster] = byCluster[c.cluster].Union(hit)
 		}
-		if len(clusters) > 1 {
-			ambiguous = append(ambiguous, taken.String())
+		if !shared.IsEmpty() {
+			ambiguous = append(ambiguous, shared.String())
 		}
 		remaining = remaining.Subtract(taken)
 		i = j

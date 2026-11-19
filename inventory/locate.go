@@ -372,27 +372,58 @@ func (inv *Inventory) Plan(intent design.Intent) ([]ClusterPlan, error) {
 func (inv *Inventory) PlanTrace(t Trace, intent design.Intent) ([]ClusterPlan, error) {
 	var out []ClusterPlan
 	for _, c := range t.Crossings {
-		m := inv.primary(c.Cluster)
-		for _, p := range c.Crossed {
-			part := intent
-			part.Src, part.Dst = p.Src, p.Dst
-			part.FromZone, part.ToZone = cmp.Or(p.FromZone, intent.FromZone), cmp.Or(p.ToZone, intent.ToZone)
-			plan, err := m.planner.Plan(part)
-			if err != nil {
-				return nil, fmt.Errorf("inventory: %s: %w", c.Cluster, err)
-			}
-			out = append(out, ClusterPlan{Cluster: c.Cluster, Firewall: m.name, Part: p, Plan: plan})
+		if len(c.Crossed) == 0 {
+			continue
 		}
+		plan, err := inv.planCluster(inv.primary(c.Cluster), c.Crossed, intent)
+		if err != nil {
+			return nil, fmt.Errorf("inventory: %s: %w", c.Cluster, err)
+		}
+		out = append(out, ClusterPlan{Cluster: c.Cluster, Firewall: inv.primary(c.Cluster).name, Part: c.Crossed[0], Parts: c.Crossed, Plan: plan})
 	}
 	return out, nil
 }
 
-// ClusterPlan is the plan of one part on one cluster.
+// planCluster designs every part crossing one cluster as one change: each
+// part is designed on the configuration the parts before it leave, so the
+// rules number on, objects are created once, and the firewall gets one set
+// of commands.
+func (inv *Inventory) planCluster(m *member, parts []Part, intent design.Intent) (*design.Plan, error) {
+	planner, fw := m.planner, m.fw
+	var plans []*design.Plan
+	for i, p := range parts {
+		part := intent
+		part.Src, part.Dst = p.Src, p.Dst
+		part.FromZone, part.ToZone = cmp.Or(p.FromZone, intent.FromZone), cmp.Or(p.ToZone, intent.ToZone)
+		plan, err := planner.Plan(part)
+		if err != nil {
+			return nil, err
+		}
+		plans = append(plans, plan)
+		if i == len(parts)-1 || len(plan.Changes) == 0 {
+			continue
+		}
+		cfg := fw.Config()
+		if err := design.Apply(cfg, plan.Changes); err != nil {
+			return nil, err
+		}
+		if fw, err = firemon.Compile(cfg); err != nil {
+			return nil, err
+		}
+		planner = design.New(fw, design.Options{Now: inv.now, Naming: m.naming})
+	}
+	return design.Merge(plans...), nil
+}
+
+// ClusterPlan is the change on one cluster for every part of the request
+// crossing it.
 type ClusterPlan struct {
 	Cluster  string
 	Firewall string
-	Part     Part
-	Plan     *design.Plan
+	// Part is the first part; Parts are all of them.
+	Part  Part
+	Parts []Part
+	Plan  *design.Plan
 }
 
 func combine(paths []query.Path) query.Verdict {
