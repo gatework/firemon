@@ -229,6 +229,7 @@ func printAction(p *printer, f report.Firewall, v reportView) {
 		for _, c := range script.Rollback {
 			p.f("      %s\n", c)
 		}
+		p.f("    下发后快照才会反映变更：用 firemon deploy 下发会自动更新快照；手工执行后请运行 firemon collect，否则再次查询会重复设计\n")
 	}
 	switch {
 	case !designed && f.Status == report.StatusIndeterminate:
