@@ -67,16 +67,27 @@ func renderAddress(a firemon.Address) ([]string, error) {
 		return nil, fmt.Errorf("paloalto: address %q must have exactly one entry", a.Name)
 	}
 	e := a.Entries[0]
+	p := "set address " + name(a.Name)
+	var line string
 	switch e.Kind {
 	case firemon.AddressKindPrefix:
-		return []string{"set address " + name(a.Name) + " ip-netmask " + e.Prefix.String()}, nil
+		line = p + " ip-netmask " + e.Prefix.String()
 	case firemon.AddressKindRange:
-		return []string{"set address " + name(a.Name) + " ip-range " + e.From.String() + "-" + e.To.String()}, nil
+		line = p + " ip-range " + e.From.String() + "-" + e.To.String()
 	case firemon.AddressKindFQDN:
-		return []string{"set address " + name(a.Name) + " fqdn " + e.FQDN}, nil
+		line = p + " fqdn " + e.FQDN
 	case firemon.AddressKindUnset:
+		return nil, fmt.Errorf("paloalto: address %q has no value", a.Name)
 	}
-	return nil, fmt.Errorf("paloalto: address %q has no value", a.Name)
+	return append([]string{line}, describe(p, a.Description)...), nil
+}
+
+// describe sets the description of the object at prefix, if any.
+func describe(prefix, description string) []string {
+	if description == "" {
+		return nil
+	}
+	return []string{prefix + " description " + strconv.Quote(description)}
 }
 
 func renderService(svc firemon.Service) ([]string, error) {
@@ -96,7 +107,7 @@ func renderService(svc firemon.Service) ([]string, error) {
 	if !src.IsAny() {
 		line += " source-port " + portText(src.Low, src.High)
 	}
-	return []string{line}, nil
+	return append([]string{line}, describe("set service "+name(svc.Name), svc.Description)...), nil
 }
 
 func renderExtend(c design.ExtendRule) (do, undo []string, err error) {

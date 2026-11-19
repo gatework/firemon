@@ -107,6 +107,9 @@ func renderAddressBody(name, description string, entries []firemon.AddressEntry,
 
 func renderService(svc firemon.Service) ([]string, error) {
 	out := []string{"service " + q(svc.Name)}
+	if svc.Description != "" {
+		out = append(out, "  description "+q(svc.Description))
+	}
 	for _, e := range svc.Entries {
 		line, err := serviceLine(e)
 		if err != nil {

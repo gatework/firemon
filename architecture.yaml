@@ -22,6 +22,7 @@ declared:
   - ./adapter/dns
   - ./internal/bootstrap
   - ./internal/workflow
+  - ./internal/oracle
   - ./internal/cli
   - ./cmd/firemon
 
@@ -78,6 +79,10 @@ rules:
   - name: reports describe evaluations without vendor syntax
     packages: [./report]
     only_local: [., ./traffic, ./query, ./design, ./inventory, ./intake]
+
+  - name: the oracle decides packets from the compiled domain alone, never through the engine it checks
+    packages: [./internal/oracle]
+    only_local: [., ./traffic]
 
   - name: vendors own device syntax and depend only on the domain
     packages: [./vendors/...]

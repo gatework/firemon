@@ -53,9 +53,9 @@ func renderAddressGroup(g firemon.AddressGroup) ([]string, error) {
 	case len(g.Entries) > 0:
 		return nil, fmt.Errorf("paloalto: address group %q has inline entries", g.Name)
 	case g.Filter != "":
-		return []string{"set address-group " + name(g.Name) + " dynamic filter " + quoteFilter(g.Filter)}, nil
+		return append([]string{"set address-group " + name(g.Name) + " dynamic filter " + quoteFilter(g.Filter)}, describe("set address-group "+name(g.Name), g.Description)...), nil
 	}
-	return []string{"set address-group " + name(g.Name) + " static " + bracket(g.Members)}, nil
+	return append([]string{"set address-group " + name(g.Name) + " static " + bracket(g.Members)}, describe("set address-group "+name(g.Name), g.Description)...), nil
 }
 
 // quoteFilter quotes a dynamic group filter expression.
