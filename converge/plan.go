@@ -438,5 +438,10 @@ func zoneNames(cfg *firemon.Config) []string {
 }
 
 func sameRegion(a, b traffic.Region) bool {
+	// A change that leaves a decision alone usually yields the very same
+	// pieces: compare them first, subtract only when they differ.
+	if x, y := a.Spaces(), b.Spaces(); slices.EqualFunc(x, y, traffic.Space.Equal) {
+		return true
+	}
 	return a.SubtractRegion(b).IsEmpty() && b.SubtractRegion(a).IsEmpty()
 }
