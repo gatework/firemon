@@ -85,7 +85,12 @@ func addressEntry(kind string, w *words) (firemon.AddressEntry, bool) {
 		return firemon.RangeEntry(from, to), err1 == nil && err2 == nil && from.Is4() == to.Is4() && !to.Less(from)
 	case "host":
 		name := w.next()
-		return firemon.FQDNEntry(name), name != ""
+		e := firemon.FQDNEntry(name)
+		if w.peek() == "vrouter" {
+			w.next()
+			e.VirtualRouter = w.next() // where the device resolves the name
+		}
+		return e, name != ""
 	default:
 		return firemon.AddressEntry{}, false
 	}

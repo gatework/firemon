@@ -61,11 +61,28 @@ func (p *Parser) Parse(text string) (*firemon.Config, error) {
 		s.dispatch(st)
 	}
 	for _, l := range strays {
+		// "show system info" saved with the configuration: "key: value"
+		// lines; sw-version is the software version set output lacks.
+		if key, value, ok := systemInfo(l.Text); ok {
+			if key == "sw-version" {
+				s.cfg.Version = value
+			}
+			continue
+		}
 		s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Line: l.Number, Text: strings.TrimSpace(l.Text), Reason: "not a set statement"})
 	}
 	cfg := s.finish()
 	cfg.Applications = p.applications()
 	return cfg, nil
+}
+
+// systemInfo reads a "key: value" line of "show system info".
+func systemInfo(line string) (key, value string, ok bool) {
+	key, value, ok = strings.Cut(strings.TrimSpace(line), ": ")
+	if !ok || key == "" || strings.Trim(key, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
+		return "", "", false
+	}
+	return key, strings.TrimSpace(value), true
 }
 
 // draft collects the attribute paths of one named rule in statement order.

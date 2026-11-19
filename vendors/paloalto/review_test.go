@@ -202,3 +202,13 @@ func TestRules_ExternalListsAndRegionsSayWhatTheyMatch(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_VersionFromSystemInfo: "show system info" saved with the set
+// output gives the software version; its other lines are not diagnosed.
+func TestParse_VersionFromSystemInfo(t *testing.T) {
+	t.Parallel()
+	cfg, _ := compileSet(t, "hostname: pa1\nsw-version: 10.2.4\nmodel: PA-3220\nset deviceconfig system hostname pa1\n")
+	if cfg.Version != "10.2.4" || len(cfg.Diagnostics) != 0 {
+		t.Fatalf("version %q diagnostics %+v", cfg.Version, cfg.Diagnostics)
+	}
+}

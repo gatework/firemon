@@ -187,7 +187,7 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 		rule("✗ 被拒绝", "拒绝策略", h)
 	}
 	if f.Defaulted != "" {
-		p.f("  ✗ 无放通策略  %s\n      没有策略放通，默认拒绝\n", f.Defaulted)
+		p.f("  ✗ 无放通策略  %s\n      没有策略放通，默认拒绝\n", trafficText(f.Defaulted))
 	}
 }
 
@@ -196,7 +196,28 @@ var partOf = regexp.MustCompile(`part of (.+?) \((\d+) pieces\)`)
 
 // trafficText writes a traffic description in Chinese.
 func trafficText(s string) string {
-	return partOf.ReplaceAllString(s, "$1 中的部分流量（共 $2 段，-v 或 --json 查看命中策略的定义）")
+	parts := strings.Split(s, "; ")
+	for i, part := range parts {
+		parts[i] = protocolNumbers(part)
+	}
+	return partOf.ReplaceAllString(strings.Join(parts, "; "), "$1 中的部分流量（共 $2 段，-v 或 --json 查看命中策略的定义）")
+}
+
+// protocolNumbers writes the protocols without a name in the service of
+// "src -> dst service" as ip/N, the form the input takes ("47" alone
+// reads as a port).
+func protocolNumbers(part string) string {
+	i := strings.LastIndexByte(part, ' ')
+	if i < 0 || !strings.Contains(part, " -> ") {
+		return part
+	}
+	items := strings.Split(part[i+1:], ",")
+	for j, item := range items {
+		if item != "" && strings.Trim(item, "0123456789") == "" {
+			items[j] = "ip/" + item
+		}
+	}
+	return part[:i+1] + strings.Join(items, ",")
 }
 
 // timeBound describes when a rule is in force, for a rule bound to a

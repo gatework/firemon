@@ -94,7 +94,11 @@ func renderAddressBody(name, description string, entries []firemon.AddressEntry,
 		case firemon.AddressKindRange:
 			out = append(out, prefix+"range "+e.From.String()+" "+e.To.String())
 		case firemon.AddressKindFQDN:
-			out = append(out, prefix+"host "+q(e.FQDN))
+			line := prefix + "host " + q(e.FQDN)
+			if e.VirtualRouter != "" {
+				line += " vrouter " + q(e.VirtualRouter)
+			}
+			out = append(out, line)
 		case firemon.AddressKindUnset:
 			return nil, fmt.Errorf("hillstone: empty entry in %q", name)
 		}
