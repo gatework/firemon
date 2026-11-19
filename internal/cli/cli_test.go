@@ -52,13 +52,17 @@ func TestRun(t *testing.T) {
 	}{
 		{"parse", []string{"parse", "--vendor", "hillstone", "--config", hillstoneConf}, cli.ExitOK, "策略                5"},
 		{"query allowed", []string{"query", "--vendor", "hillstone", "--config", hillstoneConf, "--timezone", "UTC",
-			"--src", "198.51.100.9", "--dst", "172.16.0.10", "--service", "tcp/443"}, cli.ExitOK, "结论：放通"},
+			"--src", "198.51.100.9", "--dst", "172.16.0.10", "--service", "tcp/443"}, cli.ExitOK, "结论：完全命中"},
 		{"query denied", []string{"query", "--vendor", "paloalto", "--config", paloaltoConf,
-			"--src", "192.0.2.7", "--dst", "198.51.100.80", "--service", "tcp/443"}, cli.ExitNotAllowed, "block-bad"},
+			"--src", "192.0.2.7", "--dst", "10.0.0.9", "--service", "tcp/443"}, cli.ExitNotAllowed, "被策略 block-bad 拒绝"},
+		{"vendor from the configuration", []string{"check", "--config", paloaltoConf,
+			"--src", "192.0.2.7", "--dst", "10.0.0.9", "--service", "tcp/443"}, cli.ExitNotAllowed, "被策略 block-bad 拒绝"},
+		{"same side does not cross", []string{"check", "--config", paloaltoConf,
+			"--src", "10.0.0.5", "--dst", "10.0.0.9", "--service", "tcp/443"}, cli.ExitUndecided, "源和目的在防火墙同一侧"},
 		{"usage", []string{"usage", "--vendor", "paloalto", "--config", paloaltoConf, "--addr", "172.16.0.10"}, cli.ExitOK, "web-01"},
 		{"design", []string{"design", "--vendor", "paloalto", "--config", paloaltoConf,
 			"--src", "10.0.7.0/24", "--dst", "172.16.0.40", "--service", "tcp/8443", "--from-zone", "trust", "--to-zone", "dmz", "--name", "req"},
-			cli.ExitOK, "set rulebase security rules req action allow"},
+			cli.ExitNotAllowed, "set rulebase security rules req action allow"},
 		{"audit", []string{"audit", "--vendor", "hillstone", "--config", hillstoneConf}, cli.ExitOK, "未使用的地址对象"},
 		{"unknown vendor", []string{"parse", "--vendor", "acme", "--config", hillstoneConf}, cli.ExitUsage, ""},
 		{"deploy rejects files", []string{"deploy", "--vendor", "hillstone", "--config", hillstoneConf,
@@ -81,17 +85,18 @@ func TestRun_QueryJSON(t *testing.T) {
 	code, out, errOut := run(t, "", "query", "--json", "--vendor", "paloalto", "--config", paloaltoConf,
 		"--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "udp/53")
 	var res struct {
-		Verdict string `json:"verdict"`
-		Paths   []struct {
-			From string `json:"from"`
-			To   string `json:"to"`
-		} `json:"paths"`
+		Firewalls []struct {
+			Paths []struct {
+				From string `json:"from"`
+				To   string `json:"to"`
+			} `json:"paths"`
+		} `json:"firewalls"`
 	}
 	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatalf("code %d: %v\n%s%s", code, err, out, errOut)
 	}
-	if len(res.Paths) != 1 || res.Paths[0].From != "trust" || res.Paths[0].To != "untrust" {
-		t.Fatalf("paths %+v", res.Paths)
+	if len(res.Firewalls) != 1 || len(res.Firewalls[0].Paths) != 1 || res.Firewalls[0].Paths[0].From != "trust" || res.Firewalls[0].Paths[0].To != "untrust" {
+		t.Fatalf("report %+v", res)
 	}
 }
 
@@ -106,9 +111,9 @@ func TestRun_CollectThenQuerySnapshot(t *testing.T) {
 	if code != cli.ExitOK || !strings.Contains(out, "pa1") {
 		t.Fatalf("list: %d\n%s%s", code, out, errOut)
 	}
-	code, out, errOut = run(t, "", "query", "--snapshot", "pa1", "--store", store,
+	code, out, errOut = run(t, "", "query", "-v", "--snapshot", "pa1", "--store", store,
 		"--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "udp/53")
-	if code != cli.ExitNotAllowed || !strings.Contains(out, "路径 trust → untrust") {
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "路径 trust(ethernet1/2) → untrust") {
 		t.Fatalf("query snapshot: %d\n%s%s", code, out, errOut)
 	}
 	code, _, _ = run(t, "", "deploy", "--snapshot", "pa1", "--store", store, "--src", "10.0.0.1", "--dst", "10.0.0.2", "--service", "tcp/22")
@@ -129,7 +134,7 @@ func TestRun_Locate(t *testing.T) {
 		}
 	}
 	code, out, errOut := run(t, "", "locate", "--store", store, "--design", "--src", "10.0.0.5", "--dst", "172.16.0.40", "--service", "tcp/8443", "--name", "req")
-	if code != cli.ExitNotAllowed || !strings.Contains(out, "方案：需要变更，已验证：是") {
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "处置：在 pa1 上执行") {
 		t.Fatalf("locate: %d\n%s%s", code, out, errOut)
 	}
 }
@@ -166,12 +171,12 @@ func TestRun_Check(t *testing.T) {
 	if err := os.WriteFile(inv, []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errOut := run(t, "", "check", "--store", store, "--inventory", inv,
+	code, out, errOut := run(t, "", "check", "-v", "--store", store, "--inventory", inv,
 		"--src", "10.0.5.0 255.255.255.0，172.31.0.9", "--dst", "8.8.8.8", "--service", "53/udp", "--name", "REQ-7")
 	if code != cli.ExitNotAllowed {
 		t.Fatalf("a verified change is ready: code %d\n%s%s", code, out, errOut)
 	}
-	for _, want := range []string{"结论：", "■ pa1（受保护网段", "未经过任何防火墙（已剔除）：源 172.31.0.9", "地址+掩码已转换为网段", "▶ 处置：在 pa1 上执行"} {
+	for _, want := range []string{"结论：", "■ pa1：", "不经过任何防火墙（已剔除）：源 172.31.0.9", "地址+掩码已转换为网段", "处置：在 pa1 上执行"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q (code %d)\n%s%s", want, code, out, errOut)
 		}
@@ -212,12 +217,12 @@ func TestRun_CheckDefaults(t *testing.T) {
 	store, inv := fleet(t, "")
 	env := map[string]string{"FIREMON_STORE": store, "FIREMON_INVENTORY": inv}
 	code, out, errOut := runEnv(t, env, "", "check", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53")
-	if code != cli.ExitNotAllowed || !strings.Contains(out, "▶ 处置：在 pa1 上执行") {
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "处置：在 pa1 上执行") {
 		t.Fatalf("code %d\n%s%s", code, out, errOut)
 	}
 	_, invWithStore := fleet(t, "store: snapshots\n")
 	code, out, errOut = runEnv(t, map[string]string{"FIREMON_INVENTORY": invWithStore}, "", "check", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53", "--no-design")
-	if code != cli.ExitUndecided || strings.Contains(out, "▶ 处置：在") || !strings.Contains(out, "■ pa1") {
+	if code != cli.ExitUndecided || strings.Contains(out, "处置：在") || !strings.Contains(out, "■ pa1") {
 		t.Fatalf("inventory store, no design: code %d\n%s%s", code, out, errOut)
 	}
 	code, out, _ = runEnv(t, env, "", "check", "--json", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53")
@@ -246,5 +251,41 @@ func TestRun_UsageErrors(t *testing.T) {
 		if code != cli.ExitUsage || strings.Count(errOut, "firemon:") > 1 {
 			t.Errorf("%v: code %d, stderr %q", args, code, errOut)
 		}
+	}
+}
+
+// A request a specific deny blocks needs a new rule: the design places it
+// before the deny and asks to confirm bypassing it.
+func TestRun_CheckBlockedDesignsBeforeTheDeny(t *testing.T) {
+	t.Parallel()
+	args := []string{"check", "--vendor", "paloalto", "--config", paloaltoConf, "--src", "192.0.2.7", "--dst", "10.0.0.9", "--service", "tcp/443", "--name", "REQ-9"}
+	code, out, errOut := run(t, "", args...)
+	for _, want := range []string{"结论：需要新增策略", "被策略 block-bad 拒绝", "拒绝  策略 block-bad（第 1 条）", "⚠ 新策略放在拒绝策略 block-bad 之前", "move rulebase security rules REQ-9 before block-bad"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q (code %d)\n%s%s", want, code, out, errOut)
+		}
+	}
+	if code != cli.ExitNotAllowed {
+		t.Fatalf("a verified change is ready: code %d", code)
+	}
+	// Paths and candidates are detail.
+	if strings.Contains(out, "路径 ") {
+		t.Fatalf("default output shows paths:\n%s", out)
+	}
+	_, verbose, _ := run(t, "", append(args, "-v")...)
+	if !strings.Contains(verbose, "路径 untrust") {
+		t.Fatalf("-v shows the paths:\n%s", verbose)
+	}
+}
+
+// A fully matched request shows the rule that permits it and nothing to do.
+func TestRun_CheckFullMatch(t *testing.T) {
+	t.Parallel()
+	code, out, errOut := run(t, "", "check", "--vendor", "hillstone", "--config", hillstoneConf, "--timezone", "UTC",
+		"--src", "198.51.100.9", "--dst", "172.16.0.10", "--service", "tcp/443")
+	want := "结论：完全命中\n\n■ lab-fw1：完全命中\n  已有策略：\n    放通  策略 1 web-in（第 2 条）：198.51.100.9 -> 172.16.0.10 tcp/443\n" +
+		"          区域 untrust → dmz；源 任意；目的 web-servers（172.16.0.10、172.16.0.20-172.16.0.29）；服务 web（tcp/80、tcp/443、tcp/8080）\n  处置：无需变更\n"
+	if code != cli.ExitOK || out != want {
+		t.Fatalf("code %d\n%s%s", code, out, errOut)
 	}
 }

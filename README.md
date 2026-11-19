@@ -20,7 +20,7 @@ firemon check --src 10.248.30.5 --dst 10.250.116.25 --service 9600 --name REQ-10
 firemon check --src "10.250.119.0 255.255.255.0，10.250.120.5-9" --dst "1.1.1.1、api.example.com" --service "443, udp 53, app:ssh"
 ```
 
-It reads the addresses and services in any common form, locates the firewalls through the protected networks of the inventory (falling back to routing), evaluates NAT and access control on each HA cluster, and answers per firewall 已放通 / 部分放通 / 需新增策略 / 需确认, with the permitting and blocking rules expanded as configured (every address, group and service object resolved to its members, to compare with the device), the best rules to modify, the traffic no firewall carries, and the action: nothing to do, or the verified commands and rollback to run on the active member (the backup receives them by HA). A port-only request judges rules restricted to applications with service any by the applications' standard ports (SSH tcp/22, HTTP tcp/80…): off those ports they do not match, and the report says so; name the application (`--service app:SSH`) when a port carries it. `--no-design` only queries; `--resolve` resolves domains so address-based rules can be decided; `--json` prints the report, commands included. Exit status: 0 allowed, 3 a verified change is ready, 4 needs a person, 2 usage.
+It reads the addresses and services in any common form, locates the firewalls through the protected networks of the inventory (falling back to routing), evaluates NAT and access control on each HA cluster, and answers per firewall 完全命中 / 部分命中 / 需要新增策略 / 需确认 — a request a deny rule blocks needs a new rule, which goes before that deny with a warning to confirm the bypass — with the existing rules that decide it (zones, objects and their values, to compare with the device), the part not yet permitted, and the action: nothing to do, or the verified commands and rollback to run on the active member (the backup receives them by HA). `-v` adds paths, NAT, input notes, the application-port inference, candidate rules and objects expanded member by member. A port-only request judges rules restricted to applications with service any by the applications' standard ports (SSH tcp/22, HTTP tcp/80…): off those ports they do not match, and the report says so; name the application (`--service app:SSH`) when a port carries it. `--no-design` only queries; `--resolve` resolves domains so address-based rules can be decided; `--json` prints the report, commands included. Exit status: 0 fully matched, 3 a verified change is ready, 4 needs confirmation, 2 usage.
 
 Defaults come, in order, from the flags, the environment (`FIREMON_STORE`, `FIREMON_INVENTORY`, `FIREMON_TIMEZONE`), the inventory's `store:` (relative to the inventory file), and the settings file `~/.config/firemon/config.yaml` (or `FIREMON_CONFIG`):
 
@@ -43,27 +43,24 @@ firewalls:
     cluster: SZX9-FW
 ```
 
-Every command reads the configuration from `--config FILE`, from a stored snapshot with `--snapshot NAME` (directory `--store`), or from the device with `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output.
+Without `--inventory`, a command reads one firewall: a configuration file with `--config FILE` (the vendor is recognised from the file; `--vendor` overrides), a stored snapshot with `--snapshot NAME` (directory `--store`), or the device with `--vendor`, `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output. `check` replaces the former `query`, `design` and `locate`, whose names still run it.
 
 ```sh
 # Store a device's configuration as a snapshot; later commands use --snapshot fw1
 firemon collect --vendor hillstone --host 10.0.0.1 --user ops --name fw1
 firemon collect --list
 
-# Objects, diagnostics and rules that cannot be evaluated offline
-firemon parse --vendor hillstone --config fw1.txt
+# One firewall from its configuration file: verdict, deciding rules, verified change (-v for paths and NAT)
+firemon check --config pa1.txt --src 10.1.0.0/24 --dst 192.0.2.10 --service tcp/443 --name REQ-1001
 
-# How the firewall treats traffic: zones, NAT, deciding rules, verdict (exit 3 unless allowed)
-firemon query --vendor paloalto --config pa1.txt --src 10.1.0.0/24 --dst 192.0.2.10 --service tcp/443
+# Objects, diagnostics and rules that cannot be evaluated offline
+firemon parse --config fw1.txt
 
 # Which objects and rules reference an address
-firemon usage --vendor hillstone --config fw1.txt --addr 10.250.119.11
-
-# Which firewalls among all snapshots a flow crosses, each verdict, and per-firewall plans
-firemon locate --src 10.1.0.5 --dst 192.0.2.10 --service tcp/443 --design
+firemon usage --config fw1.txt --addr 10.250.119.11
 
 # Redundant, shadowed, expired and disabled rules, permit-any rules, unused objects
-firemon audit --vendor hillstone --config fw1.txt
+firemon audit --config fw1.txt
 
 # Transparent (layer-2) HA clusters: protected networks act as routes to the protected zone,
 # everything else is reached through the peer zone; the active member is evaluated and planned on.
@@ -74,13 +71,9 @@ firemon audit --vendor hillstone --config fw1.txt
 #        protected: [{networks: [10.250.0.0/16, 10.254.0.0/16]}]}
 firemon check --inventory firemon.yaml --src 10.248.30.5 --dst 10.250.116.25 --service tcp/9600
 
-# Design and render the change that permits a request (no device access)
-firemon design --vendor paloalto --config pa1.txt --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 \
-  --name REQ-1001 --description "ticket 1001"
-
 # Publish a server port (DNAT) with its security rule; NAT rules match in order, so the
 # new rule goes before the rule that would otherwise match first (snat and static work alike)
-firemon design --vendor hillstone --config fw1.txt --src any --dst 10.0.5.20 --service tcp/443 \
+firemon check --config fw1.txt --src any --dst 10.0.5.20 --service tcp/443 \
   --nat dnat --nat-ip 198.51.100.50 --nat-port 8443 --name REQ-1002
 
 # Policy convergence: unused objects, ineffective, broad and mergeable rules; --plan writes the
@@ -89,8 +82,8 @@ firemon hits --host 10.0.0.2 --user ops --vendor paloalto --name pa1   # optiona
 firemon converge --snapshot pa1 --plan
 
 # Migration to another vendor: draft the mapping, fill in the ports, translate
-firemon migrate --vendor hillstone --config fw1.txt --to paloalto --init-mapping map.yaml
-firemon migrate --vendor hillstone --config fw1.txt --to paloalto --mapping map.yaml --out pa-migration
+firemon migrate --config fw1.txt --to paloalto --init-mapping map.yaml
+firemon migrate --config fw1.txt --to paloalto --mapping map.yaml --out pa-migration
 
 # Design on the live device; with --apply push, verify and save/commit after confirmation
 firemon deploy --vendor hillstone --host 10.0.0.1 --user ops --src 10.1.0.5 --dst 192.0.2.10 --service tcp/8443 --apply
@@ -122,7 +115,7 @@ See the package examples (`go doc github.com/gatework/firemon/query`) and the [A
 
 ## Semantics in one paragraph
 
-Rules are evaluated in device order and the first match decides, deny rules included; disabled rules and rules outside their schedule do not match. Anything that cannot be evaluated offline (domain names, application identification, dynamic groups, unknown objects) makes a rule undecidable: the query reports `indeterminate` instead of guessing. A design extends an existing rule only when the extension cannot permit anything outside the request, never overrides a specific deny unless asked (`--override`), and is verified by applying it to a copy of the configuration before it is shown.
+Rules are evaluated in device order and the first match decides, deny rules included; disabled rules and rules outside their schedule do not match. Anything that cannot be evaluated offline (domain names, application identification, dynamic groups, unknown objects) makes a rule undecidable: the query reports `indeterminate` instead of guessing. A design extends an existing rule only when the extension cannot permit anything outside the request, places a new rule before a specific deny that blocks the request (check warns to confirm it), and is verified by applying it to a copy of the configuration before it is shown.
 
 ## Development
 

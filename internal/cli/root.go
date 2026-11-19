@@ -126,14 +126,18 @@ func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &usageError{err} })
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error { return o.resolveDefaults(cmd) }
 	root.SetContext(ctx)
-	root.AddCommand(newParseCmd(o), newQueryCmd(o), newUsageCmd(o), newDesignCmd(o), newDeployCmd(o), newAuditCmd(o), newCollectCmd(o), newHitsCmd(o), newConvergeCmd(o), newMigrateCmd(o), newLocateCmd(o), newServicesCmd(o), newCheckCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
+	root.AddCommand(newCheckCmd(o), newDeployCmd(o), newCollectCmd(o), newHitsCmd(o), newConvergeCmd(o), newAuditCmd(o), newMigrateCmd(o), newParseCmd(o), newServicesCmd(o), newUsageCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
 	localizeHelp(root)
 	return root
 }
 
 // platform resolves the vendor and time zone flags.
 func (o *options) platform() (bootstrap.Platform, error) {
-	v, err := vendor("--vendor", o.vendor)
+	name := o.vendor
+	if name == "" && o.file != "" {
+		name = detectVendor(o.file) // a configuration says which vendor wrote it
+	}
+	v, err := vendor("--vendor", name)
 	if err != nil {
 		return bootstrap.Platform{}, err
 	}

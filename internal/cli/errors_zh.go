@@ -3,8 +3,11 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"os"
 	"regexp"
+	"strings"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/adapter/filestore"
@@ -18,7 +21,7 @@ func vendor(flag, value string) (firemon.Vendor, error) {
 	case err == nil:
 		return v, nil
 	case value == "":
-		return v, &usageError{fmt.Errorf("需要 %s 指定厂商：hillstone 或 paloalto", flag)}
+		return v, &usageError{fmt.Errorf("无法从配置识别厂商，请用 %s 指定：hillstone 或 paloalto", flag)}
 	default:
 		return v, &usageError{fmt.Errorf("%s %q 不是已支持的厂商：可选 hillstone 或 paloalto", flag, value)}
 	}
@@ -79,4 +82,26 @@ func localizeError(err error) string {
 		msg = c.re.ReplaceAllString(msg, c.repl)
 	}
 	return msg
+}
+
+// detectVendor names the vendor of a configuration file from its first
+// lines: PAN-OS set commands or a StoneOS version banner and commands; ""
+// when it cannot tell.
+func detectVendor(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	head := make([]byte, 64<<10)
+	n, _ := io.ReadFull(f, head)
+	text := string(head[:n])
+	switch {
+	case strings.Contains(text, "\nset deviceconfig ") || strings.Contains(text, "\nset rulebase ") || strings.HasPrefix(text, "set "):
+		return "paloalto"
+	case strings.Contains(text, "StoneOS") || strings.Contains(text, "\nVersion 5.") || strings.Contains(text, "\nip vrouter ") || strings.Contains(text, "\nrule id "):
+		return "hillstone"
+	default:
+		return ""
+	}
 }

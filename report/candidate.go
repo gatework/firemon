@@ -77,7 +77,9 @@ func candidates(fw *firemon.Firewall, paths []query.Path, plan *design.Plan) []C
 	var out []Candidate
 	for _, pn := range needsByPair(paths) {
 		for _, r := range fw.Rules() {
-			if c, ok := assess(r, pn); ok {
+			// A rule after the deny that decides the request never sees
+			// it: changing it would not help.
+			if c, ok := assess(r, pn); ok && !slices.Contains(c.Reasons, ReasonAfterDeny) {
 				c.Recommended = c.Rule == recommended
 				out = append(out, c)
 			}

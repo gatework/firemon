@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -25,24 +26,30 @@ import (
 // checkFlags are the inputs of the check command: free-form text the
 // operator pastes, read by intake.
 type checkFlags struct {
-	src, dst, service       string
-	fromZone, toZone        string
-	nat                     natFlags
-	name, description       string
-	override, plan, resolve bool
-	noDesign                bool
+	src, dst, service      string
+	fromZone, toZone       string
+	nat                    natFlags
+	name, description      string
+	plan, resolve, verbose bool
+	noDesign               bool
+	vr, at, schedule       string
+	override               bool
 }
 
 func newCheckCmd(o *options) *cobra.Command {
 	var f checkFlags
 	cmd := &cobra.Command{
-		Use:   "check --src SRC --dst DST --service SERVICE",
-		Short: "一键查询：定位防火墙，检查 NAT 与访问控制策略，输出命中报告与变更方案",
+		Use: "check --src SRC --dst DST --service SERVICE",
+		// The former query, design and locate commands asked the same
+		// question; their names still work.
+		Aliases: []string{"query", "design", "locate"},
+		Short:   "查询有没有策略、要不要新增：定位防火墙，给出结论、命中的策略和变更命令",
 		Long: "源、目的、服务可以用常见的各种写法输入。在快照中定位经过的防火墙（--inventory 提供 HA 集群和受保护网段），\n" +
-			"逐台检查 NAT 与访问控制，给出 已放通 / 部分放通 / 需新增策略 / 需确认，列出命中的已有策略及其对象定义、\n" +
-			"可修改的候选策略，并设计经过验证的变更与命令（--no-design 只查询）：\n" +
+			"逐台检查 NAT 与访问控制，给出 完全命中 / 部分命中 / 需要新增策略 / 需确认，列出命中的已有策略，\n" +
+			"并设计经过验证的变更与命令（--no-design 只查询；被拒绝策略挡住时新策略放在其前并提示确认）。\n" +
+			"-v 显示路径、NAT、输入说明、候选策略和对象完整展开：\n" +
 			"  firemon check --src 10.248.30.5 --dst 10.250.116.25 --service 9600\n" +
-			"退出码：0 已放通，3 有已验证的方案待执行，4 需人工确认，2 用法错误。",
+			"退出码：0 完全命中，3 有已验证的方案待执行，4 需确认，2 用法错误。",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return &usageError{fmt.Errorf("不接受位置参数 %q：请用 --src 源地址 --dst 目的地址 --service 服务", args)}
@@ -65,12 +72,17 @@ func newCheckCmd(o *options) *cobra.Command {
 	fl.StringVar(&f.service, "service", "", "服务：443、tcp 80、80/udp、https、ping、app:ssh …")
 	fl.StringVar(&f.fromZone, "from-zone", "", "源区域（透明模式或无法按路由定位时指定）")
 	fl.StringVar(&f.toZone, "to-zone", "", "目的区域")
+	fl.StringVar(&f.vr, "virtual-router", "", "虚拟路由器（默认使用厂商默认值）")
+	fl.StringVar(&f.at, "at", "", "按该时刻（RFC 3339）判断时间计划（默认当前时间）")
+	fl.StringVar(&f.schedule, "schedule", "", "新建策略使用的已有时间计划")
+	fl.BoolVar(&f.override, "override", false, "已不需要：被拒绝策略挡住时新策略会放在其前并提示确认")
+	_ = fl.MarkHidden("override")
 	fl.StringVar(&f.name, "name", "", "新建策略名称，例如工单号")
 	fl.StringVar(&f.description, "description", "", "新建策略描述")
-	fl.BoolVar(&f.override, "override", false, "允许新策略放在具体拒绝策略之前")
 	fl.BoolVar(&f.plan, "design", true, "为每台防火墙设计变更方案与命令")
 	fl.BoolVar(&f.noDesign, "no-design", false, "只查询，不设计变更方案")
 	fl.BoolVar(&f.resolve, "resolve", false, "解析域名，以便按 IP 写的策略也能判定")
+	fl.BoolVarP(&f.verbose, "verbose", "v", false, "显示详情：路径与 NAT、输入说明、按端口推断、候选策略、对象完整展开")
 	f.nat.register(fl)
 	return cmd
 }
@@ -94,7 +106,12 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	}
 	req := query.Request{
 		Src: in.Src, Dst: in.Dst, DstDomains: in.DstDomains, Service: in.Service, Applications: in.Applications,
-		FromZone: f.fromZone, ToZone: f.toZone,
+		FromZone: f.fromZone, ToZone: f.toZone, VirtualRouter: f.vr,
+	}
+	if f.at != "" {
+		if req.At, err = time.Parse(time.RFC3339, f.at); err != nil {
+			return &usageError{fmt.Errorf("--at %q 不是 RFC 3339 时刻，例如 2026-11-18T09:00:00+08:00", f.at)}
+		}
 	}
 	if f.resolve && len(in.DstDomains) > 0 {
 		req.Resolved = dns.Resolver{}.Resolve(cmd.Context(), in.DstDomains)
@@ -106,8 +123,10 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	var plans []inventory.ClusterPlan
 	if f.plan && !in.Dst.IsEmpty() {
 		intent := design.Intent{
-			Src: in.Src, Dst: in.Dst, Service: in.Service, FromZone: f.fromZone, ToZone: f.toZone,
-			Name: f.name, Description: f.description, Override: f.override, NAT: nat,
+			Src: in.Src, Dst: in.Dst, Service: in.Service, FromZone: f.fromZone, ToZone: f.toZone, VirtualRouter: f.vr, Schedule: f.schedule,
+			// A deny that blocks the request is passed: the new rule goes
+			// before it, and the report asks to confirm that is intended.
+			Name: f.name, Description: f.description, Override: true, NAT: nat,
 		}
 		if plans, err = inv.Plan(intent); err != nil {
 			return err
@@ -121,7 +140,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 		if err := writeJSON(cmd.OutOrStdout(), rep); err != nil {
 			return err
 		}
-	} else if err := printReport(cmd, rep, plans, platforms); err != nil {
+	} else if err := printReport(cmd, rep, reportView{plans: plans, platforms: platforms, fws: fws, verbose: f.verbose}); err != nil {
 		return err
 	}
 	return checkExit(rep, f.plan)
@@ -185,7 +204,11 @@ func (o *options) checkFleet(cmd *cobra.Command) (*inventory.Inventory, map[stri
 			return nil, nil, nil, err
 		}
 		name := cmp.Or(o.snapshot, loaded.Config.Hostname, "firewall")
-		inv, err := inventory.New([]inventory.Member{{Name: name, Firewall: loaded.Firewall, Naming: p.Naming}}, inventory.Options{Now: o.deps.Now})
+		// The operator named the firewall: it answers for every address,
+		// so no part of the request is set aside as not crossing it.
+		everything := inventory.Protection{Firewall: name, Networks: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")}}
+		inv, err := inventory.New([]inventory.Member{{Name: name, Firewall: loaded.Firewall, Naming: p.Naming}},
+			inventory.Options{Now: o.deps.Now, Protections: []inventory.Protection{everything}})
 		fws[name] = loaded.Firewall
 		return inv, map[string]bootstrap.Platform{name: p}, fws, err
 	}
@@ -224,187 +247,6 @@ func printNotes(p *printer, notes []intake.Note) {
 			line += " → " + n.Result
 		}
 		p.f("%s\n", line)
-	}
-}
-
-func printReport(cmd *cobra.Command, rep report.Report, plans []inventory.ClusterPlan, platforms map[string]bootstrap.Platform) error {
-	p := &printer{w: cmd.OutOrStdout()}
-	p.f("结论：%s\n", text(statusText, rep.Status, rep.Status.String()))
-	if len(rep.Notes) > 0 {
-		p.f("\n输入说明：\n")
-		printNotes(p, rep.Notes)
-	}
-	if rep.Excluded.Src != "" || rep.Excluded.Dst != "" {
-		p.f("\n未经过任何防火墙（已剔除）：源 %s  目的 %s\n", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst))
-	}
-	for _, in := range rep.Inside {
-		p.f("源与目的同在 %s 的 %s 区域一侧，不经过该防火墙：%s\n", in.Cluster, in.Zone, in.Traffic)
-	}
-	for _, name := range rep.ZonesNeeded {
-		p.f("提示：%s 有透明模式（二层）接口，经二层转发的流量无法按路由定位，请用 --from-zone/--to-zone 指定区域\n", name)
-	}
-	for _, a := range rep.Ambiguous {
-		p.f("归属不唯一（多个防火墙同等声明，均已检查）：%s\n", a)
-	}
-	for _, f := range rep.Firewalls {
-		printFirewall(p, f)
-		printPlan(p, f, plans, platforms)
-	}
-	return p.err
-}
-
-func printFirewall(p *printer, f report.Firewall) {
-	p.f("\n■ %s（%s，成员 %s）：%s\n", f.Cluster, text(ownershipText, f.Ownership, f.Ownership.String()),
-		strings.Join(f.Members, ","), text(statusText, f.Status, f.Status.String()))
-	for _, path := range f.Paths {
-		printPath(p, path)
-	}
-	hits := func(title string, hs []report.Hit) {
-		for _, h := range hs {
-			p.f("  %s：%s，%s\n", title, hitLabel(h.Rule, h.Name), h.Traffic)
-		}
-	}
-	hits("放通", f.Permitted)
-	hits("拒绝", f.Blocked)
-	if len(f.Undecided) > 0 {
-		names := make([]string, 0, len(f.Undecided))
-		for _, h := range f.Undecided {
-			kinds := make([]string, len(h.Reasons))
-			for i, k := range h.Reasons {
-				kinds[i] = text(issueKindText, k, k)
-			}
-			names = append(names, hitLabel(h.Rule, h.Name)+"（"+actionWord(h.Action)+"，"+strings.Join(kinds, "、")+"）")
-		}
-		p.f("  待确认流量：%s\n  可能先命中并改变结论的策略：%s\n", f.UndecidedTraffic, strings.Join(names, "，"))
-		for _, h := range f.Otherwise {
-			outcome := "拒绝"
-			if h.Final == query.OutcomePermit {
-				outcome = "放通"
-			}
-			p.f("  若这些策略都不命中：由%s%s\n", hitLabel(h.Rule, h.Name), outcome)
-		}
-	}
-	if f.Remaining != "" {
-		p.f("  未放通部分：%s\n", f.Remaining)
-	}
-	if f.Unrouted != "" {
-		p.f("  无路由（被丢弃）的目的：%s\n", f.Unrouted)
-	}
-	if f.Incomplete {
-		p.f("  评估超出预算被截断，结论仅覆盖已评估部分，按需确认处理\n")
-	}
-	printRuleDetails(p, f.Rules)
-	for _, c := range f.Candidates {
-		mark := "候选"
-		if c.Recommended {
-			mark = "推荐修改"
-		}
-		reasons := make([]string, len(c.Reasons))
-		for i, r := range c.Reasons {
-			reasons[i] = text(reasonText, r, string(r))
-		}
-		p.f("  %s %s：源%s，目的%s，服务%s；%s\n", mark, hitLabel(c.Rule, c.Name), text(relationText, c.Src, c.Src.String()),
-			text(relationText, c.Dst, c.Dst.String()), text(relationText, c.Service, c.Service.String()), cmp.Or(strings.Join(reasons, "；"), "可直接扩展"))
-	}
-}
-
-// hitLabel names a rule as "策略 ID 名称", or the default action.
-func hitLabel(id, name string) string {
-	if id == "(default)" || id == "" {
-		return "默认动作"
-	}
-	if name == "" || name == id {
-		return "策略 " + id
-	}
-	return "策略 " + id + " " + name
-}
-
-func actionWord(a firemon.Action) string {
-	switch a {
-	case firemon.ActionPermit:
-		return "命中则放通"
-	case firemon.ActionDeny:
-		return "命中则拦截"
-	case firemon.ActionUnset:
-		return "动作未知"
-	default:
-		return "动作未知"
-	}
-}
-
-// printRuleDetails writes the definitions of the deciding rules with
-// their objects expanded, to compare with the device configuration.
-func printRuleDetails(p *printer, rules []report.RuleDetail) {
-	if len(rules) == 0 {
-		return
-	}
-	p.f("  命中的已有策略（配置原文，对象已展开）：\n")
-	for _, r := range rules {
-		state := ""
-		if r.Disabled {
-			state = "，已禁用"
-		}
-		p.f("    %s（第 %d 条，%s%s）\n", hitLabel(r.Rule, r.Name), r.Position, text(actionText, r.Action, r.Action.String()), state)
-		p.f("      区域：%s → %s\n", zoneList(r.From), zoneList(r.To))
-		printObjects(p, "源地址", r.Source, r.NegateSource)
-		printObjects(p, "目的地址", r.Destination, r.NegateDest)
-		printObjects(p, "服务", r.Services, false)
-		if len(r.Applications) > 0 {
-			p.f("      应用：%s\n", strings.Join(r.Applications, "、"))
-		}
-		if r.Schedule != nil {
-			printObjects(p, "时间计划", []report.Object{*r.Schedule}, false)
-		}
-		if r.Description != "" {
-			p.f("      描述：%s\n", r.Description)
-		}
-	}
-}
-
-func zoneList(zs []string) string {
-	if len(zs) == 0 {
-		return "任意"
-	}
-	return strings.Join(zs, "、")
-}
-
-// printObjects writes one dimension of a rule: "任意" when it names
-// nothing, else each object with its values and members indented below.
-func printObjects(p *printer, title string, objs []report.Object, negate bool) {
-	prefix := ""
-	if negate {
-		prefix = "除以下以外的全部："
-	}
-	if len(objs) == 0 {
-		p.f("      %s：任意\n", title)
-		return
-	}
-	p.f("      %s：%s\n", title, prefix)
-	for _, o := range objs {
-		printObject(p, o, 8)
-	}
-}
-
-func printObject(p *printer, o report.Object, indent int) {
-	pad := strings.Repeat(" ", indent)
-	switch {
-	case o.Missing:
-		p.f("%s%s（配置中未定义）\n", pad, o.Name)
-	case o.Name == "":
-		p.f("%s%s\n", pad, strings.Join(o.Values, "、"))
-	case len(o.Members) == 0 && len(o.Values) == 1 && o.Values[0] == o.Name:
-		p.f("%s%s\n", pad, o.Name) // named after its only value
-	case len(o.Members) == 0:
-		p.f("%s%s = %s\n", pad, o.Name, cmp.Or(strings.Join(o.Values, "、"), "（空）"))
-	default:
-		line := pad + o.Name + "（组）"
-		if len(o.Values) > 0 {
-			line += " = " + strings.Join(o.Values, "、")
-		}
-		p.f("%s\n", line)
-		for _, m := range o.Members {
-			printObject(p, m, indent+2)
-		}
 	}
 }
 
@@ -453,56 +295,6 @@ func printPath(p *printer, path report.Path) {
 			order = fmt.Sprintf("（第 %d 条，按顺序首条命中）", n.Position)
 		}
 		p.f("    %s %s%s：%s → %s\n", text(natSideText, n.Side, n.Side.String()), n.Rule, order, orDash(n.Traffic), n.Translated)
-	}
-}
-
-func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, platforms map[string]bootstrap.Platform) {
-	if f.Status == report.StatusFullMatch {
-		p.f("  ▶ 处置：已放通，无需变更\n")
-		return
-	}
-	designed := false
-	for _, cp := range plans {
-		if cp.Cluster != f.Cluster || cp.Plan == nil {
-			continue
-		}
-		designed = true
-		printNATOutcome(p, cp.Plan.NAT)
-		for _, c := range cp.Plan.Conflicts {
-			p.f("  设计冲突：策略 %s 拒绝 %s（%s → %s），未自动放在其前；确认后加 --override\n", c.RuleID, c.Text, c.From, c.To)
-		}
-		for _, u := range cp.Plan.Unknown {
-			p.f("  无法设计：%s\n", planNote(u))
-		}
-		for _, w := range cp.Plan.Warnings {
-			p.f("  注意：%s\n", planNote(w))
-		}
-		if len(cp.Plan.Changes) == 0 {
-			continue
-		}
-		if !cp.Plan.Verified {
-			p.f("  ▶ 处置：需确认，方案验证未通过（%s），不输出命令\n", cmp.Or(cp.Plan.VerifyError, "未验证"))
-			continue
-		}
-		script, err := platforms[cp.Firewall].Render(cp.Plan)
-		if err != nil {
-			p.f("  ▶ 处置：需确认，方案无法生成命令：%v\n", err)
-			continue
-		}
-		p.f("  ▶ 处置：在 %s 上执行以下命令%s（已验证：只放通本次请求）\n", cp.Firewall, haNote(f.Members, cp.Firewall))
-		for _, c := range cp.Plan.Changes {
-			p.f("    · %s\n", changeText(c))
-		}
-		for _, c := range script.Commands {
-			p.f("    %s\n", c)
-		}
-		p.f("    回退命令：\n")
-		for _, c := range script.Rollback {
-			p.f("    %s\n", c)
-		}
-	}
-	if !designed {
-		p.f("  ▶ 处置：%s（去掉 --no-design 可生成变更方案）\n", text(statusText, f.Status, f.Status.String()))
 	}
 }
 
