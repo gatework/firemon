@@ -71,12 +71,8 @@ func (s *state) securityAttribute(r *firemon.SecurityRule, attr []string) {
 		r.From = append(r.From, anyless(values)...)
 	case "to":
 		r.To = append(r.To, anyless(values)...)
-	case "source":
-		r.Source = append(r.Source, s.operands(values)...)
-		s.externalOperands(r, values)
-	case "destination":
-		r.Destination = append(r.Destination, s.operands(values)...)
-		s.externalOperands(r, values)
+	case "source", "destination":
+		s.addressAttribute(r, key, values)
 	case "service":
 		for _, v := range anyless(values) {
 			if v == "application-default" {
@@ -266,6 +262,16 @@ func (s *state) operands(values []string) []firemon.AddressRef {
 		out = append(out, firemon.NamedAddress(v))
 	}
 	return out
+}
+
+// addressAttribute reads a rule's source or destination.
+func (s *state) addressAttribute(r *firemon.SecurityRule, key string, values []string) {
+	if key == "source" {
+		r.Source = append(r.Source, s.operands(values)...)
+	} else {
+		r.Destination = append(r.Destination, s.operands(values)...)
+	}
+	s.externalOperands(r, values)
 }
 
 // externalOperands notes the operands that are external lists or regions:
