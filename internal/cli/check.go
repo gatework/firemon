@@ -184,17 +184,29 @@ func checkExit(rep report.Report, designed bool) error {
 		}
 		return errNotAllowed
 	}
-	// Undecided traffic is settled by a verified plan without unknown
-	// parts: it permits the request whatever the undecidable rules do.
-	for _, f := range rep.Firewalls {
-		if f.Status == report.StatusFullMatch {
-			continue
-		}
-		if f.Plan == nil || !f.Plan.Verified || len(f.Plan.Conflicts) > 0 || len(f.Plan.Unknown) > 0 {
-			return errUndecided
-		}
+	if !planned(rep) {
+		return errUndecided
 	}
 	return errNotAllowed
+}
+
+// planned reports that every firewall the request needs a change on has a
+// verified plan without conflicts or unknown parts. Undecided traffic is
+// then settled: the plan permits the request whatever the undecidable
+// rules do.
+func planned(rep report.Report) bool {
+	for _, f := range rep.Firewalls {
+		if f.Status != report.StatusFullMatch && !settledByPlan(f) {
+			return false
+		}
+	}
+	return len(rep.Firewalls) > 0
+}
+
+// settledByPlan reports a verified plan without conflicts or unknown parts
+// on the firewall.
+func settledByPlan(f report.Firewall) bool {
+	return f.Plan != nil && f.Plan.Verified && len(f.Plan.Conflicts) == 0 && len(f.Plan.Unknown) == 0
 }
 
 // undecided reports a firewall where rules that cannot be evaluated

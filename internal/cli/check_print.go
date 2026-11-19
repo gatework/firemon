@@ -76,8 +76,14 @@ func zonesHint(name string, rep report.Report, single bool) string {
 func conclusion(rep report.Report) string {
 	switch {
 	case rep.Status != report.StatusUnset:
+		undecidedParts := rep.Status == report.StatusIndeterminate || slices.ContainsFunc(rep.Firewalls, undecided)
+		if undecidedParts && planned(rep) {
+			// Same reading as the exit code: the verified plan permits the
+			// request whatever the undecidable rules do.
+			return "需要新增策略（无法离线判定的部分，由已验证的方案确保放通）"
+		}
 		verdict := text(statusText, rep.Status, rep.Status.String())
-		if rep.Status != report.StatusIndeterminate && slices.ContainsFunc(rep.Firewalls, undecided) {
+		if rep.Status != report.StatusIndeterminate && undecidedParts {
 			verdict += "（部分流量需确认）"
 		}
 		return verdict
@@ -121,6 +127,9 @@ func printFirewall(p *printer, f report.Firewall, v reportView) {
 // firewallVerdict is the verdict with its reason: what blocks the request
 // when nothing permits it.
 func firewallVerdict(f report.Firewall) string {
+	if (f.Status == report.StatusIndeterminate || undecided(f)) && settledByPlan(f) && len(f.Plan.Changes) > 0 {
+		return "需要新增策略（无法离线判定的部分，由已验证的方案确保放通）"
+	}
 	verdict := text(statusText, f.Status, f.Status.String())
 	switch f.Status {
 	case report.StatusBlocked:
