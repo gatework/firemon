@@ -37,7 +37,10 @@ func (o *options) resolveDefaults(cmd *cobra.Command) error {
 		o.inventoryFile = expandHome(cmp.Or(getenv(envInventory), settings.Inventory))
 	}
 	if !flags.Changed("timezone") {
-		o.timezone = cmp.Or(getenv(envTimezone), settings.Timezone, "Local")
+		o.timezone = cmp.Or(getenv(envTimezone), settings.Timezone)
+		// Nothing chosen: the configuration's own time zone, else local.
+		o.timezoneDefault = o.timezone == ""
+		o.timezone = cmp.Or(o.timezone, "Local")
 	}
 	if !flags.Changed("store") {
 		o.store = cmp.Or(expandHome(getenv(envStore)), o.inventoryStore(), expandHome(settings.Store), defaultStore())

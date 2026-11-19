@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"encoding/json"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -111,5 +112,32 @@ func TestAccept_JSONAgreesWithExit(t *testing.T) {
 		if code != c.code || rep.Status != c.status || rep.Firewalls == nil {
 			t.Fatalf("%v: exit %d status %q firewalls %v, want %d %q", c.args, code, rep.Status, rep.Firewalls, c.code, c.status)
 		}
+	}
+}
+
+// TestAccept_DeviceTimezone: with no time zone chosen, a PAN-OS
+// configuration is read in the zone it sets for the device; a chosen one
+// still wins.
+func TestAccept_DeviceTimezone(t *testing.T) {
+	t.Parallel()
+	path := t.TempDir() + "/pa.conf"
+	if err := os.WriteFile(path, []byte("set deviceconfig system hostname pa\nset deviceconfig system timezone Asia/Tokyo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	zone := func(args ...string) string {
+		_, out, errOut := run(t, "", append([]string{"parse", "--dump", "--config", path}, args...)...)
+		var cfg struct {
+			TimeZone string `json:"time_zone"`
+		}
+		if err := json.Unmarshal([]byte(out), &cfg); err != nil {
+			t.Fatalf("%v\n%s%s", err, out, errOut)
+		}
+		return cfg.TimeZone
+	}
+	if got := zone(); got != "Asia/Tokyo" {
+		t.Errorf("device zone %q, want Asia/Tokyo", got)
+	}
+	if got := zone("--timezone", "UTC"); got != "UTC" {
+		t.Errorf("chosen zone %q, want UTC", got)
 	}
 }
