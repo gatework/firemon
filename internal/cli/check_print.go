@@ -9,6 +9,7 @@ import (
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/design"
+	"github.com/gatework/firemon/intake"
 	"github.com/gatework/firemon/internal/bootstrap"
 	"github.com/gatework/firemon/inventory"
 	"github.com/gatework/firemon/query"
@@ -21,6 +22,7 @@ type reportView struct {
 	platforms map[string]bootstrap.Platform
 	fws       map[string]*firemon.Firewall
 	verbose   bool
+	single    bool // one firewall from --config, --snapshot or --host: no inventory
 }
 
 // printReport writes what an operator acts on: per firewall the verdict,
@@ -28,19 +30,19 @@ type reportView struct {
 // paths, NAT, input notes, inferences and candidates.
 func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 	p := &printer{w: cmd.OutOrStdout()}
-	p.f("结论：%s\n", text(statusText, rep.Status, rep.Status.String()))
+	p.f("结论：%s\n", conclusion(rep))
 	if v.verbose && len(rep.Notes) > 0 {
 		p.f("\n输入说明：\n")
 		printNotes(p, rep.Notes)
 	}
 	if rep.Excluded.Src != "" || rep.Excluded.Dst != "" {
-		p.f("\n不经过任何防火墙（已剔除）：源 %s  目的 %s\n", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst))
+		p.f("\n不在任何防火墙的受保护网段内（库存未覆盖，或确实不经过防火墙）：源 %s  目的 %s\n", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst))
 	}
 	for _, in := range rep.Inside {
 		p.f("不经过防火墙：%s（两端都在 %s 的 %s 一侧）\n", in.Traffic, in.Cluster, in.Zone)
 	}
 	for _, name := range rep.ZonesNeeded {
-		p.f("提示：%s 是透明模式（二层），另一端不在任何绑定的网段里，无法判断它在哪个安全区域：请在库存的 zones 中为该区域绑定网段（例如 l2-untrust: 0.0.0.0/0），或用 --from-zone/--to-zone 指定\n", name)
+		p.f("提示：%s\n", zonesHint(name, rep, v.single))
 	}
 	for _, a := range rep.Ambiguous {
 		p.f("归属不唯一（多个防火墙同等声明，均已检查）：%s\n", a)
@@ -52,6 +54,39 @@ func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 		printFirewall(p, f, v)
 	}
 	return p.err
+}
+
+// zonesHint says why the zone of the far end on a transparent (layer 2)
+// firewall is unknown and how to give it.
+func zonesHint(name string, rep report.Report, single bool) string {
+	domains := slices.ContainsFunc(rep.Notes, func(n intake.Note) bool { return n.Code == intake.CodeDomain })
+	switch {
+	case domains:
+		return name + " 是透明模式（二层），目的是域名，无法据此判断它在哪个安全区域：加 --resolve 解析为地址，或用 --from-zone/--to-zone 指定"
+	case single:
+		return name + " 是透明模式（二层），无法从路由判断另一端在哪个安全区域：请用 --from-zone/--to-zone 指定，或改用库存并为区域绑定网段"
+	default:
+		return name + " 是透明模式（二层），另一端不在该防火墙任何绑定的网段里，无法判断它在哪个安全区域：请在库存的 zones 中为该区域绑定网段（IPv4 用 0.0.0.0/0，IPv6 用 ::/0），或用 --from-zone/--to-zone 指定"
+	}
+}
+
+// conclusion is the verdict over every firewall; a request that crosses
+// none is settled only when both ends sit in one zone.
+func conclusion(rep report.Report) string {
+	switch {
+	case rep.Status != report.StatusUnset:
+		verdict := text(statusText, rep.Status, rep.Status.String())
+		if rep.Status != report.StatusIndeterminate && slices.ContainsFunc(rep.Firewalls, undecided) {
+			verdict += "（部分流量需确认）"
+		}
+		return verdict
+	case rep.Settled():
+		return "无需策略：不经过防火墙"
+	case rep.Excluded.Src != "" || rep.Excluded.Dst != "":
+		return "需确认：请求不经过库存中的任何防火墙，请检查库存的 zones 是否覆盖源和目的"
+	default:
+		return "需确认：请求不经过防火墙的策略检查"
+	}
 }
 
 func printFirewall(p *printer, f report.Firewall, v reportView) {
@@ -119,6 +154,11 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 			p.f("      区域 %s → %s；源 %s；目的 %s；服务 %s%s；%s\n", zoneList(d.From), zoneList(d.To),
 				objectsBrief(d.Source, d.NegateSource), objectsBrief(d.Destination, d.NegateDest), objectsBrief(d.Services, false), appsBrief(d.Applications), logText(d.Log))
 		}
+		if ok {
+			if line := timeBound(d); line != "" {
+				p.f("      ⚠ 限时策略：%s，此结论只在该时段内成立\n", line)
+			}
+		}
 	}
 	for _, h := range f.Permitted {
 		rule("✓ 已放通", "放通策略", h)
@@ -129,6 +169,19 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 	if f.Defaulted != "" {
 		p.f("  ✗ 无放通策略  %s\n      没有策略放通，默认拒绝\n", f.Defaulted)
 	}
+}
+
+// timeBound describes when a rule is in force, for a rule bound to a
+// schedule or a validity period; empty for a permanent rule.
+func timeBound(d report.RuleDetail) string {
+	var parts []string
+	if d.Schedule != nil {
+		parts = append(parts, "时间计划 "+d.Schedule.Name+"（"+strings.Join(d.Schedule.Values, "；")+"）")
+	}
+	if d.Window != "" {
+		parts = append(parts, "有效期 "+d.Window)
+	}
+	return strings.Join(parts, "，")
 }
 
 func ruleDetail(rules []report.RuleDetail, id string) (report.RuleDetail, bool) {
@@ -211,8 +264,12 @@ func printAction(p *printer, f report.Firewall, v reportView) {
 			continue
 		}
 		p.f("  处置：%s，在 %s 上执行%s（已验证：只放通本次请求）\n", actionSummary(cp.Plan), cp.Firewall, haNote(f.Members, cp.Firewall))
-		for _, w := range passedDenies(cp.Plan, v.fws[f.Cluster]) {
-			p.f("    ⚠ 放在拒绝策略 %s 之前，会绕过它：请确认符合安全要求\n", w)
+		if ids := passedDenies(cp.Plan, v.fws[f.Cluster]); len(ids) > 0 {
+			them := "它"
+			if len(ids) > 1 {
+				them = "它们"
+			}
+			p.f("    ⚠ 放在拒绝策略 %s 之前，会绕过%s：请确认符合安全要求\n", strings.Join(ids, "、"), them)
 		}
 		n := 0
 		for _, c := range cp.Plan.Changes {
@@ -258,7 +315,7 @@ func printPlanNotes(p *printer, plan *design.Plan, verbose bool) {
 
 // passedDenies are the deny rules new rules are placed before.
 func passedDenies(plan *design.Plan, fw *firemon.Firewall) []string {
-	var out []string
+	out := slices.Clone(plan.Bypassed)
 	for _, c := range plan.Changes {
 		add, ok := c.(design.AddRule)
 		if !ok || add.Before == "" || fw == nil {

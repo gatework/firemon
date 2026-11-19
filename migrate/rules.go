@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,9 @@ type ruleResult struct {
 	rules    []firemon.SecurityRule
 	fidelity Fidelity
 	notes    []string
+	// apps are the applications that stand for the rule's services
+	// without ports on port-only targets.
+	apps []string
 }
 
 func (r *ruleResult) approximate(note string) {
@@ -51,8 +55,11 @@ func (tr *translator) rules() {
 			tr.changes.rules = append(tr.changes.rules, design.AddRule{Rule: r})
 			ids = append(ids, r.ID)
 		}
-		if res.fidelity != FidelityUntranslatable {
+		switch {
+		case res.fidelity != FidelityUntranslatable:
 			tr.ruleMap[src.ID] = ids
+		case src.Action == firemon.ActionDeny && !src.Disabled:
+			tr.disabledDenies = append(tr.disabledDenies, src.ID)
 		}
 		tr.item(ItemKindRule, src.ID, max(res.fidelity, FidelityExact), strings.Join(res.notes, "; "), ids...)
 	}
@@ -96,8 +103,30 @@ func (tr *translator) rule(src firemon.SecurityRule, compiled *firemon.Rule) rul
 	if src.Group != "" {
 		res.notes = append(res.notes, "rule group "+tr.groupName(src.Group)+" not carried over")
 	}
-	res.rules = tr.scoped(&res, out, src.Scope)
+	for _, r := range tr.withPortless(&res, out, src) {
+		res.rules = append(res.rules, tr.scoped(&res, r, src.Scope)...)
+	}
 	return res
+}
+
+// withPortless returns the rule and, for services without ports on
+// port-only targets, a companion rule matching their applications. A rule
+// that already matches applications cannot hold both.
+func (tr *translator) withPortless(res *ruleResult, out firemon.SecurityRule, src firemon.SecurityRule) []firemon.SecurityRule {
+	if len(res.apps) == 0 {
+		return []firemon.SecurityRule{out}
+	}
+	if len(src.Applications) > 0 {
+		res.untranslatable("services " + strings.Join(res.apps, ",") + " are applications on the target and the rule already matches applications")
+		return []firemon.SecurityRule{out}
+	}
+	app := out
+	app.Services, app.ServiceEntries, app.Applications = nil, nil, res.apps
+	res.notes = append(res.notes, "services without ports written as applications "+strings.Join(res.apps, ","))
+	if len(out.Services) == 0 && len(out.ServiceEntries) == 0 {
+		return []firemon.SecurityRule{app}
+	}
+	return []firemon.SecurityRule{out, app}
 }
 
 func (tr *translator) groupName(id string) string {
@@ -183,9 +212,16 @@ func (tr *translator) addressRef(res *ruleResult, name string) (*firemon.Address
 
 func (tr *translator) ruleServices(res *ruleResult, out *firemon.SecurityRule, src firemon.SecurityRule) {
 	for _, s := range src.Services {
-		if set, ok := tr.fw.Service(s); ok && set.IsAny() {
-			out.Services = nil // a predefined any: the whole field is any
+		set, known := tr.fw.Service(s)
+		if known && set.IsAny() {
+			out.Services, res.apps = nil, nil // a predefined any: the whole field is any
 			return
+		}
+		if app, ok := tr.portlessApplication(set); known && ok {
+			// ICMP is an application on port-only targets: a rule of its
+			// own matches it, next to the rule for the ports.
+			res.apps = append(res.apps, app)
+			continue
 		}
 		name, why, ok := tr.serviceName(s)
 		switch {
@@ -221,14 +257,61 @@ func (tr *translator) ruleServices(res *ruleResult, out *firemon.SecurityRule, s
 }
 
 func (tr *translator) ruleApplications(res *ruleResult, out *firemon.SecurityRule, src firemon.SecurityRule) {
+	var missing []string
 	for _, a := range src.Applications {
-		t, ok := tr.m.Applications[a]
-		if !ok {
-			res.untranslatable("application " + a + " has no mapping")
+		t, approx, ok := tr.application(a)
+		switch {
+		case !ok:
+			missing = append(missing, a)
 			continue
+		case approx:
+			res.approximate("application " + a + " written as " + t + " (same protocol, vendor signatures differ)")
 		}
-		out.Applications = append(out.Applications, t)
+		if !slices.Contains(out.Applications, t) {
+			out.Applications = append(out.Applications, t)
+		}
 	}
+	if len(missing) == 0 {
+		return
+	}
+	if src.Action != firemon.ActionDeny {
+		// A permit carried over disabled allows nothing it did not.
+		for _, a := range missing {
+			res.untranslatable("application " + a + " has no mapping")
+		}
+		return
+	}
+	tr.denyWithoutApplications(res, out, src, missing)
+}
+
+// denyWithoutApplications keeps a deny rule whose applications the target
+// cannot name in force: a deny is never weakened. It drops the
+// applications and denies on the rule's services, or, when it has none, on
+// the applications' default ports: stricter on those ports, and blind to
+// the applications elsewhere, which the report says.
+func (tr *translator) denyWithoutApplications(res *ruleResult, out *firemon.SecurityRule, src firemon.SecurityRule, missing []string) {
+	out.Applications, out.ApplicationDefault = nil, false
+	what := "applications " + strings.Join(missing, ",") + " have no mapping"
+	if len(out.Services) > 0 || len(out.ServiceEntries) > 0 || len(res.apps) > 0 {
+		res.approximate(what + "; the deny is kept on its services for every application (stricter)")
+		return
+	}
+	ports, ok := tr.applicationPorts(src.Applications)
+	if !ok {
+		res.untranslatable(what + " and their ports are unknown; map them (--mapping) or the deny is lost")
+		return
+	}
+	name := "APP_" + strings.Join(src.Applications, "_")
+	if _, done := tr.names.lookup(nsService, name); !done {
+		tr.service(name, "default ports of "+strings.Join(src.Applications, ","), serviceEntries(ports), false)
+	}
+	t, ok := tr.names.lookup(nsService, name)
+	if !ok {
+		res.untranslatable(what + "; their ports " + ports.String() + " have no service form")
+		return
+	}
+	out.Services = []string{t}
+	res.approximate(what + "; the deny is kept on their default ports " + ports.String() + " for every application (stricter there, blind elsewhere)")
 }
 
 // ruleTime carries the schedule and the validity window; a window the

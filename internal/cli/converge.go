@@ -135,7 +135,7 @@ func printConverge(p *printer, rep converge.Report) {
 		p.f("  [%s|%s] %s %s\n", text(tierText, f.Tier, f.Tier.String()), text(evidenceText, f.Evidence, f.Evidence.String()), f.ID, findingText(f))
 	}
 	if len(rep.Incomplete) > 0 {
-		p.f("\n遮蔽分析超出预算的策略：%s\n", strings.Join(rep.Incomplete, ","))
+		p.f("\n覆盖分析超出预算的策略：%s\n", strings.Join(rep.Incomplete, ","))
 	}
 }
 
@@ -164,7 +164,7 @@ func findingText(f converge.Finding) string {
 		parts = append(parts, strings.Join(rs, "、"))
 	}
 	if f.Detail != "" {
-		parts = append(parts, f.Detail)
+		parts = append(parts, zhReason(f.Detail))
 	}
 	return strings.Join(parts, "；")
 }

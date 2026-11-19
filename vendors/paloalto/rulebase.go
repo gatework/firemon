@@ -204,7 +204,7 @@ func (s *state) sourceTranslation(t *firemon.Translation, values []string) bool 
 			// The interface address is written with the interface mask
 			// (103.24.178.130/28): it is one host, not the subnet.
 			t.Mode = firemon.TranslationModeAddress
-			t.Addresses = s.operands(hostAddresses(rest[2:]))
+			t.Addresses = s.operands(s.hostAddresses(rest[2:]))
 		}
 	case "translated-address":
 		t.Mode = firemon.TranslationModeAddress
@@ -270,10 +270,15 @@ func yes(values []string) bool { return len(values) == 1 && values[0] == "yes" }
 
 // hostAddresses rewrites interface addresses written with their mask to
 // the host itself; object names pass unchanged.
-func hostAddresses(values []string) []string {
+func (s *state) hostAddresses(values []string) []string {
 	out := make([]string, len(values))
 	for i, v := range values {
 		out[i] = v
+		if raw, ok := s.hostBits[v]; ok {
+			// An address object written with the interface mask names
+			// the interface address too.
+			v = raw
+		}
 		if p, err := netip.ParsePrefix(v); err == nil {
 			out[i] = netip.PrefixFrom(p.Addr(), p.Addr().BitLen()).String()
 		}

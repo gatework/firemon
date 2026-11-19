@@ -30,12 +30,15 @@ const (
 	CodeInvalid
 	// CodeUnsupported: an item was read but cannot be used on this side.
 	CodeUnsupported
+	// CodeUnknownApplication: an application no configuration or
+	// application book knows.
+	CodeUnknownApplication
 )
 
 // String returns the code name used in JSON output.
 func (c Code) String() string {
 	names := [...]string{"unset", "masked", "mask", "short-range", "wildcard", "domain", "default-tcp",
-		"inherited-protocol", "service-name", "application", "duplicate", "invalid", "unsupported"}
+		"inherited-protocol", "service-name", "application", "duplicate", "invalid", "unsupported", "unknown-application"}
 	if int(c) < len(names) {
 		return names[c]
 	}

@@ -235,6 +235,9 @@ type Plan struct {
 	VerifyError string `json:"verify_error,omitempty"`
 	// NAT is the outcome of the NAT part, when the intent asks for one.
 	NAT *NATOutcome `json:"nat,omitempty"`
+	// Bypassed are the deny rules the new rules are placed before, in rule
+	// order: the change overrides them for the traffic it permits.
+	Bypassed []string `json:"bypassed,omitempty"`
 }
 
 // Merge combines the plans of the parts of one request on one firewall,
@@ -248,11 +251,17 @@ func Merge(plans ...*Plan) *Plan {
 	}
 	out := *plans[0]
 	out.Changes = slices.Clone(out.Changes)
+	out.Bypassed = slices.Clone(out.Bypassed)
 	for _, p := range plans[1:] {
 		out.Changes = append(out.Changes, p.Changes...)
 		out.Conflicts = append(out.Conflicts, p.Conflicts...)
 		out.Unknown = append(out.Unknown, p.Unknown...)
 		out.Warnings = append(out.Warnings, p.Warnings...)
+		for _, id := range p.Bypassed {
+			if !slices.Contains(out.Bypassed, id) {
+				out.Bypassed = append(out.Bypassed, id)
+			}
+		}
 		out.Status = max(out.Status, p.Status)
 		out.Verified = out.Verified && p.Verified
 		out.VerifyError = cmp.Or(out.VerifyError, p.VerifyError)
@@ -261,4 +270,19 @@ func Merge(plans ...*Plan) *Plan {
 		}
 	}
 	return &out
+}
+
+// bypassed records the deny rules the changes opening n are placed before,
+// in rule order.
+func (p *Plan) bypassed(n need, changes []Change) {
+	if len(changes) == 0 {
+		return
+	}
+	rules := slices.Clone(n.bypass)
+	slices.SortFunc(rules, func(a, b *firemon.Rule) int { return a.Position() - b.Position() })
+	for _, r := range rules {
+		if !slices.Contains(p.Bypassed, r.ID()) {
+			p.Bypassed = append(p.Bypassed, r.ID())
+		}
+	}
 }

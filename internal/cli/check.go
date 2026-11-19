@@ -46,7 +46,7 @@ func newCheckCmd(o *options) *cobra.Command {
 			"并设计经过验证的变更与命令（--no-design 只查询；被拒绝策略挡住时新策略放在其前并提示确认）。\n" +
 			"-v 显示路径、NAT、输入说明、候选策略和对象完整展开：\n" +
 			"  firemon search --src 10.248.30.5 --dst 10.250.116.25 --service 9600\n" +
-			"退出码：0 完全命中，3 有已验证的方案待执行，4 需确认，2 用法错误。",
+			"退出码：0 完全命中或无需策略，3 需新增或修改（已给出验证过的方案；--no-design 时未设计），4 需确认，2 输入、参数或文件错误，1 运行错误。",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return &usageError{fmt.Errorf("不接受位置参数 %q：请用 --src 源地址 --dst 目的地址 --service 服务", args)}
@@ -88,7 +88,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	if err != nil {
 		return err
 	}
-	in, err := intake.Parse(f.src, f.dst, f.service, intakeOptions(platforms))
+	in, err := intake.Parse(f.src, f.dst, f.service, intakeOptions(platforms, fws))
 	if err != nil {
 		printNotes(&printer{w: cmd.OutOrStdout()}, in.Notes)
 		return &usageError{err}
@@ -137,7 +137,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 		if err := writeJSON(cmd.OutOrStdout(), rep); err != nil {
 			return err
 		}
-	} else if err := printReport(cmd, rep, reportView{plans: plans, platforms: platforms, fws: fws, verbose: f.verbose}); err != nil {
+	} else if err := printReport(cmd, rep, reportView{plans: plans, platforms: platforms, fws: fws, verbose: f.verbose, single: o.single()}); err != nil {
 		return err
 	}
 	return checkExit(rep, f.plan)
@@ -169,14 +169,17 @@ func checkExit(rep report.Report, designed bool) error {
 	case report.StatusFullMatch:
 		return nil
 	case report.StatusUnset:
-		return errUndecided // no firewall on the way: nothing to change
+		if rep.Settled() {
+			return nil // both ends in one zone: no rule decides it
+		}
+		return errUndecided // ends the inventory does not cover
 	case report.StatusIndeterminate, report.StatusPartialMatch, report.StatusNeedNew, report.StatusBlocked:
 		if len(rep.Firewalls) == 0 {
 			return errUndecided // firewalls the request may cross were not evaluated
 		}
 	}
 	if !designed {
-		if rep.Status == report.StatusIndeterminate {
+		if rep.Status == report.StatusIndeterminate || slices.ContainsFunc(rep.Firewalls, undecided) {
 			return errUndecided
 		}
 		return errNotAllowed
@@ -194,11 +197,19 @@ func checkExit(rep report.Report, designed bool) error {
 	return errNotAllowed
 }
 
+// undecided reports a firewall where rules that cannot be evaluated
+// offline may decide part of the request.
+func undecided(f report.Firewall) bool { return len(f.Undecided) > 0 }
+
+// single reports a command run on one firewall named by --config,
+// --snapshot or --host rather than on the inventory.
+func (o *options) single() bool { return o.file != "" || o.snapshot != "" || o.device.host != "" }
+
 // checkFleet loads the inventory: one firewall from --config or --snapshot,
 // or the whole snapshot store.
 func (o *options) checkFleet(cmd *cobra.Command) (*inventory.Inventory, map[string]bootstrap.Platform, map[string]*firemon.Firewall, error) {
 	fws := map[string]*firemon.Firewall{}
-	if o.file != "" || o.snapshot != "" || o.device.host != "" {
+	if o.single() {
 		loaded, p, err := o.load(cmd.Context())
 		if err != nil {
 			return nil, nil, nil, err
@@ -224,7 +235,7 @@ func (o *options) checkFleet(cmd *cobra.Command) (*inventory.Inventory, map[stri
 
 // intakeOptions reads service and application names with the books of
 // every platform in the fleet.
-func intakeOptions(platforms map[string]bootstrap.Platform) intake.Options {
+func intakeOptions(platforms map[string]bootstrap.Platform, fws map[string]*firemon.Firewall) intake.Options {
 	services := firemon.ServiceBook{}
 	apps := firemon.ServiceBook{}
 	// Later books win on name clashes: merge in a fixed order so that the
@@ -234,9 +245,21 @@ func intakeOptions(platforms map[string]bootstrap.Platform) intake.Options {
 		services = services.With(p.Services)
 		apps = apps.With(p.Applications)
 	}
+	// Applications the rules name are known too, with or without ports.
+	named := map[string]bool{}
+	for _, fw := range fws {
+		if fw == nil {
+			continue
+		}
+		for _, r := range fw.Rules() {
+			for _, a := range r.Spec().Applications {
+				named[strings.ToLower(a)] = true
+			}
+		}
+	}
 	return intake.Options{Services: services, IsApplication: func(name string) bool {
 		_, ok := apps.Lookup(name)
-		return ok
+		return ok || named[strings.ToLower(name)]
 	}}
 }
 
@@ -359,7 +382,7 @@ func printNATOutcome(p *printer, n *design.NATOutcome) {
 		line += "（复用已有 NAT 地址）"
 	}
 	if n.Reason != "" {
-		line += "：" + n.Reason
+		line += "：" + zhReason(n.Reason)
 	}
 	p.f("%s\n", line)
 }

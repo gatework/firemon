@@ -91,7 +91,7 @@ func printProposal(cmd *cobra.Command, asJSON bool, prop workflow.Proposal, fw *
 			p.f("（复用已有地址）")
 		}
 		if n.Reason != "" {
-			p.f("：%s", n.Reason)
+			p.f("：%s", zhReason(n.Reason))
 		}
 		p.f("\n")
 	}

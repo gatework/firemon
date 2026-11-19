@@ -86,7 +86,7 @@ func TestParse_Services(t *testing.T) {
 
 func TestParse_DomainsAndApplications(t *testing.T) {
 	t.Parallel()
-	isApp := func(n string) bool { return n == "ms-rdp" }
+	isApp := func(n string) bool { return n == "ms-rdp" || n == "ssh" }
 	req, err := intake.Parse("10.0.0.1", "Account.Live.COM., *.example.com", "app:ssh, ms-rdp", intake.Options{IsApplication: isApp})
 	if err != nil {
 		t.Fatal(err)
@@ -96,6 +96,30 @@ func TestParse_DomainsAndApplications(t *testing.T) {
 	}
 	if !slices.Equal(req.Applications, []string{"ms-rdp", "ssh"}) || !req.Service.IsAny() {
 		t.Fatalf("apps %v service %s", req.Applications, req.Service)
+	}
+}
+
+// TestParse_UnknownApplicationFails: an application no book knows is not
+// guessed at; the request fails rather than being answered for the rest.
+func TestParse_UnknownApplicationFails(t *testing.T) {
+	t.Parallel()
+	isApp := func(n string) bool { return n == "ssh" }
+	req, err := intake.Parse("10.0.0.1", "10.0.0.2", "tcp/443, app:nosuchapp", intake.Options{IsApplication: isApp})
+	if !errors.Is(err, intake.ErrInvalidItem) || !slices.Contains(codes(req.Notes), intake.CodeUnknownApplication) {
+		t.Fatalf("err %v notes %v", err, req.Notes)
+	}
+	if _, err := intake.Parse("10.0.0.1", "10.0.0.2", "tcp/443, 10.0.0.1.1", intake.Options{}); !errors.Is(err, intake.ErrInvalidItem) {
+		t.Fatalf("an unreadable item fails the request: %v", err)
+	}
+}
+
+func TestParse_FamilyMismatchFails(t *testing.T) {
+	t.Parallel()
+	if _, err := intake.Parse("10.0.0.1", "2001:db8::1", "tcp/443", intake.Options{}); !errors.Is(err, intake.ErrFamilyMismatch) {
+		t.Fatalf("err %v", err)
+	}
+	if _, err := intake.Parse("10.0.0.1, 2001:db8::2", "2001:db8::1", "tcp/443", intake.Options{}); err != nil {
+		t.Fatalf("one family in common is a request: %v", err)
 	}
 }
 

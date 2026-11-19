@@ -176,7 +176,7 @@ func TestRun_Check(t *testing.T) {
 	if code != cli.ExitNotAllowed {
 		t.Fatalf("a verified change is ready: code %d\n%s%s", code, out, errOut)
 	}
-	for _, want := range []string{"结论：", "■ pa1：", "不经过任何防火墙（已剔除）：源 172.31.0.9", "地址+掩码已转换为网段", "在 pa1 上执行"} {
+	for _, want := range []string{"结论：", "■ pa1：", "不在任何防火墙的受保护网段内（库存未覆盖，或确实不经过防火墙）：源 172.31.0.9", "地址+掩码已转换为网段", "在 pa1 上执行"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q (code %d)\n%s%s", want, code, out, errOut)
 		}

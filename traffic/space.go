@@ -4,9 +4,9 @@ package traffic
 // services: the shape matched by one rule. A space is empty when any of its
 // dimensions is empty.
 type Space struct {
-	Src     AddressSet
-	Dst     AddressSet
-	Service ServiceSet
+	Src     AddressSet `json:"src"`
+	Dst     AddressSet `json:"dst"`
+	Service ServiceSet `json:"service"`
 }
 
 // AnySpace returns the space of every packet.

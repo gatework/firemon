@@ -20,6 +20,8 @@ func vendor(flag, value string) (firemon.Vendor, error) {
 	switch {
 	case err == nil:
 		return v, nil
+	case value == "" && flag == "--to":
+		return v, &usageError{errors.New("缺少 --to：迁移的目标厂商，hillstone 或 paloalto")}
 	case value == "":
 		return v, &usageError{fmt.Errorf("无法从配置识别厂商，请用 %s 指定：hillstone 或 paloalto", flag)}
 	default:
@@ -62,6 +64,10 @@ var cobraErrors = []struct {
 // and file errors in Chinese, everything else as it is.
 func localizeError(err error) string {
 	switch {
+	case errors.Is(err, intake.ErrFamilyMismatch):
+		return "源和目的的地址族不同（IPv4 与 IPv6）：没有报文会从一端到另一端，请检查输入"
+	case errors.Is(err, intake.ErrInvalidItem):
+		return "输入中有无法识别的项（见上），请修正后重试：查询只按完整的输入回答"
 	case errors.Is(err, intake.ErrNoSource):
 		return "源地址无法识别：请写 IP、网段、范围或 IP+掩码"
 	case errors.Is(err, intake.ErrNoDestination):

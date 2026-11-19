@@ -140,6 +140,10 @@ type Result struct {
 	// deployed.
 	Plan  *design.Plan `json:"plan"`
 	Items []Item       `json:"items"`
+	// DisabledDenies are the source deny rules carried over disabled: the
+	// traffic they blocked is not blocked by them on the target, and the
+	// migration is not safe to apply until they are fixed.
+	DisabledDenies []string `json:"disabled_denies,omitempty"`
 }
 
 // Count returns the number of items of a fidelity.

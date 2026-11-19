@@ -28,10 +28,10 @@ func newParseCmd(o *options) *cobra.Command {
 			p.f("厂商 %s  主机名 %s  版本 %s  指纹 %s\n", s.Vendor, s.Hostname, s.Version, s.Fingerprint[:16])
 			p.table("对象\t数量", s.rows())
 			for _, d := range s.Diagnostics {
-				p.f("第 %d 行未能解析（%s）：%s\n", d.Line, d.Reason, d.Text)
+				p.f("第 %d 行未能解析（%s）：%s\n", d.Line, zhReason(d.Reason), d.Text)
 			}
 			for _, i := range s.Issues {
-				p.f("无法离线判定：%s\n", i)
+				p.f("无法离线判定：%s\n", zhIssue(i))
 			}
 			return p.err
 		},

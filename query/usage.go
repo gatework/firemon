@@ -1,6 +1,9 @@
 package query
 
 import (
+	"slices"
+	"strings"
+
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/traffic"
 )
@@ -35,19 +38,24 @@ type Usage struct {
 func (e *Engine) Usage(a traffic.AddressSet, anyIsMatch bool) Usage {
 	var u Usage
 	for name, set := range e.fw.Addresses() {
+		// An empty object (only unresolved names) touches no address
+		// offline; an any object touches every one, shown on request.
+		if set.IsEmpty() || (!anyIsMatch && isAny(set)) {
+			continue
+		}
 		if rel := set.Relation(a); rel != traffic.RelationDisjoint {
 			u.Objects = append(u.Objects, ObjectUse{Name: name, Relation: rel})
 		}
 	}
-	all := traffic.AnyAddress()
+	slices.SortFunc(u.Objects, func(x, y ObjectUse) int { return strings.Compare(x.Name, y.Name) })
 	for _, r := range e.rules {
 		m := r.Match()
 		src, dst := m.Src.Relation(a), m.Dst.Relation(a)
 		if !anyIsMatch {
-			if m.Src.Equal(all) {
+			if isAny(m.Src) {
 				src = traffic.RelationDisjoint
 			}
-			if m.Dst.Equal(all) {
+			if isAny(m.Dst) {
 				dst = traffic.RelationDisjoint
 			}
 		}
@@ -56,4 +64,10 @@ func (e *Engine) Usage(a traffic.AddressSet, anyIsMatch bool) Usage {
 		}
 	}
 	return u
+}
+
+// isAny reports every address of a family, or of both: StoneOS Any is
+// IPv4 only.
+func isAny(s traffic.AddressSet) bool {
+	return s.Equal(traffic.AnyAddress()) || s.Equal(traffic.AnyIPv4()) || s.Equal(traffic.AnyIPv6())
 }

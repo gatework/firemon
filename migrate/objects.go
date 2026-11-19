@@ -290,7 +290,10 @@ func (tr *translator) serviceParts(entries []firemon.ServiceEntry) ([][]firemon.
 	for _, k := range order {
 		out = append(out, parts[k])
 	}
-	return out, "", len(out) > 0
+	if len(out) == 0 {
+		return nil, "an empty service has no form on the target", false
+	}
+	return out, "", true
 }
 
 // serviceName returns the target name for a source service name: a

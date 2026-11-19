@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -136,6 +137,14 @@ func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
 // platform resolves the vendor and time zone flags.
 func (o *options) platform() (bootstrap.Platform, error) {
 	name := o.vendor
+	if name == "" && !o.single() {
+		return bootstrap.Platform{}, &usageError{errors.New("该命令一次处理一台防火墙：请用 --snapshot 快照名、--config 配置文件或 --host 设备地址指定（已保存的快照见 firemon collect --list）")}
+	}
+	if o.file != "" {
+		if _, err := os.Stat(o.file); err != nil {
+			return bootstrap.Platform{}, &usageError{err} // say the file is missing, not that its vendor is unknown
+		}
+	}
 	if name == "" && o.file != "" {
 		name = detectVendor(o.file) // a configuration says which vendor wrote it
 	}

@@ -56,6 +56,11 @@ func natRoundTrip(t *testing.T, fw *firemon.Firewall) (checked int, failures []s
 		if !find(e.NATLookup(public, noService), id, query.NATRoleInbound, func(u query.NATUse) bool { return u.Translated.Equal(inner) }) {
 			failures = append(failures, fmt.Sprintf("dnat %s: %s is not shown translated to %s", id, public, inner))
 		}
+		// Without port translation the internal service is the public one.
+		if r.Spec().TranslatedDestination.Port == 0 &&
+			!find(e.NATLookup(public, noService), id, query.NATRoleInbound, func(u query.NATUse) bool { return u.Service.Equal(r.Match().Service) }) {
+			failures = append(failures, fmt.Sprintf("dnat %s: the internal service changes without port translation", id))
+		}
 	}
 	return checked, failures
 }
