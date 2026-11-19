@@ -39,16 +39,16 @@ type checkFlags struct {
 func newCheckCmd(o *options) *cobra.Command {
 	var f checkFlags
 	cmd := &cobra.Command{
-		Use: "check --src SRC --dst DST --service SERVICE",
-		// The former query, design and locate commands asked the same
-		// question; their names still work.
-		Aliases: []string{"query", "design", "locate"},
+		Use: "search --src SRC --dst DST --service SERVICE",
+		// The former check, query, design and locate commands asked the
+		// same question; their names still work.
+		Aliases: []string{"check", "query", "design", "locate"},
 		Short:   "查询有没有策略、要不要新增：定位防火墙，给出结论、命中的策略和变更命令",
 		Long: "源、目的、服务可以用常见的各种写法输入。在快照中定位经过的防火墙（--inventory 提供 HA 集群和受保护网段），\n" +
 			"逐台检查 NAT 与访问控制，给出 完全命中 / 部分命中 / 需要新增策略 / 需确认，列出命中的已有策略，\n" +
 			"并设计经过验证的变更与命令（--no-design 只查询；被拒绝策略挡住时新策略放在其前并提示确认）。\n" +
 			"-v 显示路径、NAT、输入说明、候选策略和对象完整展开：\n" +
-			"  firemon check --src 10.248.30.5 --dst 10.250.116.25 --service 9600\n" +
+			"  firemon search --src 10.248.30.5 --dst 10.250.116.25 --service 9600\n" +
 			"退出码：0 完全命中，3 有已验证的方案待执行，4 需确认，2 用法错误。",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
