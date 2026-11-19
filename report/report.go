@@ -178,7 +178,7 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 		f := firewallReport(c)
 		f.Plan = planFor(plans, c.Cluster)
 		f.Status = max(f.Status, natStatus(f.Plan))
-		f.Rules = details(fws[c.Cluster], decidingRules(f))
+		f.Rules = details(fws[c.Cluster], decidingRules(f), decidedSpaces(c))
 		if fw := fws[c.Cluster]; fw != nil && f.Status != StatusFullMatch && f.Status != StatusUnset {
 			f.Candidates = candidates(fw, c.Paths, f.Plan)
 		}
@@ -186,6 +186,23 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 		r.Status = max(r.Status, f.Status)
 	}
 	return r
+}
+
+// decidedSpaces bounds, per rule, the traffic it decides on the crossing.
+func decidedSpaces(c inventory.Crossing) map[string]traffic.Space {
+	regions := map[string]traffic.Region{}
+	for _, p := range c.Paths {
+		for _, d := range p.Decisions {
+			if d.Rule != nil {
+				regions[d.Rule.ID()] = regions[d.Rule.ID()].Union(d.Space)
+			}
+		}
+	}
+	out := make(map[string]traffic.Space, len(regions))
+	for id, r := range regions {
+		out[id] = r.Bounds()
+	}
+	return out
 }
 
 // decidingRules are the rules that decide part of the request: they

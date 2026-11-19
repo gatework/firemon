@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -31,13 +32,18 @@ type checkFlags struct {
 	name, description      string
 	plan, resolve, verbose bool
 	noDesign               bool
+	vr, at, schedule       string
+	override               bool
 }
 
 func newCheckCmd(o *options) *cobra.Command {
 	var f checkFlags
 	cmd := &cobra.Command{
-		Use:   "check --src SRC --dst DST --service SERVICE",
-		Short: "一键查询：定位防火墙，检查 NAT 与访问控制策略，输出命中报告与变更方案",
+		Use: "check --src SRC --dst DST --service SERVICE",
+		// The former query, design and locate commands asked the same
+		// question; their names still work.
+		Aliases: []string{"query", "design", "locate"},
+		Short:   "查询有没有策略、要不要新增：定位防火墙，给出结论、命中的策略和变更命令",
 		Long: "源、目的、服务可以用常见的各种写法输入。在快照中定位经过的防火墙（--inventory 提供 HA 集群和受保护网段），\n" +
 			"逐台检查 NAT 与访问控制，给出 完全命中 / 部分命中 / 需要新增策略 / 需确认，列出命中的已有策略，\n" +
 			"并设计经过验证的变更与命令（--no-design 只查询；被拒绝策略挡住时新策略放在其前并提示确认）。\n" +
@@ -66,6 +72,11 @@ func newCheckCmd(o *options) *cobra.Command {
 	fl.StringVar(&f.service, "service", "", "服务：443、tcp 80、80/udp、https、ping、app:ssh …")
 	fl.StringVar(&f.fromZone, "from-zone", "", "源区域（透明模式或无法按路由定位时指定）")
 	fl.StringVar(&f.toZone, "to-zone", "", "目的区域")
+	fl.StringVar(&f.vr, "virtual-router", "", "虚拟路由器（默认使用厂商默认值）")
+	fl.StringVar(&f.at, "at", "", "按该时刻（RFC 3339）判断时间计划（默认当前时间）")
+	fl.StringVar(&f.schedule, "schedule", "", "新建策略使用的已有时间计划")
+	fl.BoolVar(&f.override, "override", false, "已不需要：被拒绝策略挡住时新策略会放在其前并提示确认")
+	_ = fl.MarkHidden("override")
 	fl.StringVar(&f.name, "name", "", "新建策略名称，例如工单号")
 	fl.StringVar(&f.description, "description", "", "新建策略描述")
 	fl.BoolVar(&f.plan, "design", true, "为每台防火墙设计变更方案与命令")
@@ -95,7 +106,12 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	}
 	req := query.Request{
 		Src: in.Src, Dst: in.Dst, DstDomains: in.DstDomains, Service: in.Service, Applications: in.Applications,
-		FromZone: f.fromZone, ToZone: f.toZone,
+		FromZone: f.fromZone, ToZone: f.toZone, VirtualRouter: f.vr,
+	}
+	if f.at != "" {
+		if req.At, err = time.Parse(time.RFC3339, f.at); err != nil {
+			return &usageError{fmt.Errorf("--at %q 不是 RFC 3339 时刻，例如 2026-11-18T09:00:00+08:00", f.at)}
+		}
 	}
 	if f.resolve && len(in.DstDomains) > 0 {
 		req.Resolved = dns.Resolver{}.Resolve(cmd.Context(), in.DstDomains)
@@ -107,7 +123,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	var plans []inventory.ClusterPlan
 	if f.plan && !in.Dst.IsEmpty() {
 		intent := design.Intent{
-			Src: in.Src, Dst: in.Dst, Service: in.Service, FromZone: f.fromZone, ToZone: f.toZone,
+			Src: in.Src, Dst: in.Dst, Service: in.Service, FromZone: f.fromZone, ToZone: f.toZone, VirtualRouter: f.vr, Schedule: f.schedule,
 			// A deny that blocks the request is passed: the new rule goes
 			// before it, and the report asks to confirm that is intended.
 			Name: f.name, Description: f.description, Override: true, NAT: nat,
@@ -188,7 +204,11 @@ func (o *options) checkFleet(cmd *cobra.Command) (*inventory.Inventory, map[stri
 			return nil, nil, nil, err
 		}
 		name := cmp.Or(o.snapshot, loaded.Config.Hostname, "firewall")
-		inv, err := inventory.New([]inventory.Member{{Name: name, Firewall: loaded.Firewall, Naming: p.Naming}}, inventory.Options{Now: o.deps.Now})
+		// The operator named the firewall: it answers for every address,
+		// so no part of the request is set aside as not crossing it.
+		everything := inventory.Protection{Firewall: name, Networks: []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")}}
+		inv, err := inventory.New([]inventory.Member{{Name: name, Firewall: loaded.Firewall, Naming: p.Naming}},
+			inventory.Options{Now: o.deps.Now, Protections: []inventory.Protection{everything}})
 		fws[name] = loaded.Firewall
 		return inv, map[string]bootstrap.Platform{name: p}, fws, err
 	}

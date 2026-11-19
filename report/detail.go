@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/traffic"
 )
 
 // RuleDetail is the definition of a rule as configured, with every object
@@ -41,11 +42,15 @@ type Object struct {
 	Members []Object `json:"members,omitempty"`
 	// Missing reports a name the configuration does not define.
 	Missing bool `json:"missing,omitempty"`
+	// Matched reports that the object holds part of the request: the one
+	// to look at among many.
+	Matched bool `json:"matched,omitempty"`
 }
 
 // details returns the definitions of the rules with the given IDs, in
-// rule order, each once.
-func details(fw *firemon.Firewall, ids []string) []RuleDetail {
+// rule order, each once; objects holding part of the traffic each rule
+// decides (decided[id]) are marked.
+func details(fw *firemon.Firewall, ids []string, decided map[string]traffic.Space) []RuleDetail {
 	if fw == nil || len(ids) == 0 {
 		return nil
 	}
@@ -61,17 +66,24 @@ func details(fw *firemon.Firewall, ids []string) []RuleDetail {
 			From: s.From, To: s.To, NegateSource: s.NegateSource, NegateDest: s.NegateDestination,
 			Applications: s.Applications, Disabled: s.Disabled, Description: s.Description,
 		}
+		hit := decided[s.ID]
 		for _, a := range s.Source {
-			d.Source = append(d.Source, x.address(a, 0))
+			o, set := x.address(a, 0)
+			o.Matched = set.Overlaps(hit.Src)
+			d.Source = append(d.Source, o)
 		}
 		for _, a := range s.Destination {
-			d.Destination = append(d.Destination, x.address(a, 0))
+			o, set := x.address(a, 0)
+			o.Matched = set.Overlaps(hit.Dst)
+			d.Destination = append(d.Destination, o)
 		}
 		for _, n := range s.Services {
-			d.Services = append(d.Services, x.service(n, 0))
+			o, set := x.service(n, 0)
+			o.Matched = set.Overlaps(hit.Service)
+			d.Services = append(d.Services, o)
 		}
 		for _, e := range s.ServiceEntries {
-			d.Services = append(d.Services, Object{Values: []string{e.String()}})
+			d.Services = append(d.Services, Object{Values: []string{e.String()}, Matched: e.Set().Overlaps(hit.Service)})
 		}
 		if s.Schedule != "" {
 			o := x.schedule(s.Schedule)
@@ -117,57 +129,85 @@ func newExpander(cfg *firemon.Config) expander {
 	return x
 }
 
-func (x expander) address(ref firemon.AddressRef, depth int) Object {
+// address expands an address reference and returns the addresses it
+// resolves to; names that do not resolve (domains, filters) add none.
+func (x expander) address(ref firemon.AddressRef, depth int) (Object, traffic.AddressSet) {
 	if ref.IsInline() {
-		return Object{Values: []string{ref.Entry.String()}}
+		set, _ := ref.Entry.Set()
+		return Object{Values: []string{ref.Entry.String()}}, set
 	}
 	return x.addressName(ref.Name, depth)
 }
 
-func (x expander) addressName(name string, depth int) Object {
+func (x expander) addressName(name string, depth int) (Object, traffic.AddressSet) {
 	o := Object{Name: name}
+	var set traffic.AddressSet
 	a, isAddr := x.addrs[name]
 	g, isGroup := x.addrGrps[name]
 	switch {
 	case isAddr:
 		o.Values = entryTexts(a.Entries)
 		o.Values = append(o.Values, a.Invalid...)
+		set = entriesSet(a.Entries)
 	case isGroup:
 		o.Values = entryTexts(g.Entries)
+		set = entriesSet(g.Entries)
 		if g.Filter != "" {
 			o.Values = append(o.Values, "filter "+g.Filter)
 		}
 		if depth < maxDepth {
 			for _, m := range g.Members {
-				o.Members = append(o.Members, x.addressName(m, depth+1))
+				mo, ms := x.addressName(m, depth+1)
+				o.Members = append(o.Members, mo)
+				set = set.Union(ms)
 			}
 		}
 	default:
 		o.Missing = true
 	}
-	return o
+	return o, set
 }
 
-func (x expander) service(name string, depth int) Object {
+// entriesSet is the addresses of entries, exclusions removed.
+func entriesSet(es []firemon.AddressEntry) traffic.AddressSet {
+	var in, out traffic.AddressSet
+	for _, e := range es {
+		s, ok := e.Set()
+		switch {
+		case !ok:
+		case e.Exclude:
+			out = out.Union(s)
+		default:
+			in = in.Union(s)
+		}
+	}
+	return in.Subtract(out)
+}
+
+func (x expander) service(name string, depth int) (Object, traffic.ServiceSet) {
 	o := Object{Name: name}
+	var set traffic.ServiceSet
 	s, isSvc := x.svcs[name]
 	g, isGroup := x.svcGrps[name]
 	switch {
 	case isSvc:
 		for _, e := range s.Entries {
 			o.Values = append(o.Values, e.String())
+			set = set.Union(e.Set())
 		}
 		o.Values = append(o.Values, s.Invalid...)
 	case isGroup:
 		if depth < maxDepth {
 			for _, m := range g.Members {
-				o.Members = append(o.Members, x.service(m, depth+1))
+				mo, ms := x.service(m, depth+1)
+				o.Members = append(o.Members, mo)
+				set = set.Union(ms)
 			}
 		}
 	default:
 		o.Missing = true
 	}
-	return o
+	return o, set
 }
 
 func (x expander) schedule(name string) Object {

@@ -16,3 +16,18 @@ func TestInventory_DerivedClaimsSkipRoutesToMembers(t *testing.T) {
 		}
 	}
 }
+
+// Zones named by the request locate the path: it crosses the firewall
+// even though no interfaces are compared.
+func TestInventory_RequestZonesCross(t *testing.T) {
+	t.Parallel()
+	req := request("10.1.0.5", "10.2.0.9", "tcp/22")
+	req.FromZone, req.ToZone = "users", "servers"
+	tr, err := lab(t).Locate(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := names(tr); len(got) != 1 || got[0] != "core(users>servers)" {
+		t.Fatalf("crossings %v", got)
+	}
+}

@@ -45,6 +45,9 @@ func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 	for _, a := range rep.Ambiguous {
 		p.f("归属不唯一（多个防火墙同等声明，均已检查）：%s\n", a)
 	}
+	if len(rep.Firewalls) == 0 && rep.Excluded.Src == "" && rep.Excluded.Dst == "" && len(rep.Inside) == 0 {
+		p.f("\n该流量不经过防火墙的策略检查：源和目的在防火墙同一侧（从同一接口进出），或没有到达目的的路由\n")
+	}
 	for _, f := range rep.Firewalls {
 		printFirewall(p, f, v)
 	}
@@ -316,22 +319,34 @@ func zoneList(zs []string) string {
 	return strings.Join(zs, "、")
 }
 
-// objectsBrief writes one dimension on one line: object names, each with
-// its first values when they differ from the name.
+// objectsBrief writes one dimension on one line. A long list shows only
+// the objects that hold the request, with how many there are in all.
 func objectsBrief(objs []report.Object, negate bool) string {
 	if len(objs) == 0 {
 		return "任意"
 	}
-	parts := make([]string, 0, len(objs))
-	for _, o := range objs {
-		parts = append(parts, objectBrief(o))
+	shown := objs
+	if len(objs) > briefObjects {
+		shown = slices.DeleteFunc(slices.Clone(objs), func(o report.Object) bool { return !o.Matched })
+	}
+	parts := make([]string, 0, len(shown))
+	for _, o := range shown {
+		if b := objectBrief(o); !slices.Contains(parts, b) {
+			parts = append(parts, b)
+		}
 	}
 	out := strings.Join(parts, "、")
+	if len(shown) < len(objs) {
+		out = cmp.Or(out, "无") + "（共 " + itoa(len(objs)) + " 项，列出命中的 " + itoa(len(shown)) + " 项；-v 查看全部）"
+	}
 	if negate {
 		out = "除 " + out + " 以外"
 	}
 	return out
 }
+
+// briefObjects is how many objects of one dimension are listed in full.
+const briefObjects = 3
 
 func objectBrief(o report.Object) string {
 	vals := leafValues(o)
@@ -357,7 +372,11 @@ func objectBrief(o report.Object) string {
 func leafValues(o report.Object) []string {
 	out := slices.Clone(o.Values)
 	for _, m := range o.Members {
-		out = append(out, leafValues(m)...)
+		for _, v := range leafValues(m) {
+			if !slices.Contains(out, v) {
+				out = append(out, v)
+			}
+		}
 	}
 	return out
 }

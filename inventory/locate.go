@@ -252,7 +252,9 @@ func (inv *Inventory) evaluate(cluster string, a *assignment, req query.Request)
 		c.ZonesNeeded = c.ZonesNeeded || res.ZonesNeeded
 		var crossing bool
 		for _, path := range res.Paths {
-			if crossesFirewall(path, p) {
+			// Zones named by the request count as declared too: the path
+			// then has no interfaces to compare.
+			if crossesFirewall(path, Part{FromZone: r.FromZone, ToZone: r.ToZone}) {
 				crossing = true
 				c.Paths = append(c.Paths, path)
 				c.Src, c.Dst = c.Src.Union(path.Original.Src), c.Dst.Union(path.Original.Dst)

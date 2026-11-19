@@ -52,13 +52,17 @@ func TestRun(t *testing.T) {
 	}{
 		{"parse", []string{"parse", "--vendor", "hillstone", "--config", hillstoneConf}, cli.ExitOK, "策略                5"},
 		{"query allowed", []string{"query", "--vendor", "hillstone", "--config", hillstoneConf, "--timezone", "UTC",
-			"--src", "198.51.100.9", "--dst", "172.16.0.10", "--service", "tcp/443"}, cli.ExitOK, "结论：放通"},
+			"--src", "198.51.100.9", "--dst", "172.16.0.10", "--service", "tcp/443"}, cli.ExitOK, "结论：完全命中"},
 		{"query denied", []string{"query", "--vendor", "paloalto", "--config", paloaltoConf,
-			"--src", "192.0.2.7", "--dst", "198.51.100.80", "--service", "tcp/443"}, cli.ExitNotAllowed, "block-bad"},
+			"--src", "192.0.2.7", "--dst", "10.0.0.9", "--service", "tcp/443"}, cli.ExitNotAllowed, "被策略 block-bad 拒绝"},
+		{"vendor from the configuration", []string{"check", "--config", paloaltoConf,
+			"--src", "192.0.2.7", "--dst", "10.0.0.9", "--service", "tcp/443"}, cli.ExitNotAllowed, "被策略 block-bad 拒绝"},
+		{"same side does not cross", []string{"check", "--config", paloaltoConf,
+			"--src", "10.0.0.5", "--dst", "10.0.0.9", "--service", "tcp/443"}, cli.ExitUndecided, "源和目的在防火墙同一侧"},
 		{"usage", []string{"usage", "--vendor", "paloalto", "--config", paloaltoConf, "--addr", "172.16.0.10"}, cli.ExitOK, "web-01"},
 		{"design", []string{"design", "--vendor", "paloalto", "--config", paloaltoConf,
 			"--src", "10.0.7.0/24", "--dst", "172.16.0.40", "--service", "tcp/8443", "--from-zone", "trust", "--to-zone", "dmz", "--name", "req"},
-			cli.ExitOK, "set rulebase security rules req action allow"},
+			cli.ExitNotAllowed, "set rulebase security rules req action allow"},
 		{"audit", []string{"audit", "--vendor", "hillstone", "--config", hillstoneConf}, cli.ExitOK, "未使用的地址对象"},
 		{"unknown vendor", []string{"parse", "--vendor", "acme", "--config", hillstoneConf}, cli.ExitUsage, ""},
 		{"deploy rejects files", []string{"deploy", "--vendor", "hillstone", "--config", hillstoneConf,
@@ -81,17 +85,18 @@ func TestRun_QueryJSON(t *testing.T) {
 	code, out, errOut := run(t, "", "query", "--json", "--vendor", "paloalto", "--config", paloaltoConf,
 		"--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "udp/53")
 	var res struct {
-		Verdict string `json:"verdict"`
-		Paths   []struct {
-			From string `json:"from"`
-			To   string `json:"to"`
-		} `json:"paths"`
+		Firewalls []struct {
+			Paths []struct {
+				From string `json:"from"`
+				To   string `json:"to"`
+			} `json:"paths"`
+		} `json:"firewalls"`
 	}
 	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatalf("code %d: %v\n%s%s", code, err, out, errOut)
 	}
-	if len(res.Paths) != 1 || res.Paths[0].From != "trust" || res.Paths[0].To != "untrust" {
-		t.Fatalf("paths %+v", res.Paths)
+	if len(res.Firewalls) != 1 || len(res.Firewalls[0].Paths) != 1 || res.Firewalls[0].Paths[0].From != "trust" || res.Firewalls[0].Paths[0].To != "untrust" {
+		t.Fatalf("report %+v", res)
 	}
 }
 
@@ -106,9 +111,9 @@ func TestRun_CollectThenQuerySnapshot(t *testing.T) {
 	if code != cli.ExitOK || !strings.Contains(out, "pa1") {
 		t.Fatalf("list: %d\n%s%s", code, out, errOut)
 	}
-	code, out, errOut = run(t, "", "query", "--snapshot", "pa1", "--store", store,
+	code, out, errOut = run(t, "", "query", "-v", "--snapshot", "pa1", "--store", store,
 		"--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "udp/53")
-	if code != cli.ExitNotAllowed || !strings.Contains(out, "路径 trust → untrust") {
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "路径 trust(ethernet1/2) → untrust") {
 		t.Fatalf("query snapshot: %d\n%s%s", code, out, errOut)
 	}
 	code, _, _ = run(t, "", "deploy", "--snapshot", "pa1", "--store", store, "--src", "10.0.0.1", "--dst", "10.0.0.2", "--service", "tcp/22")
@@ -129,7 +134,7 @@ func TestRun_Locate(t *testing.T) {
 		}
 	}
 	code, out, errOut := run(t, "", "locate", "--store", store, "--design", "--src", "10.0.0.5", "--dst", "172.16.0.40", "--service", "tcp/8443", "--name", "req")
-	if code != cli.ExitNotAllowed || !strings.Contains(out, "方案：需要变更，已验证：是") {
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "处置：在 pa1 上执行") {
 		t.Fatalf("locate: %d\n%s%s", code, out, errOut)
 	}
 }

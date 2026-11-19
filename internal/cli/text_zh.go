@@ -313,13 +313,6 @@ var planStatusText = map[design.Status]string{
 	design.StatusIndeterminate: "无法判定",
 }
 
-var outcomeText = map[query.Outcome]string{
-	query.OutcomePermit:  "放通",
-	query.OutcomeDeny:    "拒绝",
-	query.OutcomeDefault: "默认拒绝",
-	query.OutcomeUnknown: "无法判定",
-}
-
 var countText = map[string]string{
 	"zones": "安全区域", "interfaces": "接口", "routes": "路由", "addresses": "地址对象",
 	"address_groups": "地址组", "services": "服务对象", "service_groups": "服务组", "schedules": "时间计划",

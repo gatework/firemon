@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -18,10 +19,16 @@ const usageTemplate = `用法：{{if .Runnable}}
   {{.NameAndAliases}}{{end}}{{if .HasExample}}
 
 示例：
-{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{$cmds := .Commands}}{{if eq (len .Groups) 0}}
 
-可用命令：{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+可用命令：{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{else}}{{range $group := .Groups}}
+
+{{.Title}}{{range $cmds}}{{if (and (eq .GroupID $group.ID) (or .IsAvailableCommand (eq .Name "help")))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if not .AllChildCommandsHaveGroup}}
+
+其他命令：{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 参数：
 {{.LocalFlags.FlagUsages | zhFlags | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
@@ -47,6 +54,7 @@ var registerTemplateFuncs = sync.OnceFunc(func() {
 func localizeHelp(root *cobra.Command) {
 	registerTemplateFuncs()
 	root.SetUsageTemplate(usageTemplate)
+	groupCommands(root)
 	var walk func(*cobra.Command)
 	walk = func(c *cobra.Command) {
 		c.InitDefaultHelpFlag()
@@ -112,3 +120,25 @@ func zhFlags(usages string) string {
 }
 
 var errUnknownShell = errors.New("不支持的 shell，可选 bash、zsh、fish、powershell")
+
+// commandGroups arranges the commands by what operators do with them.
+var commandGroups = []struct {
+	group    cobra.Group
+	commands []string
+}{
+	{cobra.Group{ID: "daily", Title: "日常：查询、设计与下发"}, []string{"check", "deploy"}},
+	{cobra.Group{ID: "collect", Title: "采集：配置快照与命中计数"}, []string{"collect", "hits"}},
+	{cobra.Group{ID: "govern", Title: "治理：收敛、审计与迁移"}, []string{"converge", "audit", "migrate"}},
+	{cobra.Group{ID: "tools", Title: "排查工具"}, []string{"parse", "services", "usage"}},
+}
+
+func groupCommands(root *cobra.Command) {
+	for _, g := range commandGroups {
+		root.AddGroup(&g.group)
+		for _, c := range root.Commands() {
+			if slices.Contains(g.commands, c.Name()) {
+				c.GroupID = g.group.ID
+			}
+		}
+	}
+}

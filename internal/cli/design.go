@@ -44,39 +44,6 @@ func (i *intentFlags) intent(book firemon.ServiceBook) (design.Intent, error) {
 	}, nil
 }
 
-func newDesignCmd(o *options) *cobra.Command {
-	var in intentFlags
-	cmd := &cobra.Command{
-		Use:   "design",
-		Short: "设计并渲染放通流量所需的变更（不连接设备）",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			loaded, platform, err := o.load(cmd.Context())
-			if err != nil {
-				return err
-			}
-			intent, err := in.intent(platform.Services)
-			if err != nil {
-				return err
-			}
-			prop, err := workflow.Propose(loaded.Firewall, platform, intent, o.deps.Now)
-			if err != nil {
-				return err
-			}
-			if err := printProposal(cmd, o.json, prop); err != nil {
-				return err
-			}
-			if !prop.Plan.Verified {
-				return errNotAllowed
-			}
-			return nil
-		},
-	}
-	in.register(cmd)
-	return cmd
-}
-
-// proposalView is the JSON form of a proposal.
 type proposalView struct {
 	*design.Plan
 	ChangeList []string      `json:"changes"`
