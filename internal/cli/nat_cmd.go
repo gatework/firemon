@@ -97,10 +97,10 @@ func natUseText(u query.NATUse) string {
 		label += "（第 " + itoa(u.Position) + " 条）"
 	}
 	svc := func(s traffic.ServiceSet) string {
-		if s.IsAny() {
+		if s.IsAny() || s.IsEmpty() {
 			return ""
 		}
-		return " " + s.String()
+		return " " + serviceText(s)
 	}
 	to := u.Translated.String()
 	if u.Translated.IsEmpty() {
@@ -109,16 +109,21 @@ func natUseText(u query.NATUse) string {
 			to = u.Interface + " 的接口地址"
 		}
 	}
+	// The internal service, when the rule translates the port.
+	internal := ""
+	if !u.Service.Equal(u.Match.Service) {
+		internal = svc(u.Service)
+	}
 	var what string
 	switch u.Role {
 	case query.NATRoleOutbound:
-		what = "出访源转换：源 " + u.Match.Src.String() + " → 目的 " + anyText(u.Match.Dst) + svc(u.Match.Service) + "，源转换为 " + to
+		what = "出访源转换：源 " + anyText(u.Match.Src) + " → 目的 " + anyText(u.Match.Dst) + svc(u.Match.Service) + "，源转换为 " + to
 	case query.NATRolePublished:
-		what = "被发布：公网 " + u.Match.Dst.String() + svc(u.Match.Service) + " ⇒ 内部 " + to + svc(u.Service)
+		what = "被发布：公网 " + anyText(u.Match.Dst) + svc(u.Match.Service) + " ⇒ 内部 " + to + internal
 	case query.NATRoleInbound:
-		what = "入站目的转换：公网 " + u.Match.Dst.String() + svc(u.Match.Service) + " ⇒ 内部 " + to + svc(u.Service)
+		what = "入站目的转换：公网 " + anyText(u.Match.Dst) + svc(u.Match.Service) + " ⇒ 内部 " + to + internal
 	case query.NATRolePool:
-		what = "作为源转换地址：源 " + u.Match.Src.String() + " → 目的 " + anyText(u.Match.Dst) + " 出访时转换为 " + to
+		what = "作为源转换地址：源 " + anyText(u.Match.Src) + " → 目的 " + anyText(u.Match.Dst) + " 出访时转换为 " + to
 	case query.NATRoleExempt:
 		what = "不转换（NAT 豁免）：源 " + anyText(u.Match.Src) + " → 目的 " + anyText(u.Match.Dst) + svc(u.Match.Service)
 	case query.NATRoleUnset:
@@ -139,6 +144,14 @@ func natStateText(u query.NATUse) string {
 	case query.NATStateUnset:
 	}
 	return u.State.String()
+}
+
+// serviceText writes a service set, "任意" for every service.
+func serviceText(s traffic.ServiceSet) string {
+	if s.IsAny() {
+		return "任意"
+	}
+	return s.String()
 }
 
 func anyText(s traffic.AddressSet) string {

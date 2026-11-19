@@ -138,6 +138,11 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 			p.f("      区域 %s → %s；源 %s；目的 %s；服务 %s%s；%s\n", zoneList(d.From), zoneList(d.To),
 				objectsBrief(d.Source, d.NegateSource), objectsBrief(d.Destination, d.NegateDest), objectsBrief(d.Services, false), appsBrief(d.Applications), logText(d.Log))
 		}
+		if ok {
+			if line := timeBound(d); line != "" {
+				p.f("      ⚠ 限时策略：%s，此结论只在该时段内成立\n", line)
+			}
+		}
 	}
 	for _, h := range f.Permitted {
 		rule("✓ 已放通", "放通策略", h)
@@ -148,6 +153,19 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 	if f.Defaulted != "" {
 		p.f("  ✗ 无放通策略  %s\n      没有策略放通，默认拒绝\n", f.Defaulted)
 	}
+}
+
+// timeBound describes when a rule is in force, for a rule bound to a
+// schedule or a validity period; empty for a permanent rule.
+func timeBound(d report.RuleDetail) string {
+	var parts []string
+	if d.Schedule != nil {
+		parts = append(parts, "时间计划 "+d.Schedule.Name+"（"+strings.Join(d.Schedule.Values, "；")+"）")
+	}
+	if d.Window != "" {
+		parts = append(parts, "有效期 "+d.Window)
+	}
+	return strings.Join(parts, "，")
 }
 
 func ruleDetail(rules []report.RuleDetail, id string) (report.RuleDetail, bool) {

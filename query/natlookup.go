@@ -141,7 +141,17 @@ func (e *Engine) NATLookup(addr traffic.AddressSet, svc traffic.ServiceSet) []NA
 	for _, m := range e.fw.StaticNATs() {
 		out = append(out, staticUses(m, addr)...)
 	}
-	return out
+	return slices.DeleteFunc(out, func(u NATUse) bool { return poolAsSource(u, out) })
+}
+
+// poolAsSource reports an outbound entry that matches the address only
+// because the rule takes any source, when the same rule translates to the
+// address: the address is the rule's pool, not one of its sources.
+func poolAsSource(u NATUse, all []NATUse) bool {
+	if u.Role != NATRoleOutbound || u.Rule == nil || (!u.Match.Src.Equal(traffic.AnyAddress()) && !u.Match.Src.Equal(traffic.AnyIPv4())) {
+		return false
+	}
+	return slices.ContainsFunc(all, func(o NATUse) bool { return o.Rule == u.Rule && o.Role == NATRolePool })
 }
 
 // natLists returns the NAT rule lists in the order they apply: one list by
@@ -165,7 +175,11 @@ func (e *Engine) natLists() [][]*firemon.NATRule {
 
 func ruleUses(r *firemon.NATRule, i int, list []*firemon.NATRule, addr traffic.AddressSet, svc traffic.ServiceSet) []NATUse {
 	m := r.Match()
-	if !m.Service.Overlaps(svc) && !withPort(m.Service, r.Spec().TranslatedDestination.Port).Overlaps(svc) {
+	internal := m.Service // the destination service after translation
+	if port := r.Spec().TranslatedDestination.Port; port != 0 {
+		internal = withPort(m.Service, port)
+	}
+	if !m.Service.Overlaps(svc) && !internal.Overlaps(svc) {
 		return nil
 	}
 	base := NATUse{Rule: r, ID: r.Spec().ID, Match: m, Position: i + 1}
@@ -180,7 +194,7 @@ func ruleUses(r *firemon.NATRule, i int, list []*firemon.NATRule, addr traffic.A
 		}
 		u.Service = m.Service
 		if side == firemon.NATKindDestination {
-			u.Service = withPort(m.Service, r.Spec().TranslatedDestination.Port)
+			u.Service = internal
 		}
 		out = append(out, u)
 	}

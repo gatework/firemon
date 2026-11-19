@@ -29,6 +29,8 @@ type RuleDetail struct {
 	Services     []Object        `json:"services,omitempty"`
 	Applications []string        `json:"applications,omitempty"`
 	Schedule     *Object         `json:"schedule,omitempty"`
+	// Window is the rule's own validity period, when it has one.
+	Window string `json:"window,omitempty"`
 	Disabled     bool            `json:"disabled,omitempty"`
 	Log          firemon.Logging `json:"logging,omitzero"`
 	Description  string          `json:"description,omitempty"`
@@ -89,6 +91,9 @@ func details(fw *firemon.Firewall, ids []string, decided map[string]traffic.Spac
 		if s.Schedule != "" {
 			o := x.schedule(s.Schedule)
 			d.Schedule = &o
+		}
+		if !s.Window.Start.IsZero() || !s.Window.End.IsZero() {
+			d.Window = windowText(s.Window)
 		}
 		out = append(out, d)
 	}
