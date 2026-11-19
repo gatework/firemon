@@ -123,7 +123,8 @@ func (ev *evaluator) split(s traffic.Space, onHit func(pc piece, hit traffic.Spa
 			continue
 		}
 		if !changed {
-			next = append(ev.spare[:0], ev.pieces[:i]...)
+			next = ev.spare[:0]
+			next = append(next, ev.pieces[:i]...)
 			changed = true
 		}
 		next = append(next, onHit(pc, hit)...)
