@@ -62,6 +62,12 @@ func newCatalog(fw *firemon.Firewall, naming Naming) *catalog {
 // object equal to s or to each of its ranges. Nil means any address.
 func (c *catalog) addressNames(s traffic.AddressSet) []string {
 	if s.Equal(traffic.AnyAddress()) {
+		// A vendor whose rules name "any" through a predefined object
+		// (StoneOS Any) gets that object, as the device writes it back;
+		// elsewhere any is the empty list.
+		if name, ok := c.addresses[s.String()]; ok {
+			return []string{name}
+		}
 		return nil
 	}
 	if name, ok := c.addresses[s.String()]; ok {
@@ -89,6 +95,9 @@ func (c *catalog) addressNames(s traffic.AddressSet) []string {
 // serviceNames returns object names whose union is exactly s. Nil means any.
 func (c *catalog) serviceNames(s traffic.ServiceSet) []string {
 	if s.IsAny() {
+		if name, ok := c.services[s.String()]; ok {
+			return []string{name} // as for addresses: StoneOS Any
+		}
 		return nil
 	}
 	if name, ok := c.services[s.String()]; ok {
@@ -177,10 +186,11 @@ func (c *catalog) groupServices(names []string, set traffic.ServiceSet, group st
 func (c *catalog) mark() int { return len(c.created) }
 
 // nextRule returns the index of the next rule created for this plan.
-// dated returns the next free rule name of the day, P-YYYYMMDD-NNN,
-// numbered after the rules of that day the firewall already has.
-func (c *catalog) dated(t time.Time) string {
-	prefix := "P-" + t.Format("20060102") + "-"
+// dated returns the next free rule name of the day, KIND-YYYYMMDD-NNN
+// (P for permits, B for blocks), numbered after the rules of that day the
+// firewall already has.
+func (c *catalog) dated(kind string, t time.Time) string {
+	prefix := kind + "-" + t.Format("20060102") + "-"
 	last := 0
 	for name := range c.taken {
 		seq, ok := strings.CutPrefix(name, prefix)
@@ -262,4 +272,22 @@ func (c *catalog) oneService(names []string, set traffic.ServiceSet, group strin
 	c.created = append(c.created, AddServiceGroup{Group: firemon.ServiceGroup{Name: name, Members: slices.Clone(names)}})
 	c.services[set.String()] = name
 	return []string{name}
+}
+
+// anyFor narrows an any side to the address family of the other side when
+// the firewall names that family's any with an object (StoneOS Any is
+// every IPv4 address): the rule is then written as the device writes it.
+// Packets of the other family could not match the other side anyway.
+func (c *catalog) anyFor(side, other traffic.AddressSet) traffic.AddressSet {
+	if !side.Equal(traffic.AnyAddress()) {
+		return side
+	}
+	for _, family := range []traffic.AddressSet{traffic.AnyIPv4(), traffic.AnyIPv6()} {
+		if family.ContainsSet(other) {
+			if _, ok := c.addresses[family.String()]; ok {
+				return family
+			}
+		}
+	}
+	return side
 }

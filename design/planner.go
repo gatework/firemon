@@ -22,6 +22,7 @@ type Planner struct {
 	naming    Naming
 	now       func() time.Time
 	threshold int
+	caps      firemon.Capabilities
 }
 
 // New returns a planner for fw.
@@ -34,7 +35,7 @@ func New(fw *firemon.Firewall, opts Options) *Planner {
 	if threshold == 0 {
 		threshold = DefaultGroupThreshold
 	}
-	return &Planner{fw: fw, naming: opts.Naming.withDefaults(), now: now, threshold: threshold}
+	return &Planner{fw: fw, naming: opts.Naming.withDefaults(), now: now, threshold: threshold, caps: opts.Capabilities}
 }
 
 // need is what one zone pair must newly permit.
@@ -414,12 +415,13 @@ func (p *Planner) newRule(n need, s traffic.Space, intent Intent, cat *catalog) 
 	index := cat.nextRule()
 	name := p.naming.Rule(intent, index)
 	if intent.Name == "" {
-		name = cat.dated(p.now()) // P-20261118-001: the day and its sequence
+		name = cat.dated("P", p.now()) // P-20261118-001: the day and its sequence
 	}
 	r := firemon.SecurityRule{
 		Name: cat.unique(name), Description: intent.Description,
 		From: []string{n.from}, To: []string{n.to}, Action: firemon.ActionPermit, Schedule: intent.Schedule,
 	}
+	s.Src, s.Dst = cat.anyFor(s.Src, s.Dst), cat.anyFor(s.Dst, s.Src)
 	// Best practice: a rule says why it exists and logs its sessions.
 	if r.Description == "" {
 		r.Description = r.Name + "-By-Firemon"

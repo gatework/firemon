@@ -3,12 +3,14 @@ package cli
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/gatework/firemon/adapter/filestore"
 	"github.com/gatework/firemon/internal/bootstrap"
 	"github.com/gatework/firemon/internal/workflow"
 )
@@ -25,9 +27,13 @@ func newDeployCmd(o *options) *cobra.Command {
 			"每次写入都记日志，不自动重试；保存或提交前会回读配置并核对。",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if o.file != "" || o.snapshot != "" {
-				return &usageError{errors.New("deploy 直接读取设备，不要指定 --config 或 --snapshot")}
+			if o.file != "" {
+				return &usageError{errors.New("deploy 直接读取设备，不要指定 --config")}
 			}
+			// --snapshot names the stored snapshot to refresh after the
+			// change; the configuration itself is read from the device.
+			refresh := o.snapshot
+			o.snapshot = ""
 			loaded, platform, err := o.load(cmd.Context())
 			if err != nil {
 				return err
@@ -53,7 +59,10 @@ func newDeployCmd(o *options) *cobra.Command {
 			if !yes && !confirm(cmd) {
 				return errors.New("未确认，没有发送任何命令")
 			}
-			return o.push(cmd, platform, prop, journalRoot)
+			if err := o.push(cmd, platform, prop, journalRoot); err != nil {
+				return err
+			}
+			return o.refreshSnapshot(cmd, platform, refresh)
 		},
 	}
 	in.register(cmd)
@@ -96,4 +105,47 @@ func defaultJournalRoot() string {
 		return "firemon-journal"
 	}
 	return filepath.Join(dir, "firemon", "deploy")
+}
+
+// refreshSnapshot stores the device's configuration after a change, so
+// that the next search sees it and does not design the same change again.
+// The snapshot is the one --snapshot names, else the one stored from the
+// same device address.
+func (o *options) refreshSnapshot(cmd *cobra.Command, platform bootstrap.Platform, name string) error {
+	store, err := filestore.New(o.store)
+	if err != nil {
+		return err
+	}
+	if name == "" {
+		snaps, err := store.List(cmd.Context())
+		if err != nil {
+			return err
+		}
+		for _, s := range snaps {
+			if s.Host != "" && s.Host == o.device.host {
+				name = s.Device
+				break
+			}
+		}
+	}
+	p := &printer{w: cmd.OutOrStdout()}
+	if name == "" {
+		p.f("提示：快照库中没有该设备的快照；下次用 --snapshot 指定快照名，下发后会自动更新它，否则请运行 firemon collect\n")
+		return p.err
+	}
+	client, err := o.device.client(platform, o.deps.Getenv)
+	if err != nil {
+		return err
+	}
+	loaded, err := workflow.Load(cmd.Context(), workflow.Source{Platform: platform, Device: client})
+	if err != nil {
+		return fmt.Errorf("下发成功，但更新快照 %s 时读取设备失败，请运行 firemon collect：%w", name, err)
+	}
+	if _, err := store.Save(cmd.Context(), filestore.Snapshot{
+		Device: name, Host: o.device.host, CollectedAt: o.deps.Now().UTC(), Config: loaded.Config, Raw: loaded.Raw,
+	}); err != nil {
+		return err
+	}
+	p.f("快照 %s 已按下发后的设备配置更新；同集群的备机经 HA 同步后，用 firemon collect 更新其快照\n", name)
+	return p.err
 }

@@ -127,7 +127,7 @@ var commandGroups = []struct {
 	group    cobra.Group
 	commands []string
 }{
-	{cobra.Group{ID: "daily", Title: "日常：查询、设计与下发"}, []string{"search", "nat", "deploy"}},
+	{cobra.Group{ID: "daily", Title: "日常：查询、设计与下发"}, []string{"search", "nat", "block", "deploy"}},
 	{cobra.Group{ID: "collect", Title: "采集：配置快照与命中计数"}, []string{"collect", "hits"}},
 	{cobra.Group{ID: "govern", Title: "治理：收敛、审计与迁移"}, []string{"converge", "audit", "migrate"}},
 	{cobra.Group{ID: "tools", Title: "排查工具"}, []string{"parse", "predefined-service", "usage"}},

@@ -134,7 +134,7 @@ func TestRun_Locate(t *testing.T) {
 		}
 	}
 	code, out, errOut := run(t, "", "search", "--store", store, "--design", "--src", "10.0.0.5", "--dst", "172.16.0.40", "--service", "tcp/8443", "--name", "req")
-	if code != cli.ExitNotAllowed || !strings.Contains(out, "处置：在 pa1 上执行") {
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "在 pa1 上执行") {
 		t.Fatalf("locate: %d\n%s%s", code, out, errOut)
 	}
 }
@@ -176,7 +176,7 @@ func TestRun_Check(t *testing.T) {
 	if code != cli.ExitNotAllowed {
 		t.Fatalf("a verified change is ready: code %d\n%s%s", code, out, errOut)
 	}
-	for _, want := range []string{"结论：", "■ pa1：", "不经过任何防火墙（已剔除）：源 172.31.0.9", "地址+掩码已转换为网段", "处置：在 pa1 上执行"} {
+	for _, want := range []string{"结论：", "■ pa1：", "不经过任何防火墙（已剔除）：源 172.31.0.9", "地址+掩码已转换为网段", "在 pa1 上执行"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q (code %d)\n%s%s", want, code, out, errOut)
 		}
@@ -217,7 +217,7 @@ func TestRun_CheckDefaults(t *testing.T) {
 	store, inv := fleet(t, "")
 	env := map[string]string{"FIREMON_STORE": store, "FIREMON_INVENTORY": inv}
 	code, out, errOut := runEnv(t, env, "", "search", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53")
-	if code != cli.ExitNotAllowed || !strings.Contains(out, "处置：在 pa1 上执行") {
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "在 pa1 上执行") {
 		t.Fatalf("code %d\n%s%s", code, out, errOut)
 	}
 	_, invWithStore := fleet(t, "store: snapshots\n")
@@ -262,7 +262,7 @@ func TestRun_CheckBlockedDesignsBeforeTheDeny(t *testing.T) {
 	t.Parallel()
 	args := []string{"search", "--vendor", "paloalto", "--config", paloaltoConf, "--src", "192.0.2.7", "--dst", "10.0.0.9", "--service", "tcp/443", "--name", "REQ-9"}
 	code, out, errOut := run(t, "", args...)
-	for _, want := range []string{"结论：需要新增策略", "被策略 block-bad 拒绝", "拒绝  策略 block-bad（第 1 条）", "⚠ 新策略放在拒绝策略 block-bad 之前", "move rulebase security rules REQ-9 before block-bad"} {
+	for _, want := range []string{"结论：需要新增策略", "被策略 block-bad 拒绝", "拒绝策略：策略 block-bad（第 1 条）", "⚠ 放在拒绝策略 block-bad 之前", "move rulebase security rules REQ-9 before block-bad"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q (code %d)\n%s%s", want, code, out, errOut)
 		}
@@ -285,8 +285,8 @@ func TestRun_CheckFullMatch(t *testing.T) {
 	t.Parallel()
 	code, out, errOut := run(t, "", "search", "--vendor", "hillstone", "--config", hillstoneConf, "--timezone", "UTC",
 		"--src", "198.51.100.9", "--dst", "172.16.0.10", "--service", "tcp/443")
-	want := "结论：完全命中\n\n■ lab-fw1：完全命中\n  已有策略：\n    放通  策略 1 web-in（第 2 条）：198.51.100.9 -> 172.16.0.10 tcp/443\n" +
-		"          区域 untrust → dmz；源 任意；目的 web-servers（172.16.0.10、172.16.0.20-172.16.0.29）；服务 web（tcp/80、tcp/443、tcp/8080）；日志 会话结束\n  处置：无需变更\n"
+	want := "结论：完全命中\n\n■ lab-fw1：完全命中\n  ✓ 已放通  198.51.100.9 -> 172.16.0.10 tcp/443\n      放通策略：策略 1 web-in（第 2 条）\n" +
+		"      区域 untrust → dmz；源 任意；目的 web-servers（172.16.0.10、172.16.0.20-172.16.0.29）；服务 web（tcp/80、tcp/443、tcp/8080）；日志 会话结束\n  处置：无需变更\n"
 	if code != cli.ExitOK || out != want {
 		t.Fatalf("code %d\n%s%s", code, out, errOut)
 	}
@@ -317,5 +317,23 @@ func TestRun_NAT(t *testing.T) {
 	_, out, _ := run(t, "", "nat", "--config", paloaltoConf, "--ip", "198.51.100.80")
 	if strings.Contains(out, "出访源转换") {
 		t.Errorf("an inside source rule listed for a public address:\n%s", out)
+	}
+}
+
+// block denies traffic on every firewall with a verified rule placed
+// before the first rule that may match it.
+func TestRun_Block(t *testing.T) {
+	t.Parallel()
+	code, out, errOut := run(t, "", "block", "--config", paloaltoConf, "--dst", "172.16.0.10", "--service", "443")
+	for _, w := range []string{"需新增封堵策略", "新增策略 B-20261117-001", "set rulebase security rules B-20261117-001 action deny", "move rulebase security rules B-20261117-001 before"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing %q (code %d)\n%s%s", w, code, out, errOut)
+		}
+	}
+	if code != cli.ExitNotAllowed {
+		t.Errorf("a verified block is ready: code %d", code)
+	}
+	if code, _, _ := run(t, "", "block", "--config", paloaltoConf); code != cli.ExitUsage {
+		t.Errorf("block without an address: code %d", code)
 	}
 }

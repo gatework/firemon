@@ -95,6 +95,8 @@ type Firewall struct {
 	// undecided traffic when the undecided rules do not match.
 	Otherwise []Hit  `json:"otherwise,omitempty"`
 	Remaining string `json:"remaining,omitempty"`
+	// Defaulted is the traffic no rule decides: the default action denies it.
+	Defaulted string `json:"defaulted,omitempty"`
 	// Unrouted is the destination part the firewall has no route for.
 	Unrouted string `json:"unrouted,omitempty"`
 	// Incomplete reports a cut-short evaluation.
@@ -292,6 +294,9 @@ func firewallReport(c inventory.Crossing) Firewall {
 	f.Permitted, f.Blocked = acc.permitted.hits(), acc.blocked.hits()
 	f.Undecided, f.Otherwise = acc.undecided.hits(), acc.otherwise.hits()
 	f.UndecidedTraffic = describeAll(acc.unknown)
+	if !deflt.IsEmpty() {
+		f.Defaulted = compact(deflt)
+	}
 	if rest := blocked.Union(deflt); !rest.IsEmpty() {
 		f.Remaining = rest.String()
 	}

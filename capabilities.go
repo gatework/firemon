@@ -24,6 +24,9 @@ type Capabilities struct {
 	ApplicationDefault bool
 	// RuleWindows: rules carry an inline validity window.
 	RuleWindows bool
+	// LogDeny: rules log the packets they deny on their own (StoneOS
+	// policy-deny); elsewhere a deny rule logs at session end.
+	LogDeny bool
 	// InlineServices: rules carry inline service entries.
 	InlineServices bool
 	// InlineFQDN: rules carry inline domain names.
