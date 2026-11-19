@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/netip"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/gatework/firemon"
@@ -175,5 +176,29 @@ set rulebase qos rules shape destination qos-host
 	}
 	if u := fw.References().Unused(); len(u) != 0 {
 		t.Fatalf("pbf and qos objects are in use: %v", u)
+	}
+}
+
+// TestRules_ExternalListsAndRegionsSayWhatTheyMatch: an external list or a
+// region in a rule leaves it undecidable and names the kind.
+func TestRules_ExternalListsAndRegionsSayWhatTheyMatch(t *testing.T) {
+	t.Parallel()
+	var text strings.Builder
+	text.WriteString("set external-list bad-ips type ip url https://example.com/bad.txt\n")
+	for _, r := range []struct{ name, src string }{{"edl", "bad-ips"}, {"geo", "CN"}} {
+		for _, attr := range []string{"from any", "to any", "source " + r.src, "destination any", "service any", "application any", "action deny"} {
+			text.WriteString("set rulebase security rules " + r.name + " " + attr + "\n")
+		}
+	}
+	cfg, fw := compileSet(t, text.String())
+	for i, want := range []string{"external-list bad-ips", "region CN"} {
+		if got := cfg.Rules[i].Unsupported; !slices.Equal(got, []string{want}) {
+			t.Errorf("rule %s unsupported %v, want %s", cfg.Rules[i].ID, got, want)
+		}
+	}
+	for _, r := range fw.Rules() {
+		if r.Decidable() {
+			t.Errorf("rule %s is decidable", r.ID())
+		}
 	}
 }

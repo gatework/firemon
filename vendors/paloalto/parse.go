@@ -93,6 +93,7 @@ type state struct {
 	ifaceRefs map[string][]string // interface -> address object names used as its IP
 	hostBits  map[string]string   // address object -> unmasked ip-netmask value
 	routeDrop map[string]string   // static route key -> why it does not forward
+	external  map[string]string   // external list or region name -> its kind
 	security  *rulebook
 	nat       *rulebook
 	pbf       *rulebook
@@ -132,6 +133,7 @@ func newState(loc *time.Location) *state {
 		ifaceRefs: map[string][]string{},
 		hostBits:  map[string]string{},
 		routeDrop: map[string]string{},
+		external:  map[string]string{},
 		security:  newRulebook(),
 		nat:       newRulebook(),
 		pbf:       newRulebook(),
@@ -208,6 +210,10 @@ func (s *state) dispatch(st statement) {
 		if section == "system" && key == "hostname" {
 			s.cfg.Hostname = p.scalar()
 		}
+	case "external-list", "region":
+		// Contents the device fetches or knows by country: named here so
+		// that rules using them say what they match.
+		s.external[p.next()] = head
 	case "device-group", "template":
 		s.diagnose(st, "Panorama scope is not supported")
 	}
