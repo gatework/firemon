@@ -22,8 +22,8 @@ type intentFlags struct {
 func (i *intentFlags) register(cmd *cobra.Command) {
 	i.trafficFlags.register(cmd)
 	f := cmd.Flags()
-	f.StringVar(&i.name, "name", "", "新建策略的名称，例如工单号（默认 fm_<序号>）")
-	f.StringVar(&i.description, "description", "", "新建策略的描述")
+	f.StringVar(&i.name, "name", "", "新建策略名称，例如工单号（默认 P-日期-序号，如 P-20261118-001）")
+	f.StringVar(&i.description, "description", "", "新建策略描述（默认 名称-By-Firemon）")
 	f.StringVar(&i.schedule, "schedule", "", "新建策略使用的已有时间计划")
 	f.BoolVar(&i.noLog, "no-log", false, "新建策略不开启日志（默认记录会话开始和结束）")
 	i.nat.register(f)

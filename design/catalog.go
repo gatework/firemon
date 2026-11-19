@@ -1,9 +1,12 @@
 package design
 
 import (
+	"fmt"
 	"net/netip"
 	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/traffic"
@@ -174,6 +177,23 @@ func (c *catalog) groupServices(names []string, set traffic.ServiceSet, group st
 func (c *catalog) mark() int { return len(c.created) }
 
 // nextRule returns the index of the next rule created for this plan.
+// dated returns the next free rule name of the day, P-YYYYMMDD-NNN,
+// numbered after the rules of that day the firewall already has.
+func (c *catalog) dated(t time.Time) string {
+	prefix := "P-" + t.Format("20060102") + "-"
+	last := 0
+	for name := range c.taken {
+		seq, ok := strings.CutPrefix(name, prefix)
+		if !ok {
+			continue
+		}
+		if n, err := strconv.Atoi(seq); err == nil && n > last {
+			last = n
+		}
+	}
+	return fmt.Sprintf("%s%03d", prefix, last+1)
+}
+
 func (c *catalog) nextRule() int {
 	c.rules++
 	return c.rules - 1

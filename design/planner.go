@@ -412,13 +412,17 @@ func extendable(r *firemon.Rule, from, to string) bool {
 
 func (p *Planner) newRule(n need, s traffic.Space, intent Intent, cat *catalog) AddRule {
 	index := cat.nextRule()
+	name := p.naming.Rule(intent, index)
+	if intent.Name == "" {
+		name = cat.dated(p.now()) // P-20261118-001: the day and its sequence
+	}
 	r := firemon.SecurityRule{
-		Name: cat.unique(p.naming.Rule(intent, index)), Description: intent.Description,
+		Name: cat.unique(name), Description: intent.Description,
 		From: []string{n.from}, To: []string{n.to}, Action: firemon.ActionPermit, Schedule: intent.Schedule,
 	}
 	// Best practice: a rule says why it exists and logs its sessions.
 	if r.Description == "" {
-		r.Description = r.Name + " 由 firemon 于 " + p.now().Format("2006-01-02") + " 创建"
+		r.Description = r.Name + "-By-Firemon"
 	}
 	if !intent.NoLog {
 		r.Log = firemon.Logging{Start: true, End: true, Setting: intent.LogSetting}
