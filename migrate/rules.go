@@ -67,7 +67,7 @@ func (tr *translator) rules() {
 
 // ruleID returns the target identifier of the n-th rule made from src.
 func (tr *translator) ruleID(src firemon.SecurityRule, n int) string {
-	if tr.caps.NumericRuleIDs {
+	if tr.t.Semantics.NumericRuleIDs {
 		return strconv.Itoa(len(tr.out.Rules) + 1)
 	}
 	base := src.Name
@@ -84,9 +84,9 @@ func (tr *translator) rule(src firemon.SecurityRule, compiled *firemon.Rule) rul
 	res := ruleResult{fidelity: FidelityExact}
 	out := firemon.SecurityRule{
 		Name: src.Name, Description: src.Description, From: tr.zones(src.From), To: tr.zones(src.To),
-		Action: src.Action, Disabled: src.Disabled, Log: src.Log, Applications: nil,
+		Action: src.Action, Disabled: src.Disabled, Log: src.Log,
 	}
-	if tr.caps.NumericRuleIDs && out.Name == "" {
+	if tr.t.Semantics.NumericRuleIDs && out.Name == "" {
 		out.Name = src.ID
 	}
 	out.Source = tr.operands(&res, src.Source, src.NegateSource, compiled, "source", src.ID)
@@ -97,8 +97,11 @@ func (tr *translator) rule(src firemon.SecurityRule, compiled *firemon.Rule) rul
 	tr.ruleServices(&res, &out, src)
 	tr.ruleApplications(&res, &out, src)
 	tr.ruleTime(&res, &out, src)
-	for _, u := range src.Unsupported {
+	for _, u := range firemon.Criteria(src.Conditions) {
 		res.untranslatable("criterion not translated: " + u)
+	}
+	if len(src.Inspection) > 0 {
+		res.approximate("inspection not carried over: " + strings.Join(src.Inspection, ", "))
 	}
 	if src.Group != "" {
 		res.notes = append(res.notes, "rule group "+tr.groupName(src.Group)+" not carried over")
@@ -116,12 +119,13 @@ func (tr *translator) withPortless(res *ruleResult, out firemon.SecurityRule, sr
 	if len(res.apps) == 0 {
 		return []firemon.SecurityRule{out}
 	}
-	if len(src.Applications) > 0 {
+	if len(src.Applications()) > 0 {
 		res.untranslatable("services " + strings.Join(res.apps, ",") + " are applications on the target and the rule already matches applications")
 		return []firemon.SecurityRule{out}
 	}
 	app := out
-	app.Services, app.ServiceEntries, app.Applications = nil, nil, res.apps
+	app.Services, app.ServiceEntries = nil, nil
+	app.Conditions = firemon.WithApplications(app.Conditions, res.apps)
 	res.notes = append(res.notes, "services without ports written as applications "+strings.Join(res.apps, ","))
 	if len(out.Services) == 0 && len(out.ServiceEntries) == 0 {
 		return []firemon.SecurityRule{app}
@@ -247,9 +251,9 @@ func (tr *translator) ruleServices(res *ruleResult, out *firemon.SecurityRule, s
 			}
 		}
 	}
-	if src.ApplicationDefault {
+	if src.DefaultPorts {
 		if tr.caps.ApplicationDefault {
-			out.ApplicationDefault = true
+			out.DefaultPorts = true
 		} else {
 			res.approximate("application-default dropped: the applications match on any port")
 		}
@@ -258,7 +262,7 @@ func (tr *translator) ruleServices(res *ruleResult, out *firemon.SecurityRule, s
 
 func (tr *translator) ruleApplications(res *ruleResult, out *firemon.SecurityRule, src firemon.SecurityRule) {
 	var missing []string
-	for _, a := range src.Applications {
+	for _, a := range src.Applications() {
 		t, approx, ok := tr.application(a)
 		switch {
 		case !ok:
@@ -267,8 +271,8 @@ func (tr *translator) ruleApplications(res *ruleResult, out *firemon.SecurityRul
 		case approx:
 			res.approximate("application " + a + " written as " + t + " (same protocol, vendor signatures differ)")
 		}
-		if !slices.Contains(out.Applications, t) {
-			out.Applications = append(out.Applications, t)
+		if !slices.Contains(out.Applications(), t) {
+			out.Conditions = firemon.AddApplications(out.Conditions, t)
 		}
 	}
 	if len(missing) == 0 {
@@ -290,20 +294,20 @@ func (tr *translator) ruleApplications(res *ruleResult, out *firemon.SecurityRul
 // the applications' default ports: stricter on those ports, and blind to
 // the applications elsewhere, which the report says.
 func (tr *translator) denyWithoutApplications(res *ruleResult, out *firemon.SecurityRule, src firemon.SecurityRule, missing []string) {
-	out.Applications, out.ApplicationDefault = nil, false
+	out.Conditions, out.DefaultPorts = firemon.WithApplications(out.Conditions, nil), false
 	what := "applications " + strings.Join(missing, ",") + " have no mapping"
 	if len(out.Services) > 0 || len(out.ServiceEntries) > 0 || len(res.apps) > 0 {
 		res.approximate(what + "; the deny is kept on its services for every application (stricter)")
 		return
 	}
-	ports, ok := tr.applicationPorts(src.Applications)
+	ports, ok := tr.applicationPorts(src.Applications())
 	if !ok {
 		res.untranslatable(what + " and their ports are unknown; map them (--mapping) or the deny is lost")
 		return
 	}
-	name := "APP_" + strings.Join(src.Applications, "_")
+	name := "APP_" + strings.Join(src.Applications(), "_")
 	if _, done := tr.names.lookup(nsService, name); !done {
-		tr.service(name, "default ports of "+strings.Join(src.Applications, ","), serviceEntries(ports), false)
+		tr.service(name, "default ports of "+strings.Join(src.Applications(), ","), serviceEntries(ports), false)
 	}
 	t, ok := tr.names.lookup(nsService, name)
 	if !ok {

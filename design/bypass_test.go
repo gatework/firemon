@@ -16,7 +16,7 @@ func TestPlan_OverridePlacesBeforeApplicationDeny(t *testing.T) {
 	t.Parallel()
 	anyAddr := []firemon.AddressRef{inline("0.0.0.0/0")}
 	app := rule("12", firemon.ActionDeny, "trust", "dmz", anyAddr, anyAddr, "tcp/22")
-	app.Applications = []string{"SSH"}
+	app.Conditions = []firemon.Condition{firemon.ApplicationCondition("SSH")}
 	cfg := lab(
 		rule("1", firemon.ActionPermit, "trust", "dmz", []firemon.AddressRef{inline("10.0.9.0/24")}, anyAddr, "HTTPS"),
 		app,

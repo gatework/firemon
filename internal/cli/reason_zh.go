@@ -81,6 +81,7 @@ var reasonRules = []reasonRule{
 	{re: regexp.MustCompile(`^ignored by the source device \((.+)\); not carried over$`), repl: "源设备上不生效（$1），不迁移", sub: []int{1}},
 	{re: regexp.MustCompile(`^criterion not translated: (.+)$`), repl: "条件未翻译：$1", sub: []int{1}},
 	{re: regexp.MustCompile(`^rule group (.+) not carried over$`), repl: "策略组 $1 未迁移"},
+	{re: regexp.MustCompile(`^inspection not carried over: (.+)$`), repl: "安全检测未迁移：$1"},
 	{re: regexp.MustCompile(`^services (.+) are applications on the target and the rule already matches applications$`), repl: "服务 $1 在目标设备上是应用，而策略已按应用匹配，无法合写"},
 	{re: regexp.MustCompile(`^services without ports written as applications (.+)$`), repl: "无端口的服务写为应用 $1"},
 	{re: regexp.MustCompile(`^negated (source|destination) cannot be resolved exactly$`), repl: "取反的$1无法精确解析", sub: []int{1}},

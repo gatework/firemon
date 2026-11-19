@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gatework/firemon"
@@ -171,7 +172,7 @@ func renderExtend(c design.ExtendRule) (do, undo []string, err error) {
 // cleanup can be restored as it was.
 func renderRule(c design.AddRule) ([]string, error) {
 	r := c.Rule
-	if r.NegateSource || r.NegateDestination || r.Scope != firemon.ZoneScopeAny || r.ApplicationDefault {
+	if r.NegateSource || r.NegateDestination || r.Scope != firemon.ZoneScopeAny || r.DefaultPorts {
 		return nil, fmt.Errorf("hillstone: rule %s: negation, rule-type and application-default have no StoneOS form", r.ID)
 	}
 	head := "rule id " + r.ID
@@ -198,7 +199,7 @@ func renderRule(c design.AddRule) ([]string, error) {
 	}
 	out = append(out, src...)
 	out = append(out, dst...)
-	if complete && len(r.Services) == 0 && len(r.ServiceEntries) == 0 && len(r.Applications) == 0 {
+	if complete && len(r.Services) == 0 && len(r.ServiceEntries) == 0 && len(r.Applications()) == 0 {
 		out = append(out, "  service "+q(anyName))
 	}
 	for _, s := range r.Services {
@@ -211,7 +212,7 @@ func renderRule(c design.AddRule) ([]string, error) {
 		}
 		out = append(out, "  service-rule "+line)
 	}
-	for _, a := range r.Applications {
+	for _, a := range r.Applications() {
 		out = append(out, "  application "+q(a))
 	}
 	out = append(out, ruleOptions(r)...)
@@ -238,6 +239,10 @@ func ruleOptions(r firemon.SecurityRule) []string {
 	}
 	if r.Group != "" {
 		out = append(out, "  aggregate-rule "+r.Group)
+	}
+	for _, in := range r.Inspection {
+		kind, name, _ := strings.Cut(in, " ")
+		out = append(out, "  "+kind+" "+q(name))
 	}
 	if r.Log.Start {
 		out = append(out, "  log session-start")

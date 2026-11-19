@@ -76,7 +76,7 @@ func (tr *translator) dynamicNAT(n firemon.DynamicNAT, both bool) {
 	out.Services = tr.singleService(out.Services, "nat-"+n.ID+"-svc")
 	out.TranslatedSource = tr.translation(&res, n.TranslatedSource)
 	out.TranslatedDestination = tr.translation(&res, n.TranslatedDestination)
-	for _, u := range n.Unsupported {
+	for _, u := range firemon.Criteria(n.Conditions) {
 		res.untranslatable("criterion not translated: " + u)
 	}
 	if both && tr.src.Semantics.NATOrder != tr.t.Semantics.NATOrder {
@@ -147,7 +147,7 @@ func (tr *translator) translation(res *ruleResult, t firemon.Translation) firemo
 
 // natID numbers StoneOS NAT rules per list, names PAN-OS ones.
 func (tr *translator) natID(n firemon.DynamicNAT, side firemon.NATKind) string {
-	if !tr.caps.NumericRuleIDs {
+	if !tr.t.Semantics.NumericRuleIDs {
 		return tr.names.fresh(nsNAT, cmpVR(n.Name, "nat-"+n.ID))
 	}
 	count := 0
@@ -183,7 +183,7 @@ func joinNotes(notes []string) string { return strings.Join(notes, "; ") }
 // single groups several address operands into one object on targets
 // whose NAT rules take one operand (StoneOS).
 func (tr *translator) single(refs []firemon.AddressRef, base string) []firemon.AddressRef {
-	if len(refs) <= 1 || !tr.caps.NumericRuleIDs {
+	if len(refs) <= 1 || !tr.t.Semantics.NumericRuleIDs {
 		return refs
 	}
 	g := firemon.AddressGroup{Name: tr.names.fresh(nsAddress, base)}
@@ -209,7 +209,7 @@ func (tr *translator) single(refs []firemon.AddressRef, base string) []firemon.A
 
 // singleService groups several services into one on StoneOS NAT rules.
 func (tr *translator) singleService(names []string, base string) []string {
-	if len(names) <= 1 || !tr.caps.NumericRuleIDs {
+	if len(names) <= 1 || !tr.t.Semantics.NumericRuleIDs {
 		return names
 	}
 	g := firemon.ServiceGroup{Name: tr.names.fresh(nsService, base), Members: names}

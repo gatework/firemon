@@ -175,7 +175,7 @@ func demoteUnrestorable(cfg *firemon.Config, findings []Finding) {
 	unread := unreadNames(cfg)
 	partialRule := map[string]bool{}
 	for _, r := range cfg.Rules {
-		partialRule[r.ID] = len(r.Unsupported) > 0
+		partialRule[r.ID] = len(firemon.Criteria(r.Conditions)) > 0
 	}
 	for i := range findings {
 		f := &findings[i]

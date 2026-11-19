@@ -266,9 +266,9 @@ func (s *state) natClause(n *firemon.DynamicNAT, t *firemon.Translation, w *word
 		w.next() // the tracked object
 	case "ingress-interface", "evr":
 		// Narrow the match in ways the model does not evaluate.
-		n.Unsupported = append(n.Unsupported, kw+" "+w.next())
+		n.Conditions = append(n.Conditions, other(kw+" "+w.next()))
 	default:
-		n.Unsupported = append(n.Unsupported, "unrecognized "+kw+" "+w.rest())
+		n.Conditions = append(n.Conditions, other("unrecognized "+kw+" "+w.rest()))
 		for !w.done() {
 			w.next()
 		}

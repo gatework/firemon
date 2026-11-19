@@ -45,7 +45,7 @@ func TestAnalyze_UnrestorableRuleIsReview(t *testing.T) {
 	cfg := &firemon.Config{
 		Vendor: firemon.VendorHillstone,
 		Rules: []firemon.SecurityRule{
-			{ID: "1", Action: firemon.ActionPermit, Disabled: true, Unsupported: []string{"user alice"}},
+			{ID: "1", Action: firemon.ActionPermit, Disabled: true, Conditions: []firemon.Condition{firemon.Criterion(firemon.ConditionUser, "user alice", "alice")}},
 			{ID: "2", Action: firemon.ActionPermit, Disabled: true},
 		},
 	}

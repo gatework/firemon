@@ -101,11 +101,11 @@ func (s *state) ruleIn(b block, head *words, from, to []string) {
 				// An operand the model cannot read narrows the rule on the
 				// device; never let it widen the model.
 				s.diagnose(l, "invalid rule operand")
-				r.Unsupported = append(r.Unsupported, "unparsed "+strings.TrimSpace(l.Text))
+				r.Conditions = append(r.Conditions, other("unparsed "+strings.TrimSpace(l.Text)))
 				continue
 			}
 		case !s.ruleAttribute(&r, kw, w):
-			r.Unsupported = append(r.Unsupported, "unrecognized "+strings.TrimSpace(l.Text))
+			r.Conditions = append(r.Conditions, other("unrecognized "+strings.TrimSpace(l.Text)))
 			continue
 		}
 		s.mark(l)
@@ -138,7 +138,7 @@ func (s *state) ruleAttribute(r *firemon.SecurityRule, kw string, w *words) bool
 	case "action":
 		r.Action = ruleAction(w.next())
 		if r.Action == firemon.ActionUnset {
-			r.Unsupported = append(r.Unsupported, "action "+w.rest())
+			r.Conditions = append(r.Conditions, other("action "+w.rest()))
 		}
 	case "disable":
 		r.Disabled = true
@@ -149,13 +149,13 @@ func (s *state) ruleAttribute(r *firemon.SecurityRule, kw string, w *words) bool
 	case "service":
 		r.Services = append(r.Services, w.next())
 	case "application":
-		r.Applications = append(r.Applications, w.next())
+		r.Conditions = firemon.AddApplications(r.Conditions, w.next())
 	case "schedule":
 		r.Schedule = w.next()
 	case "start-time", "expire-time":
 		t, ok := s.dateTime(w)
 		if !ok {
-			r.Unsupported = append(r.Unsupported, "invalid "+kw)
+			r.Conditions = append(r.Conditions, other("invalid "+kw))
 			break
 		}
 		if kw == "start-time" {
@@ -175,14 +175,18 @@ func (s *state) ruleAttribute(r *firemon.SecurityRule, kw string, w *words) bool
 	case "service-rule":
 		e, ok := inlineService(w)
 		if !ok {
-			r.Unsupported = append(r.Unsupported, kw+" "+w.rest())
+			r.Conditions = append(r.Conditions, other(kw+" "+w.rest()))
 			break
 		}
 		r.ServiceEntries = append(r.ServiceEntries, e)
 	case "domain-book", "vlan-id", "user", "role", "usergroup":
-		r.Unsupported = append(r.Unsupported, kw+" "+w.rest())
-	case "av", "ips", "url", "assistant", "sandbox", "wbl", "spam", "ssl-proxy", "qos-tag", "session-limit":
-		// Security profiles inspect allowed traffic; they do not change matching.
+		raw := kw + " " + w.rest()
+		r.Conditions = append(r.Conditions, firemon.Criterion(criterionKind(kw), raw, strings.Trim(strings.TrimSpace(strings.TrimPrefix(raw, kw)), `"`)))
+	case "av", "ips", "url", "sandbox", "wbl", "spam", "ssl-proxy":
+		// Inspection of the permitted traffic; it does not change matching.
+		r.Inspection = append(r.Inspection, kw+" "+w.next())
+	case "assistant", "qos-tag", "session-limit":
+		// Traffic handling outside matching and inspection.
 	default:
 		return false
 	}
@@ -247,12 +251,13 @@ func anyZones(zones []string) []string {
 // created without them.
 func incomplete(r firemon.SecurityRule) string {
 	var missing []string
-	if r.Action == firemon.ActionUnset && !slices.ContainsFunc(r.Unsupported, func(u string) bool { return strings.HasPrefix(u, "action ") }) {
+	criteria := firemon.Criteria(r.Conditions)
+	if r.Action == firemon.ActionUnset && !slices.ContainsFunc(criteria, func(u string) bool { return strings.HasPrefix(u, "action ") }) {
 		missing = append(missing, "action")
 	}
 	// An operand the parser could not read is still present on the device.
 	unread := func(prefix string) bool {
-		return slices.ContainsFunc(r.Unsupported, func(u string) bool { return strings.HasPrefix(u, "unparsed "+prefix) })
+		return slices.ContainsFunc(criteria, func(u string) bool { return strings.HasPrefix(u, "unparsed "+prefix) })
 	}
 	if len(r.Source) == 0 && !unread("src-") {
 		missing = append(missing, "source")
@@ -260,7 +265,7 @@ func incomplete(r firemon.SecurityRule) string {
 	if len(r.Destination) == 0 && !unread("dst-") {
 		missing = append(missing, "destination")
 	}
-	if len(r.Services) == 0 && len(r.ServiceEntries) == 0 && len(r.Applications) == 0 {
+	if len(r.Services) == 0 && len(r.ServiceEntries) == 0 && len(r.Applications()) == 0 {
 		missing = append(missing, "service")
 	}
 	if len(missing) == 0 {
@@ -307,7 +312,7 @@ func removeAttribute(r *firemon.SecurityRule, w *words) {
 	case "service":
 		r.Services = slices.DeleteFunc(r.Services, func(s string) bool { return s == value })
 	case "application":
-		r.Applications = slices.DeleteFunc(r.Applications, func(s string) bool { return s == value })
+		r.Conditions = firemon.WithApplications(r.Conditions, slices.DeleteFunc(r.Applications(), func(s string) bool { return s == value }))
 	case "schedule":
 		r.Schedule = ""
 	case "disable":
@@ -379,5 +384,20 @@ func (s *state) dropGroup(id string) {
 		if s.cfg.Rules[i].Group == id {
 			s.cfg.Rules[i].Group = ""
 		}
+	}
+}
+
+// other is a criterion the model holds as written.
+func other(raw string) firemon.Condition { return firemon.Criterion(firemon.ConditionOther, raw) }
+
+// criterionKind maps a StoneOS rule keyword to the condition it is.
+func criterionKind(kw string) firemon.ConditionKind {
+	switch kw {
+	case "domain-book":
+		return firemon.ConditionDomain
+	case "user", "role", "usergroup", "user-group":
+		return firemon.ConditionUser
+	default:
+		return firemon.ConditionOther
 	}
 }

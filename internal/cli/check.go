@@ -264,7 +264,7 @@ func intakeOptions(platforms map[string]bootstrap.Platform, fws map[string]*fire
 			continue
 		}
 		for _, r := range fw.Rules() {
-			for _, a := range r.Spec().Applications {
+			for _, a := range r.Spec().Applications() {
 				named[strings.ToLower(a)] = true
 			}
 		}

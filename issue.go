@@ -1,6 +1,9 @@
 package firemon
 
-import "strings"
+import (
+	"cmp"
+	"strings"
+)
 
 // IssueKind classifies why something cannot be evaluated exactly.
 type IssueKind uint8
@@ -97,27 +100,44 @@ func issuesOf(kind IssueKind, reasons []string) []Issue {
 	return out
 }
 
-// unsupportedKind classifies a criterion a parser recognized but the
-// model cannot evaluate (SecurityRule.Unsupported).
-func unsupportedKind(criterion string) IssueKind {
-	switch {
-	case strings.HasPrefix(criterion, "source-user"), strings.HasPrefix(criterion, "user"),
-		strings.HasPrefix(criterion, "role"):
+// conditionKind is the issue a condition the model cannot evaluate offline
+// raises; applications are reported apart (appIssues).
+func conditionKind(k ConditionKind) IssueKind {
+	switch k {
+	case ConditionUser:
 		return IssueKindUser
-	case strings.HasPrefix(criterion, "category"), strings.HasPrefix(criterion, "url-category"):
+	case ConditionURLCategory:
 		return IssueKindURLCategory
-	case strings.HasPrefix(criterion, "domain-book"):
+	case ConditionDomain:
 		return IssueKindDomain
+	case ConditionUnset, ConditionApplication, ConditionOther:
+		return IssueKindUnsupported
 	default:
 		return IssueKindUnsupported
 	}
 }
 
-// unsupportedIssues classifies parser criteria.
-func unsupportedIssues(criteria []string) []Issue {
-	out := make([]Issue, len(criteria))
-	for i, c := range criteria {
-		out[i] = Issue{Kind: unsupportedKind(c), Reason: c}
+// conditionIssues are the issues of the conditions other than
+// applications, in order, with the vendor text as reason.
+func conditionIssues(conds []Condition) []Issue {
+	var out []Issue
+	for _, c := range conds {
+		if c.Kind != ConditionApplication {
+			out = append(out, Issue{Kind: conditionKind(c.Kind), Reason: c.Raw})
+		}
+	}
+	return out
+}
+
+// criteriaIssues are the issues of every condition, applications included:
+// constructs that do not evaluate applications, such as policy routes,
+// cannot decide them.
+func criteriaIssues(conds []Condition) []Issue {
+	out := conditionIssues(conds)
+	for _, c := range conds {
+		if c.Kind == ConditionApplication {
+			out = append(out, Issue{Kind: IssueKindApplication, Reason: cmp.Or(c.Raw, "application match "+strings.Join(c.Values, ","))})
+		}
 	}
 	return out
 }

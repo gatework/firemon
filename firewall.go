@@ -247,7 +247,7 @@ func (fw *Firewall) compileRules(res *resolver) {
 		semantic := fw.ruleSemanticIssues(spec)
 		r.issues = slices.Concat(r.issues, apps, semantic)
 		r.certain = certain && len(apps) == 0 && len(semantic) == 0
-		for _, a := range spec.Applications {
+		for _, a := range spec.Applications() {
 			r.apps = append(r.apps, strings.ToLower(a))
 		}
 		if spec.Schedule != "" {
@@ -307,18 +307,18 @@ func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, is
 	if !dst.exact() {
 		bound.Dst = traffic.AnyAddress()
 	}
-	if !svc.exact() || spec.ApplicationDefault {
+	if !svc.exact() || spec.DefaultPorts {
 		bound.Service = traffic.AnyService()
 	}
 	issues = slices.Concat(
 		issuesOf(IssueKindObject, src.problems), issuesOf(IssueKindDomain, src.domainProblems),
 		issuesOf(IssueKindObject, dst.problems), issuesOf(IssueKindObject, svc.problems),
-		unsupportedIssues(spec.Unsupported))
+		conditionIssues(spec.Conditions))
 	// match is certainly matched when every dimension only understates the
 	// true set and no other criterion narrows the rule. A negated inexact
 	// dimension turns an understatement into an overstatement.
-	certain = !src.overstated && !dst.overstated && !svc.overstated && len(spec.Unsupported) == 0 &&
-		!spec.ApplicationDefault && (!spec.NegateSource || src.exact()) && (!spec.NegateDestination || dst.exact())
+	certain = !src.overstated && !dst.overstated && !svc.overstated && len(Criteria(spec.Conditions)) == 0 &&
+		!spec.DefaultPorts && (!spec.NegateSource || src.exact()) && (!spec.NegateDestination || dst.exact())
 	if spec.NegateDestination && !dst.domains.IsEmpty() {
 		// A negated domain cannot be matched by name either.
 		return match, bound, append(issues, issuesOf(IssueKindDomain, dst.domainProblems)...), traffic.DomainSet{}, certain
@@ -330,10 +330,10 @@ func ruleSpace(res *resolver, spec SecurityRule) (match, bound traffic.Space, is
 // targets that do not name an application.
 func appIssues(spec SecurityRule) []Issue {
 	var out []Issue
-	if len(spec.Applications) > 0 {
-		out = append(out, Issue{Kind: IssueKindApplication, Reason: "application match " + strings.Join(spec.Applications, ",")})
+	if apps := spec.Applications(); len(apps) > 0 {
+		out = append(out, Issue{Kind: IssueKindApplication, Reason: "application match " + strings.Join(apps, ",")})
 	}
-	if spec.ApplicationDefault {
+	if spec.DefaultPorts {
 		out = append(out, Issue{Kind: IssueKindApplication, Reason: "application-default service"})
 	}
 	return out
@@ -362,7 +362,7 @@ func (fw *Firewall) compileNAT(res *resolver) {
 		if !svc.exact() {
 			n.bound.Service = traffic.AnyService()
 		}
-		n.issues = slices.Concat(src.allProblems(), dst.allProblems(), svc.allProblems(), spec.Unsupported)
+		n.issues = slices.Concat(src.allProblems(), dst.allProblems(), svc.allProblems(), Criteria(spec.Conditions))
 		n.src, n.issues = fw.translation(res, spec.TranslatedSource, n.issues)
 		n.dst, n.issues = fw.translation(res, spec.TranslatedDestination, n.issues)
 		if spec.TranslatedSource.Mode == TranslationModeUnset && spec.TranslatedDestination.Mode == TranslationModeUnset {

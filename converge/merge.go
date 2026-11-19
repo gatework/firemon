@@ -53,7 +53,8 @@ func mergeKey(r *firemon.Rule) string {
 	sorted := func(s []string) string { return strings.Join(slices.Sorted(slices.Values(s)), ",") }
 	return strings.Join([]string{
 		sorted(spec.From), sorted(spec.To), spec.Scope.String(), spec.Action.String(), sorted(r.Applications()),
-		strconv.FormatBool(spec.ApplicationDefault), fmt.Sprint(spec.Log), spec.Group,
+		strconv.FormatBool(spec.DefaultPorts), fmt.Sprint(spec.Log), spec.Group,
+		sorted(spec.Inspection), sorted(firemon.Criteria(spec.Conditions)),
 	}, "|")
 }
 

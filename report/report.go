@@ -525,7 +525,7 @@ func pathSummary(p query.Path) Path {
 	}
 	for _, a := range p.AppPorts {
 		spec := a.Rule.Spec()
-		out.AppPorts = append(out.AppPorts, AppPorts{Rule: spec.ID, Name: spec.Name, Applications: spec.Applications, Ports: a.Ports.String()})
+		out.AppPorts = append(out.AppPorts, AppPorts{Rule: spec.ID, Name: spec.Name, Applications: spec.Applications(), Ports: a.Ports.String()})
 	}
 	if h := p.DestinationNAT; h != nil {
 		out.NAT = append(out.NAT, natLine(*h))

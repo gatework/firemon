@@ -97,7 +97,7 @@ func Decide(fw *firemon.Firewall, p Packet, at time.Time) Verdict {
 // so it is taken not to be one of those applications.
 func offAppPorts(fw *firemon.Firewall, r *firemon.Rule, svc traffic.ServiceSet) bool {
 	apps := r.Applications()
-	if len(apps) == 0 || r.ApplicationDefault() || !r.Bound().Service.IsAny() {
+	if len(apps) == 0 || r.DefaultPorts() || !r.Bound().Service.IsAny() {
 		return false
 	}
 	for _, a := range apps {

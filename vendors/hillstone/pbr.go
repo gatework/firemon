@@ -50,14 +50,14 @@ func (s *state) pbrLine(r *firemon.PolicyRoute, line string) bool {
 	case kw == "nexthop":
 		hop, err := netip.ParseAddr(w.next())
 		if err != nil {
-			r.Unsupported = append(r.Unsupported, strings.TrimSpace(line))
+			r.Conditions = append(r.Conditions, other(strings.TrimSpace(line)))
 			return false
 		}
 		r.NextHop = hop
 		if !w.done() {
 			// "nexthop A track T": the entry forwards only while the
 			// track object is up, a state the configuration does not hold.
-			r.Unsupported = append(r.Unsupported, "nexthop "+hop.String()+" "+w.rest())
+			r.Conditions = append(r.Conditions, other("nexthop "+hop.String()+" "+w.rest()))
 		}
 	case kw == "disable":
 		r.Disabled = true
@@ -68,20 +68,20 @@ func (s *state) pbrLine(r *firemon.PolicyRoute, line string) bool {
 		// The entry applies only within the schedule, which the policy
 		// route model does not hold; the schedule stays in use.
 		name := w.next()
-		r.Unsupported = append(r.Unsupported, "schedule "+name)
+		r.Conditions = append(r.Conditions, other("schedule "+name))
 		s.cfg.ExternalUses = append(s.cfg.ExternalUses, firemon.ExternalUse{
 			Site: firemon.UseSitePolicyRoute, ID: r.Policy + "/" + r.ID, Kind: firemon.ObjectKindSchedule, Name: name,
 		})
 	case strings.HasPrefix(kw, "src-") || strings.HasPrefix(kw, "dst-"):
 		var rule firemon.SecurityRule
 		if !s.ruleOperand(&rule, kw, w) || len(rule.From)+len(rule.To) > 0 {
-			r.Unsupported = append(r.Unsupported, strings.TrimSpace(line))
+			r.Conditions = append(r.Conditions, other(strings.TrimSpace(line)))
 			return false
 		}
 		r.Source = append(r.Source, rule.Source...)
 		r.Destination = append(r.Destination, rule.Destination...)
 	default:
-		r.Unsupported = append(r.Unsupported, strings.TrimSpace(line))
+		r.Conditions = append(r.Conditions, firemon.Criterion(criterionKind(kw), strings.TrimSpace(line)))
 	}
 	return true
 }

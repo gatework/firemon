@@ -140,7 +140,7 @@ func (e *Engine) ruleView(r *firemon.Rule, p *Path) view {
 		if !r.MatchesApplication(p.Application) {
 			return view{skip: true}
 		}
-		if r.ApplicationDefault() {
+		if r.DefaultPorts() {
 			if ports, ok := e.fw.ApplicationPorts(p.Application); ok {
 				v.match.Service, v.bound.Service = ports, ports
 			} else {
