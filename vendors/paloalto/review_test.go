@@ -78,6 +78,21 @@ set rulebase nat rules out source-translation dynamic-ip-and-port interface-addr
 	}
 }
 
+// TestNAT_InterfaceAddressObjectIsHost: the interface address may name an
+// address object written with the interface mask; it is still one host.
+func TestNAT_InterfaceAddressObjectIsHost(t *testing.T) {
+	t.Parallel()
+	cfg, _ := compileSet(t, `set address wan-ip ip-netmask 103.24.178.130/28
+set rulebase nat rules out from inside to outside source any destination any service any
+set rulebase nat rules out source-translation dynamic-ip-and-port interface-address interface ethernet1/2
+set rulebase nat rules out source-translation dynamic-ip-and-port interface-address ip wan-ip
+`)
+	got := cfg.DynamicNATs[0].TranslatedSource.Addresses
+	if len(got) != 1 || !got[0].IsInline() || got[0].Entry.Prefix.String() != "103.24.178.130/32" {
+		t.Fatalf("interface address %+v", got)
+	}
+}
+
 func equalJSON(t *testing.T, a, b any) bool {
 	t.Helper()
 	x, err1 := json.Marshal(a)

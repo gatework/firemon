@@ -65,13 +65,14 @@ type blockResult struct {
 }
 
 func (o *options) block(cmd *cobra.Command, req blockRequest) error {
-	inv, platforms, _, err := o.checkFleet(cmd)
+	inv, platforms, fws, err := o.checkFleet(cmd)
 	if err != nil {
 		return err
 	}
-	opts := intakeOptions(platforms)
+	opts := intakeOptions(platforms, fws)
 	in, err := intake.Parse(req.src, req.dst, req.service, opts)
 	if err != nil {
+		printNotes(&printer{w: cmd.OutOrStdout()}, in.Notes)
 		return &usageError{err}
 	}
 	intent := design.Intent{Src: in.Src, Dst: in.Dst, Service: in.Service, Name: req.name, Description: req.description,

@@ -45,6 +45,9 @@ type need struct {
 	scope    traffic.Region // policy-space packets of the intent on this pair
 	conflict traffic.Region // packets that must stay as they are: specific denies and undecidable parts
 	before   *firemon.Rule  // first deny deciding the need; nil means end
+	// bypass are the deny rules the new rules go before: definite denies
+	// and denies that match applications, URL categories or users first.
+	bypass []*firemon.Rule
 }
 
 // Plan designs the changes that permit intent and, when it asks for one,
@@ -127,6 +130,7 @@ func (p *Planner) planAccess(intent Intent) (*Plan, error) {
 		}
 		ruleChanges = append(ruleChanges, changes...)
 		opened = append(opened, n)
+		plan.bypassed(n, changes)
 		for _, c := range changes {
 			if x, ok := c.(ExtendRule); ok {
 				if r, ok := p.fw.Rule(x.RuleID); ok && !r.Spec().Log.Enabled() {
@@ -238,10 +242,7 @@ func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan)
 	switch outcome {
 	case query.OutcomeDefault:
 		n.region = n.region.Union(d.Space)
-		if onlyNarrowDenies(d.Possible) {
-			plan.Warnings = append(plan.Warnings, d.Space.String()+": deny rules "+ruleIDs(d.Possible)+
-				" that match applications, URL categories or users still come first")
-		}
+		p.narrowDenies(n, d, intent, plan)
 	case query.OutcomeDeny:
 		if !catchAll(d.Rule) && !intent.Override {
 			n.conflict = n.conflict.Union(d.Space)
@@ -249,17 +250,42 @@ func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan)
 			return
 		}
 		n.region = n.region.Union(d.Space)
-		if n.before == nil || d.Rule.Position() < n.before.Position() {
-			n.before = d.Rule
-		}
-		if onlyNarrowDenies(d.Possible) {
-			plan.Warnings = append(plan.Warnings, d.Space.String()+": deny rules "+ruleIDs(d.Possible)+
-				" that match applications, URL categories or users still come first")
-		}
+		n.goBefore(d.Rule)
+		p.narrowDenies(n, d, intent, plan)
 	case query.OutcomeUnknown:
 		plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": "+d.Space.String())
 		n.conflict = n.conflict.Union(d.Space) // never opened blindly
 	case query.OutcomePermit, query.OutcomeUnset:
+	}
+}
+
+// narrowDenies handles the deny rules that match applications, URL
+// categories or users and come before the decision: an override places the
+// new rules before them too, since the traffic asked for may be exactly
+// what they block (SSH denied by application before tcp/22 is permitted);
+// otherwise the plan warns that they still come first.
+func (p *Planner) narrowDenies(n *need, d query.Decision, intent Intent, plan *Plan) {
+	if !onlyNarrowDenies(d.Possible) {
+		return
+	}
+	if !intent.Override {
+		plan.Warnings = append(plan.Warnings, d.Space.String()+": deny rules "+ruleIDs(d.Possible)+
+			" that match applications, URL categories or users still come first")
+		return
+	}
+	for _, r := range d.Possible {
+		n.goBefore(r)
+	}
+}
+
+// goBefore places the need's new rules before deny rule r, when r comes
+// earlier than the current place, and records that they bypass it.
+func (n *need) goBefore(r *firemon.Rule) {
+	if n.before == nil || r.Position() < n.before.Position() {
+		n.before = r
+	}
+	if !slices.Contains(n.bypass, r) {
+		n.bypass = append(n.bypass, r)
 	}
 }
 

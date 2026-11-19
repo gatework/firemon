@@ -77,19 +77,26 @@ func (o *options) migrate(cmd *cobra.Command, f migrateFlags) error {
 		return err
 	}
 	if o.json {
-		return writeJSON(cmd.OutOrStdout(), struct {
-			From     firemon.Vendor `json:"from"`
-			To       firemon.Vendor `json:"to"`
-			Items    []migrate.Item `json:"items"`
-			Commands []string       `json:"commands"`
-		}{src.Vendor, to, res.Items, script.Commands})
+		if err := writeJSON(cmd.OutOrStdout(), struct {
+			From           firemon.Vendor `json:"from"`
+			To             firemon.Vendor `json:"to"`
+			DisabledDenies []string       `json:"disabled_denies,omitempty"`
+			Items          []migrate.Item `json:"items"`
+			Commands       []string       `json:"commands"`
+		}{src.Vendor, to, res.DisabledDenies, res.Items, script.Commands}); err != nil {
+			return err
+		}
+		return deniesLost(res)
 	}
 	var report strings.Builder
 	printMigration(&printer{w: &report}, src.Vendor, to, res)
 	if f.out == "" {
 		p := &printer{w: cmd.OutOrStdout()}
 		p.f("%s\n命令：\n%s\n", report.String(), strings.Join(script.Commands, "\n"))
-		return p.err
+		if p.err != nil {
+			return p.err
+		}
+		return deniesLost(res)
 	}
 	if err := os.MkdirAll(f.out, 0o700); err != nil {
 		return err
@@ -102,7 +109,19 @@ func (o *options) migrate(cmd *cobra.Command, f migrateFlags) error {
 	}
 	p := &printer{w: cmd.OutOrStdout()}
 	p.f("%s\n命令与报告已写入 %s\n", report.String(), f.out)
-	return p.err
+	if p.err != nil {
+		return p.err
+	}
+	return deniesLost(res)
+}
+
+// deniesLost makes a migration that carries deny rules over disabled
+// exit as needing confirmation: applied as it is, it blocks less.
+func deniesLost(res migrate.Result) error {
+	if len(res.DisabledDenies) > 0 {
+		return errUndecided
+	}
+	return nil
 }
 
 func writeSkeleton(cmd *cobra.Command, src *firemon.Config, target migrate.Target, path string) error {
@@ -128,6 +147,10 @@ func writeSkeleton(cmd *cobra.Command, src *firemon.Config, target migrate.Targe
 
 func printMigration(p *printer, from, to firemon.Vendor, res migrate.Result) {
 	p.f("策略迁移报告：%s → %s\n", from, to)
+	if len(res.DisabledDenies) > 0 {
+		p.f("⚠ 拒绝策略 %s 无法翻译，已以禁用状态迁移：目标设备上它们拦截的流量将不再被拦截，修正前不要下发（可用 --mapping 补充应用或服务对应）\n",
+			strings.Join(res.DisabledDenies, "、"))
+	}
 	p.f("完全等价 %d 项，近似 %d 项，无法翻译 %d 项（无法翻译的策略已以禁用状态迁移）\n",
 		res.Count(migrate.FidelityExact), res.Count(migrate.FidelityApproximate), res.Count(migrate.FidelityUntranslatable))
 	for _, fid := range []migrate.Fidelity{migrate.FidelityUntranslatable, migrate.FidelityApproximate} {

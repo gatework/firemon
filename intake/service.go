@@ -139,6 +139,10 @@ func (s *serviceSide) application(input, name string) {
 		s.notes = append(s.notes, Note{Field: FieldService, Code: CodeInvalid, Input: input})
 		return
 	}
+	if s.opts.IsApplication != nil && !s.opts.IsApplication(name) {
+		s.notes = append(s.notes, Note{Field: FieldService, Code: CodeUnknownApplication, Input: input})
+		return
+	}
 	s.apps = append(s.apps, name)
 	s.notes = append(s.notes, Note{Field: FieldService, Code: CodeApplication, Input: input, Result: name})
 }

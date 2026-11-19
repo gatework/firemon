@@ -71,7 +71,8 @@ var noteText = map[intake.Code]string{
 	intake.CodeServiceName:       "按服务名解析",
 	intake.CodeApplication:       "按应用识别匹配",
 	intake.CodeDuplicate:         "重复或已被覆盖，已忽略",
-	intake.CodeInvalid:           "无法识别，已忽略",
+	intake.CodeInvalid:           "无法识别",
+	intake.CodeUnknownApplication: "未知应用：配置和预定义应用表中都没有",
 	intake.CodeUnsupported:       "此处不支持，已忽略",
 }
 

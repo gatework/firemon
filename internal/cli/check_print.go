@@ -211,8 +211,8 @@ func printAction(p *printer, f report.Firewall, v reportView) {
 			continue
 		}
 		p.f("  处置：%s，在 %s 上执行%s（已验证：只放通本次请求）\n", actionSummary(cp.Plan), cp.Firewall, haNote(f.Members, cp.Firewall))
-		for _, w := range passedDenies(cp.Plan, v.fws[f.Cluster]) {
-			p.f("    ⚠ 放在拒绝策略 %s 之前，会绕过它：请确认符合安全要求\n", w)
+		if ids := passedDenies(cp.Plan, v.fws[f.Cluster]); len(ids) > 0 {
+			p.f("    ⚠ 放在拒绝策略 %s 之前，会绕过它们：请确认符合安全要求\n", strings.Join(ids, "、"))
 		}
 		n := 0
 		for _, c := range cp.Plan.Changes {
@@ -258,7 +258,7 @@ func printPlanNotes(p *printer, plan *design.Plan, verbose bool) {
 
 // passedDenies are the deny rules new rules are placed before.
 func passedDenies(plan *design.Plan, fw *firemon.Firewall) []string {
-	var out []string
+	out := slices.Clone(plan.Bypassed)
 	for _, c := range plan.Changes {
 		add, ok := c.(design.AddRule)
 		if !ok || add.Before == "" || fw == nil {

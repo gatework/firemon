@@ -88,7 +88,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	if err != nil {
 		return err
 	}
-	in, err := intake.Parse(f.src, f.dst, f.service, intakeOptions(platforms))
+	in, err := intake.Parse(f.src, f.dst, f.service, intakeOptions(platforms, fws))
 	if err != nil {
 		printNotes(&printer{w: cmd.OutOrStdout()}, in.Notes)
 		return &usageError{err}
@@ -224,7 +224,7 @@ func (o *options) checkFleet(cmd *cobra.Command) (*inventory.Inventory, map[stri
 
 // intakeOptions reads service and application names with the books of
 // every platform in the fleet.
-func intakeOptions(platforms map[string]bootstrap.Platform) intake.Options {
+func intakeOptions(platforms map[string]bootstrap.Platform, fws map[string]*firemon.Firewall) intake.Options {
 	services := firemon.ServiceBook{}
 	apps := firemon.ServiceBook{}
 	// Later books win on name clashes: merge in a fixed order so that the
@@ -234,9 +234,21 @@ func intakeOptions(platforms map[string]bootstrap.Platform) intake.Options {
 		services = services.With(p.Services)
 		apps = apps.With(p.Applications)
 	}
+	// Applications the rules name are known too, with or without ports.
+	named := map[string]bool{}
+	for _, fw := range fws {
+		if fw == nil {
+			continue
+		}
+		for _, r := range fw.Rules() {
+			for _, a := range r.Spec().Applications {
+				named[strings.ToLower(a)] = true
+			}
+		}
+	}
 	return intake.Options{Services: services, IsApplication: func(name string) bool {
 		_, ok := apps.Lookup(name)
-		return ok
+		return ok || named[strings.ToLower(name)]
 	}}
 }
 

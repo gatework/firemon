@@ -28,6 +28,8 @@ type translator struct {
 	broken map[namespace]map[string]string
 	// ruleMap lists, per translated source rule, its target rules.
 	ruleMap map[string][]string
+	// disabledDenies are the deny rules carried over disabled.
+	disabledDenies []string
 }
 
 // changeSet keeps changes by kind so the plan lists them in dependency
@@ -76,6 +78,8 @@ func Translate(src *firemon.Config, m Mapping, t Target) (Result, error) {
 		Config: tr.out,
 		Plan:   &design.Plan{Kind: design.PlanKindMigration, Status: design.StatusChange, Changes: tr.changes.all()},
 		Items:  tr.items,
+
+		DisabledDenies: tr.disabledDenies,
 	}
 	tr.verify(&res)
 	return res, nil

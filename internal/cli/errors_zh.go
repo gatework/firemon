@@ -62,6 +62,8 @@ var cobraErrors = []struct {
 // and file errors in Chinese, everything else as it is.
 func localizeError(err error) string {
 	switch {
+	case errors.Is(err, intake.ErrInvalidItem):
+		return "输入中有无法识别的项（见上），请修正后重试：查询只按完整的输入回答"
 	case errors.Is(err, intake.ErrNoSource):
 		return "源地址无法识别：请写 IP、网段、范围或 IP+掩码"
 	case errors.Is(err, intake.ErrNoDestination):

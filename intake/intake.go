@@ -13,6 +13,9 @@ var (
 	ErrNoSource      = errors.New("intake: no usable source address")
 	ErrNoDestination = errors.New("intake: no usable destination address or domain")
 	ErrNoService     = errors.New("intake: no usable service or application")
+	// ErrInvalidItem reports an item that could not be read: a request is
+	// answered as written or not at all, never for part of it.
+	ErrInvalidItem = errors.New("intake: an item cannot be read")
 )
 
 // Options tells Parse how to read names. The zero value reads only
@@ -53,6 +56,9 @@ func Parse(src, dst, service string, opts Options) (Request, error) {
 		req.Service = traffic.AnyService()
 	}
 	var errs []error
+	if slices.ContainsFunc(req.Notes, func(n Note) bool { return n.Code == CodeInvalid || n.Code == CodeUnknownApplication }) {
+		errs = append(errs, ErrInvalidItem)
+	}
 	if req.Src.IsEmpty() {
 		errs = append(errs, ErrNoSource)
 	}
