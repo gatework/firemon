@@ -113,6 +113,16 @@ func TestParse_UnknownApplicationFails(t *testing.T) {
 	}
 }
 
+func TestParse_FamilyMismatchFails(t *testing.T) {
+	t.Parallel()
+	if _, err := intake.Parse("10.0.0.1", "2001:db8::1", "tcp/443", intake.Options{}); !errors.Is(err, intake.ErrFamilyMismatch) {
+		t.Fatalf("err %v", err)
+	}
+	if _, err := intake.Parse("10.0.0.1, 2001:db8::2", "2001:db8::1", "tcp/443", intake.Options{}); err != nil {
+		t.Fatalf("one family in common is a request: %v", err)
+	}
+}
+
 func TestParse_SkipsInvalidAndFailsOnEmpty(t *testing.T) {
 	t.Parallel()
 	req, err := intake.Parse("10.0.0.1, 999.1.1.1, www.example.com", "bogus!", "tcp/99999", intake.Options{})

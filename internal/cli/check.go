@@ -137,7 +137,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 		if err := writeJSON(cmd.OutOrStdout(), rep); err != nil {
 			return err
 		}
-	} else if err := printReport(cmd, rep, reportView{plans: plans, platforms: platforms, fws: fws, verbose: f.verbose}); err != nil {
+	} else if err := printReport(cmd, rep, reportView{plans: plans, platforms: platforms, fws: fws, verbose: f.verbose, single: o.single()}); err != nil {
 		return err
 	}
 	return checkExit(rep, f.plan)
@@ -201,11 +201,15 @@ func checkExit(rep report.Report, designed bool) error {
 // offline may decide part of the request.
 func undecided(f report.Firewall) bool { return len(f.Undecided) > 0 }
 
+// single reports a command run on one firewall named by --config,
+// --snapshot or --host rather than on the inventory.
+func (o *options) single() bool { return o.file != "" || o.snapshot != "" || o.device.host != "" }
+
 // checkFleet loads the inventory: one firewall from --config or --snapshot,
 // or the whole snapshot store.
 func (o *options) checkFleet(cmd *cobra.Command) (*inventory.Inventory, map[string]bootstrap.Platform, map[string]*firemon.Firewall, error) {
 	fws := map[string]*firemon.Firewall{}
-	if o.file != "" || o.snapshot != "" || o.device.host != "" {
+	if o.single() {
 		loaded, p, err := o.load(cmd.Context())
 		if err != nil {
 			return nil, nil, nil, err

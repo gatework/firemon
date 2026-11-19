@@ -13,6 +13,9 @@ var (
 	ErrNoSource      = errors.New("intake: no usable source address")
 	ErrNoDestination = errors.New("intake: no usable destination address or domain")
 	ErrNoService     = errors.New("intake: no usable service or application")
+	// ErrFamilyMismatch reports a source and destination of different IP
+	// families: no packet goes from one to the other.
+	ErrFamilyMismatch = errors.New("intake: source and destination are of different IP families")
 	// ErrInvalidItem reports an item that could not be read: a request is
 	// answered as written or not at all, never for part of it.
 	ErrInvalidItem = errors.New("intake: an item cannot be read")
@@ -68,5 +71,15 @@ func Parse(src, dst, service string, opts Options) (Request, error) {
 	if req.Service.IsEmpty() {
 		errs = append(errs, ErrNoService)
 	}
+	if !req.Src.IsEmpty() && !req.Dst.IsEmpty() && len(req.DstDomains) == 0 && !sameFamily(req.Src, req.Dst) {
+		errs = append(errs, ErrFamilyMismatch)
+	}
 	return req, errors.Join(errs...)
+}
+
+// sameFamily reports whether some source and destination share an IP
+// family.
+func sameFamily(src, dst traffic.AddressSet) bool {
+	v4, v6 := traffic.AnyIPv4(), traffic.AnyIPv6()
+	return (src.Overlaps(v4) && dst.Overlaps(v4)) || (src.Overlaps(v6) && dst.Overlaps(v6))
 }

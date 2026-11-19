@@ -10,6 +10,7 @@ import (
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/internal/bootstrap"
+	"github.com/gatework/firemon/intake"
 	"github.com/gatework/firemon/inventory"
 	"github.com/gatework/firemon/query"
 	"github.com/gatework/firemon/report"
@@ -21,6 +22,7 @@ type reportView struct {
 	platforms map[string]bootstrap.Platform
 	fws       map[string]*firemon.Firewall
 	verbose   bool
+	single    bool // one firewall from --config, --snapshot or --host: no inventory
 }
 
 // printReport writes what an operator acts on: per firewall the verdict,
@@ -40,7 +42,7 @@ func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 		p.f("不经过防火墙：%s（两端都在 %s 的 %s 一侧）\n", in.Traffic, in.Cluster, in.Zone)
 	}
 	for _, name := range rep.ZonesNeeded {
-		p.f("提示：%s 是透明模式（二层），另一端不在任何绑定的网段里，无法判断它在哪个安全区域：请在库存的 zones 中为该区域绑定网段（例如 l2-untrust: 0.0.0.0/0），或用 --from-zone/--to-zone 指定\n", name)
+		p.f("提示：%s\n", zonesHint(name, rep, v.single))
 	}
 	for _, a := range rep.Ambiguous {
 		p.f("归属不唯一（多个防火墙同等声明，均已检查）：%s\n", a)
@@ -52,6 +54,20 @@ func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 		printFirewall(p, f, v)
 	}
 	return p.err
+}
+
+// zonesHint says why the zone of the far end on a transparent (layer 2)
+// firewall is unknown and how to give it.
+func zonesHint(name string, rep report.Report, single bool) string {
+	domains := slices.ContainsFunc(rep.Notes, func(n intake.Note) bool { return n.Code == intake.CodeDomain })
+	switch {
+	case domains:
+		return name + " 是透明模式（二层），目的是域名，无法据此判断它在哪个安全区域：加 --resolve 解析为地址，或用 --from-zone/--to-zone 指定"
+	case single:
+		return name + " 是透明模式（二层），无法从路由判断另一端在哪个安全区域：请用 --from-zone/--to-zone 指定，或改用库存并为区域绑定网段"
+	default:
+		return name + " 是透明模式（二层），另一端不在该防火墙任何绑定的网段里，无法判断它在哪个安全区域：请在库存的 zones 中为该区域绑定网段（IPv4 用 0.0.0.0/0，IPv6 用 ::/0），或用 --from-zone/--to-zone 指定"
+	}
 }
 
 // conclusion is the verdict over every firewall; a request that crosses
