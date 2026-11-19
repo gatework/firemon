@@ -113,6 +113,18 @@ func TestParse_UnknownApplicationFails(t *testing.T) {
 	}
 }
 
+func TestParse_PortZeroFails(t *testing.T) {
+	t.Parallel()
+	for _, svc := range []string{"tcp/0", "0", "udp 0"} {
+		if _, err := intake.Parse("10.0.0.1", "10.0.0.2", svc, intake.Options{}); !errors.Is(err, intake.ErrInvalidItem) {
+			t.Errorf("%s: err %v", svc, err)
+		}
+	}
+	if _, err := intake.Parse("10.0.0.1", "10.0.0.2", "tcp/0-65535", intake.Options{}); err != nil {
+		t.Fatalf("every port: %v", err)
+	}
+}
+
 func TestParse_FamilyMismatchFails(t *testing.T) {
 	t.Parallel()
 	if _, err := intake.Parse("10.0.0.1", "2001:db8::1", "tcp/443", intake.Options{}); !errors.Is(err, intake.ErrFamilyMismatch) {

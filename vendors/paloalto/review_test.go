@@ -3,6 +3,7 @@ package paloalto_test
 import (
 	"encoding/json"
 	"net/netip"
+	"slices"
 	"testing"
 
 	"github.com/gatework/firemon"
@@ -90,6 +91,52 @@ set rulebase nat rules out source-translation dynamic-ip-and-port interface-addr
 	got := cfg.DynamicNATs[0].TranslatedSource.Addresses
 	if len(got) != 1 || !got[0].IsInline() || got[0].Entry.Prefix.String() != "103.24.178.130/32" {
 		t.Fatalf("interface address %+v", got)
+	}
+}
+
+// TestRouting_LogicalRouterAndDroppedRoutes: the Advanced Routing Engine
+// form is a routing context like a virtual router; routes that do not
+// forward, or whose next hop is a name, are left out and reported.
+func TestRouting_LogicalRouterAndDroppedRoutes(t *testing.T) {
+	t.Parallel()
+	cfg, _ := compileSet(t, `set network interface ethernet ethernet1/1 layer3 ip 192.0.2.2/24
+set network logical-router lr1 vrf default interface [ ethernet1/1 ]
+set network logical-router lr1 vrf default routing-table ip static-route def destination 0.0.0.0/0
+set network logical-router lr1 vrf default routing-table ip static-route def nexthop ip-address 192.0.2.1
+set network logical-router lr1 vrf blue routing-table ip static-route b destination 10.9.0.0/16
+set network logical-router lr1 vrf blue routing-table ip static-route b nexthop ip-address 192.0.2.9
+set network logical-router lr1 vrf default routing-table ip static-route quiet destination 10.8.0.0/16
+set network logical-router lr1 vrf default routing-table ip static-route quiet nexthop ip-address 192.0.2.1
+set network logical-router lr1 vrf default routing-table ip static-route quiet route-table no-install
+set network logical-router lr1 vrf default routing-table ip static-route named destination 10.7.0.0/16
+set network logical-router lr1 vrf default routing-table ip static-route named nexthop fqdn gw.example.com
+set network logical-router lr1 vrf default routing-table ip static-route named interface ethernet1/1
+`)
+	var got []string
+	for _, r := range cfg.Routes {
+		got = append(got, r.VirtualRouter+" "+r.Destination.String())
+	}
+	if !slices.Equal(got, []string{"lr1 0.0.0.0/0", "lr1/blue 10.9.0.0/16"}) {
+		t.Fatalf("routes %v", got)
+	}
+	if cfg.Interfaces[0].VirtualRouter != "lr1" || len(cfg.Diagnostics) != 2 {
+		t.Fatalf("interface %+v diagnostics %+v", cfg.Interfaces[0], cfg.Diagnostics)
+	}
+}
+
+// TestNAT_UnmodelledTranslationsAreUndecidable: NAT64, NPTv6 and source
+// translation fallback are not in the model; such rules stay undecidable.
+func TestNAT_UnmodelledTranslationsAreUndecidable(t *testing.T) {
+	t.Parallel()
+	_, fw := compileSet(t, `set rulebase nat rules six from inside to outside source any destination any service any
+set rulebase nat rules six nat-type nat64
+set rulebase nat rules fb from inside to outside source any destination any service any
+set rulebase nat rules fb source-translation dynamic-ip-and-port translated-address 203.0.113.5 fallback translated-address 203.0.113.6
+`)
+	for _, r := range fw.NATRules() {
+		if r.Decidable() {
+			t.Errorf("nat rule %s is decidable", r.Spec().ID)
+		}
 	}
 }
 

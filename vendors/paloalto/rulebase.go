@@ -151,7 +151,19 @@ func (s *state) buildNATRules() {
 				n.Disabled = yes(values)
 			case "description":
 				n.Description = strings.Join(values, " ")
+			case "nat-type":
+				if t := strings.Join(values, " "); t != "ipv4" {
+					n.Unsupported = append(n.Unsupported, "nat-type "+t)
+				}
 			case "source-translation":
+				// fallback addresses apply when the pool runs out and a
+				// floating IP follows HA state: neither is in the model.
+				for _, v := range values {
+					if v == "fallback" || v == "floating-ip" {
+						n.Unsupported = append(n.Unsupported, "source-translation "+strings.Join(values, " "))
+						break
+					}
+				}
 				bidirectional = s.sourceTranslation(&src, values) || bidirectional
 			case "destination-translation", "dynamic-destination-translation":
 				s.destinationTranslation(&dst, values)
@@ -171,6 +183,10 @@ func (s *state) emitNAT(n firemon.DynamicNAT, src, dst firemon.Translation, bidi
 	}
 	n.TranslatedSource, n.TranslatedDestination = src, dst
 	s.cfg.DynamicNATs = append(s.cfg.DynamicNATs, n)
+	if bidirectional && (len(n.Source) != 1 || len(src.Addresses) != 1) {
+		s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Text: "nat rule " + n.Name + " bi-directional",
+			Reason: "bi-directional static NAT with several or any sources: the reverse mapping is not modelled"})
+	}
 	if bidirectional && len(n.Source) == 1 && len(src.Addresses) == 1 {
 		s.cfg.StaticNATs = append(s.cfg.StaticNATs, firemon.StaticNAT{
 			ID: n.ID, Name: n.Name, Real: n.Source[0], Mapped: src.Addresses[0], Zones: slices.Clone(n.To),

@@ -1,6 +1,7 @@
 package intake
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -94,7 +95,7 @@ func suffix(rest string) string {
 // explicit adds ports of protocol p; ports may be a list ("80,443" was
 // split already) or a range.
 func (s *serviceSide) explicit(input string, p traffic.Protocol, ports string) {
-	r, err := traffic.ParsePortRange(ports)
+	r, err := parsePorts(ports)
 	if err != nil {
 		s.notes = append(s.notes, Note{Field: FieldService, Code: CodeInvalid, Input: input})
 		return
@@ -106,7 +107,7 @@ func (s *serviceSide) explicit(input string, p traffic.Protocol, ports string) {
 // barePort takes a port or port range without protocol: TCP, or the
 // protocol of the item before it.
 func (s *serviceSide) barePort(tok string) {
-	r, err := traffic.ParsePortRange(tok)
+	r, err := parsePorts(tok)
 	if err != nil {
 		s.notes = append(s.notes, Note{Field: FieldService, Code: CodeInvalid, Input: tok})
 		return
@@ -159,6 +160,20 @@ func (s *serviceSide) merge(input string, set traffic.ServiceSet, code Code) {
 }
 
 // isPortSpec reports "80" or "80-90".
+// errPortZero rejects port 0: no connection is made to it, so a request
+// for it is a typing error.
+var errPortZero = errors.New("intake: port 0")
+
+// parsePorts reads a destination port or range; port 0 alone is refused
+// (0-65535 still means every port).
+func parsePorts(text string) (traffic.PortRange, error) {
+	r, err := traffic.ParsePortRange(text)
+	if err == nil && r.High == 0 {
+		return r, errPortZero
+	}
+	return r, err
+}
+
 func isPortSpec(s string) bool {
 	lo, hi, isRange := strings.Cut(s, "-")
 	if _, err := strconv.ParseUint(lo, 10, 16); err != nil {

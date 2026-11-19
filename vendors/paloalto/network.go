@@ -57,6 +57,10 @@ func (s *state) network(p *path, st statement) {
 		s.iface(p)
 	case "virtual-router":
 		s.virtualRouter(p, st)
+	case "logical-router":
+		s.logicalRouter(p, st)
+	case "shared-gateway":
+		s.diagnose(st, "shared gateways are not supported")
 	}
 }
 
@@ -105,7 +109,31 @@ func (s *state) iface(p *path) {
 //	    destination P | nexthop ip-address A | nexthop ipv6-address A |
 //	    interface IF | metric N | admin-dist N
 func (s *state) virtualRouter(p *path, st statement) {
-	vr := p.next()
+	s.routerBody(p.next(), p, st)
+}
+
+// logicalRouter parses the Advanced Routing Engine form (PAN-OS 10.2+),
+// one routing context per VRF:
+//
+//	network logical-router LR vrf VRF interface [ IFS ]
+//	network logical-router LR vrf VRF routing-table ip|ipv6 static-route NAME ...
+//
+// The default VRF is named after the router, others LR/VRF.
+func (s *state) logicalRouter(p *path, st statement) {
+	lr := p.next()
+	if p.next() != "vrf" {
+		return
+	}
+	name := lr
+	if vrf := p.next(); vrf != "default" {
+		name = lr + "/" + vrf
+	}
+	s.routerBody(name, p, st)
+}
+
+// routerBody parses the interfaces and static routes of one routing
+// context.
+func (s *state) routerBody(vr string, p *path, st statement) {
 	if !slices.ContainsFunc(s.cfg.VirtualRouters, func(v firemon.VirtualRouter) bool { return v.Name == vr }) {
 		s.cfg.VirtualRouters = append(s.cfg.VirtualRouters, firemon.VirtualRouter{Name: vr})
 	}
@@ -146,6 +174,14 @@ func (s *state) staticRoute(vr string, p *path, st statement) {
 			r.NextVirtualRouter = p.scalar()
 		case "discard":
 			r.Discard = true
+		case "fqdn":
+			// Resolved by the device at run time: without the address
+			// the route would look connected.
+			s.routeDrop[key] = "next hop FQDN " + p.scalar() + " cannot be resolved offline"
+		}
+	case "route-table":
+		if t := p.next(); t == "no-install" || t == "multicast" {
+			s.routeDrop[key] = "route-table " + t + ": not used for forwarding"
 		}
 	case "interface":
 		r.Interface = p.scalar()
@@ -210,6 +246,10 @@ func (s *state) flushRoutes() {
 		}
 		if !r.Destination.IsValid() {
 			s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Text: "static-route " + r.Name, Reason: "route without destination"})
+			continue
+		}
+		if why, drop := s.routeDrop[key]; drop {
+			s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Text: "static-route " + r.VirtualRouter + " " + r.Name, Reason: why})
 			continue
 		}
 		s.cfg.Routes = append(s.cfg.Routes, *r)
