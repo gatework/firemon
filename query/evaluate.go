@@ -33,7 +33,10 @@ type evaluator struct {
 	// finish: appending to a region one piece at a time copies it each
 	// time, quadratic on wide requests split into many pieces.
 	spaces [][]traffic.Space
-	max    int
+	// spare is the other piece buffer: split fills it and swaps, so a
+	// long rule list does not allocate a new list for every rule.
+	spare []piece
+	max   int
 }
 
 // evaluate runs ordered first-match over p.Policy and fills its decisions
@@ -120,7 +123,7 @@ func (ev *evaluator) split(s traffic.Space, onHit func(pc piece, hit traffic.Spa
 			continue
 		}
 		if !changed {
-			next = append(make([]piece, 0, len(ev.pieces)+4), ev.pieces[:i]...)
+			next = append(ev.spare[:0], ev.pieces[:i]...)
 			changed = true
 		}
 		next = append(next, onHit(pc, hit)...)
@@ -129,7 +132,10 @@ func (ev *evaluator) split(s traffic.Space, onHit func(pc piece, hit traffic.Spa
 		}
 	}
 	if changed {
-		ev.pieces = next
+		// The old list becomes the spare; clear it so the pieces it held
+		// can be collected.
+		clear(ev.pieces)
+		ev.spare, ev.pieces = ev.pieces[:0], next
 	}
 }
 

@@ -8,16 +8,19 @@ import (
 	"go4.org/netipx"
 )
 
+// ipSet is s as a netipx set, the reference implementation.
+func ipSet(s AddressSet) *netipx.IPSet {
+	var b netipx.IPSetBuilder
+	s.addTo(&b)
+	set, _ := b.IPSet()
+	return set
+}
+
 // reference computes a set operation with the set builder only.
 func reference(a, b AddressSet, op func(*netipx.IPSetBuilder, *netipx.IPSet)) AddressSet {
 	var bld netipx.IPSetBuilder
 	a.addTo(&bld)
-	other := b.ips
-	if other == nil {
-		var empty netipx.IPSetBuilder
-		other, _ = empty.IPSet()
-	}
-	op(&bld, other)
+	op(&bld, ipSet(b))
 	return build(&bld)
 }
 
@@ -29,10 +32,24 @@ func TestSetOps_FastPathsAgree(t *testing.T) {
 	random := func() AddressSet {
 		var b netipx.IPSetBuilder
 		for range rng.IntN(4) {
-			from := netip.AddrFrom4([4]byte{10, 0, byte(rng.IntN(4)), byte(rng.IntN(256))})
+			// Mostly a dense IPv4 neighbourhood; sometimes the ends of the
+			// IPv4 space, or IPv6, so both families and the edges mix.
+			var from netip.Addr
+			switch rng.IntN(6) {
+			case 0:
+				from = netip.AddrFrom4([4]byte{0, 0, 0, byte(rng.IntN(3))})
+			case 1:
+				from = netip.AddrFrom4([4]byte{255, 255, 255, byte(250 + rng.IntN(6))})
+			case 2:
+				from = netip.AddrFrom16([16]byte{0x20, 0x01, 0x0d, 0xb8, 15: byte(rng.IntN(256))})
+			default:
+				from = netip.AddrFrom4([4]byte{10, 0, byte(rng.IntN(4)), byte(rng.IntN(256))})
+			}
 			to := from
 			for range rng.IntN(300) {
-				to = to.Next()
+				if next := to.Next(); next.IsValid() && next.BitLen() == from.BitLen() {
+					to = next
+				}
 			}
 			b.AddRange(netipx.IPRangeFrom(from, to))
 		}
@@ -40,6 +57,16 @@ func TestSetOps_FastPathsAgree(t *testing.T) {
 	}
 	for range 20000 {
 		a, b := random(), random()
+		if got, want := a.Union(b), reference(a, b, (*netipx.IPSetBuilder).AddSet); !got.Equal(want) {
+			t.Fatalf("%s ∪ %s = %s, want %s", a, b, got, want)
+		}
+		if a.Overlaps(b) != ipSet(a).Overlaps(ipSet(b)) {
+			t.Fatalf("%s overlaps %s", a, b)
+		}
+		probe := netip.AddrFrom4([4]byte{10, 0, byte(rng.IntN(4)), byte(rng.IntN(256))})
+		if a.Contains(probe) != ipSet(a).Contains(probe) {
+			t.Fatalf("%s contains %s", a, probe)
+		}
 		if got, want := a.Intersect(b), reference(a, b, (*netipx.IPSetBuilder).Intersect); !got.Equal(want) {
 			t.Fatalf("%s ∩ %s = %s, want %s", a, b, got, want)
 		}

@@ -27,7 +27,7 @@ type device struct {
 	readback func(cmds []string) (*firemon.Config, error)
 }
 
-func loadDevice(t *testing.T, path string) (device, bool) {
+func loadDevice(t testing.TB, path string) (device, bool) {
 	t.Helper()
 	raw, err := os.ReadFile(path)
 	if err != nil {
