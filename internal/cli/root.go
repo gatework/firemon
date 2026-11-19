@@ -130,7 +130,7 @@ func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &usageError{err} })
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error { return o.resolveDefaults(cmd) }
 	root.SetContext(ctx)
-	root.AddCommand(newCheckCmd(o), newDeployCmd(o), newCollectCmd(o), newHitsCmd(o), newConvergeCmd(o), newAuditCmd(o), newMigrateCmd(o), newParseCmd(o), newServicesCmd(o), newUsageCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
+	root.AddCommand(newCheckCmd(o), newNATCmd(o), newDeployCmd(o), newCollectCmd(o), newHitsCmd(o), newConvergeCmd(o), newAuditCmd(o), newMigrateCmd(o), newParseCmd(o), newServicesCmd(o), newUsageCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
 	localizeHelp(root)
 	return root
 }

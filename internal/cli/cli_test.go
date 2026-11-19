@@ -289,3 +289,31 @@ func TestRun_CheckFullMatch(t *testing.T) {
 		t.Fatalf("code %d\n%s%s", code, out, errOut)
 	}
 }
+
+// nat looks an address up both ways and says which entries take effect.
+func TestRun_NAT(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		conf, ip string
+		want     []string
+	}{
+		{paloaltoConf, "172.16.0.10", []string{"被发布：公网 198.51.100.80 tcp/80,tcp/8080 ⇒ 内部 172.16.0.10 tcp/8080  [NAT 规则 dnat-web（第 1 条），生效]"}},
+		{paloaltoConf, "198.51.100.80", []string{"入站目的转换：公网 198.51.100.80 tcp/80,tcp/8080 ⇒ 内部 172.16.0.10 tcp/8080"}},
+		{paloaltoConf, "172.16.0.11", []string{"[NAT 规则 static-web（第 3 条），被前面的规则 snat-out 完全覆盖，不会生效]", "被发布：公网 198.51.100.11 ⇒ 内部 172.16.0.11  [静态 NAT static-web，生效]"}},
+		{hillstoneConf, "10.1.0.5", []string{"[NAT 规则 2（第 2 条），已禁用]"}},
+		{hillstoneConf, "172.16.0.10", []string{"被发布：公网 198.51.100.80 tcp/80 ⇒ 内部 172.16.0.10 tcp/8080  [NAT 规则 1（第 1 条），生效]"}},
+	} {
+		code, out, errOut := run(t, "", "nat", "--config", tt.conf, "--ip", tt.ip)
+		for _, w := range tt.want {
+			if code != cli.ExitOK || !strings.Contains(out, w) {
+				t.Errorf("%s %s: missing %q (code %d)\n%s%s", tt.conf, tt.ip, w, code, out, errOut)
+			}
+		}
+	}
+	// The public address of a source translation is not "translated when
+	// it goes out" by a rule for traffic from the inside.
+	_, out, _ := run(t, "", "nat", "--config", paloaltoConf, "--ip", "198.51.100.80")
+	if strings.Contains(out, "出访源转换") {
+		t.Errorf("an inside source rule listed for a public address:\n%s", out)
+	}
+}
