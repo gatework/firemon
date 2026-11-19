@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"cmp"
+
 	"github.com/spf13/cobra"
 
 	"github.com/gatework/firemon"
@@ -25,13 +27,18 @@ func newParseCmd(o *options) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), s)
 			}
 			p := &printer{w: cmd.OutOrStdout()}
-			p.f("厂商 %s  主机名 %s  版本 %s  指纹 %s\n", s.Vendor, s.Hostname, s.Version, s.Fingerprint[:16])
+			// PAN-OS set output carries no software version.
+			p.f("厂商 %s  主机名 %s  版本 %s  指纹 %s\n", s.Vendor, orDash(s.Hostname), cmp.Or(s.Version, "未知（配置中没有版本信息）"), s.Fingerprint[:16])
 			p.table("对象\t数量", s.rows())
 			for _, d := range s.Diagnostics {
 				p.f("第 %d 行未能解析（%s）：%s\n", d.Line, zhReason(d.Reason), d.Text)
 			}
 			for _, i := range s.Issues {
-				p.f("无法离线判定：%s\n", zhIssue(i))
+				label := "无法离线判定"
+				if i.Kind == firemon.IssueKindConfig {
+					label = "配置问题"
+				}
+				p.f("%s：%s\n", label, zhIssue(i))
 			}
 			return p.err
 		},
@@ -44,20 +51,33 @@ func newParseCmd(o *options) *cobra.Command {
 type summary struct {
 	Vendor      firemon.Vendor       `json:"vendor"`
 	Hostname    string               `json:"hostname,omitempty"`
-	Version     string               `json:"version,omitempty"`
+	Version     string               `json:"version"`
 	Fingerprint string               `json:"fingerprint"`
 	Counts      map[string]int       `json:"counts"`
-	Diagnostics []firemon.Diagnostic `json:"diagnostics,omitempty"`
-	Issues      []firemon.Issue      `json:"issues,omitempty"`
+	Diagnostics []firemon.Diagnostic `json:"diagnostics"`
+	// Issues are the configuration problems and what cannot be decided
+	// offline in rules that are in force; disabled and incomplete rules
+	// decide nothing.
+	Issues []firemon.Issue `json:"issues"`
 }
 
 var countOrder = []string{"zones", "interfaces", "routes", "addresses", "address_groups", "services", "service_groups", "schedules", "rules", "undecidable_rules", "static_nats", "dynamic_nats"}
 
 func summarize(cfg *firemon.Config, fw *firemon.Firewall) summary {
 	undecidable := 0
+	idle := map[string]bool{} // rules that decide nothing: disabled or incomplete
 	for _, r := range fw.Rules() {
-		if !r.Decidable() {
+		switch {
+		case r.Ignored() || r.Spec().Disabled:
+			idle["rule "+r.ID()] = true
+		case !r.Decidable():
 			undecidable++
+		}
+	}
+	issues := []firemon.Issue{}
+	for _, is := range fw.Issues() {
+		if is.Kind == firemon.IssueKindConfig || !idle[is.Object] {
+			issues = append(issues, is)
 		}
 	}
 	return summary{
@@ -68,8 +88,8 @@ func summarize(cfg *firemon.Config, fw *firemon.Firewall) summary {
 			"service_groups": len(cfg.ServiceGroups), "schedules": len(cfg.Schedules), "rules": len(cfg.Rules),
 			"undecidable_rules": undecidable, "static_nats": len(cfg.StaticNATs), "dynamic_nats": len(cfg.DynamicNATs),
 		},
-		Diagnostics: cfg.Diagnostics,
-		Issues:      fw.Issues(),
+		Diagnostics: append([]firemon.Diagnostic{}, cfg.Diagnostics...),
+		Issues:      issues,
 	}
 }
 

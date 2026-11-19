@@ -54,6 +54,11 @@ func (s *state) pbrLine(r *firemon.PolicyRoute, line string) bool {
 			return false
 		}
 		r.NextHop = hop
+		if !w.done() {
+			// "nexthop A track T": the entry forwards only while the
+			// track object is up, a state the configuration does not hold.
+			r.Unsupported = append(r.Unsupported, "nexthop "+hop.String()+" "+w.rest())
+		}
 	case kw == "disable":
 		r.Disabled = true
 	case kw == "log":

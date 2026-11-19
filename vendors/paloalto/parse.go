@@ -92,6 +92,7 @@ type state struct {
 	ifaceVR   map[string]string
 	ifaceRefs map[string][]string // interface -> address object names used as its IP
 	hostBits  map[string]string   // address object -> unmasked ip-netmask value
+	routeDrop map[string]string   // static route key -> why it does not forward
 	security  *rulebook
 	nat       *rulebook
 	pbf       *rulebook
@@ -130,6 +131,7 @@ func newState(loc *time.Location) *state {
 		ifaceVR:   map[string]string{},
 		ifaceRefs: map[string][]string{},
 		hostBits:  map[string]string{},
+		routeDrop: map[string]string{},
 		security:  newRulebook(),
 		nat:       newRulebook(),
 		pbf:       newRulebook(),

@@ -137,3 +137,26 @@ exit
 		t.Fatalf("stale report: %v", err)
 	}
 }
+
+// A tracked next hop forwards only while its track object is up: the
+// entry cannot be decided offline.
+func TestPBR_TrackedNextHopIsConditional(t *testing.T) {
+	t.Parallel()
+	fw := compileText(t, `zone "inside"
+exit
+interface ethernet0/1
+  zone "inside"
+  ip address 10.0.0.2/24
+exit
+pbr-policy "p" vrouter "trust-vr"
+  match id 1
+    src-ip 10.9.0.0/16
+    nexthop 10.0.0.1 track "t1"
+  exit
+exit
+`)
+	routes := fw.Config().PolicyRoutes
+	if len(routes) != 1 || len(routes[0].Unsupported) != 1 || routes[0].Unsupported[0] != "nexthop 10.0.0.1 track t1" {
+		t.Fatalf("policy routes %+v", routes)
+	}
+}

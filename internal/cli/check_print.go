@@ -160,10 +160,20 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 			}
 		}
 	}
-	for _, h := range f.Permitted {
+	// First match: the rules in the order the firewall tries them.
+	byPosition := func(hits []report.Hit) []report.Hit {
+		out := slices.Clone(hits)
+		slices.SortStableFunc(out, func(a, b report.Hit) int {
+			da, _ := ruleDetail(f.Rules, a.Rule)
+			db, _ := ruleDetail(f.Rules, b.Rule)
+			return da.Position - db.Position
+		})
+		return out
+	}
+	for _, h := range byPosition(f.Permitted) {
 		rule("✓ 已放通", "放通策略", h)
 	}
-	for _, h := range f.Blocked {
+	for _, h := range byPosition(f.Blocked) {
 		rule("✗ 被拒绝", "拒绝策略", h)
 	}
 	if f.Defaulted != "" {
