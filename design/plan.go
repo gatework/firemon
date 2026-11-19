@@ -1,7 +1,9 @@
 package design
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/gatework/firemon"
@@ -233,4 +235,30 @@ type Plan struct {
 	VerifyError string `json:"verify_error,omitempty"`
 	// NAT is the outcome of the NAT part, when the intent asks for one.
 	NAT *NATOutcome `json:"nat,omitempty"`
+}
+
+// Merge combines the plans of the parts of one request on one firewall,
+// each designed on the configuration the plans before it leave, into one
+// plan for that firewall: its changes in order, its findings together,
+// verified only when every part is, and based on the first plan's
+// baseline, the firewall as it is now.
+func Merge(plans ...*Plan) *Plan {
+	if len(plans) == 0 {
+		return nil
+	}
+	out := *plans[0]
+	out.Changes = slices.Clone(out.Changes)
+	for _, p := range plans[1:] {
+		out.Changes = append(out.Changes, p.Changes...)
+		out.Conflicts = append(out.Conflicts, p.Conflicts...)
+		out.Unknown = append(out.Unknown, p.Unknown...)
+		out.Warnings = append(out.Warnings, p.Warnings...)
+		out.Status = max(out.Status, p.Status)
+		out.Verified = out.Verified && p.Verified
+		out.VerifyError = cmp.Or(out.VerifyError, p.VerifyError)
+		if out.NAT == nil {
+			out.NAT = p.NAT
+		}
+	}
+	return &out
 }
