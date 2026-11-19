@@ -36,20 +36,19 @@ type checkFlags struct {
 func newCheckCmd(o *options) *cobra.Command {
 	var f checkFlags
 	cmd := &cobra.Command{
-		Use:   "check [SRC DST SERVICE]",
+		Use:   "check --src SRC --dst DST --service SERVICE",
 		Short: "一键查询：定位防火墙，检查 NAT 与访问控制策略，输出命中报告与变更方案",
 		Long: "check takes sources, destinations and services in any common form (see intake), locates the\n" +
 			"firewalls among the snapshots (--inventory adds HA clusters and protected networks), evaluates\n" +
 			"NAT and access control on each, and reports full match, partial match, need new, blocked or\n" +
 			"indeterminate, with the best rules to modify, and designs the verified change and commands\n" +
-			"(--no-design to skip). Sources, destinations and services may be given as arguments:\n" +
-			"  firemon check 10.248.30.5 10.250.116.25 9600\n" +
-			"  firemon 10.248.30.5 10.250.116.25 9600        (check is the default command)\n" +
+			"(--no-design to skip):\n" +
+			"  firemon check --src 10.248.30.5 --dst 10.250.116.25 --service 9600\n" +
 			"Exit status: 0 allowed, 3 a verified change is ready, 4 needs confirmation, 2 usage.",
-		Args: usageArgs(cobra.MaximumNArgs(3)),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := f.positional(args); err != nil {
-				return err
+		Args: usageArgs(cobra.NoArgs),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if f.src == "" || f.dst == "" || f.service == "" {
+				return &usageError{errors.New("需要 --src 源地址、--dst 目的地址和 --service 服务")}
 			}
 			if f.noDesign {
 				f.plan = false
@@ -125,24 +124,6 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 	return checkExit(rep, f.plan)
 }
 
-// positional takes SRC DST SERVICE from the arguments; each may instead
-// come from its flag, never from both.
-func (f *checkFlags) positional(args []string) error {
-	for i, dst := range []*string{&f.src, &f.dst, &f.service} {
-		if i >= len(args) {
-			break
-		}
-		if *dst != "" {
-			return &usageError{fmt.Errorf("参数 %q 与对应的 --src/--dst/--service 重复", args[i])}
-		}
-		*dst = args[i]
-	}
-	if f.src == "" || f.dst == "" || f.service == "" {
-		return &usageError{errors.New("需要源地址、目的地址和服务：firemon check SRC DST SERVICE")}
-	}
-	return nil
-}
-
 // attachScripts renders the verified plans so that JSON carries the
 // commands and their rollback.
 func attachScripts(rep *report.Report, plans []inventory.ClusterPlan, platforms map[string]bootstrap.Platform) error {
@@ -200,7 +181,7 @@ func (o *options) checkFleet(cmd *cobra.Command) (*inventory.Inventory, map[stri
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		name := firstNonEmpty(o.snapshot, loaded.Config.Hostname, "firewall")
+		name := cmp.Or(o.snapshot, loaded.Config.Hostname, "firewall")
 		inv, err := inventory.New([]inventory.Member{{Name: name, Firewall: loaded.Firewall, Naming: p.Naming}}, inventory.Options{Now: o.deps.Now})
 		fws[name] = loaded.Firewall
 		return inv, map[string]bootstrap.Platform{name: p}, fws, err
@@ -435,15 +416,6 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // printNATOutcome writes the NAT part of a plan.

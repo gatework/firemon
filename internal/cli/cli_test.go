@@ -205,27 +205,22 @@ func fleet(t *testing.T, extra string) (store, inv string) {
 	return store, inv
 }
 
-// The everyday question needs no command name and no flags: the store and
-// inventory come from the environment, or the inventory names the store.
-func TestRun_CheckPositional(t *testing.T) {
+// The everyday question needs only --src, --dst and --service: the store
+// and inventory come from the environment, or the inventory names the store.
+func TestRun_CheckDefaults(t *testing.T) {
 	t.Parallel()
 	store, inv := fleet(t, "")
 	env := map[string]string{"FIREMON_STORE": store, "FIREMON_INVENTORY": inv}
-	for _, args := range [][]string{
-		{"check", "10.0.5.1", "8.8.8.8", "udp 53"},
-		{"10.0.5.1", "8.8.8.8", "udp 53"},
-	} {
-		code, out, errOut := runEnv(t, env, "", args...)
-		if code != cli.ExitNotAllowed || !strings.Contains(out, "▶ 处置：在 pa1 上执行") {
-			t.Fatalf("%v: code %d\n%s%s", args, code, out, errOut)
-		}
+	code, out, errOut := runEnv(t, env, "", "check", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53")
+	if code != cli.ExitNotAllowed || !strings.Contains(out, "▶ 处置：在 pa1 上执行") {
+		t.Fatalf("code %d\n%s%s", code, out, errOut)
 	}
 	_, invWithStore := fleet(t, "store: snapshots\n")
-	code, out, errOut := runEnv(t, map[string]string{"FIREMON_INVENTORY": invWithStore}, "", "10.0.5.1", "8.8.8.8", "udp 53", "--no-design")
+	code, out, errOut = runEnv(t, map[string]string{"FIREMON_INVENTORY": invWithStore}, "", "check", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53", "--no-design")
 	if code != cli.ExitUndecided || strings.Contains(out, "▶ 处置：在") || !strings.Contains(out, "■ pa1") {
 		t.Fatalf("inventory store, no design: code %d\n%s%s", code, out, errOut)
 	}
-	code, out, _ = runEnv(t, env, "", "check", "--json", "10.0.5.1", "8.8.8.8", "udp 53")
+	code, out, _ = runEnv(t, env, "", "check", "--json", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53")
 	var rep struct {
 		Firewalls []struct {
 			Scripts []struct {
@@ -243,9 +238,9 @@ func TestRun_UsageErrors(t *testing.T) {
 	t.Parallel()
 	for _, args := range [][]string{
 		{"chek"},
-		{"check", "10.0.0.1", "10.0.0.2", "tcp/22", "extra"},
-		{"check", "10.0.0.1", "10.0.0.2"},
-		{"check", "--src", "10.0.0.1", "10.0.0.1", "10.0.0.2", "tcp/22"},
+		{"10.0.0.1", "10.0.0.2", "tcp/22"},
+		{"check", "10.0.0.1", "10.0.0.2", "tcp/22"},
+		{"check", "--src", "10.0.0.1", "--dst", "10.0.0.2"},
 	} {
 		code, _, errOut := run(t, "", args...)
 		if code != cli.ExitUsage || strings.Count(errOut, "firemon:") > 1 {

@@ -49,7 +49,7 @@ var (
 // Run executes the command line and returns the process exit code.
 func Run(ctx context.Context, args []string, deps Deps) int {
 	root := newRoot(ctx, &deps)
-	root.SetArgs(implicitCheck(root, args))
+	root.SetArgs(args)
 	root.SetIn(deps.Stdin)
 	root.SetOut(deps.Stdout)
 	root.SetErr(deps.Stderr)
@@ -82,27 +82,6 @@ func isCobraUsage(msg string) bool {
 		}
 	}
 	return false
-}
-
-// implicitCheck lets the most common question skip the command name:
-// "firemon 10.1.1.1 10.2.2.2 443" runs check. Only an unknown first word
-// that looks like an address does; a mistyped command keeps cobra's
-// suggestions.
-func implicitCheck(root *cobra.Command, args []string) []string {
-	cmd, rest, err := root.Find(args)
-	if err == nil && cmd != root {
-		return args
-	}
-	for _, a := range rest {
-		if strings.HasPrefix(a, "-") {
-			continue
-		}
-		if strings.ContainsAny(a, "0123456789.:/") {
-			return append([]string{"check"}, args...)
-		}
-		break
-	}
-	return args
 }
 
 // usageError marks invalid flags or arguments.
