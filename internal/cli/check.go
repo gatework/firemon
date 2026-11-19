@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"maps"
@@ -29,19 +30,30 @@ type checkFlags struct {
 	nat                     natFlags
 	name, description       string
 	override, plan, resolve bool
+	noDesign                bool
 }
 
 func newCheckCmd(o *options) *cobra.Command {
 	var f checkFlags
 	cmd := &cobra.Command{
-		Use:   "check",
+		Use:   "check [SRC DST SERVICE]",
 		Short: "一键查询：定位防火墙，检查 NAT 与访问控制策略，输出命中报告与变更方案",
 		Long: "check takes sources, destinations and services in any common form (see intake), locates the\n" +
 			"firewalls among the snapshots (--inventory adds HA clusters and protected networks), evaluates\n" +
 			"NAT and access control on each, and reports full match, partial match, need new, blocked or\n" +
-			"indeterminate, with the best rules to modify. --design adds the verified change and commands.",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+			"indeterminate, with the best rules to modify, and designs the verified change and commands\n" +
+			"(--no-design to skip). Sources, destinations and services may be given as arguments:\n" +
+			"  firemon check 10.248.30.5 10.250.116.25 9600\n" +
+			"  firemon 10.248.30.5 10.250.116.25 9600        (check is the default command)\n" +
+			"Exit status: 0 allowed, 3 a verified change is ready, 4 needs confirmation, 2 usage.",
+		Args: usageArgs(cobra.MaximumNArgs(3)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := f.positional(args); err != nil {
+				return err
+			}
+			if f.noDesign {
+				f.plan = false
+			}
 			return o.check(cmd, f)
 		},
 	}
@@ -54,7 +66,8 @@ func newCheckCmd(o *options) *cobra.Command {
 	fl.StringVar(&f.name, "name", "", "新建策略名称，例如工单号")
 	fl.StringVar(&f.description, "description", "", "新建策略描述")
 	fl.BoolVar(&f.override, "override", false, "允许新策略放在具体拒绝策略之前")
-	fl.BoolVar(&f.plan, "design", false, "为每台防火墙输出变更方案与命令")
+	fl.BoolVar(&f.plan, "design", true, "为每台防火墙输出变更方案与命令（默认开启）")
+	fl.BoolVar(&f.noDesign, "no-design", false, "只查询，不设计变更方案")
 	fl.BoolVar(&f.resolve, "resolve", false, "解析域名，以便按 IP 写的策略也能判定")
 	f.nat.register(fl)
 	return cmd
@@ -75,7 +88,7 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 		return &usageError{err}
 	}
 	if nat != nil && !f.plan {
-		return &usageError{errors.New("--nat designs a change: add --design")}
+		return &usageError{errors.New("--nat 需要设计变更方案，请去掉 --no-design")}
 	}
 	req := query.Request{
 		Src: in.Src, Dst: in.Dst, DstDomains: in.DstDomains, Service: in.Service, Applications: in.Applications,
@@ -99,16 +112,83 @@ func (o *options) check(cmd *cobra.Command, f checkFlags) error {
 		}
 	}
 	rep := report.Build(in.Notes, tr, fws, plans)
-	if o.json {
-		return writeJSON(cmd.OutOrStdout(), rep)
-	}
-	if err := printReport(cmd, rep, plans, platforms); err != nil {
+	if err := attachScripts(&rep, plans, platforms); err != nil {
 		return err
 	}
-	if rep.Status != report.StatusFullMatch {
-		return errNotAllowed
+	if o.json {
+		if err := writeJSON(cmd.OutOrStdout(), rep); err != nil {
+			return err
+		}
+	} else if err := printReport(cmd, rep, plans, platforms); err != nil {
+		return err
+	}
+	return checkExit(rep, f.plan)
+}
+
+// positional takes SRC DST SERVICE from the arguments; each may instead
+// come from its flag, never from both.
+func (f *checkFlags) positional(args []string) error {
+	for i, dst := range []*string{&f.src, &f.dst, &f.service} {
+		if i >= len(args) {
+			break
+		}
+		if *dst != "" {
+			return &usageError{fmt.Errorf("参数 %q 与对应的 --src/--dst/--service 重复", args[i])}
+		}
+		*dst = args[i]
+	}
+	if f.src == "" || f.dst == "" || f.service == "" {
+		return &usageError{errors.New("需要源地址、目的地址和服务：firemon check SRC DST SERVICE")}
 	}
 	return nil
+}
+
+// attachScripts renders the verified plans so that JSON carries the
+// commands and their rollback.
+func attachScripts(rep *report.Report, plans []inventory.ClusterPlan, platforms map[string]bootstrap.Platform) error {
+	for i := range rep.Firewalls {
+		f := &rep.Firewalls[i]
+		for _, cp := range plans {
+			if cp.Cluster != f.Cluster || cp.Plan == nil || !cp.Plan.Verified || len(cp.Plan.Changes) == 0 {
+				continue
+			}
+			script, err := platforms[cp.Firewall].Render(cp.Plan)
+			if err != nil {
+				return err
+			}
+			f.Scripts = append(f.Scripts, script)
+		}
+	}
+	return nil
+}
+
+// checkExit maps the result to the exit status: allowed, a verified
+// change ready for every firewall that needs one, or a person needed.
+func checkExit(rep report.Report, designed bool) error {
+	switch rep.Status {
+	case report.StatusFullMatch:
+		return nil
+	case report.StatusUnset:
+		return errUndecided // no firewall on the way: nothing to change
+	case report.StatusIndeterminate, report.StatusPartialMatch, report.StatusNeedNew, report.StatusBlocked:
+	}
+	if !designed {
+		if rep.Status == report.StatusIndeterminate {
+			return errUndecided
+		}
+		return errNotAllowed
+	}
+	// Undecided traffic is settled by a verified plan without unknown
+	// parts: it permits the request whatever the undecidable rules do.
+	for _, f := range rep.Firewalls {
+		if f.Status == report.StatusFullMatch {
+			continue
+		}
+		if f.Plan == nil || !f.Plan.Verified || len(f.Plan.Conflicts) > 0 || len(f.Plan.Unknown) > 0 {
+			return errUndecided
+		}
+	}
+	return errNotAllowed
 }
 
 // checkFleet loads the inventory: one firewall from --config or --snapshot,
@@ -276,40 +356,63 @@ func printPath(p *printer, path report.Path) {
 }
 
 func printPlan(p *printer, f report.Firewall, plans []inventory.ClusterPlan, platforms map[string]bootstrap.Platform) {
+	if f.Status == report.StatusFullMatch {
+		p.f("  ▶ 处置：已放通，无需变更\n")
+		return
+	}
+	designed := false
 	for _, cp := range plans {
 		if cp.Cluster != f.Cluster || cp.Plan == nil {
 			continue
 		}
+		designed = true
 		printNATOutcome(p, cp.Plan.NAT)
 		for _, c := range cp.Plan.Conflicts {
 			p.f("  设计冲突：策略 %s 拒绝 %s（%s → %s），未自动放在其前；确认后加 --override\n", c.RuleID, c.Text, c.From, c.To)
 		}
 		for _, u := range cp.Plan.Unknown {
-			p.f("  无法设计：%s\n", u)
+			p.f("  无法设计：%s\n", planNote(u))
 		}
 		for _, w := range cp.Plan.Warnings {
-			p.f("  注意：%s\n", w)
+			p.f("  注意：%s\n", planNote(w))
 		}
 		if len(cp.Plan.Changes) == 0 {
 			continue
 		}
-		script, err := platforms[cp.Firewall].Render(cp.Plan)
-		if err != nil {
-			p.f("  方案无法生成命令：%v\n", err)
+		if !cp.Plan.Verified {
+			p.f("  ▶ 处置：需确认，方案验证未通过（%s），不输出命令\n", cmp.Or(cp.Plan.VerifyError, "未验证"))
 			continue
 		}
-		p.f("  变更方案（%s，已验证：%v）：\n", cp.Firewall, cp.Plan.Verified)
-		if cp.Plan.VerifyError != "" {
-			p.f("    验证未通过：%s\n", cp.Plan.VerifyError)
+		script, err := platforms[cp.Firewall].Render(cp.Plan)
+		if err != nil {
+			p.f("  ▶ 处置：需确认，方案无法生成命令：%v\n", err)
+			continue
+		}
+		p.f("  ▶ 处置：在 %s 上执行以下命令%s（已验证：只放通本次请求）\n", cp.Firewall, haNote(f.Members, cp.Firewall))
+		for _, c := range cp.Plan.Changes {
+			p.f("    · %s\n", c)
 		}
 		for _, c := range script.Commands {
 			p.f("    %s\n", c)
 		}
-		p.f("  回退命令：\n")
+		p.f("    回退命令：\n")
 		for _, c := range script.Rollback {
 			p.f("    %s\n", c)
 		}
 	}
+	if !designed {
+		p.f("  ▶ 处置：%s（去掉 --no-design 可生成变更方案）\n", text(statusText, f.Status, f.Status.String()))
+	}
+}
+
+// haNote names the cluster members that receive the change through HA
+// synchronization.
+func haNote(members []string, on string) string {
+	others := slices.DeleteFunc(slices.Clone(members), func(m string) bool { return m == on })
+	if len(others) == 0 {
+		return ""
+	}
+	return "，" + strings.Join(others, "、") + " 通过 HA 同步"
 }
 
 // conditionText renders a path condition.

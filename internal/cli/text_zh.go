@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"regexp"
+
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/converge"
 	"github.com/gatework/firemon/design"
@@ -18,11 +20,11 @@ import (
 
 var statusText = map[report.Status]string{
 	report.StatusUnset:         "未经过任何防火墙",
-	report.StatusFullMatch:     "完全命中",
-	report.StatusPartialMatch:  "部分命中",
-	report.StatusNeedNew:       "需要新增",
-	report.StatusBlocked:       "被拒绝",
-	report.StatusIndeterminate: "无法判定",
+	report.StatusFullMatch:     "已放通",
+	report.StatusPartialMatch:  "部分放通",
+	report.StatusNeedNew:       "需新增策略",
+	report.StatusBlocked:       "需新增策略（被拒绝策略挡住）",
+	report.StatusIndeterminate: "需确认",
 }
 
 var verdictText = map[query.Verdict]string{
@@ -181,4 +183,27 @@ var itemKindText = map[migrate.ItemKind]string{
 	migrate.ItemKindRule:          "策略",
 	migrate.ItemKindNAT:           "NAT",
 	migrate.ItemKindDefault:       "默认动作",
+}
+
+// planNotes translate the planner's notes; a note of another form is
+// printed as it is.
+var planNotes = []struct {
+	re   *regexp.Regexp
+	repl string
+}{
+	{regexp.MustCompile(`^(.*) may already be permitted by undecidable rules (.*)$`), "$1 可能已被无法离线判定的策略 $2 放通"},
+	{regexp.MustCompile(`^(.*): rules (.*) that match applications, URL categories or users may still decide part of it first$`), "$1：按应用、URL 分类或用户匹配的策略 $2 可能先命中其中一部分"},
+	{regexp.MustCompile(`^(.*): deny rules (.*) that match applications, URL categories or users still come first$`), "$1：按应用、URL 分类或用户匹配的拒绝策略 $2 仍排在新策略之前"},
+	{regexp.MustCompile(`^unrouted destinations (.*)$`), "目的 $1 无路由"},
+	{regexp.MustCompile(`^(.*): NAT may apply \((.*)\)$`), "$1：NAT 规则 $2 可能生效，无法判定"},
+	{regexp.MustCompile(`^(.*): (.*) needs an application match \(no port service\)$`), "$1：$2 需要按应用匹配（没有对应的端口服务）"},
+}
+
+func planNote(s string) string {
+	for _, n := range planNotes {
+		if n.re.MatchString(s) {
+			return n.re.ReplaceAllString(s, n.repl)
+		}
+	}
+	return s
 }

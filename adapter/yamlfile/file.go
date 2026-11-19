@@ -40,6 +40,9 @@ type Protected struct {
 
 // File is a decoded inventory file.
 type File struct {
+	// Store is the snapshot directory of the firewalls, relative to the
+	// inventory file; empty leaves the choice to the command line.
+	Store     string     `yaml:"store,omitempty"`
 	Firewalls []Firewall `yaml:"firewalls"`
 }
 
