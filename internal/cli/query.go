@@ -37,11 +37,11 @@ func newUsageCmd(o *options) *cobra.Command {
 			}
 			var objects []objectView
 			for _, ob := range u.Objects {
-				objects = append(objects, objectView{ob.Name, ob.Relation.String()})
+				objects = append(objects, objectView{ob.Name, usageRelation(ob.Relation)})
 			}
 			var rules []ruleView
 			for _, r := range u.Rules {
-				rules = append(rules, ruleView{ruleLabel(r.Rule), r.Source.String(), r.Destination.String()})
+				rules = append(rules, ruleView{ruleLabel(r.Rule), usageRelation(r.Source), usageRelation(r.Destination)})
 			}
 			if o.json {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"objects": objects, "rules": rules})
@@ -64,6 +64,25 @@ func newUsageCmd(o *options) *cobra.Command {
 	cmd.Flags().StringVar(&addr, "addr", "", "要查找的地址、网段或范围")
 	cmd.Flags().BoolVar(&withAny, "include-any", false, "同时列出源或目的为任意地址的策略")
 	return cmd
+}
+
+// usageRelation says how an object or rule side relates to the searched
+// addresses, from the object's point of view.
+func usageRelation(r traffic.Relation) string {
+	switch r {
+	case traffic.RelationEqual:
+		return "相等"
+	case traffic.RelationSuperset:
+		return "包含所查地址"
+	case traffic.RelationSubset:
+		return "在所查地址之内"
+	case traffic.RelationOverlap:
+		return "部分重叠"
+	case traffic.RelationDisjoint:
+		return "-"
+	case traffic.RelationUnset:
+	}
+	return r.String()
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
