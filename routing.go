@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"net/netip"
 	"slices"
+	"strings"
 
 	"github.com/gatework/firemon/traffic"
 )
@@ -119,7 +120,10 @@ func buildRoutingTables(cfg *Config, ifaces map[string]Interface) (map[string]*R
 	}
 	var issues []Issue
 	for _, e := range pending {
-		issues = append(issues, Issue{Kind: IssueKindConfig, Object: "route " + e.route.Destination.String(), Reason: "not installed: no route reaches next hop " + e.route.NextHop.String()})
+		// The routing context names the route: the same destination is
+		// often configured in several virtual routers.
+		object := strings.TrimSpace("route " + e.route.VirtualRouter + " " + e.route.Destination.String())
+		issues = append(issues, Issue{Kind: IssueKindConfig, Object: object, Reason: "not installed: no route reaches next hop " + e.route.NextHop.String()})
 	}
 	for _, t := range tables {
 		slices.SortStableFunc(t.entries, func(a, b routeEntry) int {
