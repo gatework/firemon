@@ -309,15 +309,8 @@ func (s *state) undo(w *words) {
 			return
 		}
 		id := w.next()
-		i, ok := s.ruleIndex[id]
-		if !ok {
-			return
-		}
-		s.cfg.Rules = slices.Delete(s.cfg.Rules, i, i+1)
-		delete(s.ruleIndex, id)
-		for j := i; j < len(s.cfg.Rules); j++ {
-			s.ruleIndex[s.cfg.Rules[j].ID] = j
-		}
+		s.dropRule(id)
+		s.dropGroup(id)
 	case "address":
 		s.addresses.remove(w.next())
 	case "service":

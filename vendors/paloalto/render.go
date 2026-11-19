@@ -302,6 +302,12 @@ func renderNAT(c design.AddNAT) ([]string, error) {
 			out = append(out, p+"destination-translation translated-port "+strconv.Itoa(int(t.Port)))
 		}
 	}
+	if r.Description != "" {
+		out = append(out, p+"description "+strconv.Quote(r.Description))
+	}
+	if r.Disabled {
+		out = append(out, p+"disabled yes") // a rule carried over disabled must stay off
+	}
 	if c.Before != "" {
 		out = append(out, "move rulebase nat rules "+name(r.ID)+" before "+name(c.Before))
 	}

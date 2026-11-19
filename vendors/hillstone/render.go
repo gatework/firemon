@@ -338,6 +338,12 @@ func renderNAT(c design.AddNAT) (do, undo []string, err error) {
 	} else if t.Port != 0 {
 		line += " port " + strconv.Itoa(int(t.Port))
 	}
+	if r.Description != "" {
+		line += " description " + q(r.Description)
+	}
+	if r.Disabled {
+		line += " disable" // a rule carried over disabled must stay off
+	}
 	vr := "ip vrouter " + q(cmp.Or(r.VirtualRouter, DefaultVirtualRouter))
 	return []string{vr, "  " + line, "exit"}, []string{vr, "  no " + kind + " id " + r.ID, "exit"}, nil
 }
@@ -351,6 +357,9 @@ func renderStaticNAT(m firemon.StaticNAT) (do, undo []string, err error) {
 	}
 	vr := "ip vrouter " + q(cmp.Or(m.VirtualRouter, DefaultVirtualRouter))
 	line := "bnatrule id " + m.ID + " virtual " + virtual + " real " + inside
+	if m.Disabled {
+		line += " disable"
+	}
 	return []string{vr, "  " + line, "exit"}, []string{vr, "  no bnatrule id " + m.ID, "exit"}, nil
 }
 

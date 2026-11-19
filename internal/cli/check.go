@@ -3,7 +3,9 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/netip"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -138,7 +140,10 @@ func (o *options) checkFleet(cmd *cobra.Command) (*inventory.Inventory, map[stri
 func intakeOptions(platforms map[string]bootstrap.Platform) intake.Options {
 	services := firemon.ServiceBook{}
 	apps := firemon.ServiceBook{}
-	for _, p := range platforms {
+	// Later books win on name clashes: merge in a fixed order so that the
+	// result does not depend on map iteration.
+	for _, name := range slices.Sorted(maps.Keys(platforms)) {
+		p := platforms[name]
 		services = services.With(p.Services)
 		apps = apps.With(p.Applications)
 	}

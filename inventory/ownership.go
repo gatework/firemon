@@ -3,6 +3,7 @@ package inventory
 import (
 	"cmp"
 	"fmt"
+	"net/netip"
 	"slices"
 
 	"github.com/gatework/firemon/traffic"
@@ -90,7 +91,7 @@ func (inv *Inventory) buildClaims(protections []Protection) ([]claim, error) {
 		}
 		egress, _ := table.Lookup(traffic.AnyAddress())
 		for _, e := range egress {
-			if b := e.Route.Destination.Bits(); b > 0 && e.Interface != "" {
+			if b := e.Route.Destination.Bits(); b > 0 && e.Interface != "" && !inv.towardOther(m.cluster, e.Route.NextHop) {
 				out = append(out, claim{cluster: m.cluster, set: e.Addresses, bits: b, ownership: OwnershipDerived})
 			}
 		}
@@ -139,4 +140,14 @@ func appendOwned(parts []owned, o owned) []owned {
 	}
 	parts[i].set = parts[i].set.Union(o.set)
 	return parts
+}
+
+// towardOther reports whether hop is an interface address of another
+// cluster of the inventory: networks behind it belong to that cluster or
+// further, not to the one routing to it.
+func (inv *Inventory) towardOther(cluster string, hop netip.Addr) bool {
+	if !hop.IsValid() {
+		return false
+	}
+	return slices.ContainsFunc(inv.byAddress[hop], func(c string) bool { return c != cluster })
 }

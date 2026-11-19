@@ -25,7 +25,12 @@ func (s *state) rulebase(p *path, st statement) {
 			book = s.nat
 		}
 		book.add(name, st.first, p.value())
-	case "pbf", "qos", "dos":
+	case "default-security-rules":
+		s.defaultRules(p)
+	default:
+		// pbf, qos, dos, decryption, authentication, application-override,
+		// tunnel-inspect, ...: pbf is modelled; for the others only their
+		// references to objects matter.
 		if p.next() != "rules" {
 			return
 		}
@@ -38,21 +43,6 @@ func (s *state) rulebase(p *path, st statement) {
 			book = s.others[base]
 		}
 		book.add(name, st.first, p.value())
-	case "default-security-rules":
-		if p.next() != "rules" {
-			return
-		}
-		rule := p.next()
-		if p.next() != "action" {
-			return
-		}
-		action := securityAction(p.scalar())
-		switch rule {
-		case "intrazone-default":
-			s.cfg.Semantics.IntrazoneAction = action
-		case "interzone-default":
-			s.cfg.Semantics.InterzoneAction = action
-		}
 	}
 }
 
@@ -284,4 +274,23 @@ func hostAddresses(values []string) []string {
 		}
 	}
 	return out
+}
+
+// defaultRules reads the actions of the predefined intrazone and interzone
+// default rules.
+func (s *state) defaultRules(p *path) {
+	if p.next() != "rules" {
+		return
+	}
+	rule := p.next()
+	if p.next() != "action" {
+		return
+	}
+	action := securityAction(p.scalar())
+	switch rule {
+	case "intrazone-default":
+		s.cfg.Semantics.IntrazoneAction = action
+	case "interzone-default":
+		s.cfg.Semantics.InterzoneAction = action
+	}
 }

@@ -113,11 +113,25 @@ func (tr *translator) addressGroup(g firemon.AddressGroup) {
 		tr.flatGroup(g)
 		return
 	}
-	target := tr.names.name(nsAddress, g.Name)
-	out := firemon.AddressGroup{Name: target, Description: g.Description, Entries: g.Entries, Filter: g.Filter}
+	var members []string
 	for _, m := range g.Members {
-		out.Members = append(out.Members, tr.names.name(nsAddress, m))
+		// Through addressRef: a predefined member becomes an object, an
+		// undefined one fails the group instead of naming nothing.
+		var probe ruleResult
+		ref, ok := tr.addressRef(&probe, m)
+		switch {
+		case !ok:
+			tr.markBroken(nsAddress, g.Name, "member "+m+": "+joinNotes(probe.notes))
+			tr.item(ItemKindAddressGroup, g.Name, FidelityUntranslatable, "member "+m+": "+joinNotes(probe.notes))
+			return
+		case ref == nil:
+			tr.flatGroup(g) // a member is any: the group is any
+			return
+		}
+		members = append(members, ref.Name)
 	}
+	target := tr.names.name(nsAddress, g.Name)
+	out := firemon.AddressGroup{Name: target, Description: g.Description, Entries: g.Entries, Filter: g.Filter, Members: members}
 	tr.out.AddressGroups = append(tr.out.AddressGroups, out)
 	tr.changes.groups = append(tr.changes.groups, design.AddAddressGroup{Group: out})
 	tr.item(ItemKindAddressGroup, g.Name, FidelityExact, "", target)
@@ -189,7 +203,7 @@ func (tr *translator) services() {
 			tr.service(s.Name, s.Description, s.Entries, len(s.Invalid) > 0)
 		}
 	}
-	for _, g := range tr.src.ServiceGroups {
+	for _, g := range orderServiceGroups(tr.src.ServiceGroups) {
 		if g.Predefined {
 			continue
 		}
@@ -376,4 +390,31 @@ func (tr *translator) schedule(s firemon.Schedule) (firemon.Schedule, string, Fi
 		return out, "ends rounded up to the minute (PAN-OS counts minutes)", FidelityApproximate
 	}
 	return out, "", FidelityExact
+}
+
+// orderServiceGroups lists service groups after the groups they contain.
+func orderServiceGroups(groups []firemon.ServiceGroup) []firemon.ServiceGroup {
+	byName := map[string]firemon.ServiceGroup{}
+	for _, g := range groups {
+		byName[g.Name] = g
+	}
+	var out []firemon.ServiceGroup
+	seen := map[string]bool{}
+	var visit func(g firemon.ServiceGroup)
+	visit = func(g firemon.ServiceGroup) {
+		if seen[g.Name] {
+			return
+		}
+		seen[g.Name] = true
+		for _, m := range g.Members {
+			if mg, ok := byName[m]; ok {
+				visit(mg)
+			}
+		}
+		out = append(out, g)
+	}
+	for _, g := range groups {
+		visit(g)
+	}
+	return out
 }

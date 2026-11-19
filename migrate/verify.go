@@ -54,7 +54,7 @@ func (tr *translator) compare(src *firemon.Rule, out *firemon.Firewall, ids []st
 		}
 	}
 	if !src.Decidable() {
-		return "" // the source match is not exact: nothing exact to compare
+		return "the source rule cannot be evaluated exactly, so the translation cannot be verified"
 	}
 	want := traffic.NewRegion(src.Match())
 	if !want.SubtractRegion(union).IsEmpty() || !union.SubtractRegion(want).IsEmpty() {

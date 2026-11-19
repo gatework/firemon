@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/inventory"
 )
 
@@ -74,5 +75,37 @@ func TestTransparentClusters_ProtectedZonesLocateBothSides(t *testing.T) {
 	}
 	if len(same.Crossings) != 0 || len(same.Inside) != 1 || same.Inside[0].Zone != "l2-trust" {
 		t.Fatalf("both ends behind l2-trust do not cross: %+v", same)
+	}
+}
+
+func TestInventory_PlanOnlyCrossedParts(t *testing.T) {
+	t.Parallel()
+	members := []inventory.Member{
+		{Name: "szx9-in-fw01", Cluster: "SZX9-IN", Firewall: bridge(t), Active: true},
+		{Name: "szx8-in-fw01", Cluster: "SZX8-IN", Firewall: bridge(t), Active: true},
+	}
+	inv, err := inventory.New(members, inventory.Options{
+		Now: func() time.Time { return now },
+		Protections: []inventory.Protection{
+			{Firewall: "szx9-in-fw01", Zone: "l2-trust", Networks: []netip.Prefix{netip.MustParsePrefix("10.250.0.0/16"), netip.MustParsePrefix("10.254.0.0/16")}},
+			{Firewall: "szx8-in-fw01", Zone: "l2-trust", Networks: []netip.Prefix{netip.MustParsePrefix("10.248.0.0/16")}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := request("10.250.1.0/24,10.248.1.0/24", "10.254.1.1", "tcp/22")
+	plans, err := inv.Plan(design.Intent{Src: req.Src, Dst: req.Dst, Service: req.Service, Name: "req"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inside := netip.MustParseAddr("10.250.1.1")
+	if len(plans) == 0 {
+		t.Fatal("the crossing part needs a design")
+	}
+	for _, p := range plans {
+		if p.Part.Src.Contains(inside) {
+			t.Fatalf("%s designs traffic that stays behind l2-trust: %v", p.Cluster, p.Part.Src)
+		}
 	}
 }

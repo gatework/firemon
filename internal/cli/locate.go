@@ -39,7 +39,7 @@ func newLocateCmd(o *options) *cobra.Command {
 			}
 			plans := map[string]*design.Plan{}
 			if plan {
-				cps, err := inv.Plan(intent)
+				cps, err := inv.PlanTrace(tr, intent)
 				if err != nil {
 					return err
 				}

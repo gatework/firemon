@@ -18,7 +18,7 @@ import (
 // rules' traffic up to the first rule's position changes no decision: no
 // rule in between with another action, or that cannot be evaluated, may
 // match it.
-func mergeable(fw *firemon.Firewall, flagged map[string]bool, at time.Time, budget int) []Finding {
+func mergeable(fw *firemon.Firewall, flagged map[string]bool, at time.Time, budget int) (out []Finding, incomplete []string) {
 	rules := fw.Rules()
 	buckets := map[string][]*firemon.Rule{}
 	var keys []string
@@ -32,11 +32,11 @@ func mergeable(fw *firemon.Firewall, flagged map[string]bool, at time.Time, budg
 		}
 		buckets[k] = append(buckets[k], r)
 	}
-	var out []Finding
 	for _, k := range keys {
-		out = append(out, mergeBucket(rules, buckets[k], budget)...)
+		f, cut := mergeBucket(rules, buckets[k], budget)
+		out, incomplete = append(out, f...), append(incomplete, cut...)
 	}
-	return out
+	return out, incomplete
 }
 
 func mergeEligible(r *firemon.Rule, flagged map[string]bool, at time.Time) bool {
@@ -58,9 +58,8 @@ func mergeKey(r *firemon.Rule) string {
 
 // mergeBucket groups the rules of one bucket, each with the earliest rule
 // it can join.
-func mergeBucket(all, bucket []*firemon.Rule, budget int) []Finding {
+func mergeBucket(all, bucket []*firemon.Rule, budget int) (out []Finding, incomplete []string) {
 	used := map[string]bool{}
-	var out []Finding
 	for i, first := range bucket {
 		if used[first.ID()] {
 			continue
@@ -75,7 +74,11 @@ func mergeBucket(all, bucket []*firemon.Rule, budget int) []Finding {
 			if !ok || (field != design.FieldUnset && d != field) {
 				continue
 			}
-			if !orderSafe(all, first, l, budget) {
+			safe, complete := orderSafe(all, first, l, budget)
+			if !complete {
+				incomplete = append(incomplete, l.ID())
+			}
+			if !safe {
 				continue
 			}
 			field = d
@@ -90,7 +93,7 @@ func mergeBucket(all, bucket []*firemon.Rule, budget int) []Finding {
 			Rules: append([]string{first.ID()}, later...), Merge: &Merge{Keep: first.ID(), Remove: later, Field: field},
 		})
 	}
-	return out
+	return out, incomplete
 }
 
 // differing returns the one dimension in which two matches differ; false
@@ -112,21 +115,22 @@ func differing(a, b traffic.Space) (design.Field, bool) {
 // orderSafe reports whether the traffic of later can be decided at the
 // position of first: every rule in between that may match it decides it
 // the same way.
-func orderSafe(all []*firemon.Rule, first, later *firemon.Rule, budget int) bool {
+// It stops, unsafe and incomplete, after budget rules in between.
+func orderSafe(all []*firemon.Rule, first, later *firemon.Rule, budget int) (safe, complete bool) {
 	m := later.Match()
-	checked := 0
-	for _, x := range all[first.Position()+1 : later.Position()] {
+	between := all[first.Position()+1 : later.Position()]
+	if len(between) > budget {
+		return false, false
+	}
+	for _, x := range between {
 		if x.Ignored() || !zonesMeet(x, later) || !x.Bound().Overlaps(m) {
 			continue
 		}
-		if checked++; checked > budget {
-			return false
-		}
 		if x.Action() != later.Action() || !x.Decidable() || x.Scheduled() {
-			return false
+			return false, true
 		}
 	}
-	return true
+	return true, true
 }
 
 // zonesMeet reports whether two rules can apply to a common zone pair.

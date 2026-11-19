@@ -1,7 +1,9 @@
 package paloalto
 
 import (
+	"maps"
 	"net/netip"
+	"slices"
 	"strings"
 
 	"github.com/gatework/firemon"
@@ -48,6 +50,10 @@ func (s *state) buildPBF() {
 				s.pbfAction(&r, values)
 			case "disabled":
 				r.Disabled = yes(values)
+			case "schedule":
+				for _, v := range anyless(values) {
+					s.cfg.ExternalUses = append(s.cfg.ExternalUses, firemon.ExternalUse{Site: firemon.UseSitePolicyRoute, ID: "pbf " + d.name, Kind: firemon.ObjectKindSchedule, Name: v})
+				}
 			}
 		}
 		r.VirtualRouter = s.ifaceVR[r.Interface]
@@ -94,13 +100,12 @@ func (s *state) pbfAction(r *firemon.PolicyRoute, values []string) {
 	}
 }
 
-// externalUses records the objects QoS and DoS rules refer to.
+// externalUses records the objects the rulebases the model does not
+// evaluate refer to (qos, dos, decryption, authentication,
+// application-override, tunnel-inspect, ...).
 func (s *state) externalUses() {
-	for _, base := range []string{"qos", "dos"} {
+	for _, base := range slices.Sorted(maps.Keys(s.others)) {
 		book := s.others[base]
-		if book == nil {
-			continue
-		}
 		site := firemon.UseSiteQoS
 		if base != "qos" {
 			site = firemon.UseSiteOther

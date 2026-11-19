@@ -18,7 +18,7 @@ const (
 // broad reviews enabled permits: two dimensions any, any service with a
 // wide or any address side, or a /8. Counters, when present, say whether
 // the rule is used at all; narrowing a used rule needs traffic logs.
-func broad(fw *firemon.Firewall, flagged map[string]bool, counters *hits.Snapshot, minWindow time.Duration) []Finding {
+func broad(fw *firemon.Firewall, flagged map[string]bool, counters *hits.Index, minWindow time.Duration) []Finding {
 	var out []Finding
 	for _, r := range fw.Rules() {
 		if r.Action() != firemon.ActionPermit || r.Ignored() || !r.Decidable() || flagged[r.ID()] {
@@ -113,7 +113,7 @@ func widest(s traffic.AddressSet) int {
 }
 
 // zeroHits reports enabled rules the counters saw unused over the window.
-func zeroHits(fw *firemon.Firewall, flagged map[string]bool, counters *hits.Snapshot, minWindow time.Duration) []Finding {
+func zeroHits(fw *firemon.Firewall, flagged map[string]bool, counters *hits.Index, minWindow time.Duration) []Finding {
 	if counters == nil {
 		return nil
 	}

@@ -138,29 +138,54 @@ func (r References) Users(o ObjectRef) []Use { return slices.Clone(r.users[o]) }
 func (r References) Live(o ObjectRef) bool { return r.live[o] }
 
 // Unused returns the declared, non-predefined objects that are not live,
-// groups before their members so that they can be deleted in order.
+// each after every unused group that contains it, so that deleting them in
+// this order never removes an object something still refers to.
 func (r References) Unused() []ObjectRef {
-	var out []ObjectRef
+	unused := map[ObjectRef]bool{}
 	for _, o := range r.all {
 		if !r.live[o] {
-			out = append(out, o)
+			unused[o] = true
 		}
 	}
-	slices.SortStableFunc(out, func(a, b ObjectRef) int { return cmp.Compare(deleteRank(a.Kind), deleteRank(b.Kind)) })
+	var out []ObjectRef
+	done := map[ObjectRef]bool{}
+	var visit func(o ObjectRef)
+	visit = func(o ObjectRef) {
+		if done[o] {
+			return
+		}
+		done[o] = true
+		for _, u := range r.users[o] {
+			if u.Site != UseSiteGroup {
+				continue
+			}
+			for _, kind := range []ObjectKind{ObjectKindAddressGroup, ObjectKindServiceGroup} {
+				if g := (ObjectRef{Kind: kind, Name: u.ID}); unused[g] && sameNamespace(g.Kind, o.Kind) {
+					visit(g) // the group that contains o goes first
+				}
+			}
+		}
+		out = append(out, o)
+	}
+	for _, o := range r.all {
+		if unused[o] {
+			visit(o)
+		}
+	}
 	return out
 }
 
-// deleteRank orders kinds so that users are deleted before what they use.
-func deleteRank(k ObjectKind) int {
-	switch k {
-	case ObjectKindAddressGroup, ObjectKindServiceGroup:
-		return 0
-	case ObjectKindUnset, ObjectKindAddress, ObjectKindService, ObjectKindSchedule:
-		return 1
-	default:
-		return 1
-	}
+// sameNamespace reports whether two kinds share a name space: addresses
+// with address groups, services with service groups.
+func sameNamespace(a, b ObjectKind) bool {
+	isAddr := func(k ObjectKind) bool { return k == ObjectKindAddress || k == ObjectKindAddressGroup }
+	isSvc := func(k ObjectKind) bool { return k == ObjectKindService || k == ObjectKindServiceGroup }
+	return (isAddr(a) && isAddr(b)) || (isSvc(a) && isSvc(b)) || a == b
 }
+
+// ReferencesOf returns the reference graph of a configuration without
+// compiling it, for checks on configurations being changed.
+func ReferencesOf(cfg *Config) References { return buildReferences(cfg) }
 
 // References returns the reference graph of the configuration.
 func (fw *Firewall) References() References { return fw.refs }

@@ -59,6 +59,14 @@ func (s *state) pbrLine(r *firemon.PolicyRoute, line string) bool {
 	case kw == "log":
 	case kw == "service":
 		r.Services = append(r.Services, w.next())
+	case kw == "schedule":
+		// The entry applies only within the schedule, which the policy
+		// route model does not hold; the schedule stays in use.
+		name := w.next()
+		r.Unsupported = append(r.Unsupported, "schedule "+name)
+		s.cfg.ExternalUses = append(s.cfg.ExternalUses, firemon.ExternalUse{
+			Site: firemon.UseSitePolicyRoute, ID: r.Policy + "/" + r.ID, Kind: firemon.ObjectKindSchedule, Name: name,
+		})
 	case strings.HasPrefix(kw, "src-") || strings.HasPrefix(kw, "dst-"):
 		var rule firemon.SecurityRule
 		if !s.ruleOperand(&rule, kw, w) || len(rule.From)+len(rule.To) > 0 {

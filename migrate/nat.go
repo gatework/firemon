@@ -139,7 +139,7 @@ func (tr *translator) translation(res *ruleResult, t firemon.Translation) firemo
 	case firemon.TranslationModeInterface:
 		out.Interface = tr.iface(t.Interface)
 	case firemon.TranslationModeAddress:
-		out.Addresses = tr.operands(res, t.Addresses, false, nil, "translated address", "")
+		out.Addresses = tr.single(tr.operands(res, t.Addresses, false, nil, "translated address", ""), "nat-translated")
 	case firemon.TranslationModeUnset, firemon.TranslationModeNone:
 	}
 	return out

@@ -80,8 +80,8 @@ func renderSchedule(s firemon.Schedule) ([]string, error) {
 	case len(s.Windows) > 0:
 		var ws []string
 		for _, w := range s.Windows {
-			if w.Start.IsZero() {
-				return nil, fmt.Errorf("paloalto: schedule %q: a window needs a start", s.Name)
+			if w.Start.IsZero() || w.End.IsZero() {
+				return nil, fmt.Errorf("paloalto: schedule %q: a window needs a start and an end", s.Name)
 			}
 			ws = append(ws, w.Start.Format("2006/01/02@15:04")+"-"+w.End.Add(-time.Minute).Format("2006/01/02@15:04"))
 		}

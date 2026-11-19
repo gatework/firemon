@@ -37,6 +37,12 @@ type Report struct {
 	Incomplete []string `json:"incomplete,omitempty"`
 	// HitsTaken is when the counters were read; zero without counters.
 	HitsTaken time.Time `json:"hits_taken,omitzero"`
+	// Baseline is the fingerprint of the configuration reviewed; Plan
+	// refuses a report of another configuration.
+	Baseline string `json:"baseline"`
+	// DuplicateRuleIDs are IDs several rules share; rules cannot be
+	// planned by ID while they do.
+	DuplicateRuleIDs []string `json:"duplicate_rule_ids,omitempty"`
 }
 
 // Count returns the number of findings of a category.
@@ -66,8 +72,9 @@ func Analyze(fw *firemon.Firewall, opts Options) Report {
 		now = time.Now
 	}
 	minWindow := cmp.Or(opts.MinWindow, DefaultMinWindow)
-	a := audit.Run(fw, audit.Options{Now: now, MaxSpaces: opts.MaxSpaces})
-	r := Report{Incomplete: a.Incomplete}
+	budget := cmp.Or(opts.MaxSpaces, audit.DefaultMaxSpaces)
+	a := audit.Run(fw, audit.Options{Now: now, MaxSpaces: budget})
+	r := Report{Incomplete: a.Incomplete, Baseline: fw.Fingerprint(), DuplicateRuleIDs: duplicateIDs(fw)}
 	if opts.Hits != nil {
 		r.HitsTaken = opts.Hits.Taken
 	}
@@ -80,12 +87,20 @@ func Analyze(fw *firemon.Firewall, opts Options) Report {
 			}
 		}
 	}
-	demoteUnrestorable(fw.Config(), r.Findings)
+	cfg := fw.Config()
+	demoteUnrestorable(cfg, r.Findings)
 	at := now()
-	r.Findings = append(r.Findings, mergeable(fw, flagged, at, opts.MaxSpaces)...)
-	r.Findings = append(r.Findings, broad(fw, flagged, opts.Hits, minWindow)...)
-	r.Findings = append(r.Findings, zeroHits(fw, flagged, opts.Hits, minWindow)...)
-	r.Findings = append(r.Findings, duplicateObjects(fw)...)
+	merges, cut := mergeable(fw, flagged, at, budget)
+	r.Findings = append(r.Findings, merges...)
+	r.Incomplete = append(r.Incomplete, cut...)
+	var counters *hits.Index
+	if opts.Hits != nil {
+		x := opts.Hits.Indexed()
+		counters = &x
+	}
+	r.Findings = append(r.Findings, broad(fw, flagged, counters, minWindow)...)
+	r.Findings = append(r.Findings, zeroHits(fw, flagged, counters, minWindow)...)
+	r.Findings = append(r.Findings, duplicateObjects(fw, cfg)...)
 	position := map[string]int{}
 	for _, rule := range fw.Rules() {
 		position[rule.ID()] = rule.Position()
@@ -156,16 +171,37 @@ func demoteUnrestorable(cfg *firemon.Config, findings []Finding) {
 	for _, s := range cfg.Schedules {
 		partial[firemon.ObjectRef{Kind: firemon.ObjectKindSchedule, Name: s.Name}] = s.Unsupported != ""
 	}
+	unread := unreadNames(cfg)
+	partialRule := map[string]bool{}
+	for _, r := range cfg.Rules {
+		partialRule[r.ID] = len(r.Unsupported) > 0
+	}
 	for i := range findings {
 		f := &findings[i]
-		if f.Category != CategoryUnusedObject {
-			continue
-		}
-		for _, o := range f.Objects {
-			if partial[o] {
-				f.Tier = TierReview
-				f.Detail = "definition not fully modelled: a rollback could not recreate it"
+		switch f.Category {
+		case CategoryUnusedObject:
+			for _, o := range f.Objects {
+				switch {
+				case partial[o]:
+					f.Tier = TierReview
+					f.Detail = "definition not fully modelled: a rollback could not recreate it"
+				case unread[o.Name]:
+					// A line the parser could not read names it: something
+					// the model does not see may use it.
+					f.Tier = TierReview
+					f.Detail = "named in a configuration line that was not parsed: it may be in use"
+				}
 			}
+		case CategoryNeverMatches, CategoryIncomplete, CategoryDisabled, CategoryExpired, CategoryRedundant:
+			for _, id := range f.Rules {
+				if partialRule[id] {
+					// Users, URL categories or unread lines: deleting is
+					// fine, but a rollback could not restore the rule.
+					f.Tier = TierReview
+					f.Detail = "the rule has criteria the model does not hold: a rollback could not restore it exactly"
+				}
+			}
+		case CategoryUnset, CategoryEmptyObject, CategoryShadowed, CategoryMergeable, CategoryBroad, CategoryZeroHit, CategoryDuplicateObject:
 		}
 	}
 }
@@ -173,9 +209,8 @@ func demoteUnrestorable(cfg *firemon.Config, findings []Finding) {
 // duplicateObjects groups live objects of one namespace whose resolved
 // contents are equal: rules could share one of them. Merging them changes
 // every reference, so it is advice.
-func duplicateObjects(fw *firemon.Firewall) []Finding {
+func duplicateObjects(fw *firemon.Firewall, cfg *firemon.Config) []Finding {
 	refs := fw.References()
-	cfg := fw.Config()
 	kindOf := map[string]firemon.ObjectKind{}
 	for _, a := range cfg.Addresses {
 		if !a.Predefined {
@@ -233,6 +268,33 @@ func duplicateObjects(fw *firemon.Firewall) []Finding {
 			Tier: TierReview, Evidence: EvidenceStatic, Objects: objs,
 			Detail: "equal contents " + strings.TrimPrefix(strings.TrimPrefix(key, "address "), "service ") + "; refer to one of " + strings.Join(names, ", "),
 		})
+	}
+	return out
+}
+
+// duplicateIDs returns the rule IDs several rules share.
+func duplicateIDs(fw *firemon.Firewall) []string {
+	seen := map[string]int{}
+	var out []string
+	for _, r := range fw.Rules() {
+		if seen[r.ID()]++; seen[r.ID()] == 2 {
+			out = append(out, r.ID())
+		}
+	}
+	return out
+}
+
+// unreadNames returns the words of the configuration lines the parser did
+// not read, quotes and list brackets removed.
+func unreadNames(cfg *firemon.Config) map[string]bool {
+	out := map[string]bool{}
+	for _, d := range cfg.Diagnostics {
+		for _, w := range strings.FieldsFunc(d.Text, func(r rune) bool { return r == ' ' || r == '[' || r == ']' || r == '\t' }) {
+			out[strings.Trim(w, `"'`)] = true
+		}
+		for _, q := range strings.Split(d.Text, `"`)[1:] {
+			out[q] = true // quoted names with spaces
+		}
 	}
 	return out
 }

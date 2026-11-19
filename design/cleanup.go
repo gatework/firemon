@@ -1,6 +1,7 @@
 package design
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -129,7 +130,7 @@ func (AddSchedule) change()        {}
 
 // ErrInUse reports a deletion of an object something still refers to, or
 // a reduction that would empty a field.
-var ErrInUse = fmt.Errorf("design: still in use")
+var ErrInUse = errors.New("design: still in use")
 
 // applyCleanup applies the cleanup changes; ok is false for other kinds.
 func applyCleanup(cfg *firemon.Config, ch Change) (ok bool, err error) {
@@ -141,15 +142,25 @@ func applyCleanup(cfg *firemon.Config, ch Change) (ok bool, err error) {
 		}
 		cfg.Rules = slices.Delete(cfg.Rules, i, i+1)
 	case DeleteAddress:
-		return true, remove(&cfg.Addresses, c.Address.Name, func(a firemon.Address) string { return a.Name })
+		return true, removeUnused(cfg, firemon.ObjectRef{Kind: firemon.ObjectKindAddress, Name: c.Address.Name}, func() error {
+			return remove(&cfg.Addresses, c.Address.Name, func(a firemon.Address) string { return a.Name })
+		})
 	case DeleteAddressGroup:
-		return true, remove(&cfg.AddressGroups, c.Group.Name, func(g firemon.AddressGroup) string { return g.Name })
+		return true, removeUnused(cfg, firemon.ObjectRef{Kind: firemon.ObjectKindAddressGroup, Name: c.Group.Name}, func() error {
+			return remove(&cfg.AddressGroups, c.Group.Name, func(g firemon.AddressGroup) string { return g.Name })
+		})
 	case DeleteService:
-		return true, remove(&cfg.Services, c.Service.Name, func(s firemon.Service) string { return s.Name })
+		return true, removeUnused(cfg, firemon.ObjectRef{Kind: firemon.ObjectKindService, Name: c.Service.Name}, func() error {
+			return remove(&cfg.Services, c.Service.Name, func(s firemon.Service) string { return s.Name })
+		})
 	case DeleteServiceGroup:
-		return true, remove(&cfg.ServiceGroups, c.Group.Name, func(g firemon.ServiceGroup) string { return g.Name })
+		return true, removeUnused(cfg, firemon.ObjectRef{Kind: firemon.ObjectKindServiceGroup, Name: c.Group.Name}, func() error {
+			return remove(&cfg.ServiceGroups, c.Group.Name, func(g firemon.ServiceGroup) string { return g.Name })
+		})
 	case DeleteSchedule:
-		return true, remove(&cfg.Schedules, c.Schedule.Name, func(s firemon.Schedule) string { return s.Name })
+		return true, removeUnused(cfg, firemon.ObjectRef{Kind: firemon.ObjectKindSchedule, Name: c.Schedule.Name}, func() error {
+			return remove(&cfg.Schedules, c.Schedule.Name, func(s firemon.Schedule) string { return s.Name })
+		})
 	case ReduceRule:
 		return true, reduce(cfg, c)
 	case AddSchedule:
@@ -163,7 +174,7 @@ func applyCleanup(cfg *firemon.Config, ch Change) (ok bool, err error) {
 func remove[T any](list *[]T, name string, key func(T) string) error {
 	i := slices.IndexFunc(*list, func(v T) bool { return key(v) == name })
 	if i < 0 {
-		return fmt.Errorf("design: delete unknown object %q", name)
+		return fmt.Errorf("%w %q", ErrUnknownObject, name)
 	}
 	*list = slices.Delete(*list, i, i+1)
 	return nil
@@ -197,3 +208,16 @@ func reduce(cfg *firemon.Config, c ReduceRule) error {
 	}
 	return nil
 }
+
+// removeUnused deletes an object only when nothing refers to it any more,
+// as the device does.
+func removeUnused(cfg *firemon.Config, o firemon.ObjectRef, del func() error) error {
+	if users := firemon.ReferencesOf(cfg).Users(o); len(users) > 0 {
+		return fmt.Errorf("%w: %s is used by %s %s", ErrInUse, o, users[0].Site, users[0].ID)
+	}
+	return del()
+}
+
+// ErrUnknownObject reports a deletion of an object the configuration does
+// not have.
+var ErrUnknownObject = errors.New("design: unknown object")

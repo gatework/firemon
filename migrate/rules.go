@@ -30,13 +30,13 @@ func (r *ruleResult) untranslatable(note string) {
 // is carried over disabled, with the reason in its description.
 func (tr *translator) rules() {
 	tr.ruleMap = map[string][]string{}
-	for _, src := range tr.src.Rules {
+	compiled := tr.fw.Rules() // by position: rule IDs may repeat
+	for i, src := range tr.src.Rules {
 		if src.Incomplete != "" {
 			tr.item(ItemKindRule, src.ID, FidelityExact, "ignored by the source device ("+src.Incomplete+"); not carried over")
 			continue
 		}
-		compiled, _ := tr.fw.Rule(src.ID)
-		res := tr.rule(src, compiled)
+		res := tr.rule(src, compiled[i])
 		var ids []string
 		for _, r := range res.rules {
 			if res.fidelity == FidelityUntranslatable {
@@ -113,13 +113,13 @@ func (tr *translator) groupName(id string) string {
 // an object of the complement, taken from the compiled source rule.
 func (tr *translator) operands(res *ruleResult, refs []firemon.AddressRef, negate bool, compiled *firemon.Rule, side, ruleID string) []firemon.AddressRef {
 	if negate && !tr.caps.NegateAddresses {
+		if compiled == nil || !compiled.Decidable() {
+			res.untranslatable("negated " + side + " cannot be resolved exactly")
+			return nil
+		}
 		set := compiled.Match().Src
 		if side == "destination" {
 			set = compiled.Match().Dst
-		}
-		if !compiled.Decidable() {
-			res.untranslatable("negated " + side + " cannot be resolved exactly")
-			return nil
 		}
 		name := tr.names.fresh(nsAddress, "NOT_"+ruleID+"_"+side)
 		a := firemon.Address{Name: name, Description: "complement of the negated " + side + " of rule " + ruleID, Entries: entriesOf(set)}
@@ -238,7 +238,12 @@ func (tr *translator) ruleTime(res *ruleResult, out *firemon.SecurityRule, src f
 		if reason, bad := tr.broken[nsSchedule][src.Schedule]; bad {
 			res.untranslatable("schedule " + src.Schedule + ": " + reason)
 		} else {
-			out.Schedule, _ = tr.names.lookup(nsSchedule, src.Schedule)
+			name, ok := tr.names.lookup(nsSchedule, src.Schedule)
+			if !ok {
+				// Without its schedule the rule would apply all the time.
+				res.untranslatable("schedule " + src.Schedule + " is not defined on the source")
+			}
+			out.Schedule = name
 		}
 	}
 	if src.Window == (firemon.TimeWindow{}) {
