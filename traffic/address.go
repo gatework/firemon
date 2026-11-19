@@ -177,6 +177,9 @@ func (s AddressSet) Overlaps(o AddressSet) bool {
 	// Both range lists are sorted and disjoint: advance whichever range
 	// ends first until two ranges meet, in linear time.
 	a, b := s.rs, o.rs
+	if len(a) == 0 || len(b) == 0 || a[len(a)-1].To().Less(b[0].From()) || b[len(b)-1].To().Less(a[0].From()) {
+		return false // the spans do not meet: most pairs end here
+	}
 	for i, j := 0, 0; i < len(a) && j < len(b); {
 		switch {
 		case a[i].To().Less(b[j].From()):

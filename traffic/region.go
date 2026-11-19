@@ -17,11 +17,30 @@ type Region struct {
 
 // NewRegion returns the union of spaces.
 func NewRegion(spaces ...Space) Region {
-	var r Region
+	var out []Space
 	for _, s := range spaces {
-		r = r.Add(s)
+		out = appendNew(out, out, s)
 	}
-	return r
+	return Region{spaces: out}
+}
+
+// appendNew appends to out the parts of s outside every space of seen.
+func appendNew(out, seen []Space, s Space) []Space {
+	if s.IsEmpty() {
+		return out
+	}
+	pieces := []Space{s}
+	for _, e := range seen {
+		if pieces = subtractAll(pieces, e); len(pieces) == 0 {
+			return out
+		}
+	}
+	for _, p := range pieces {
+		if !p.IsEmpty() {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // Add returns r plus s, keeping the spaces disjoint.
@@ -64,10 +83,21 @@ func DisjointRegion(spaces ...Space) Region {
 
 // Union returns the packets in r or o.
 func (r Region) Union(o Region) Region {
-	for _, s := range o.spaces {
-		r = r.Add(s)
+	switch {
+	case o.IsEmpty():
+		return r
+	case r.IsEmpty():
+		return o
 	}
-	return r
+	// The spaces of o are disjoint from each other: each only needs r's
+	// spaces taken out, and the result is built in one slice rather than
+	// copied once per space.
+	out := make([]Space, len(r.spaces), len(r.spaces)+len(o.spaces))
+	copy(out, r.spaces)
+	for _, s := range o.spaces {
+		out = appendNew(out, r.spaces, s)
+	}
+	return Region{spaces: out}
 }
 
 // Subtract returns r minus s.

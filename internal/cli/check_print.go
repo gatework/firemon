@@ -2,6 +2,7 @@ package cli
 
 import (
 	"cmp"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -144,7 +145,7 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 		if ok {
 			position = "（第 " + itoa(d.Position) + " 条）"
 		}
-		p.f("  %s  %s\n", mark, h.Traffic)
+		p.f("  %s  %s\n", mark, trafficText(h.Traffic))
 		p.f("      %s：%s%s\n", what, hitLabel(h.Rule, h.Name), position)
 		switch {
 		case !ok:
@@ -179,6 +180,14 @@ func printFlows(p *printer, f report.Firewall, verbose bool) {
 	if f.Defaulted != "" {
 		p.f("  ✗ 无放通策略  %s\n      没有策略放通，默认拒绝\n", f.Defaulted)
 	}
+}
+
+// partOf is the report's summary of traffic in many pieces.
+var partOf = regexp.MustCompile(`part of (.+?) \((\d+) pieces\)`)
+
+// trafficText writes a traffic description in Chinese.
+func trafficText(s string) string {
+	return partOf.ReplaceAllString(s, "$1 中的部分流量（共 $2 段，-v 或 --json 查看命中策略的定义）")
 }
 
 // timeBound describes when a rule is in force, for a rule bound to a
@@ -216,7 +225,7 @@ func printUndecided(p *printer, f report.Firewall) {
 		}
 		names = append(names, hitLabel(h.Rule, h.Name)+"（"+actionWord(h.Action)+"，"+strings.Join(kinds, "、")+"）")
 	}
-	p.f("  需确认：%s\n", f.UndecidedTraffic)
+	p.f("  需确认：%s\n", trafficText(f.UndecidedTraffic))
 	p.f("    可能先命中并改变结论：%s\n", strings.Join(names, "，"))
 	for _, h := range f.Otherwise {
 		outcome := "拒绝"

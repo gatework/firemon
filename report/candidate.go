@@ -61,8 +61,10 @@ func (c Candidate) key() design.CandidateKey {
 
 // pairNeed is what one zone pair still needs and the request scope there.
 type pairNeed struct {
-	from, to    string
-	need, scope traffic.Region
+	from, to string
+	// need and scope gather the spaces to open and the request on the
+	// pair; only their bounds are used, so overlaps do not matter.
+	need, scope []traffic.Space
 	// needBounds and scopeBounds bound need and scope, computed once for
 	// every rule assessed against the pair.
 	needBounds, scopeBounds traffic.Space
@@ -107,20 +109,20 @@ func needsByPair(paths []query.Path) []pairNeed {
 			i = len(out) - 1
 		}
 		n := &out[i]
-		n.scope = n.scope.Add(p.Policy)
+		n.scope = append(n.scope, p.Policy)
 		for _, d := range p.Decisions {
 			if d.Outcome != query.OutcomeDeny && d.Outcome != query.OutcomeDefault {
 				continue
 			}
-			n.need = n.need.Union(d.Space)
+			n.need = append(n.need, d.Space.Spaces()...)
 			if d.Rule != nil && (n.firstDeny < 0 || d.Rule.Position() < n.firstDeny) {
 				n.firstDeny = d.Rule.Position()
 			}
 		}
 	}
-	out = slices.DeleteFunc(out, func(n pairNeed) bool { return n.need.IsEmpty() })
+	out = slices.DeleteFunc(out, func(n pairNeed) bool { return len(n.need) == 0 })
 	for i := range out {
-		out[i].needBounds, out[i].scopeBounds = out[i].need.Bounds(), out[i].scope.Bounds()
+		out[i].needBounds, out[i].scopeBounds = bounds(out[i].need), bounds(out[i].scope)
 	}
 	return out
 }

@@ -2,6 +2,7 @@ package report
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/gatework/firemon"
@@ -216,19 +217,31 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 
 // decidedSpaces bounds, per rule, the traffic it decides on the crossing.
 func decidedSpaces(c inventory.Crossing) map[string]traffic.Space {
-	regions := map[string]traffic.Region{}
+	spaces := map[string][]traffic.Space{} // bounded only: overlaps do not matter
 	for _, p := range c.Paths {
 		for _, d := range p.Decisions {
 			if d.Rule != nil {
-				regions[d.Rule.ID()] = regions[d.Rule.ID()].Union(d.Space)
+				spaces[d.Rule.ID()] = append(spaces[d.Rule.ID()], d.Space.Spaces()...)
 			}
 		}
 	}
-	out := make(map[string]traffic.Space, len(regions))
-	for id, r := range regions {
-		out[id] = r.Bounds()
+	out := make(map[string]traffic.Space, len(spaces))
+	for id, ss := range spaces {
+		out[id] = bounds(ss)
 	}
 	return out
+}
+
+// bounds is the smallest space holding every space, which may overlap.
+func bounds(spaces []traffic.Space) traffic.Space {
+	srcs, dsts := make([]traffic.AddressSet, len(spaces)), make([]traffic.AddressSet, len(spaces))
+	var box traffic.Space
+	for i, s := range spaces {
+		srcs[i], dsts[i] = s.Src, s.Dst
+		box.Service = box.Service.Union(s.Service)
+	}
+	box.Src, box.Dst = traffic.UnionAll(srcs...), traffic.UnionAll(dsts...)
+	return box
 }
 
 // decidingRules are the rules that decide part of the request: they
@@ -407,17 +420,32 @@ func describeAll(ls []labelled) string {
 	return strings.Join(slices.Compact(parts), "; ")
 }
 
+// maxListedSpaces bounds the pieces a traffic description merges and lists.
+const maxListedSpaces = 32
+
 // compactSpaces writes the union of spaces that may overlap: one box when
 // the box is exactly their union, which is the common case, without
 // merging them first; the merged region otherwise.
 func compactSpaces(spaces []traffic.Space) string {
-	srcs, dsts := make([]traffic.AddressSet, len(spaces)), make([]traffic.AddressSet, len(spaces))
-	var box traffic.Space
-	for i, s := range spaces {
-		srcs[i], dsts[i] = s.Src, s.Dst
-		box.Service = box.Service.Union(s.Service)
+	// Paths of several zone pairs often decide the very same space.
+	seen := map[string]bool{}
+	spaces = slices.DeleteFunc(slices.Clone(spaces), func(s traffic.Space) bool {
+		key := s.String()
+		if seen[key] {
+			return true
+		}
+		seen[key] = true
+		return false
+	})
+	box := bounds(spaces)
+	if slices.ContainsFunc(spaces, func(s traffic.Space) bool { return s.ContainsSpace(box) }) {
+		return box.String()
 	}
-	box.Src, box.Dst = traffic.UnionAll(srcs...), traffic.UnionAll(dsts...)
+	if len(spaces) > maxListedSpaces {
+		// Thousands of pieces read as noise and cost quadratic time to
+		// merge: say they lie within the box, which is exact, and how many.
+		return "part of " + box.String() + " (" + strconv.Itoa(len(spaces)) + " pieces)"
+	}
 	rest := traffic.NewRegion(box)
 	for _, s := range spaces {
 		if rest = rest.Subtract(s); rest.IsEmpty() {

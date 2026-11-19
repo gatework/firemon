@@ -51,3 +51,40 @@ func TestSetOps_FastPathsAgree(t *testing.T) {
 		}
 	}
 }
+
+// TestRegion_UnionAgreesWithAdd: Union and NewRegion, built in one slice,
+// hold the same packets as adding spaces one by one, and stay disjoint.
+func TestRegion_UnionAgreesWithAdd(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(3, 4))
+	space := func() Space {
+		lo := byte(rng.IntN(200))
+		src := AddressRange(netip.AddrFrom4([4]byte{10, 0, 0, lo}), netip.AddrFrom4([4]byte{10, 0, 0, lo + byte(rng.IntN(50))}))
+		dst := AddressRange(netip.AddrFrom4([4]byte{10, 1, 0, lo}), netip.AddrFrom4([4]byte{10, 1, 0, lo + byte(rng.IntN(50))}))
+		port := uint16(rng.IntN(100))
+		return Space{Src: src, Dst: dst, Service: PortService(ProtocolTCP, PortRange{Low: port, High: port + uint16(rng.IntN(20))})}
+	}
+	for range 500 {
+		var spaces []Space
+		for range rng.IntN(8) {
+			spaces = append(spaces, space())
+		}
+		var added Region
+		for _, s := range spaces {
+			added = added.Add(s)
+		}
+		half := len(spaces) / 2
+		for _, got := range []Region{NewRegion(spaces...), NewRegion(spaces[:half]...).Union(NewRegion(spaces[half:]...))} {
+			if !got.SubtractRegion(added).IsEmpty() || !added.SubtractRegion(got).IsEmpty() {
+				t.Fatalf("union %s, added %s", got, added)
+			}
+			for i, a := range got.spaces {
+				for _, b := range got.spaces[i+1:] {
+					if a.Overlaps(b) {
+						t.Fatalf("spaces overlap: %s and %s", a, b)
+					}
+				}
+			}
+		}
+	}
+}
