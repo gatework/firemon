@@ -107,8 +107,14 @@ func UnionAll(sets ...AddressSet) AddressSet {
 
 // Intersect returns the addresses in both s and o.
 func (s AddressSet) Intersect(o AddressSet) AddressSet {
-	if s.IsEmpty() || o.IsEmpty() {
+	// Building a set is costly: settle the common cases on the ranges.
+	switch {
+	case s.IsEmpty() || o.IsEmpty() || !s.Overlaps(o):
 		return AddressSet{}
+	case covers(o.rs, s.rs):
+		return s
+	case covers(s.rs, o.rs):
+		return o
 	}
 	var b netipx.IPSetBuilder
 	b.AddSet(s.ips)
@@ -118,8 +124,11 @@ func (s AddressSet) Intersect(o AddressSet) AddressSet {
 
 // Subtract returns the addresses in s that are not in o.
 func (s AddressSet) Subtract(o AddressSet) AddressSet {
-	if s.IsEmpty() || o.IsEmpty() {
+	switch {
+	case s.IsEmpty() || o.IsEmpty() || !s.Overlaps(o):
 		return s
+	case covers(o.rs, s.rs):
+		return AddressSet{}
 	}
 	var b netipx.IPSetBuilder
 	b.AddSet(s.ips)
@@ -145,7 +154,23 @@ func (s AddressSet) Contains(addr netip.Addr) bool {
 }
 
 // ContainsSet reports whether every address of o is in s.
-func (s AddressSet) ContainsSet(o AddressSet) bool { return o.Subtract(s).IsEmpty() }
+func (s AddressSet) ContainsSet(o AddressSet) bool { return o.IsEmpty() || covers(s.rs, o.rs) }
+
+// covers reports whether every range of b lies within a range of a. Both
+// are sorted, disjoint and merged (adjacent ranges are one), so a range of
+// b inside a's union lies inside one range of a; one walk, no allocation.
+func covers(a, b []netipx.IPRange) bool {
+	i := 0
+	for _, r := range b {
+		for i < len(a) && a[i].To().Less(r.From()) {
+			i++
+		}
+		if i == len(a) || r.From().Less(a[i].From()) || a[i].To().Less(r.To()) {
+			return false
+		}
+	}
+	return true
+}
 
 // Overlaps reports whether s and o share at least one address.
 func (s AddressSet) Overlaps(o AddressSet) bool {

@@ -122,10 +122,15 @@ func (r Region) Overlaps(s Space) bool {
 // Bounds returns the smallest space containing the region: the union of
 // its spaces in each dimension.
 func (r Region) Bounds() Space {
+	// Addresses are unioned in one pass: pairwise unions rebuild the set
+	// once per space, quadratic on regions of many spaces.
+	srcs, dsts := make([]AddressSet, len(r.spaces)), make([]AddressSet, len(r.spaces))
 	var b Space
-	for _, s := range r.spaces {
-		b.Src, b.Dst, b.Service = b.Src.Union(s.Src), b.Dst.Union(s.Dst), b.Service.Union(s.Service)
+	for i, s := range r.spaces {
+		srcs[i], dsts[i] = s.Src, s.Dst
+		b.Service = b.Service.Union(s.Service)
 	}
+	b.Src, b.Dst = UnionAll(srcs...), UnionAll(dsts...)
 	return b
 }
 

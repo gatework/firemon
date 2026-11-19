@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/gatework/firemon/traffic"
 )
@@ -27,7 +28,22 @@ type Egress struct {
 type RoutingTable struct {
 	name    string
 	entries []routeEntry
+	// dests are the entries' destinations as address sets, built once.
+	dests []traffic.AddressSet
+	// cache keeps recent lookups: design verification looks the same
+	// destinations up again for every candidate change.
+	mu    sync.Mutex
+	cache map[string]lookup
 }
+
+// lookup is a cached Lookup result; callers must not modify it.
+type lookup struct {
+	egress   []Egress
+	unrouted traffic.AddressSet
+}
+
+// maxLookups bounds the lookup cache; it is emptied when full.
+const maxLookups = 4096
 
 type routeEntry struct {
 	route     Route
@@ -47,22 +63,50 @@ func (t *RoutingTable) Name() string { return t.name }
 // routes equal in all three share the traffic (equal-cost multipath) and
 // each returns the same addresses.
 func (t *RoutingTable) Lookup(dst traffic.AddressSet) (egress []Egress, unrouted traffic.AddressSet) {
+	key := dst.String()
+	t.mu.Lock()
+	hit, ok := t.cache[key]
+	t.mu.Unlock()
+	if ok {
+		return slices.Clone(hit.egress), hit.unrouted
+	}
+	egress, unrouted = t.lookup(dst)
+	t.mu.Lock()
+	if t.cache == nil || len(t.cache) >= maxLookups {
+		t.cache = map[string]lookup{}
+	}
+	t.cache[key] = lookup{egress: slices.Clone(egress), unrouted: unrouted}
+	t.mu.Unlock()
+	return egress, unrouted
+}
+
+func (t *RoutingTable) lookup(dst traffic.AddressSet) (egress []Egress, unrouted traffic.AddressSet) {
 	remaining := dst
 	for i := 0; i < len(t.entries) && !remaining.IsEmpty(); {
 		best := t.entries[i]
-		hit := remaining.Intersect(traffic.NewAddressSet(best.route.Destination))
-		j := i
-		for ; j < len(t.entries) && sameRank(t.entries[j], best); j++ {
-			if hit.IsEmpty() {
-				continue
-			}
-			e := t.entries[j]
-			egress = append(egress, Egress{Route: e.route, Connected: e.connected, Interface: e.iface, Zone: e.zone, Addresses: hit})
+		j := i + 1
+		for j < len(t.entries) && sameRank(t.entries[j], best) {
+			j++
 		}
-		remaining = remaining.Subtract(hit)
+		// Most routes touch none of the addresses: test before building.
+		if dest := t.dest(i); remaining.Overlaps(dest) {
+			hit := remaining.Intersect(dest)
+			for _, e := range t.entries[i:j] {
+				egress = append(egress, Egress{Route: e.route, Connected: e.connected, Interface: e.iface, Zone: e.zone, Addresses: hit})
+			}
+			remaining = remaining.Subtract(hit)
+		}
 		i = j
 	}
 	return egress, remaining
+}
+
+// dest is the destination of entry i as an address set.
+func (t *RoutingTable) dest(i int) traffic.AddressSet {
+	if i < len(t.dests) {
+		return t.dests[i]
+	}
+	return traffic.NewAddressSet(t.entries[i].route.Destination)
 }
 
 func sameRank(a, b routeEntry) bool {
@@ -137,6 +181,10 @@ func buildRoutingTables(cfg *Config, ifaces map[string]Interface) (map[string]*R
 				cmp.Compare(a.order, b.order),
 			)
 		})
+		t.dests = make([]traffic.AddressSet, len(t.entries))
+		for i, e := range t.entries {
+			t.dests[i] = traffic.NewAddressSet(e.route.Destination)
+		}
 	}
 	return tables, issues
 }

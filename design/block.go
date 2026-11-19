@@ -102,18 +102,31 @@ func firstOverlapping(fw *firemon.Firewall, s traffic.Space) *firemon.Rule {
 func blocked(fw *firemon.Firewall, s traffic.Space, at time.Time) (open bool, by []string) {
 	e := query.New(fw, query.Options{Now: func() time.Time { return at }})
 	zones := zoneNames(fw)
-	for _, from := range zones {
-		for _, to := range zones {
-			for _, d := range e.Evaluate(from, to, s, at).Decisions {
-				switch {
-				case d.Outcome != query.OutcomeDeny:
-					// Permitted, possibly permitted, or denied only by the
-					// default: a block needs a rule of its own, which a
-					// permit added later cannot get around.
-					open = true
-				case !slices.Contains(by, d.Rule.ID()):
-					by = append(by, d.Rule.ID())
-				}
+	// Zone pairs are independent: each keeps only its outcome, read back
+	// in order so the result does not depend on scheduling.
+	type pair struct {
+		open bool
+		by   []string
+	}
+	pairs := make([]pair, len(zones)*len(zones))
+	query.Each(len(pairs), func(i int) {
+		for _, d := range e.Evaluate(zones[i/len(zones)], zones[i%len(zones)], s, at).Decisions {
+			switch {
+			case d.Outcome != query.OutcomeDeny:
+				// Permitted, possibly permitted, or denied only by the
+				// default: a block needs a rule of its own, which a permit
+				// added later cannot get around.
+				pairs[i].open = true
+			case !slices.Contains(pairs[i].by, d.Rule.ID()):
+				pairs[i].by = append(pairs[i].by, d.Rule.ID())
+			}
+		}
+	})
+	for _, p := range pairs {
+		open = open || p.open
+		for _, id := range p.by {
+			if !slices.Contains(by, id) {
+				by = append(by, id)
 			}
 		}
 	}

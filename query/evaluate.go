@@ -29,7 +29,11 @@ type evaluator struct {
 	path      *Path
 	pieces    []piece
 	decisions []Decision
-	max       int
+	// spaces gathers the pieces of each decision, made a region once in
+	// finish: appending to a region one piece at a time copies it each
+	// time, quadratic on wide requests split into many pieces.
+	spaces [][]traffic.Space
+	max    int
 }
 
 // evaluate runs ordered first-match over p.Policy and fills its decisions
@@ -138,6 +142,9 @@ func (ev *evaluator) finish(o Outcome) {
 		}
 		ev.record(nil, o, pc.possible, pc.space)
 	}
+	for i := range ev.decisions {
+		ev.decisions[i].Space = traffic.DisjointRegion(ev.spaces[i]...) // pieces of one partition never overlap
+	}
 	ev.path.Decisions = ev.decisions
 }
 
@@ -150,11 +157,12 @@ func (ev *evaluator) record(r *firemon.Rule, final Outcome, possible []*firemon.
 	for i := range ev.decisions {
 		d := &ev.decisions[i]
 		if d.Rule == r && d.Outcome == o && d.Final == final && slices.Equal(d.Possible, possible) {
-			d.Space = d.Space.AppendDisjoint(s) // pieces of one partition never overlap
+			ev.spaces[i] = append(ev.spaces[i], s)
 			return
 		}
 	}
-	ev.decisions = append(ev.decisions, Decision{Rule: r, Outcome: o, Final: final, Space: traffic.NewRegion(s), Possible: slices.Clone(possible)})
+	ev.decisions = append(ev.decisions, Decision{Rule: r, Outcome: o, Final: final, Possible: slices.Clone(possible)})
+	ev.spaces = append(ev.spaces, []traffic.Space{s})
 }
 
 // Deciders returns the possible rules that would change the outcome if

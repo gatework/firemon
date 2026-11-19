@@ -63,7 +63,10 @@ func (c Candidate) key() design.CandidateKey {
 type pairNeed struct {
 	from, to    string
 	need, scope traffic.Region
-	firstDeny   int // position of the first deny deciding part of the request; -1 when none
+	// needBounds and scopeBounds bound need and scope, computed once for
+	// every rule assessed against the pair.
+	needBounds, scopeBounds traffic.Space
+	firstDeny               int // position of the first deny deciding part of the request; -1 when none
 }
 
 // candidates ranks the permit rules that could be modified to carry the
@@ -115,7 +118,11 @@ func needsByPair(paths []query.Path) []pairNeed {
 			}
 		}
 	}
-	return slices.DeleteFunc(out, func(n pairNeed) bool { return n.need.IsEmpty() })
+	out = slices.DeleteFunc(out, func(n pairNeed) bool { return n.need.IsEmpty() })
+	for i := range out {
+		out[i].needBounds, out[i].scopeBounds = out[i].need.Bounds(), out[i].scope.Bounds()
+	}
+	return out
 }
 
 // assess relates one rule to one zone pair's need.
@@ -129,7 +136,7 @@ func assess(r *firemon.Rule, pn pairNeed) (Candidate, bool) {
 		// the request's addresses or ports to it would not carry it.
 		return Candidate{}, false
 	}
-	need, scope, m := pn.need.Bounds(), pn.scope.Bounds(), r.Match()
+	need, scope, m := pn.needBounds, pn.scopeBounds, r.Match()
 	c := Candidate{
 		Rule: r.ID(), Name: spec.Name, From: pn.from, To: pn.to, position: r.Position(), logs: spec.Log.Enabled(),
 		Src: m.Src.Relation(need.Src), Dst: m.Dst.Relation(need.Dst), Service: m.Service.Relation(need.Service),

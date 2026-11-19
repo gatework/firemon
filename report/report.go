@@ -266,14 +266,17 @@ func firewallReport(c inventory.Crossing) Firewall {
 	if !c.Unrouted.IsEmpty() {
 		f.Unrouted = c.Unrouted.String()
 	}
-	var permitted, blocked, deflt, unknown traffic.Region
+	// Only whether anything is permitted or undecided matters: those are
+	// not accumulated, as overlap checks across many paths are costly.
+	var blocked, deflt traffic.Region
+	var permitted, unknown bool
 	var acc hitSets
 	for _, p := range c.Paths {
 		f.Paths = append(f.Paths, pathSummary(p))
 		for _, d := range p.Decisions {
 			switch d.Outcome {
 			case query.OutcomePermit:
-				permitted = permitted.Union(d.Space)
+				permitted = permitted || !d.Space.IsEmpty()
 				acc.add(&acc.permitted, d.Rule, p, d.Space, nil)
 			case query.OutcomeDeny:
 				blocked = blocked.Union(d.Space)
@@ -281,7 +284,7 @@ func firewallReport(c inventory.Crossing) Firewall {
 			case query.OutcomeDefault:
 				deflt = deflt.Union(d.Space)
 			case query.OutcomeUnknown:
-				unknown = unknown.Union(d.Space)
+				unknown = unknown || !d.Space.IsEmpty()
 				acc.unknown = append(acc.unknown, labelled{p, d.Space})
 				// Only the rules that would change the outcome matter: a
 				// deny that might match first cannot block traffic that is
@@ -308,7 +311,7 @@ func firewallReport(c inventory.Crossing) Firewall {
 	if rest := blocked.Union(deflt); !rest.IsEmpty() {
 		f.Remaining = rest.String()
 	}
-	f.Status = classify(!permitted.IsEmpty(), !blocked.IsEmpty(), !deflt.IsEmpty() || f.Unrouted != "", !unknown.IsEmpty() || c.Incomplete)
+	f.Status = classify(permitted, !blocked.IsEmpty(), !deflt.IsEmpty() || f.Unrouted != "", unknown || c.Incomplete)
 	return f
 }
 
@@ -390,18 +393,38 @@ func (l *hitList) action(r *firemon.Rule) {
 // domain name on unresolved domain paths.
 func describeAll(ls []labelled) string {
 	var parts []string
-	var plain traffic.Region
+	var plain []traffic.Space // the regions of several paths overlap
 	for _, x := range ls {
 		if x.path.Domain != "" && !x.path.DomainResolved {
 			parts = append(parts, describe(x.r, x.path))
 			continue
 		}
-		plain = plain.Union(x.r)
+		plain = append(plain, x.r.Spaces()...)
 	}
-	if !plain.IsEmpty() {
-		parts = append([]string{compact(plain)}, parts...)
+	if len(plain) > 0 {
+		parts = append([]string{compactSpaces(plain)}, parts...)
 	}
 	return strings.Join(slices.Compact(parts), "; ")
+}
+
+// compactSpaces writes the union of spaces that may overlap: one box when
+// the box is exactly their union, which is the common case, without
+// merging them first; the merged region otherwise.
+func compactSpaces(spaces []traffic.Space) string {
+	srcs, dsts := make([]traffic.AddressSet, len(spaces)), make([]traffic.AddressSet, len(spaces))
+	var box traffic.Space
+	for i, s := range spaces {
+		srcs[i], dsts[i] = s.Src, s.Dst
+		box.Service = box.Service.Union(s.Service)
+	}
+	box.Src, box.Dst = traffic.UnionAll(srcs...), traffic.UnionAll(dsts...)
+	rest := traffic.NewRegion(box)
+	for _, s := range spaces {
+		if rest = rest.Subtract(s); rest.IsEmpty() {
+			return box.String()
+		}
+	}
+	return traffic.NewRegion(spaces...).String()
 }
 
 // compact writes a region as one box when that box holds exactly the
