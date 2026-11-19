@@ -38,7 +38,7 @@ func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[strin
 	var members []inventory.Member
 	platforms := map[string]bootstrap.Platform{}
 	for _, fm := range fleet {
-		snap, err := store.Load(cmd.Context(), fm.snapshot)
+		snap, err := o.loadStored(cmd.Context(), store, fm.snapshot)
 		if err != nil {
 			return nil, nil, fmt.Errorf("库存中的防火墙 %s：%w", fm.name, snapshotError(err, fm.snapshot, o.store))
 		}

@@ -200,7 +200,7 @@ func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
 	var out []clusterReview
 	for _, c := range slices.Sorted(maps.Keys(clusters)) {
 		members := clusters[c]
-		snap, err := store.Load(cmd.Context(), members[0].snapshot)
+		snap, err := o.loadStored(cmd.Context(), store, members[0].snapshot)
 		if err != nil {
 			return fmt.Errorf("集群 %s：%w", c, snapshotError(err, members[0].snapshot, o.store))
 		}

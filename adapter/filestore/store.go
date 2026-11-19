@@ -21,6 +21,9 @@ var (
 	ErrInvalidName = errors.New("filestore: invalid device name")
 	ErrNotFound    = errors.New("filestore: snapshot not found")
 	ErrCorrupt     = errors.New("filestore: snapshot does not match its fingerprint")
+	// ErrStale reports a snapshot stored by another model version: parse
+	// its raw text again and save it.
+	ErrStale = errors.New("filestore: snapshot stored by another version")
 )
 
 // maxFile bounds every file read from the store.
@@ -39,6 +42,8 @@ type Snapshot struct {
 	Host        string         `json:"host,omitempty"`
 	CollectedAt time.Time      `json:"collected_at"`
 	Fingerprint string         `json:"fingerprint"`
+	// Model is the firemon.ModelVersion the configuration was stored with.
+	Model int `json:"model,omitempty"`
 	// Config and Raw are stored in their own files.
 	Config *firemon.Config `json:"-"`
 	Raw    string          `json:"-"`
@@ -71,7 +76,7 @@ func (s *Store) Save(ctx context.Context, snap Snapshot) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	snap.Fingerprint, snap.Vendor = fw.Fingerprint(), snap.Config.Vendor
+	snap.Fingerprint, snap.Vendor, snap.Model = fw.Fingerprint(), snap.Config.Vendor, firemon.ModelVersion
 	dir := filepath.Join(s.root, snap.Device)
 	if err := storage.PrepareDirectory(dir); err != nil {
 		return Snapshot{}, fmt.Errorf("filestore: %w", err)
@@ -101,6 +106,9 @@ func (s *Store) Load(ctx context.Context, device string) (Snapshot, error) {
 	snap, err := s.meta(ctx, device)
 	if err != nil {
 		return Snapshot{}, err
+	}
+	if snap.Model != firemon.ModelVersion {
+		return snap, ErrStale // the metadata says what to parse again
 	}
 	body, _, err := storage.Read(ctx, filepath.Join(s.root, device, configFile), maxFile)
 	if err != nil {

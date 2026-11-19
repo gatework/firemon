@@ -109,7 +109,7 @@ var natStatusText = map[design.NATStatus]string{
 	design.NATStatusAdded:         "需新增",
 	design.NATStatusNeedsAddress:  "需分配公网地址",
 	design.NATStatusIndeterminate: "无法判定",
-	design.NATStatusConflict:      "冲突（加 --override 才会插到该规则之前）",
+	design.NATStatusConflict:      "冲突：该公网地址和端口已发布给其他服务器，请换用其他 --nat-ip 或 --nat-port",
 }
 
 var categoryText = map[converge.Category]string{

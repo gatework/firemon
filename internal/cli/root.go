@@ -28,13 +28,13 @@ const (
 	ExitOK = iota
 	ExitError
 	ExitUsage
-	// ExitNotAllowed reports traffic that is not (fully) allowed; check
+	// ExitNotAllowed reports traffic that is not (fully) allowed; search
 	// returns it when every firewall that needs a change has a verified
 	// one, ready to deploy.
 	ExitNotAllowed
 	// ExitUndecided reports a result that needs a person: rules that
-	// cannot be evaluated offline, a deny rule the design will not pass
-	// without --override, or a change that failed verification.
+	// cannot be evaluated offline, a NAT publication that would take over
+	// another server's address, or a change that failed verification.
 	ExitUndecided
 )
 
@@ -122,8 +122,6 @@ func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
 	f.StringVar(&o.store, "store", "", "快照目录（默认依次取 $FIREMON_STORE、库存文件的 store、配置文件、用户配置目录）")
 	f.StringVar(&o.inventoryFile, "inventory", "", "库存文件（YAML）：防火墙、HA 集群、快照与受保护网段（默认取 $FIREMON_INVENTORY 或配置文件）")
 	f.StringVar(&o.book, "predefined-service", "", "设备上实际的预定义服务表（JSON），覆盖厂商默认值（见 predefined-service 命令）")
-	f.StringVar(&o.book, "service-book", "", "同 --predefined-service（旧名）")
-	_ = f.MarkHidden("service-book")
 	f.StringVar(&o.timezone, "timezone", "", "设备时区，用于时间计划，IANA 名称（默认取 $FIREMON_TIMEZONE、配置文件或本机时区）")
 	f.BoolVar(&o.json, "json", false, "输出 JSON")
 	o.device.register(root)

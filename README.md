@@ -51,7 +51,7 @@ firewalls:
 
 The older `protected:`/`protected_zone:` keys still read as protected zones. A transparent (layer-2) firewall needs the far side bound too; without it search says which binding is missing instead of guessing.
 
-Without `--inventory`, a command reads one firewall: a configuration file with `--config FILE` (the vendor is recognised from the file; `--vendor` overrides), a stored snapshot with `--snapshot NAME` (directory `--store`), or the device with `--vendor`, `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output. `search` replaces the former `check`, `query`, `design` and `locate`, whose names still run it; `--predefined-service` replaces `--service-book`.
+Without `--inventory`, a command reads one firewall: a configuration file with `--config FILE` (the vendor is recognised from the file; `--vendor` overrides), a stored snapshot with `--snapshot NAME` (directory `--store`), or the device with `--vendor`, `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output.
 
 ```sh
 # Store a device's configuration as a snapshot; later commands use --snapshot fw1

@@ -84,7 +84,7 @@ const (
 	// request the planner cannot translate safely.
 	NATStatusIndeterminate
 	// NATStatusConflict: an existing rule that matches first already
-	// publishes the address and port elsewhere; Override places the new
+	// publishes the address and port elsewhere; OverrideNAT places the new
 	// rule in front of it.
 	NATStatusConflict
 )
@@ -178,7 +178,7 @@ func (p *Planner) planNAT(intent Intent, at time.Time) (NATOutcome, []Change, In
 	if out, done := n.current(); done {
 		return out, nil, access
 	}
-	if out, taken := n.taken(); taken && !intent.Override {
+	if out, taken := n.taken(); taken && !intent.OverrideNAT {
 		return out, nil, access
 	}
 	cat := newCatalog(p.fw, p.naming)
