@@ -31,10 +31,9 @@ func newConvergeCmd(o *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "converge",
 		Short: "策略收敛：未使用对象、无效策略、过宽放通、可合并策略，安全项输出变更与回退命令",
-		Long: "converge reviews the policy: unused or empty objects, rules that never take effect (redundant,\n" +
-			"shadowed, disabled, expired, incomplete, never matching), broad permits and rules that can merge.\n" +
-			"Hit counters (stored with `firemon hits` for --snapshot, or --hits FILE) add zero-hit evidence.\n" +
-			"--plan designs the Safe findings (or --select IDs) as changes verified to keep every decision.",
+		Long: "审查策略：未使用或为空的对象，不会生效的策略（冗余、被覆盖、禁用、过期、不完整、永不命中），\n" +
+			"过宽的放通策略，以及可合并的策略。命中计数（用 firemon hits 为 --snapshot 保存，或 --hits 文件）\n" +
+			"提供零命中证据。--plan 把安全项（或 --select 指定的发现）设计为变更，并验证每个判定都不变。",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return o.converge(cmd, f)
@@ -171,7 +170,7 @@ func findingText(f converge.Finding) string {
 }
 
 func printCleanupPlan(p *printer, plan *design.Plan, script *design.Script) {
-	p.f("\n变更方案（%d 项，有效策略不变已验证：%v）\n", len(plan.Changes), plan.Verified)
+	p.f("\n变更方案（%d 项，已验证全部判定不变：%s）\n", len(plan.Changes), yesNo(plan.Verified))
 	if !plan.Verified {
 		// Never print commands that are not proven to keep every decision.
 		p.f("  验证未通过：%s。不输出命令；请缩小 --select 范围后重试。\n", cmp.Or(plan.VerifyError, "未验证"))
@@ -203,7 +202,7 @@ func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
 		members := clusters[c]
 		snap, err := store.Load(cmd.Context(), members[0].snapshot)
 		if err != nil {
-			return fmt.Errorf("cluster %s: %w", c, err)
+			return fmt.Errorf("集群 %s：%w", c, snapshotError(err, members[0].snapshot, o.store))
 		}
 		loaded, err := workflow.FromConfig(snap.Config)
 		if err != nil {
@@ -222,7 +221,7 @@ func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
 		if f.plan {
 			plan, err := converge.Plan(loaded.Firewall, rep, converge.Selection{IDs: f.selection}, converge.PlanOptions{Now: o.deps.Now, Naming: platform.Naming})
 			if err != nil {
-				return &usageError{fmt.Errorf("cluster %s: %w", c, err)}
+				return &usageError{fmt.Errorf("集群 %s：%w", c, err)}
 			}
 			script, err := platform.Render(plan)
 			if err != nil {

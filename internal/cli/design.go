@@ -21,10 +21,10 @@ type intentFlags struct {
 func (i *intentFlags) register(cmd *cobra.Command) {
 	i.trafficFlags.register(cmd)
 	f := cmd.Flags()
-	f.StringVar(&i.name, "name", "", "name of new rules (default fm_<n>)")
-	f.StringVar(&i.description, "description", "", "description of new rules, for example the ticket")
-	f.StringVar(&i.schedule, "schedule", "", "existing schedule to attach to new rules")
-	f.BoolVar(&i.override, "override", false, "place new rules above specific deny rules instead of reporting conflicts")
+	f.StringVar(&i.name, "name", "", "新建策略的名称，例如工单号（默认 fm_<序号>）")
+	f.StringVar(&i.description, "description", "", "新建策略的描述")
+	f.StringVar(&i.schedule, "schedule", "", "新建策略使用的已有时间计划")
+	f.BoolVar(&i.override, "override", false, "允许新策略放在挡住请求的具体拒绝策略之前，而不是报告冲突")
 	i.nat.register(f)
 }
 
@@ -48,7 +48,7 @@ func newDesignCmd(o *options) *cobra.Command {
 	var in intentFlags
 	cmd := &cobra.Command{
 		Use:   "design",
-		Short: "Design and render the change that permits traffic, without touching the device",
+		Short: "设计并渲染放通流量所需的变更（不连接设备）",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			loaded, platform, err := o.load(cmd.Context())
@@ -91,50 +91,53 @@ func printProposal(cmd *cobra.Command, asJSON bool, prop workflow.Proposal) erro
 	if asJSON {
 		return writeJSON(cmd.OutOrStdout(), proposalView{Plan: prop.Plan, ChangeList: changes, Script: prop.Script})
 	}
+	for i, c := range prop.Plan.Changes {
+		changes[i] = changeText(c) // JSON keeps the stable English form above
+	}
 	p := &printer{w: cmd.OutOrStdout()}
 	plan := prop.Plan
-	p.f("status: %s  verified: %v  baseline: %s\n", plan.Status, plan.Verified, plan.Baseline[:16])
+	p.f("方案：%s  已验证：%s  基线指纹：%s\n", text(planStatusText, plan.Status, plan.Status.String()), yesNo(plan.Verified), plan.Baseline[:16])
 	if plan.VerifyError != "" {
-		p.f("verification failed: %s\n", plan.VerifyError)
+		p.f("验证未通过：%s\n", plan.VerifyError)
 	}
 	if n := plan.NAT; n != nil {
-		p.f("nat: %s", n.Status)
+		p.f("NAT：%s", text(natStatusText, n.Status, n.Status.String()))
 		switch {
 		case len(n.Existing) > 0:
-			p.f(" by rule %s", strings.Join(n.Existing, ","))
+			p.f("，由 NAT 规则 %s 完成", strings.Join(n.Existing, ","))
 		case n.Rule != "":
-			p.f(" rule %s", n.Rule)
+			p.f("，规则 %s", n.Rule)
 			if n.Before != "" {
-				p.f(" before %s (NAT matches in order)", n.Before)
+				p.f("，放在 %s 之前（NAT 按顺序首条命中）", n.Before)
 			}
 		}
 		if n.Address != "" {
-			p.f(" address %s", n.Address)
+			p.f("，地址 %s", n.Address)
 		}
 		if n.Interface != "" {
-			p.f(" interface address of %s", n.Interface)
+			p.f("，使用 %s 的接口地址", n.Interface)
 		}
 		if n.Reused {
-			p.f(" (reused)")
+			p.f("（复用已有地址）")
 		}
 		if n.Reason != "" {
-			p.f(": %s", n.Reason)
+			p.f("：%s", n.Reason)
 		}
 		p.f("\n")
 	}
 	for _, c := range plan.Conflicts {
-		p.f("conflict: rule %s denies %s -> %s: %s (use --override to place new rules above it)\n", c.RuleID, c.From, c.To, c.Text)
+		p.f("冲突：策略 %s 拒绝 %s → %s 的 %s（确认后加 --override 把新策略放在它之前）\n", c.RuleID, c.From, c.To, c.Text)
 	}
 	for _, u := range plan.Unknown {
-		p.f("undecidable: %s\n", u)
+		p.f("无法设计：%s\n", planNote(u))
 	}
 	for _, w := range plan.Warnings {
-		p.f("warning: %s\n", w)
+		p.f("注意：%s\n", planNote(w))
 	}
 	if len(changes) > 0 {
-		p.f("\nchanges:\n  %s\n", strings.Join(changes, "\n  "))
-		p.f("\ncommands:\n%s\n", strings.Join(prop.Script.Commands, "\n"))
-		p.f("\nrollback:\n%s\n", strings.Join(prop.Script.Rollback, "\n"))
+		p.f("\n变更：\n  %s\n", strings.Join(changes, "\n  "))
+		p.f("\n命令：\n%s\n", strings.Join(prop.Script.Commands, "\n"))
+		p.f("\n回退命令：\n%s\n", strings.Join(prop.Script.Rollback, "\n"))
 	}
 	return p.err
 }

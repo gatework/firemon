@@ -38,14 +38,17 @@ func newCheckCmd(o *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check --src SRC --dst DST --service SERVICE",
 		Short: "一键查询：定位防火墙，检查 NAT 与访问控制策略，输出命中报告与变更方案",
-		Long: "check takes sources, destinations and services in any common form (see intake), locates the\n" +
-			"firewalls among the snapshots (--inventory adds HA clusters and protected networks), evaluates\n" +
-			"NAT and access control on each, and reports full match, partial match, need new, blocked or\n" +
-			"indeterminate, with the best rules to modify, and designs the verified change and commands\n" +
-			"(--no-design to skip):\n" +
+		Long: "源、目的、服务可以用常见的各种写法输入。在快照中定位经过的防火墙（--inventory 提供 HA 集群和受保护网段），\n" +
+			"逐台检查 NAT 与访问控制，给出 已放通 / 部分放通 / 需新增策略 / 需确认，列出命中的已有策略及其对象定义、\n" +
+			"可修改的候选策略，并设计经过验证的变更与命令（--no-design 只查询）：\n" +
 			"  firemon check --src 10.248.30.5 --dst 10.250.116.25 --service 9600\n" +
-			"Exit status: 0 allowed, 3 a verified change is ready, 4 needs confirmation, 2 usage.",
-		Args: usageArgs(cobra.NoArgs),
+			"退出码：0 已放通，3 有已验证的方案待执行，4 需人工确认，2 用法错误。",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return &usageError{fmt.Errorf("不接受位置参数 %q：请用 --src 源地址 --dst 目的地址 --service 服务", args)}
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if f.src == "" || f.dst == "" || f.service == "" {
 				return &usageError{errors.New("需要 --src 源地址、--dst 目的地址和 --service 服务")}
@@ -65,7 +68,7 @@ func newCheckCmd(o *options) *cobra.Command {
 	fl.StringVar(&f.name, "name", "", "新建策略名称，例如工单号")
 	fl.StringVar(&f.description, "description", "", "新建策略描述")
 	fl.BoolVar(&f.override, "override", false, "允许新策略放在具体拒绝策略之前")
-	fl.BoolVar(&f.plan, "design", true, "为每台防火墙输出变更方案与命令（默认开启）")
+	fl.BoolVar(&f.plan, "design", true, "为每台防火墙设计变更方案与命令")
 	fl.BoolVar(&f.noDesign, "no-design", false, "只查询，不设计变更方案")
 	fl.BoolVar(&f.resolve, "resolve", false, "解析域名，以便按 IP 写的策略也能判定")
 	f.nat.register(fl)

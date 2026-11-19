@@ -17,15 +17,14 @@ func newHitsCmd(o *options) *cobra.Command {
 	var show bool
 	cmd := &cobra.Command{
 		Use:   "hits",
-		Short: "Collect a device's rule hit counters (read-only), import them, or show the stored ones",
-		Long: "hits reads the rule hit counters of the device (--host, --user) with a read-only command and stores\n" +
-			"them under --store for the snapshot --name; --file imports counters exported as JSON or CSV\n" +
-			"(columns rule,hits[,last_hit,first_hit,reset]); --show prints the latest stored counters.\n" +
-			"converge uses them as evidence that a rule is unused.",
+		Short: "采集（只读）、导入或查看策略命中计数",
+		Long: "用只读命令读取设备（--host、--user）的策略命中计数，按快照名 --name 保存到 --store；\n" +
+			"--file 导入 JSON 或 CSV 格式的计数（列：rule,hits[,last_hit,first_hit,reset]）；--show 打印最近保存的计数。\n" +
+			"converge 用它作为策略未被使用的证据。",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if name == "" {
-				return &usageError{errors.New("--name is required")}
+				return &usageError{errors.New("需要 --name 指定快照名称")}
 			}
 			store, err := filestore.New(o.store)
 			if err != nil {
@@ -49,10 +48,10 @@ func newHitsCmd(o *options) *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&name, "name", "", "snapshot name the counters belong to")
-	f.StringVar(&command, "command", "", "read-only command that lists the counters (default: the vendor's)")
-	f.StringVar(&file, "file", "", "import counters from a JSON or CSV file instead of the device")
-	f.BoolVar(&show, "show", false, "print the latest stored counters")
+	f.StringVar(&name, "name", "", "计数所属的快照名称")
+	f.StringVar(&command, "command", "", "列出命中计数的只读命令（默认使用厂商命令）")
+	f.StringVar(&file, "file", "", "从 JSON 或 CSV 文件导入计数，而不是读取设备")
+	f.BoolVar(&show, "show", false, "打印最近保存的计数")
 	return cmd
 }
 
@@ -100,7 +99,7 @@ func printHits(o *options, cmd *cobra.Command, snap hits.Snapshot) error {
 		rows = append(rows, []string{c.Rule, strconv.FormatUint(c.Hits, 10), last})
 	}
 	p := &printer{w: cmd.OutOrStdout()}
-	p.f("%s: %d counters, taken %s\n", snap.Firewall, len(snap.Counters), snap.Taken.Format(time.RFC3339))
-	p.table("RULE\tHITS\tLAST HIT", rows)
+	p.f("%s：%d 条计数，采集于 %s\n", snap.Firewall, len(snap.Counters), snap.Taken.Format(time.RFC3339))
+	p.table("策略\t命中次数\t最近命中", rows)
 	return p.err
 }

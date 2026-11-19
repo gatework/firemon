@@ -22,7 +22,7 @@ func newLocateCmd(o *options) *cobra.Command {
 	var plan bool
 	cmd := &cobra.Command{
 		Use:   "locate",
-		Short: "Find the firewalls among all snapshots a flow crosses, with each verdict (and plans with --design)",
+		Short: "在全部快照中找出流量经过的防火墙及各自结论（加 --design 给出方案）",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			inv, platforms, err := o.inventory(cmd)
@@ -59,7 +59,7 @@ func newLocateCmd(o *options) *cobra.Command {
 		},
 	}
 	in.register(cmd)
-	cmd.Flags().BoolVar(&plan, "design", false, "design the change on every crossed firewall")
+	cmd.Flags().BoolVar(&plan, "design", false, "为经过的每台防火墙设计变更")
 	return cmd
 }
 
@@ -86,7 +86,7 @@ func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[strin
 	for _, fm := range fleet {
 		snap, err := store.Load(cmd.Context(), fm.snapshot)
 		if err != nil {
-			return nil, nil, fmt.Errorf("firewall %s: %w", fm.name, err)
+			return nil, nil, fmt.Errorf("库存中的防火墙 %s：%w", fm.name, snapshotError(err, fm.snapshot, o.store))
 		}
 		loaded, err := workflow.FromConfig(snap.Config)
 		if err != nil {
@@ -108,7 +108,7 @@ func (o *options) fleet(cmd *cobra.Command, store *filestore.Store) ([]fleetMemb
 	if o.inventoryFile != "" {
 		f, err := yamlfile.Load(o.inventoryFile)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, inventoryError(err, o.inventoryFile)
 		}
 		protections, err := f.Protections(cmd.Context())
 		if err != nil {
@@ -125,7 +125,7 @@ func (o *options) fleet(cmd *cobra.Command, store *filestore.Store) ([]fleetMemb
 		return nil, nil, err
 	}
 	if len(snaps) == 0 {
-		return nil, nil, errors.New("no snapshots in " + o.store + "; store some with collect")
+		return nil, nil, errors.New("快照目录 " + o.store + " 中没有快照；请先用 collect 保存，或用 --inventory 指定库存文件")
 	}
 	out := make([]fleetMember, 0, len(snaps))
 	for _, s := range snaps {
@@ -164,15 +164,15 @@ func (o *options) printTrace(cmd *cobra.Command, tr inventory.Trace, plans map[s
 		return writeJSON(cmd.OutOrStdout(), map[string]any{"verdict": tr.Verdict, "crossings": views})
 	}
 	p := &printer{w: cmd.OutOrStdout()}
-	p.f("verdict: %s\n", tr.Verdict)
+	p.f("结论：%s\n", text(verdictText, tr.Verdict, tr.Verdict.String()))
 	for _, v := range views {
 		zones := make([]string, 0, len(v.Paths))
 		for _, pv := range v.Paths {
 			zones = append(zones, pv.From+" -> "+pv.To)
 		}
-		p.f("\n%s  %s  %s\n", v.Firewall, v.Verdict, strings.Join(slices.Compact(zones), ", "))
+		p.f("\n%s：%s（%s）\n", v.Firewall, text(verdictText, v.Verdict, v.Verdict.String()), strings.Join(slices.Compact(zones), "、"))
 		if v.Plan != nil {
-			p.f("  plan: %s, verified %v\n", v.Plan.Status, v.Plan.Verified)
+			p.f("  方案：%s，已验证：%s\n", text(planStatusText, v.Plan.Status, v.Plan.Status.String()), yesNo(v.Plan.Verified))
 			for _, c := range v.Plan.Script.Commands {
 				p.f("    %s\n", c)
 			}

@@ -29,16 +29,16 @@ type deviceFlags struct {
 
 func (d *deviceFlags) register(cmd *cobra.Command) {
 	f := cmd.PersistentFlags()
-	f.StringVar(&d.host, "host", "", "device address")
-	f.StringVar(&d.user, "user", "", "login user; the password is read from "+envPassword)
-	f.IntVar(&d.port, "port", 22, "SSH port")
-	f.StringVar(&d.knownHosts, "known-hosts", "", "SSH known_hosts file (default: the user's)")
-	f.DurationVar(&d.timeout, "command-timeout", 2*time.Minute, "timeout of one device command")
+	f.StringVar(&d.host, "host", "", "设备地址")
+	f.StringVar(&d.user, "user", "", "登录用户；密码从环境变量 "+envPassword+" 读取")
+	f.IntVar(&d.port, "port", 22, "设备 SSH 端口")
+	f.StringVar(&d.knownHosts, "known-hosts", "", "SSH known_hosts 文件（默认使用当前用户的）")
+	f.DurationVar(&d.timeout, "command-timeout", 2*time.Minute, "单条设备命令的超时时间")
 }
 
 func (d *deviceFlags) client(p bootstrap.Platform, getenv func(string) string) (*netconnector.Client, error) {
 	if d.host == "" || d.user == "" {
-		return nil, &usageError{errors.New("set --config, or --host and --user to read the device")}
+		return nil, &usageError{errors.New("请用 --config 指定配置文件，或用 --host 和 --user 登录设备读取")}
 	}
 	return bootstrap.Client(p, connector.ConnectionConfig{
 		Host: d.host, Username: d.user, Password: getenv(envPassword), EnablePassword: getenv(envEnable),

@@ -12,10 +12,9 @@ import (
 func newServicesCmd(o *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "services",
-		Short: "Print the effective predefined service book of a vendor",
-		Long: "services prints the predefined services firemon assumes for --vendor: the built-in default\n" +
-			"overridden by --service-book. Built-in services differ by model and release; compare the output\n" +
-			"with the device, save the corrected JSON and pass it with --service-book.",
+		Short: "打印厂商实际生效的预定义服务表",
+		Long: "打印 firemon 对 --vendor 采用的预定义服务：内置默认值，再用 --service-book 覆盖。\n" +
+			"不同型号和版本的内置服务有差异；请与设备对照，把修正后的 JSON 保存下来并用 --service-book 指定。",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			p, err := o.platform()
@@ -34,7 +33,7 @@ func newServicesCmd(o *options) *cobra.Command {
 				rows = append(rows, []string{name, strings.Join(exprs, ",")})
 			}
 			pr := &printer{w: cmd.OutOrStdout()}
-			pr.table("SERVICE\tPORTS", rows)
+			pr.table("服务\t端口", rows)
 			return pr.err
 		},
 	}
