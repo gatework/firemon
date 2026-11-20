@@ -96,9 +96,10 @@ type DynamicNAT struct {
 	// Precedence orders the rule among all NAT entries, static mappings
 	// included, on vendors with one NAT rulebase (Semantics.NATOrder).
 	Precedence int `json:"precedence,omitempty"`
-	// Unsupported lists match criteria the model cannot evaluate, such as
-	// an ingress interface; the rule is then undecidable.
-	Unsupported []string `json:"unsupported,omitempty"`
+	// Conditions are criteria beyond addresses and services, such as an
+	// ingress interface or a translation the model does not hold; the rule
+	// is then undecidable.
+	Conditions []Condition `json:"conditions,omitempty"`
 }
 
 // StaticNAT is a one-to-one bidirectional mapping between real (internal)

@@ -77,7 +77,7 @@ func TestTranslate_DenyNeverWeakened(t *testing.T) {
 	if r1.Fidelity != migrate.FidelityApproximate {
 		t.Fatalf("rule 1: %+v", r1)
 	}
-	if r, _ := back.Rule(r1.Target[0]); r.Spec().Disabled || !slices.Equal(r.Spec().Applications, []string{"ssh"}) {
+	if r, _ := back.Rule(r1.Target[0]); r.Spec().Disabled || !slices.Equal(r.Spec().Applications(), []string{"ssh"}) {
 		t.Fatalf("rule 1 read back %+v", r.Spec())
 	}
 	// BitTorrent has no mapping and no known ports: lost, and said so.
@@ -95,7 +95,7 @@ func TestTranslate_DenyNeverWeakened(t *testing.T) {
 		t.Fatalf("rule 3: %+v", r3)
 	}
 	app, _ := back.Rule(r3.Target[1])
-	if !slices.Equal(app.Spec().Applications, []string{"icmp"}) || app.Spec().Disabled {
+	if !slices.Equal(app.Spec().Applications(), []string{"icmp"}) || app.Spec().Disabled {
 		t.Fatalf("rule 3 companion %+v", app.Spec())
 	}
 }
@@ -114,7 +114,7 @@ func TestTranslate_DenyKeptOnApplicationPorts(t *testing.T) {
 	}
 	r, _ := back.Rule(it.Target[0])
 	want, _ := traffic.ParseServiceSet("tcp/8400-8403")
-	if r.Spec().Disabled || len(r.Spec().Applications) > 0 || !r.Match().Service.Equal(want) {
+	if r.Spec().Disabled || len(r.Spec().Applications()) > 0 || !r.Match().Service.Equal(want) {
 		t.Fatalf("rule 2 read back %+v, service %s", r.Spec(), r.Match().Service)
 	}
 }

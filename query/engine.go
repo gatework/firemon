@@ -49,7 +49,7 @@ func applicationPorts(fw *firemon.Firewall, rules []*firemon.Rule) map[*firemon.
 	out := map[*firemon.Rule]traffic.ServiceSet{}
 	for _, r := range rules {
 		apps := r.Applications()
-		if len(apps) == 0 || r.ApplicationDefault() || !r.Bound().Service.IsAny() {
+		if len(apps) == 0 || r.DefaultPorts() || !r.Bound().Service.IsAny() {
 			continue
 		}
 		var ports traffic.ServiceSet

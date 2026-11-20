@@ -156,7 +156,7 @@ pbr-policy "p" vrouter "trust-vr"
 exit
 `)
 	routes := fw.Config().PolicyRoutes
-	if len(routes) != 1 || len(routes[0].Unsupported) != 1 || routes[0].Unsupported[0] != "nexthop 10.0.0.1 track t1" {
+	if len(routes) != 1 || len(routes[0].Conditions) != 1 || routes[0].Conditions[0].Raw != "nexthop 10.0.0.1 track t1" {
 		t.Fatalf("policy routes %+v", routes)
 	}
 }

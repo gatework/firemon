@@ -1455,13 +1455,19 @@
       "services": [
         "Any"
       ],
-      "applications": [
-        "HTTPS"
+      "conditions": [
+        {
+          "kind": "application",
+          "values": [
+            "HTTPS"
+          ]
+        },
+        {
+          "kind": "other",
+          "raw": "unrecognized unknown-keyword 42"
+        }
       ],
-      "action": "permit",
-      "unsupported": [
-        "unrecognized unknown-keyword 42"
-      ]
+      "action": "permit"
     }
   ],
   "rule_groups": [

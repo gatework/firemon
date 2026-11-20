@@ -25,9 +25,9 @@ type PolicyRoute struct {
 	NextHop           netip.Addr `json:"next_hop,omitzero"`
 	Interface         string     `json:"interface,omitempty"`
 	Disabled          bool       `json:"disabled,omitempty"`
-	// Unsupported lists match criteria that cannot be evaluated offline,
-	// such as user groups.
-	Unsupported []string `json:"unsupported,omitempty"`
+	// Conditions are criteria beyond addresses and services, such as user
+	// groups; they cannot be evaluated offline.
+	Conditions []Condition `json:"conditions,omitempty"`
 }
 
 // PolicyBinding attaches a policy-based routing policy to the traffic
@@ -128,7 +128,7 @@ func (fw *Firewall) compilePolicyRoutes(res *resolver) {
 		p.issues = slices.Concat(
 			issuesOf(IssueKindObject, src.problems), issuesOf(IssueKindDomain, src.domainProblems),
 			issuesOf(IssueKindObject, dst.problems), issuesOf(IssueKindDestinationDomain, dst.domainProblems),
-			issuesOf(IssueKindObject, svc.problems), unsupportedIssues(spec.Unsupported))
+			issuesOf(IssueKindObject, svc.problems), criteriaIssues(spec.Conditions))
 		if (spec.NegateSource && !src.exact()) || (spec.NegateDestination && !dst.exact()) {
 			p.issues = append(p.issues, Issue{Kind: IssueKindObject, Reason: "negated operand is not exact"})
 		}

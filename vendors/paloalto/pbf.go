@@ -40,7 +40,7 @@ func (s *state) buildPBF() {
 				r.Services = append(r.Services, anyless(values)...)
 			case "source-user", "application":
 				if vs := anyless(values); len(vs) > 0 {
-					r.Unsupported = append(r.Unsupported, key+" "+strings.Join(vs, ","))
+					r.Conditions = append(r.Conditions, firemon.Criterion(criterionKind(key), key+" "+strings.Join(vs, ","), vs...))
 				}
 			case "negate-source":
 				r.NegateSource = yes(values)
@@ -84,7 +84,7 @@ func (s *state) pbfFrom(policy string, values []string) {
 func (s *state) pbfAction(r *firemon.PolicyRoute, values []string) {
 	if len(values) < 3 || values[0] != "forward" {
 		if len(values) > 0 && values[0] != "forward" {
-			r.Unsupported = append(r.Unsupported, "action "+strings.Join(values, " "))
+			r.Conditions = append(r.Conditions, firemon.Criterion(firemon.ConditionOther, "action "+strings.Join(values, " ")))
 		}
 		return
 	}

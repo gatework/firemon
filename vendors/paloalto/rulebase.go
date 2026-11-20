@@ -76,13 +76,13 @@ func (s *state) securityAttribute(r *firemon.SecurityRule, attr []string) {
 	case "service":
 		for _, v := range anyless(values) {
 			if v == "application-default" {
-				r.ApplicationDefault = true
+				r.DefaultPorts = true
 				continue
 			}
 			r.Services = append(r.Services, v)
 		}
 	case "application":
-		r.Applications = append(r.Applications, anyless(values)...)
+		r.Conditions = firemon.AddApplications(r.Conditions, anyless(values)...)
 	case "action":
 		r.Action = securityAction(strings.Join(values, " "))
 	case "disabled":
@@ -107,13 +107,42 @@ func (s *state) securityAttribute(r *firemon.SecurityRule, attr []string) {
 	case "log-end":
 		r.Log.End = yes(values)
 	case "log-setting":
-		r.Log.Setting = strings.Join(values, " ")
+		r.Log.Forward = strings.Join(values, " ")
+	case "profile-setting":
+		r.Inspection = append(r.Inspection, inspection(values)...)
 	case "group-tag":
 		r.Group = strings.Join(values, " ")
 	case "source-user", "category", "source-hip", "destination-hip", "source-imei", "source-imsi", "source-nw-slice":
 		if vs := anyless(values); len(vs) > 0 {
-			r.Unsupported = append(r.Unsupported, key+" "+strings.Join(vs, ","))
+			r.Conditions = append(r.Conditions, firemon.Criterion(criterionKind(key), key+" "+strings.Join(vs, ","), vs...))
 		}
+	}
+}
+
+// criterionKind maps a PAN-OS rule attribute to the condition it is.
+func criterionKind(key string) firemon.ConditionKind {
+	switch key {
+	case "source-user":
+		return firemon.ConditionUser
+	case "category":
+		return firemon.ConditionURLCategory
+	case "application":
+		return firemon.ConditionApplication
+	default:
+		return firemon.ConditionOther
+	}
+}
+
+// inspection reads "profile-setting group G" and "profile-setting profiles
+// TYPE NAME" as inspection entries; an empty group is none.
+func inspection(values []string) []string {
+	switch {
+	case len(values) >= 2 && values[0] == "group":
+		return []string{"group " + strings.Join(values[1:], " ")}
+	case len(values) >= 3 && values[0] == "profiles":
+		return []string{values[1] + " " + strings.Join(values[2:], " ")}
+	default:
+		return nil
 	}
 }
 
@@ -151,14 +180,14 @@ func (s *state) buildNATRules() {
 				n.Description = strings.Join(values, " ")
 			case "nat-type":
 				if t := strings.Join(values, " "); t != "ipv4" {
-					n.Unsupported = append(n.Unsupported, "nat-type "+t)
+					n.Conditions = append(n.Conditions, firemon.Criterion(firemon.ConditionOther, "nat-type "+t))
 				}
 			case "source-translation":
 				// fallback addresses apply when the pool runs out and a
 				// floating IP follows HA state: neither is in the model.
 				for _, v := range values {
 					if v == "fallback" || v == "floating-ip" {
-						n.Unsupported = append(n.Unsupported, "source-translation "+strings.Join(values, " "))
+						n.Conditions = append(n.Conditions, firemon.Criterion(firemon.ConditionOther, "source-translation "+strings.Join(values, " ")))
 						break
 					}
 				}
@@ -280,7 +309,7 @@ func (s *state) addressAttribute(r *firemon.SecurityRule, key string, values []s
 func (s *state) externalOperands(r *firemon.SecurityRule, values []string) {
 	for _, v := range anyless(values) {
 		if kind := s.externalKind(v); kind != "" {
-			r.Unsupported = append(r.Unsupported, kind+" "+v)
+			r.Conditions = append(r.Conditions, firemon.Criterion(firemon.ConditionOther, kind+" "+v, v))
 		}
 	}
 }

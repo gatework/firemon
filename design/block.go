@@ -52,7 +52,7 @@ func (p *Planner) PlanBlock(intent Intent) (*BlockPlan, error) {
 		r.Description = r.Name + "-By-Firemon"
 	}
 	if !intent.NoLog {
-		r.Log = firemon.Logging{End: true, Deny: p.caps.LogDeny, Setting: intent.LogSetting}
+		r.Log = firemon.Logging{End: true, Deny: p.caps.LogDeny, Forward: intent.LogSetting}
 	}
 	for _, n := range cat.groupAddresses(cat.addressNames(space.Src), space.Src, p.naming.Group(r.Name, FieldSource)) {
 		r.Source = append(r.Source, firemon.NamedAddress(n))

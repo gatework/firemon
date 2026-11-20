@@ -417,8 +417,8 @@ func logText(l firemon.Logging) string {
 		return "未开启日志"
 	}
 	out := "日志 " + strings.Join(parts, "+")
-	if l.Setting != "" {
-		out += "（转发配置 " + l.Setting + "）"
+	if l.Forward != "" {
+		out += "（转发配置 " + l.Forward + "）"
 	}
 	return out
 }

@@ -31,8 +31,6 @@ type Capabilities struct {
 	InlineServices bool
 	// InlineFQDN: rules carry inline domain names.
 	InlineFQDN bool
-	// NumericRuleIDs: rules are identified by device numbers, not names.
-	NumericRuleIDs bool
 	// MaxNameLength bounds object and rule names; zero means no limit.
 	MaxNameLength int
 }

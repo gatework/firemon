@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/vendors/paloalto"
 )
 
@@ -192,7 +193,7 @@ func TestRules_ExternalListsAndRegionsSayWhatTheyMatch(t *testing.T) {
 	}
 	cfg, fw := compileSet(t, text.String())
 	for i, want := range []string{"external-list bad-ips", "region CN"} {
-		if got := cfg.Rules[i].Unsupported; !slices.Equal(got, []string{want}) {
+		if got := firemon.Criteria(cfg.Rules[i].Conditions); !slices.Equal(got, []string{want}) {
 			t.Errorf("rule %s unsupported %v, want %s", cfg.Rules[i].ID, got, want)
 		}
 	}
@@ -210,5 +211,34 @@ func TestParse_VersionFromSystemInfo(t *testing.T) {
 	cfg, _ := compileSet(t, "hostname: pa1\nsw-version: 10.2.4\nmodel: PA-3220\nset deviceconfig system hostname pa1\n")
 	if cfg.Version != "10.2.4" || len(cfg.Diagnostics) != 0 {
 		t.Fatalf("version %q diagnostics %+v", cfg.Version, cfg.Diagnostics)
+	}
+}
+
+// TestRule_InspectionRoundTrip: a profile group and single profiles are
+// read as inspection and written back.
+func TestRule_InspectionRoundTrip(t *testing.T) {
+	t.Parallel()
+	var text strings.Builder
+	for _, attr := range []string{"from any", "to any", "source any", "destination any", "service any", "application any", "action allow",
+		"profile-setting group Protect", "category adult", "source-user alice"} {
+		text.WriteString("set rulebase security rules r1 " + attr + "\n")
+	}
+	text.WriteString("set rulebase security rules r2 profile-setting profiles vulnerability strict\n")
+	cfg, _ := compileSet(t, text.String())
+	if !slices.Equal(cfg.Rules[0].Inspection, []string{"group Protect"}) || !slices.Equal(cfg.Rules[1].Inspection, []string{"vulnerability strict"}) {
+		t.Fatalf("inspection %v %v", cfg.Rules[0].Inspection, cfg.Rules[1].Inspection)
+	}
+	if got := firemon.ConditionValues(cfg.Rules[0].Conditions, firemon.ConditionURLCategory); !slices.Equal(got, []string{"adult"}) {
+		t.Fatalf("url category %v", got)
+	}
+	if got := firemon.ConditionValues(cfg.Rules[0].Conditions, firemon.ConditionUser); !slices.Equal(got, []string{"alice"}) {
+		t.Fatalf("user %v", got)
+	}
+	script, err := paloalto.Renderer{}.Render(&design.Plan{Changes: []design.Change{design.AddRule{Rule: cfg.Rules[0]}}, Verified: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(script.Commands, "set rulebase security rules r1 profile-setting group Protect") {
+		t.Fatalf("commands %q", script.Commands)
 	}
 }

@@ -134,7 +134,7 @@ func renderRule(c design.AddRule) ([]string, error) {
 	p := "set rulebase security rules " + name(r.ID) + " "
 	action := map[firemon.Action]string{firemon.ActionPermit: "allow", firemon.ActionDeny: "deny"}[r.Action]
 	services := r.Services
-	if r.ApplicationDefault {
+	if r.DefaultPorts {
 		services = append(slices.Clone(services), "application-default")
 	}
 	out := []string{
@@ -142,7 +142,7 @@ func renderRule(c design.AddRule) ([]string, error) {
 		p + "to " + list(orAny(r.To)),
 		p + "source " + list(orAny(src)),
 		p + "destination " + list(orAny(dst)),
-		p + "application " + list(orAny(r.Applications)),
+		p + "application " + list(orAny(r.Applications())),
 		p + "service " + list(orAny(services)),
 	}
 	if action != "" {
@@ -153,6 +153,26 @@ func renderRule(c design.AddRule) ([]string, error) {
 		out = append(out, "move rulebase security rules "+name(r.ID)+" before "+name(c.Before))
 	}
 	return out, nil
+}
+
+// profileTypes are the security profile types of a rule's profile setting.
+var profileTypes = []string{"virus", "spyware", "vulnerability", "url-filtering", "file-blocking", "wildfire-analysis", "data-filtering"}
+
+// inspectionLines writes a rule's inspection in PAN-OS terms; entries of
+// another vendor's terms have no PAN-OS form and are left out (migration
+// reports them).
+func inspectionLines(p string, inspection []string) []string {
+	var out []string
+	for _, in := range inspection {
+		kind, value, _ := strings.Cut(in, " ")
+		switch {
+		case kind == "group":
+			out = append(out, p+"profile-setting group "+name(value))
+		case slices.Contains(profileTypes, kind):
+			out = append(out, p+"profile-setting profiles "+kind+" "+name(value))
+		}
+	}
+	return out
 }
 
 // ruleOptions writes the attributes that do not match addresses.
@@ -189,9 +209,10 @@ func ruleOptions(p string, r firemon.SecurityRule) []string {
 	} else {
 		out = append(out, p+"log-end no")
 	}
-	if r.Log.Setting != "" {
-		out = append(out, p+"log-setting "+name(r.Log.Setting))
+	if r.Log.Forward != "" {
+		out = append(out, p+"log-setting "+name(r.Log.Forward))
 	}
+	out = append(out, inspectionLines(p, r.Inspection)...)
 	if r.Disabled {
 		out = append(out, p+"disabled yes")
 	}

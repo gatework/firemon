@@ -51,7 +51,7 @@ func Skeleton(src *firemon.Config, t Target) (Mapping, error) {
 				}
 			}
 		}
-		for _, a := range r.Applications {
+		for _, a := range r.Applications() {
 			m.Applications[a] = a
 		}
 	}

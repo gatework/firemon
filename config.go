@@ -16,7 +16,7 @@ type Diagnostic struct {
 // ModelVersion numbers the shape of Config and what its fingerprint
 // covers. It changes whenever either does: a configuration stored by an
 // older version is parsed again from its text rather than trusted.
-const ModelVersion = 3
+const ModelVersion = 4
 
 // Config is the declarative configuration of one firewall as produced by a
 // vendor parser. Order is significant for Rules, DynamicNATs and
@@ -105,12 +105,12 @@ func (c *Config) Clone() *Config {
 		n.Services = slices.Clone(n.Services)
 		n.TranslatedSource.Addresses = slices.Clone(n.TranslatedSource.Addresses)
 		n.TranslatedDestination.Addresses = slices.Clone(n.TranslatedDestination.Addresses)
-		n.Unsupported = slices.Clone(n.Unsupported)
+		n.Conditions = cloneConditions(n.Conditions)
 		return n
 	})
 	out.PolicyRoutes = cloneEach(c.PolicyRoutes, func(p PolicyRoute) PolicyRoute {
 		p.Source, p.Destination = slices.Clone(p.Source), slices.Clone(p.Destination)
-		p.Services, p.Unsupported = slices.Clone(p.Services), slices.Clone(p.Unsupported)
+		p.Services, p.Conditions = slices.Clone(p.Services), cloneConditions(p.Conditions)
 		return p
 	})
 	out.PolicyBindings = slices.Clone(c.PolicyBindings)
@@ -123,10 +123,18 @@ func (c *Config) Clone() *Config {
 func cloneRule(r SecurityRule) SecurityRule {
 	r.From, r.To = slices.Clone(r.From), slices.Clone(r.To)
 	r.Source, r.Destination = slices.Clone(r.Source), slices.Clone(r.Destination)
-	r.Services, r.Applications = slices.Clone(r.Services), slices.Clone(r.Applications)
+	r.Services = slices.Clone(r.Services)
 	r.ServiceEntries = slices.Clone(r.ServiceEntries)
-	r.Unsupported = slices.Clone(r.Unsupported)
+	r.Conditions = cloneConditions(r.Conditions)
+	r.Inspection = slices.Clone(r.Inspection)
 	return r
+}
+
+func cloneConditions(conds []Condition) []Condition {
+	return cloneEach(conds, func(c Condition) Condition {
+		c.Values = slices.Clone(c.Values)
+		return c
+	})
 }
 
 func cloneEach[T any](in []T, clone func(T) T) []T {

@@ -423,10 +423,15 @@
           "name": "lan"
         }
       ],
-      "application_default": true,
-      "applications": [
-        "ssl",
-        "web-browsing"
+      "default_ports": true,
+      "conditions": [
+        {
+          "kind": "application",
+          "values": [
+            "ssl",
+            "web-browsing"
+          ]
+        }
       ],
       "action": "permit",
       "logging": {

@@ -30,10 +30,12 @@ type RuleDetail struct {
 	Applications []string       `json:"applications,omitempty"`
 	Schedule     *Object        `json:"schedule,omitempty"`
 	// Window is the rule's own validity period, when it has one.
-	Window      string          `json:"window,omitempty"`
-	Disabled    bool            `json:"disabled,omitempty"`
-	Log         firemon.Logging `json:"logging,omitzero"`
-	Description string          `json:"description,omitempty"`
+	Window   string          `json:"window,omitempty"`
+	Disabled bool            `json:"disabled,omitempty"`
+	Log      firemon.Logging `json:"logging,omitzero"`
+	// Inspection is the security inspection the rule applies.
+	Inspection  []string `json:"inspection,omitempty"`
+	Description string   `json:"description,omitempty"`
 }
 
 // Object is a named object or an inline value. Values are its own
@@ -67,7 +69,7 @@ func details(fw *firemon.Firewall, ids []string, decided map[string]traffic.Spac
 		d := RuleDetail{
 			Rule: s.ID, Name: s.Name, Position: r.Position() + 1, Action: s.Action,
 			From: s.From, To: s.To, NegateSource: s.NegateSource, NegateDest: s.NegateDestination,
-			Applications: s.Applications, Disabled: s.Disabled, Description: s.Description, Log: s.Log,
+			Applications: s.Applications(), Inspection: s.Inspection, Disabled: s.Disabled, Description: s.Description, Log: s.Log,
 		}
 		hit := decided[s.ID]
 		for _, a := range s.Source {

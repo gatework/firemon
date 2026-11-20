@@ -145,7 +145,7 @@ func TestEngine_Query(t *testing.T) {
 		{
 			name: "undecidable rule that cannot overlap is ignored",
 			cfg: lab(firemon.AddressStageOriginal,
-				firemon.SecurityRule{ID: "1", Action: firemon.ActionDeny, Source: []firemon.AddressRef{inline("192.0.2.0/24")}, Applications: []string{"ssh"}},
+				firemon.SecurityRule{ID: "1", Action: firemon.ActionDeny, Source: []firemon.AddressRef{inline("192.0.2.0/24")}, Conditions: []firemon.Condition{firemon.ApplicationCondition("ssh")}},
 				permit("2", "", "", "", "", "https")),
 			src: "10.0.0.9", dst: "172.16.0.10", service: "tcp/443", want: query.VerdictAllowed, paths: 1,
 		},

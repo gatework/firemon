@@ -443,7 +443,7 @@ func extendable(r *firemon.Rule, from, to string) bool {
 	s := r.Spec()
 	return r.Action() == firemon.ActionPermit && r.Decidable() && !r.Scheduled() && !r.Ignored() &&
 		slices.Equal(s.From, []string{from}) && slices.Equal(s.To, []string{to}) &&
-		!s.NegateSource && !s.NegateDestination && len(s.ServiceEntries) == 0 && len(s.Applications) == 0
+		!s.NegateSource && !s.NegateDestination && len(s.ServiceEntries) == 0 && len(s.Applications()) == 0
 }
 
 func (p *Planner) newRule(n need, s traffic.Space, intent Intent, cat *catalog) AddRule {
@@ -462,7 +462,7 @@ func (p *Planner) newRule(n need, s traffic.Space, intent Intent, cat *catalog) 
 		r.Description = r.Name + "-By-Firemon"
 	}
 	if !intent.NoLog {
-		r.Log = firemon.Logging{Start: true, End: true, Setting: intent.LogSetting}
+		r.Log = firemon.Logging{Start: true, End: true, Forward: intent.LogSetting}
 	}
 	for _, name := range cat.groupAddresses(cat.addressNames(s.Src), s.Src, p.naming.Group(r.Name, FieldSource)) {
 		r.Source = append(r.Source, firemon.NamedAddress(name))

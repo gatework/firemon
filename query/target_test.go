@@ -42,7 +42,7 @@ func TestDomainTarget_AddressRulesNeedResolution(t *testing.T) {
 func TestApplicationTarget(t *testing.T) {
 	t.Parallel()
 	cfg := lab(firemon.AddressStageOriginal,
-		firemon.SecurityRule{ID: "ssh", Action: firemon.ActionPermit, Applications: []string{"SSH"}, ApplicationDefault: true})
+		firemon.SecurityRule{ID: "ssh", Action: firemon.ActionPermit, Conditions: []firemon.Condition{firemon.ApplicationCondition("SSH")}, DefaultPorts: true})
 	cfg.Applications = firemon.ServiceBook{"ssh": {firemon.PortEntry(6, portOf(22))}}
 	tests := []struct {
 		name string
@@ -86,9 +86,9 @@ func TestApplicationRule_StandardPorts(t *testing.T) {
 		{"an unknown application may still change the outcome", []string{"unknown-app", "no-ssh"}, "tcp/12345", query.VerdictIndeterminate, true},
 	}
 	all := lab(firemon.AddressStageOriginal,
-		firemon.SecurityRule{ID: "no-ssh", Action: firemon.ActionDeny, Applications: []string{"SSH"}},
-		firemon.SecurityRule{ID: "web-8080", Action: firemon.ActionDeny, Applications: []string{"HTTP"}, Services: []string{"tcp-8080"}},
-		firemon.SecurityRule{ID: "unknown-app", Action: firemon.ActionPermit, Applications: []string{"Acme"}},
+		firemon.SecurityRule{ID: "no-ssh", Action: firemon.ActionDeny, Conditions: []firemon.Condition{firemon.ApplicationCondition("SSH")}},
+		firemon.SecurityRule{ID: "web-8080", Action: firemon.ActionDeny, Conditions: []firemon.Condition{firemon.ApplicationCondition("HTTP")}, Services: []string{"tcp-8080"}},
+		firemon.SecurityRule{ID: "unknown-app", Action: firemon.ActionPermit, Conditions: []firemon.Condition{firemon.ApplicationCondition("Acme")}},
 		permit("rest", "", "", "", ""))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

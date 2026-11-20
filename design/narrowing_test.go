@@ -13,9 +13,9 @@ import (
 func TestPlan_NarrowingDenyAheadIsAWarning(t *testing.T) {
 	t.Parallel()
 	appDeny := rule("9", firemon.ActionDeny, "trust", "dmz", nil, nil)
-	appDeny.Applications = []string{"bittorrent"}
+	appDeny.Conditions = []firemon.Condition{firemon.ApplicationCondition("bittorrent")}
 	appPermit := rule("8", firemon.ActionPermit, "trust", "dmz", nil, nil)
-	appPermit.Applications = []string{"ssh"}
+	appPermit.Conditions = []firemon.Condition{firemon.ApplicationCondition("ssh")}
 	p := plan(t, lab(appPermit, appDeny), intent(t, "10.0.1.5", "172.16.0.10", "tcp/7777"))
 	if p.Status != design.StatusChange || !p.Verified || len(p.Unknown) != 0 {
 		t.Fatalf("plan %s verified %v unknown %v: %s", p.Status, p.Verified, p.Unknown, p.VerifyError)
