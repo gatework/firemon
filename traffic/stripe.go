@@ -3,7 +3,7 @@ package traffic
 import (
 	"slices"
 
-	"github.com/gatework/set"
+	"github.com/gatework/netops/set"
 )
 
 // lattice is the set algebra a stripe value supports. The zero value of V
