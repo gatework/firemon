@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gatework/set"
+	"github.com/gatework/netops/set"
 )
 
 // PortRange is an inclusive range of 16-bit numbers: TCP, UDP and SCTP ports,
@@ -80,7 +80,7 @@ func (p PortSet) Subtract(o PortSet) PortSet {
 	if p.IsEmpty() || o.IsEmpty() {
 		return p
 	}
-	return normalized(p.s.Intersection(complement(o.s)))
+	return normalized(p.s.Difference(o.s))
 }
 
 // IsEmpty reports whether p holds no port.
@@ -135,20 +135,4 @@ func normalized(s *set.Set[uint16]) PortSet {
 		return PortSet{}
 	}
 	return PortSet{s: s}
-}
-
-// complement returns every uint16 not in s.
-func complement(s *set.Set[uint16]) *set.Set[uint16] {
-	out := set.New[uint16]()
-	next := uint32(0)
-	for r := range s.All() {
-		if uint32(r.Min) > next {
-			out.Add(uint16(next), r.Min-1)
-		}
-		next = uint32(r.Max) + 1
-	}
-	if next <= math.MaxUint16 {
-		out.Add(uint16(next), math.MaxUint16)
-	}
-	return out
 }

@@ -27,7 +27,7 @@ type fleetMember struct {
 // inventory loads the fleet: the firewalls of --inventory with their
 // clusters and protected networks, or every stored snapshot.
 func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[string]bootstrap.Platform, error) {
-	store, err := filestore.New(o.store)
+	store, err := bootstrap.OpenSnapshots(o.store)
 	if err != nil {
 		return nil, nil, err
 	}

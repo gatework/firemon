@@ -3,7 +3,7 @@ package paloalto
 import (
 	"strings"
 
-	"github.com/gatework/parser"
+	"github.com/gatework/netops/parse"
 )
 
 // statement is one "set" command: its words and its first and last line.
@@ -32,7 +32,7 @@ func (w word) values() []string {
 // statements extracts the set commands of content. A quoted value may
 // continue over following lines (certificates and descriptions); those
 // lines belong to the statement. Other lines are returned as strays.
-func statements(content *parser.Content) (out []statement, strays []parser.Line) {
+func statements(content *parse.Content) (out []statement, strays []parse.Line) {
 	lines := content.Lines()
 	for i := 0; i < len(lines); i++ {
 		text := lines[i].Text

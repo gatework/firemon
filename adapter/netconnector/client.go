@@ -4,70 +4,124 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
+	"time"
 
-	"github.com/gatework/go-netops/apply"
 	"github.com/gatework/net-connector/connector"
-	nchillstone "github.com/gatework/net-connector/vendors/hillstone"
-	ncpaloalto "github.com/gatework/net-connector/vendors/paloalto"
+	"github.com/gatework/net-connector/driver"
+	"github.com/gatework/net-connector/transport"
+	"github.com/gatework/net-connector/transport/ssh"
+	"github.com/gatework/net-connector/vendors"
+	"github.com/gatework/netops/apply"
+	"github.com/gatework/netops/change"
+	"github.com/gatework/netops/credential"
+	"github.com/gatework/netops/device"
+	"github.com/gatework/netops/failure"
+	"github.com/gatework/netops/secret"
 
 	"github.com/gatework/firemon"
 )
 
-// ErrUnsupportedVendor reports a vendor without a connector platform.
+// ErrUnsupportedVendor reports a vendor without a net-connector platform.
 var ErrUnsupportedVendor = errors.New("netconnector: unsupported vendor")
+
+// CommitCommand ends a PAN-OS deployment: the set commands before it are
+// collected and committed as one candidate batch.
+const CommitCommand = "commit"
 
 // ParseFunc converts running-configuration text.
 type ParseFunc func(text string) (*firemon.Config, error)
 
 // Client talks to one device.
 type Client struct {
+	d      *connector.Dialer
+	dev    device.Device
 	vendor firemon.Vendor
-	conn   connector.ConnectionConfig
 	parse  ParseFunc
 }
 
-// New returns a client for one device. parse converts the running
-// configuration of vendor.
-func New(vendor firemon.Vendor, conn connector.ConnectionConfig, parse ParseFunc) (*Client, error) {
-	if _, err := driverFor(vendor); err != nil {
+// SSHConfig contains the SSH settings accepted by the operator interface.
+type SSHConfig struct {
+	Host, Username, Password, EnablePassword string
+	Port                                     int
+	KnownHosts                               string
+	CommandTimeout                           time.Duration
+}
+
+// NewSSH returns a client using SSH and the supplied device credentials.
+// Host keys are checked strictly against KnownHosts (default
+// ~/.ssh/known_hosts).
+func NewSSH(vendor firemon.Vendor, s SSHConfig, parse ParseFunc) (*Client, error) {
+	sd, err := ssh.New(ssh.Options{KnownHosts: s.KnownHosts})
+	if err != nil {
+		return nil, fmt.Errorf("netconnector: %w", err)
+	}
+	creds := credential.Static{Username: s.Username, Password: secret.New(s.Password), EnablePassword: secret.New(s.EnablePassword)}
+	return New(vendor, s.Host, sd, creds, s.Port, s.CommandTimeout, parse)
+}
+
+// New returns a client for the device at host, reached through t. parse
+// converts the running configuration of vendor.
+func New(vendor firemon.Vendor, host string, t transport.Dialer, creds credential.Provider, port int, timeout time.Duration, parse ParseFunc) (*Client, error) {
+	platform, err := platformOf(vendor)
+	if err != nil {
 		return nil, err
 	}
-	return &Client{vendor: vendor, conn: conn, parse: parse}, nil
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return nil, fmt.Errorf("netconnector: device address %q: %w", host, err)
+	}
+	d, err := connector.NewDialer(connector.Options{Registry: vendors.Builtin(), Credentials: creds, Transport: t, Port: port, Timeout: timeout})
+	if err != nil {
+		return nil, fmt.Errorf("netconnector: %w", err)
+	}
+	dev := device.Device{ID: addr.String(), Mgmt: addr, Platform: platform}.Normalize()
+	return &Client{d: d, dev: dev, vendor: vendor, parse: parse}, nil
 }
+
+func platformOf(v firemon.Vendor) (string, error) {
+	switch v {
+	case firemon.VendorHillstone:
+		return "hillstone", nil
+	case firemon.VendorPaloAlto:
+		return "palo_alto", nil
+	case firemon.VendorUnset:
+		return "", ErrUnsupportedVendor
+	default:
+		return "", ErrUnsupportedVendor
+	}
+}
+
+// Device returns the identity of the target.
+func (c *Client) Device() device.Device { return c.dev.Clone() }
 
 // Show runs one read-only command and returns its output. It is meant for
 // display commands such as rule hit counters; it never enters
 // configuration mode.
 func (c *Client) Show(ctx context.Context, command string) (string, error) {
 	var out string
-	err := c.with(ctx, func(ctx context.Context, op *connector.Operation) error {
-		res, err := op.ExecuteCommand(ctx, connector.Command{Text: command, Source: "firemon"}, connector.ExecuteOptions{})
-		if err != nil {
-			return err
-		}
-		out, err = res.JoinedOutput()
+	err := c.with(ctx, func(ctx context.Context, s *connector.Session) error {
+		var err error
+		out, err = s.Show(ctx, command)
 		return err
 	})
 	return out, err
 }
 
-// RunningConfig returns the device's running configuration text.
+// RunningConfig returns the device's running configuration text. On PAN-OS
+// the software version from "show system info" is put at its head.
 func (c *Client) RunningConfig(ctx context.Context) (string, error) {
 	var text string
-	err := c.with(ctx, func(ctx context.Context, op *connector.Operation) error {
+	err := c.with(ctx, func(ctx context.Context, s *connector.Session) error {
 		var err error
-		if text, err = runningConfig(ctx, op); err != nil {
+		if text, err = s.Config(ctx); err != nil {
 			return err
 		}
 		if c.vendor == firemon.VendorPaloAlto {
-			// Set output carries no software version; "show system info"
-			// does. Best effort: without it the version is unknown.
-			res, err := op.ExecuteCommand(ctx, connector.Command{Text: "show system info", Source: "firemon"}, connector.ExecuteOptions{})
-			if err == nil {
-				if info, err := res.JoinedOutput(); err == nil {
-					text = WithVersion(text, info)
-				}
+			// Best effort: without it the version is unknown.
+			if info, err := s.Show(ctx, "show system info"); err == nil {
+				text = WithVersion(text, info)
 			}
 		}
 		return nil
@@ -87,16 +141,12 @@ func WithVersion(text, info string) string {
 	return text
 }
 
-// Open implements deploy.Opener: it lends one session for the whole run.
-func (c *Client) Open(ctx context.Context, run func(context.Context, apply.Session[*firemon.Config]) error) (opErr, cleanupErr error) {
-	dev, err := c.device()
-	if err != nil {
-		return err, nil
-	}
-	opErr = dev.WithOperation(ctx, func(ctx context.Context, op *connector.Operation) error {
-		return run(ctx, &session{op: op, vendor: c.vendor, parse: c.parse})
+// Open lends one session for a deployment and reports the operation and
+// close errors separately, as apply.Settle needs.
+func (c *Client) Open(ctx context.Context, run func(context.Context, apply.Session[*firemon.Config]) error) (opErr, closeErr error) {
+	return c.d.Open(ctx, c.dev, func(ctx context.Context, s *connector.Session) error {
+		return run(ctx, &session{s: s, vendor: c.vendor, parse: c.parse})
 	})
-	return opErr, dev.Close()
 }
 
 // Save persists the running configuration where the platform separates
@@ -105,89 +155,47 @@ func (c *Client) Save(ctx context.Context) error {
 	if c.vendor == firemon.VendorPaloAlto {
 		return nil
 	}
-	return c.with(ctx, func(ctx context.Context, op *connector.Operation) error {
-		_, err := op.SaveConfig(ctx, connector.ExecuteOptions{})
-		return err
-	})
+	return c.with(ctx, func(ctx context.Context, s *connector.Session) error { return s.Save(ctx) })
 }
 
-// Device returns the journal identity of the target.
-func (c *Client) Device() apply.Device {
-	return apply.Device{Host: c.conn.Host, Platform: c.vendor.String()}
+func (c *Client) with(ctx context.Context, run func(context.Context, *connector.Session) error) error {
+	opErr, closeErr := c.d.Open(ctx, c.dev, run)
+	return errors.Join(opErr, closeErr)
 }
 
-func (c *Client) with(ctx context.Context, run func(context.Context, *connector.Operation) error) error {
-	dev, err := c.device()
-	if err != nil {
-		return err
-	}
-	return errors.Join(dev.WithOperation(ctx, run), dev.Close())
-}
-
-func (c *Client) device() (*connector.Device, error) {
-	d, err := driverFor(c.vendor)
-	if err != nil {
-		return nil, err
-	}
-	dev, err := connector.New(d, c.conn)
-	if err != nil {
-		return nil, fmt.Errorf("netconnector: %w", err)
-	}
-	return dev, nil
-}
-
-func driverFor(v firemon.Vendor) (connector.Driver, error) {
-	switch v {
-	case firemon.VendorHillstone:
-		return nchillstone.New(), nil
-	case firemon.VendorPaloAlto:
-		return ncpaloalto.New(), nil
-	case firemon.VendorUnset:
-		return nil, ErrUnsupportedVendor
-	default:
-		return nil, ErrUnsupportedVendor
-	}
-}
-
-func runningConfig(ctx context.Context, op *connector.Operation) (string, error) {
-	res, err := op.RunningConfig(ctx)
-	if err != nil {
-		return "", err
-	}
-	text, ok := res.Config()
-	if !ok {
-		return "", errors.New("netconnector: device returned no configuration")
-	}
-	return text, nil
-}
-
-// session adapts one connector operation to apply.Session.
+// session adapts one connector session to apply.Session.
 type session struct {
-	op     *connector.Operation
-	vendor firemon.Vendor
-	parse  ParseFunc
+	s       *connector.Session
+	vendor  firemon.Vendor
+	parse   ParseFunc
+	pending []string // PAN-OS set commands awaiting the commit
 }
 
-// ReadConfiguration reads and parses the running configuration.
-func (s *session) ReadConfiguration(ctx context.Context) (*firemon.Config, error) {
-	text, err := runningConfig(ctx, s.op)
+// Read reads and parses the running configuration.
+func (s *session) Read(ctx context.Context) (*firemon.Config, error) {
+	text, err := s.s.Config(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return s.parse(text)
 }
 
-// Write sends one deployment write: a single CLI line on Hillstone, a
-// whole candidate batch committed at once on PAN-OS.
-func (s *session) Write(ctx context.Context, command string) error {
-	if s.vendor == firemon.VendorPaloAlto {
-		body, err := connector.ParseScript(command, "firemon")
-		if err != nil {
-			return err
-		}
-		_, err = s.op.Commit(ctx, body, connector.CommitOptions{})
-		return err
+// Write sends one deployment write. Hillstone lines go to the device one at
+// a time. PAN-OS set commands are collected and sent with CommitCommand as
+// one candidate batch whose commit the device must confirm.
+func (s *session) Write(ctx context.Context, cmd change.Command) error {
+	if s.vendor != firemon.VendorPaloAlto {
+		return s.s.Write(ctx, cmd)
 	}
-	_, err := s.op.ExecuteCommand(ctx, connector.Command{Text: command, Source: "firemon"}, connector.ExecuteOptions{})
+	if cmd.Text != CommitCommand {
+		s.pending = append(s.pending, cmd.Text)
+		return nil
+	}
+	if len(s.pending) == 0 {
+		return failure.New(failure.CodeInvalid, "netconnector: empty commit")
+	}
+	body := s.pending
+	s.pending = nil
+	_, err := s.s.Commit(ctx, body, driver.CommitOptions{})
 	return err
 }

@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gatework/net-connector/storage"
-
 	"github.com/gatework/firemon"
 )
 
@@ -49,18 +47,29 @@ type Snapshot struct {
 	Raw    string          `json:"-"`
 }
 
+// Files supplies private directories, bounded reads and durable atomic writes.
+type Files interface {
+	PrepareDirectory(path string) error
+	Read(ctx context.Context, path string, limit int64) ([]byte, error)
+	Write(ctx context.Context, path string, body []byte) error
+}
+
 // Store is a snapshot directory. It is safe for concurrent readers; writers
 // of the same device must be serialized by the caller.
 type Store struct {
-	root string
+	root  string
+	files Files
 }
 
 // New opens root, creating it with private permissions when missing.
-func New(root string) (*Store, error) {
-	if err := storage.PrepareDirectory(root); err != nil {
+func New(root string, files Files) (*Store, error) {
+	if files == nil {
+		return nil, errors.New("filestore: file operations required")
+	}
+	if err := files.PrepareDirectory(root); err != nil {
 		return nil, fmt.Errorf("filestore: %w", err)
 	}
-	return &Store{root: root}, nil
+	return &Store{root: root, files: files}, nil
 }
 
 // Save stores snap as the device's latest snapshot. The fingerprint is
@@ -78,7 +87,7 @@ func (s *Store) Save(ctx context.Context, snap Snapshot) (Snapshot, error) {
 	}
 	snap.Fingerprint, snap.Vendor, snap.Model = fw.Fingerprint(), snap.Config.Vendor, firemon.ModelVersion
 	dir := filepath.Join(s.root, snap.Device)
-	if err := storage.PrepareDirectory(dir); err != nil {
+	if err := s.files.PrepareDirectory(dir); err != nil {
 		return Snapshot{}, fmt.Errorf("filestore: %w", err)
 	}
 	config, err := json.Marshal(snap.Config)
@@ -93,7 +102,7 @@ func (s *Store) Save(ctx context.Context, snap Snapshot) (Snapshot, error) {
 		name string
 		body []byte
 	}{{rawFile, []byte(snap.Raw)}, {configFile, config}, {metaFile, meta}} {
-		if _, err := storage.Write(ctx, filepath.Join(dir, f.name), f.body); err != nil {
+		if err := s.files.Write(ctx, filepath.Join(dir, f.name), f.body); err != nil {
 			return Snapshot{}, fmt.Errorf("filestore: write %s: %w", f.name, err)
 		}
 	}
@@ -110,7 +119,7 @@ func (s *Store) Load(ctx context.Context, device string) (Snapshot, error) {
 	if snap.Model != firemon.ModelVersion {
 		return snap, ErrStale // the metadata says what to parse again
 	}
-	body, _, err := storage.Read(ctx, filepath.Join(s.root, device, configFile), maxFile)
+	body, err := s.files.Read(ctx, filepath.Join(s.root, device, configFile), maxFile)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("filestore: read configuration: %w", err)
 	}
@@ -139,7 +148,7 @@ func (s *Store) Raw(ctx context.Context, device string) (string, error) {
 	if err := validName(device); err != nil {
 		return "", err
 	}
-	body, _, err := storage.Read(ctx, filepath.Join(s.root, device, rawFile), maxFile)
+	body, err := s.files.Read(ctx, filepath.Join(s.root, device, rawFile), maxFile)
 	if err != nil {
 		return "", fmt.Errorf("filestore: read raw configuration: %w", err)
 	}
@@ -174,7 +183,7 @@ func (s *Store) meta(ctx context.Context, device string) (Snapshot, error) {
 	if err := validName(device); err != nil {
 		return Snapshot{}, err
 	}
-	body, _, err := storage.Read(ctx, filepath.Join(s.root, device, metaFile), maxFile)
+	body, err := s.files.Read(ctx, filepath.Join(s.root, device, metaFile), maxFile)
 	if errors.Is(err, os.ErrNotExist) {
 		return Snapshot{}, fmt.Errorf("%w: %s", ErrNotFound, device)
 	}

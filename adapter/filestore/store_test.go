@@ -11,6 +11,7 @@ import (
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/adapter/filestore"
+	"github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/vendors/hillstone"
 )
 
@@ -28,7 +29,7 @@ func TestStore_SaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := filestore.New(filepath.Join(t.TempDir(), "snapshots"))
+	s, err := filestore.New(filepath.Join(t.TempDir(), "snapshots"), netconnector.PrivateFiles{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +56,7 @@ func TestStore_SaveLoad(t *testing.T) {
 
 func TestStore_Errors(t *testing.T) {
 	t.Parallel()
-	s, err := filestore.New(t.TempDir())
+	s, err := filestore.New(t.TempDir(), netconnector.PrivateFiles{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestStore_StaleModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := filepath.Join(t.TempDir(), "snapshots")
-	s, err := filestore.New(root)
+	s, err := filestore.New(root, netconnector.PrivateFiles{})
 	if err != nil {
 		t.Fatal(err)
 	}

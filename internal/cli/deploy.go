@@ -84,7 +84,7 @@ func (o *options) push(cmd *cobra.Command, platform bootstrap.Platform, prop wor
 	}
 	receipt, err := workflow.Apply(cmd.Context(), client, platform, prop, journal, o.deps.Now)
 	p := &printer{w: cmd.OutOrStdout()}
-	p.f("\n下发结果：%s，日志 %s\n", receipt.State.Status, dir)
+	p.f("\n下发结果：%s，日志 %s\n", receipt.Record.Status, dir)
 	if err != nil {
 		p.f("回退命令见上方；不会自动重试\n")
 		return errors.Join(err, p.err)
@@ -112,7 +112,7 @@ func defaultJournalRoot() string {
 // The snapshot is the one --snapshot names, else the one stored from the
 // same device address.
 func (o *options) refreshSnapshot(cmd *cobra.Command, platform bootstrap.Platform, name string) error {
-	store, err := filestore.New(o.store)
+	store, err := bootstrap.OpenSnapshots(o.store)
 	if err != nil {
 		return err
 	}

@@ -1,13 +1,14 @@
 package paloalto
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/gatework/firemon"
-	"github.com/gatework/parser"
+	"github.com/gatework/netops/parse"
 )
 
 // DefaultVirtualRouter is the PAN-OS virtual router present on every device.
@@ -19,7 +20,7 @@ type Options struct {
 	// Location is the device time zone for schedules.
 	Location *time.Location
 	// Limits bounds the input size.
-	Limits parser.Limits
+	Limits parse.Limits
 	// Services is the predefined service book observed on the device. Its
 	// entries replace those of DefaultServices with the same name; services
 	// declared in the configuration take precedence over both.
@@ -43,7 +44,7 @@ func New(opts Options) *Parser {
 
 // Parse converts the set-format configuration text.
 func (p *Parser) Parse(text string) (*firemon.Config, error) {
-	content, err := parser.New(text, p.opts.Limits)
+	content, err := parse.New(context.Background(), text, p.opts.Limits)
 	if err != nil {
 		return nil, fmt.Errorf("paloalto: %w", err)
 	}

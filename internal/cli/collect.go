@@ -27,7 +27,7 @@ func newCollectCmd(o *options) *cobra.Command {
 			"其他命令用 --snapshot 名称 使用该快照。--list 列出已保存的快照。",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			store, err := filestore.New(o.store)
+			store, err := bootstrap.OpenSnapshots(o.store)
 			if err != nil {
 				return err
 			}
@@ -82,7 +82,7 @@ func (o *options) loadSnapshot(ctx context.Context) (workflow.Loaded, bootstrap.
 	if o.file != "" {
 		return workflow.Loaded{}, bootstrap.Platform{}, &usageError{errors.New("--config 和 --snapshot 只能二选一")}
 	}
-	store, err := filestore.New(o.store)
+	store, err := bootstrap.OpenSnapshots(o.store)
 	if err != nil {
 		return workflow.Loaded{}, bootstrap.Platform{}, err
 	}

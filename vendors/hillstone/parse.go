@@ -1,13 +1,14 @@
 package hillstone
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/gatework/firemon"
-	"github.com/gatework/parser"
+	"github.com/gatework/netops/parse"
 )
 
 // DefaultVirtualRouter is the StoneOS routing context of layer-3 zones that
@@ -20,7 +21,7 @@ type Options struct {
 	// Location is the device time zone for schedules and rule windows.
 	Location *time.Location
 	// Limits bounds the input size.
-	Limits parser.Limits
+	Limits parse.Limits
 	// Services is the predefined service book observed on the device. Its
 	// entries replace those of DefaultServices with the same name; services
 	// declared in the configuration take precedence over both.
@@ -44,7 +45,7 @@ func New(opts Options) *Parser {
 
 // Parse converts the text of "show configuration running".
 func (p *Parser) Parse(text string) (*firemon.Config, error) {
-	content, err := parser.New(text, p.opts.Limits)
+	content, err := parse.New(context.Background(), text, p.opts.Limits)
 	if err != nil {
 		return nil, fmt.Errorf("hillstone: %w", err)
 	}
@@ -76,7 +77,7 @@ func (p *Parser) location() *time.Location {
 // state accumulates one parse.
 type state struct {
 	cfg       *firemon.Config
-	cursor    *parser.Cursor
+	cursor    *parse.Cursor
 	loc       *time.Location
 	addresses *catalog[addressDraft]
 	services  *catalog[firemon.Service]
@@ -94,7 +95,7 @@ type state struct {
 	place string
 }
 
-func newState(content *parser.Content, loc *time.Location) *state {
+func newState(content *parse.Content, loc *time.Location) *state {
 	return &state{
 		cfg: &firemon.Config{
 			Vendor:   firemon.VendorHillstone,
@@ -209,13 +210,13 @@ func (s *state) interfaceVRs() []firemon.Interface {
 	return out
 }
 
-func (s *state) markHead(b block) { _ = s.cursor.SetParsed(b.head.Number, true) }
+func (s *state) markHead(b block) { _ = s.cursor.Mark(b.head.Number, b.head.Number) }
 
-func (s *state) mark(l parser.Line) { _ = s.cursor.SetParsed(l.Number, true) }
+func (s *state) mark(l parse.Line) { _ = s.cursor.Mark(l.Number, l.Number) }
 
-func (s *state) markRange(first, last int) { _ = s.cursor.SetParsedRange(first, last, true) }
+func (s *state) markRange(first, last int) { _ = s.cursor.Mark(first, last) }
 
-func (s *state) diagnose(l parser.Line, reason string) {
+func (s *state) diagnose(l parse.Line, reason string) {
 	s.mark(l)
 	s.cfg.Diagnostics = append(s.cfg.Diagnostics, firemon.Diagnostic{Line: l.Number, Text: strings.TrimSpace(l.Text), Reason: reason})
 }

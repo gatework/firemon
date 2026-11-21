@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gatework/go-netops/apply"
+	"github.com/gatework/netops/apply"
+	"github.com/gatework/netops/change"
+	ndevice "github.com/gatework/netops/device"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/deploy"
@@ -28,11 +30,12 @@ type device struct {
 	extra  string // appended by the device after the last write
 }
 
-func (d *device) ReadConfiguration(context.Context) (*firemon.Config, error) {
-	return hillstone.New(hillstone.Options{}).Parse(d.text)
+func (d *device) Read(context.Context) (*firemon.Config, error) {
+	return hillstone.New(hillstone.Options{}).Parse(d.text) //nolint:contextcheck // synthetic configuration is already in memory
 }
 
-func (d *device) Write(_ context.Context, command string) error {
+func (d *device) Write(_ context.Context, cmd change.Command) error {
+	command := cmd.Text
 	if command == d.failOn {
 		return errors.New("device rejected command")
 	}
@@ -50,16 +53,13 @@ func (d *device) open(ctx context.Context, run func(context.Context, apply.Sessi
 	return run(ctx, d), nil
 }
 
-// journal keeps the last state in memory.
-type journal struct{ states []apply.State }
+// journal keeps every execution record in memory.
+type journal struct{ records []apply.Record }
 
-func (j *journal) WriteExecution(_ context.Context, s apply.State) error {
-	j.states = append(j.states, s)
-	return nil
-}
+func (j *journal) Execution(string, string) apply.Journal { return j }
 
-func (j *journal) FinalizeExecution(_ context.Context, s apply.State) error {
-	j.states = append(j.states, s)
+func (j *journal) Write(_ context.Context, r apply.Record) error {
+	j.records = append(j.records, r)
 	return nil
 }
 
@@ -104,12 +104,33 @@ func TestDeployer_Deploy(t *testing.T) {
 	dev := &device{text: text}
 	j := &journal{}
 	d := deploy.New(dev.open, deploy.Options{Writer: fixed(commands), Journal: j, Now: func() time.Time { return now }})
-	receipt, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Device: apply.Device{Host: "lab", Platform: "hillstone"}})
+	receipt, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Device: ndevice.Device{ID: "lab", Platform: "hillstone"}})
 	if err != nil {
-		t.Fatalf("deploy: %v (state %+v)", err, receipt.State)
+		t.Fatalf("deploy: %v (state %+v)", err, receipt.Record)
 	}
-	if receipt.State.Status != apply.StatusVerified || len(dev.writes) != len(commands) {
-		t.Fatalf("status %s, %d writes of %d", receipt.State.Status, len(dev.writes), len(commands))
+	if receipt.Record.Status != apply.StatusVerified || len(dev.writes) != len(commands) {
+		t.Fatalf("status %s, %d writes of %d", receipt.Record.Status, len(dev.writes), len(commands))
+	}
+}
+
+func TestDeployer_PersistsCloseFailure(t *testing.T) {
+	t.Parallel()
+	text := fixture(t)
+	p, commands := planFor(t, text)
+	dev := &device{text: text}
+	j := &journal{}
+	closeErr := errors.New("session close failed")
+	open := func(ctx context.Context, run func(context.Context, apply.Session[*firemon.Config]) error) (error, error) {
+		return run(ctx, dev), closeErr
+	}
+	d := deploy.New(open, deploy.Options{Writer: fixed(commands), Journal: j, Now: func() time.Time { return now }})
+	receipt, err := d.Deploy(t.Context(), deploy.Request{Plan: p, Device: ndevice.Device{ID: "lab", Platform: "hillstone"}})
+	if !errors.Is(err, closeErr) || !receipt.ReportUnconfirmed || receipt.Record.Status != apply.StatusUncertain {
+		t.Fatalf("receipt = %+v, error = %v", receipt, err)
+	}
+	last := j.records[len(j.records)-1]
+	if last.Status != apply.StatusUncertain || last.Stage != apply.StageClose {
+		t.Fatalf("persisted status = %s, stage = %s", last.Status, last.Stage)
 	}
 }
 
@@ -132,8 +153,8 @@ func TestDeployer_StopsOnRejectedCommand(t *testing.T) {
 	dev := &device{text: text, failOn: commands[2]}
 	d := deploy.New(dev.open, deploy.Options{Writer: fixed(commands), Journal: &journal{}, Now: func() time.Time { return now }})
 	receipt, err := d.Deploy(t.Context(), deploy.Request{Plan: p})
-	if err == nil || receipt.State.Status == apply.StatusVerified || len(dev.writes) != 2 {
-		t.Fatalf("err %v status %s writes %d", err, receipt.State.Status, len(dev.writes))
+	if err == nil || receipt.Record.Status == apply.StatusVerified || len(dev.writes) != 2 {
+		t.Fatalf("err %v status %s writes %d", err, receipt.Record.Status, len(dev.writes))
 	}
 }
 

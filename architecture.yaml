@@ -104,9 +104,15 @@ rules:
     packages: [./adapter/yamlfile]
     only_local: [., ./inventory, ./migrate]
 
-  - name: only the netconnector adapter talks to devices
-    packages: [./adapter/filestore, ./adapter/yamlfile]
-    deny: [github.com/gatework/net-connector/connector, github.com/gatework/net-connector/vendors/...]
+  - name: the retired kernels are not used
+    packages: [./...]
+    deny: [github.com/gatework/go-netops/..., github.com/gatework/parser/..., github.com/gatework/set/..., github.com/gatework/go-expect/...]
+    transitive: true
+
+  - name: only the netconnector adapter imports net-connector
+    packages: [./...]
+    except: [./adapter/netconnector]
+    deny: [github.com/gatework/net-connector/...]
 
   - name: workflows do not reach the command line
     packages: [./internal/workflow, ./internal/bootstrap]

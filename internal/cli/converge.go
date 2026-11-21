@@ -105,7 +105,7 @@ func (o *options) counters(cmd *cobra.Command, file string) (*hits.Snapshot, err
 	if o.snapshot == "" {
 		return nil, nil //nolint:nilnil // no counters: static review only
 	}
-	store, err := filestore.New(o.store)
+	store, err := bootstrap.OpenSnapshots(o.store)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func printCleanupPlan(p *printer, plan *design.Plan, script *design.Script) {
 // (or the first by name), with the hit counters of all its members merged: a rule unused
 // on the active member may carry the standby's traffic after a failover.
 func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
-	store, err := filestore.New(o.store)
+	store, err := bootstrap.OpenSnapshots(o.store)
 	if err != nil {
 		return err
 	}

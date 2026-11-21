@@ -4,6 +4,16 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-20
+
+### Changed
+
+- Use net-connector v0.10.1 and netops v0.2.0 for device sessions, deployment, parsing and port sets. The standalone set, parser and go-netops modules are no longer required.
+- Device collection and deployment use in-process SSH with strict host-key checks. Use a management IP address and a trusted known-hosts file.
+- PAN-OS deployments commit the candidate as one batch and require positive commit evidence. Set-format reads require an empty configuration diff before and after the read.
+
+## [0.3.0] - 2026-11-20
+
 ### Changed
 
 - **Breaking:** v2 rewrite. The module is rebuilt around `traffic` (exact set algebra), the `firemon` domain model and compiler, vendor packages for Hillstone and PAN-OS, and the `query`, `design` and `deploy` workflows. The v0.2 API is removed.
