@@ -12,7 +12,7 @@ v2 is a rewrite and is not in production: no compatibility promise (GEN-1). The 
 
 - `traffic` is pure set algebra; the root package `firemon` is the domain model and compiler. Neither performs I/O. `architecture.yaml` enforces the direction; register every new package there first.
 - `vendors/<vendor>` owns all device syntax: parsing to `firemon.Config` and rendering design plans to commands. Nothing outside a vendor package switches on `firemon.Vendor`; vendor behaviour reaches the engine through `firemon.Semantics`.
-- `adapter/netconnector` is the only package that imports net-connector.
+- `adapter/netconnector` is the only package that imports net-connector. Device dialogues, save and commit evidence belong to the net-connector drivers; parsing builds on netops `parse`, deployment on netops `apply`.
 - Vendors are wired explicitly in `internal/bootstrap`; no `init` registration.
 
 ## Semantics that must not regress

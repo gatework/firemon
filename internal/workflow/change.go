@@ -4,7 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/gatework/go-netops/apply"
+	"github.com/gatework/netops/apply"
+	"github.com/gatework/netops/device"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/deploy"
@@ -33,13 +34,13 @@ func Propose(fw *firemon.Firewall, p bootstrap.Platform, intent design.Intent, n
 
 // Target is a device that lends deployment sessions and persists changes.
 type Target interface {
-	Open(ctx context.Context, run func(context.Context, apply.Session[*firemon.Config]) error) (opErr, cleanupErr error)
+	Open(ctx context.Context, run func(context.Context, apply.Session[*firemon.Config]) error) (opErr, closeErr error)
 	Save(ctx context.Context) error
-	Device() apply.Device
+	Device() device.Device
 }
 
 // Apply deploys a proposal, then persists it once the readback verified.
-func Apply(ctx context.Context, t Target, p bootstrap.Platform, prop Proposal, journal apply.Journal, now func() time.Time) (deploy.Receipt, error) {
+func Apply(ctx context.Context, t Target, p bootstrap.Platform, prop Proposal, journal deploy.Executions, now func() time.Time) (deploy.Receipt, error) {
 	write := deploy.WriterFunc(func(plan *design.Plan) ([]string, error) {
 		script, err := p.Render(plan)
 		if err != nil {

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gatework/go-netops/apply"
-	"github.com/gatework/go-netops/store"
-	"github.com/gatework/net-connector/connector"
+	"github.com/gatework/netops/store"
+	"github.com/gatework/netops/store/journal"
 
 	"github.com/gatework/firemon"
+	"github.com/gatework/firemon/adapter/filestore"
 	"github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/hits"
@@ -78,17 +78,21 @@ func Lookup(vendor firemon.Vendor, loc *time.Location, book firemon.ServiceBook)
 	}
 }
 
-// Client returns a device client for the platform.
-func Client(p Platform, conn connector.ConnectionConfig) (*netconnector.Client, error) {
-	return netconnector.New(p.Vendor, conn, p.Parse)
+// OpenSnapshots opens the private device snapshot store.
+func OpenSnapshots(root string) (*filestore.Store, error) {
+	return filestore.New(root, netconnector.PrivateFiles{})
 }
 
 // Journal returns a deployment journal in a new private batch directory
 // under root, and that directory.
-func Journal(root string) (apply.Journal, string, error) {
-	s, err := store.New(root, store.Options{})
+func Journal(root string) (*journal.Journal, string, error) {
+	s, err := store.NewBatch(root, time.Now())
 	if err != nil {
 		return nil, "", err
 	}
-	return store.NewJournal(s), s.Directory(), nil
+	j, err := journal.Open(s.Root(), nil)
+	if err != nil {
+		return nil, "", err
+	}
+	return j, s.Root(), nil
 }

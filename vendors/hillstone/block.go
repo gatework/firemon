@@ -3,14 +3,14 @@ package hillstone
 import (
 	"strings"
 
-	"github.com/gatework/parser"
+	"github.com/gatework/netops/parse"
 )
 
 // block is one top-level StoneOS block: its head line and body lines. A
 // single-line statement is a block without body.
 type block struct {
-	head parser.Line
-	body []parser.Line
+	head parse.Line
+	body []parse.Line
 	last int // line number of the closing exit, or of the head for statements
 }
 
@@ -28,7 +28,7 @@ func (b *block) keyword() string {
 // continuations of wrapped strings. Older output does not indent bodies, so
 // the heads of policy-relevant blocks always open a block, which then runs
 // to the first "exit" that does not close a nested rule.
-func segment(content *parser.Content) []block {
+func segment(content *parse.Content) []block {
 	lines := content.Lines()
 	var out []block
 	for i := 0; i < len(lines); i++ {
@@ -40,10 +40,10 @@ func segment(content *parser.Content) []block {
 		next := i + 1
 		switch {
 		case next < len(lines) && (isIndented(lines[next].Text) || lines[next].Text == "exit"):
-			i = b.collect(lines, next, func(l parser.Line) bool { return l.Text == "exit" })
+			i = b.collect(lines, next, func(l parse.Line) bool { return l.Text == "exit" })
 		case next < len(lines) && opensBlock(head.Text):
 			depth := 0
-			i = b.collect(lines, next, func(l parser.Line) bool {
+			i = b.collect(lines, next, func(l parse.Line) bool {
 				t := strings.TrimSpace(l.Text)
 				switch {
 				case strings.HasPrefix(t, "rule ") && b.keyword() == "policy":
@@ -63,7 +63,7 @@ func segment(content *parser.Content) []block {
 
 // collect appends lines from start until end reports the closing line and
 // returns the index of that line (or of the last line).
-func (b *block) collect(lines []parser.Line, start int, end func(parser.Line) bool) int {
+func (b *block) collect(lines []parse.Line, start int, end func(parse.Line) bool) int {
 	j := start
 	for ; j < len(lines) && !end(lines[j]); j++ {
 		b.body = append(b.body, lines[j])

@@ -6,8 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gatework/net-connector/connector"
-
 	"github.com/gatework/firemon/adapter/netconnector"
 	"github.com/gatework/firemon/internal/bootstrap"
 )
@@ -40,8 +38,8 @@ func (d *deviceFlags) client(p bootstrap.Platform, getenv func(string) string) (
 	if d.host == "" || d.user == "" {
 		return nil, &usageError{errors.New("请用 --config 指定配置文件，或用 --host 和 --user 登录设备读取")}
 	}
-	return bootstrap.Client(p, connector.ConnectionConfig{
+	return netconnector.NewSSH(p.Vendor, netconnector.SSHConfig{
 		Host: d.host, Username: d.user, Password: getenv(envPassword), EnablePassword: getenv(envEnable),
-		Protocol: connector.ProtocolSSH, Port: d.port, KnownHosts: d.knownHosts, CommandTimeout: d.timeout,
-	})
+		Port: d.port, KnownHosts: d.knownHosts, CommandTimeout: d.timeout,
+	}, p.Parse)
 }

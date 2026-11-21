@@ -10,8 +10,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/gatework/net-connector/storage"
-
 	"github.com/gatework/firemon/hits"
 )
 
@@ -24,7 +22,7 @@ func (s *Store) SaveHits(ctx context.Context, device string, snap hits.Snapshot)
 		return err
 	}
 	dir := filepath.Join(s.root, device, hitsDir)
-	if err := storage.PrepareDirectory(dir); err != nil {
+	if err := s.files.PrepareDirectory(dir); err != nil {
 		return fmt.Errorf("filestore: %w", err)
 	}
 	body, err := json.MarshalIndent(snap, "", "  ")
@@ -32,7 +30,7 @@ func (s *Store) SaveHits(ctx context.Context, device string, snap hits.Snapshot)
 		return fmt.Errorf("filestore: encode hits: %w", err)
 	}
 	name := snap.Taken.UTC().Format("20060102T150405Z") + ".json"
-	if _, err := storage.Write(ctx, filepath.Join(dir, name), body); err != nil {
+	if err := s.files.Write(ctx, filepath.Join(dir, name), body); err != nil {
 		return fmt.Errorf("filestore: write hits: %w", err)
 	}
 	return nil
@@ -61,7 +59,7 @@ func (s *Store) LatestHits(ctx context.Context, device string) (hits.Snapshot, e
 		return hits.Snapshot{}, fmt.Errorf("%w: hits of %s", ErrNotFound, device)
 	}
 	slices.Sort(names) // UTC timestamps sort chronologically
-	body, _, err := storage.Read(ctx, filepath.Join(dir, names[len(names)-1]), maxFile)
+	body, err := s.files.Read(ctx, filepath.Join(dir, names[len(names)-1]), maxFile)
 	if err != nil {
 		return hits.Snapshot{}, fmt.Errorf("filestore: read hits: %w", err)
 	}

@@ -262,14 +262,19 @@ func portText(lo, hi uint16) string {
 	return strconv.Itoa(int(lo)) + "-" + strconv.Itoa(int(hi))
 }
 
-// DeployCommands returns the rendered commands as one candidate batch: the
-// deployment session commits it atomically, so it is a single write.
+// DeployCommands returns the rendered set commands followed by
+// CommitCommand: the deployment session collects the set commands and
+// commits them atomically as one candidate batch.
 func DeployCommands(s design.Script) []string {
 	if len(s.Commands) == 0 {
 		return nil
 	}
-	return []string{strings.Join(s.Commands, "\n")}
+	return append(slices.Clone(s.Commands), CommitCommand)
 }
+
+// CommitCommand ends a deployment: the session commits the set commands
+// before it as one candidate batch.
+const CommitCommand = "commit"
 
 // maxNameLength is the PAN-OS limit for object and rule names.
 const maxNameLength = 63

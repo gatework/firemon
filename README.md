@@ -54,7 +54,7 @@ firewalls:
 
 The older `protected:`/`protected_zone:` keys still read as protected zones. A transparent (layer-2) firewall needs the far side bound too; without it search says which binding is missing instead of guessing.
 
-Without `--inventory`, a command reads one firewall: a configuration file with `--config FILE` (the vendor is recognised from the file; `--vendor` overrides), a stored snapshot with `--snapshot NAME` (directory `--store`), or the device with `--vendor`, `--host` and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output.
+Without `--inventory`, a command reads one firewall: a configuration file with `--config FILE` (the vendor is recognised from the file; `--vendor` overrides), a stored snapshot with `--snapshot NAME` (directory `--store`), or the device with `--vendor`, `--host` (management IP address) and `--user` (the password comes from `FIREMON_PASSWORD`, an enable password from `FIREMON_ENABLE_PASSWORD`). `--json` prints machine-readable output. SSH checks host keys against `--known-hosts` (default `~/.ssh/known_hosts`). Set `EXPECT_RECORD=off` to disable session recording.
 
 ```sh
 # Store a device's configuration as a snapshot; later commands use --snapshot fw1
@@ -112,7 +112,7 @@ Addresses accept `10.0.0.1`, `10.0.0.0/24`, `10.0.0.1-10.0.0.9` and `any`; servi
 | `intake` | Tolerant reading of operator input with coded notes |
 | `report` | Per-firewall classification, candidate rules and plans |
 | `adapter/yamlfile`, `adapter/dns` | Operator inventory file; optional domain resolution |
-| `deploy` | Fingerprint-checked, journaled deployment on go-netops `apply` |
+| `deploy` | Fingerprint-checked, journaled deployment on netops `apply` |
 | `vendors/hillstone`, `vendors/paloalto` | Parsing and rendering per vendor |
 | `adapter/netconnector` | Device access through net-connector |
 | `adapter/filestore` | Snapshot directory: raw text, parsed configuration, fingerprint |

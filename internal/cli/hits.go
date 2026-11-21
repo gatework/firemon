@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gatework/firemon/internal/bootstrap"
+
 	"github.com/spf13/cobra"
 
-	"github.com/gatework/firemon/adapter/filestore"
 	"github.com/gatework/firemon/hits"
 )
 
@@ -26,7 +27,7 @@ func newHitsCmd(o *options) *cobra.Command {
 			if name == "" {
 				return &usageError{errors.New("需要 --name 指定快照名称")}
 			}
-			store, err := filestore.New(o.store)
+			store, err := bootstrap.OpenSnapshots(o.store)
 			if err != nil {
 				return err
 			}
