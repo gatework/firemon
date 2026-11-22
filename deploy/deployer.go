@@ -13,6 +13,7 @@ import (
 	"github.com/gatework/netops/device"
 	"github.com/gatework/netops/evidence"
 	"github.com/gatework/netops/failure"
+	"github.com/gatework/netops/lease"
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/design"
@@ -62,7 +63,23 @@ type Options struct {
 	Journal Executions
 	// Now supplies the instant schedules are evaluated at during checks.
 	Now func() time.Time
+	// Guard protects the device from unauthorized and concurrent changes.
+	Guard Guard
 }
+
+// Guard is the protection of a deployment. The zero Guard checks nothing.
+type Guard struct {
+	// Authorize, when set, must allow the device before a session opens.
+	Authorize func(device.Device) error
+	// Leases, when set, leases the device by management address for the
+	// deployment, so that no other gatework tool changes it meanwhile.
+	Leases   *lease.Manager
+	Holder   lease.Holder
+	LeaseTTL time.Duration // zero means one hour
+}
+
+// ErrUnauthorized reports a deployment the operator may not perform.
+var ErrUnauthorized = errors.New("deploy: not authorized")
 
 // Deployer applies plans through one opener.
 type Deployer struct {
@@ -70,6 +87,7 @@ type Deployer struct {
 	write   Writer
 	journal Executions
 	now     func() time.Time
+	guard   Guard
 }
 
 // New returns a deployer.
@@ -78,7 +96,7 @@ func New(open Opener, opts Options) *Deployer {
 	if now == nil {
 		now = time.Now
 	}
-	return &Deployer{open: open, write: opts.Writer, journal: opts.Journal, now: now}
+	return &Deployer{open: open, write: opts.Writer, journal: opts.Journal, now: now, guard: opts.Guard}
 }
 
 // Request is one deployment.
@@ -119,6 +137,11 @@ func (d *Deployer) Deploy(ctx context.Context, req Request) (Receipt, error) {
 	if err != nil {
 		return Receipt{}, err
 	}
+	release, refused := d.protect(ctx, req, p.meta.ID)
+	if refused != nil {
+		return Receipt{Record: apply.Record{Status: apply.StatusFailed, Failure: failure.Primary(refused)}}, refused
+	}
+	defer release()
 	var rec apply.Record
 	var execution apply.Journal
 	opErr, closeErr := d.open(ctx, func(ctx context.Context, s apply.Session[*firemon.Config]) error {
@@ -249,4 +272,37 @@ func fingerprint(fp string) evidence.Digest {
 
 func digest(commands []string) evidence.Digest {
 	return evidence.DigestString(strings.Join(commands, "\n"))
+}
+
+// protect authorizes the deployment and leases its device. It returns the
+// lease release, or the refusal.
+func (d *Deployer) protect(ctx context.Context, req Request, planID string) (release func(), refused error) {
+	g := d.guard
+	if g.Authorize != nil {
+		if err := g.Authorize(req.Device); err != nil {
+			return nil, failure.Wrap(failure.CodeInvalid, "deploy", errors.Join(ErrUnauthorized, err))
+		}
+	}
+	if g.Leases == nil {
+		return func() {}, nil
+	}
+	if !req.Device.Mgmt.IsValid() {
+		return nil, failure.New(failure.CodeInvalid, "deploy: a leased device needs a management address")
+	}
+	h := g.Holder
+	if h.Tool == "" {
+		h.Tool = "firemon"
+	}
+	if h.Purpose == "" {
+		h.Purpose = planID
+	}
+	ttl := g.LeaseTTL
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
+	set, err := g.Leases.Acquire(ctx, []string{lease.Key(req.Device)}, h, ttl)
+	if err != nil {
+		return nil, failure.Wrap(failure.CodeBusy, "deploy: lease", err)
+	}
+	return func() { _ = g.Leases.Release(context.WithoutCancel(ctx), set) }, nil
 }

@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gatework/firemon/adapter/filestore"
+	"github.com/gatework/firemon/deploy"
 	"github.com/gatework/firemon/internal/bootstrap"
 	"github.com/gatework/firemon/internal/workflow"
 )
@@ -18,7 +20,8 @@ import (
 func newDeployCmd(o *options) *cobra.Command {
 	var in intentFlags
 	var apply, yes bool
-	var journalRoot string
+	var journalRoot, authzPath string
+	var leaseTTL time.Duration
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "在设备上设计变更；加 --apply 时下发、核对并保存",
@@ -59,7 +62,11 @@ func newDeployCmd(o *options) *cobra.Command {
 			if !yes && !confirm(cmd) {
 				return errors.New("未确认，没有发送任何命令")
 			}
-			if err := o.push(cmd, platform, prop, journalRoot); err != nil {
+			guard, err := bootstrap.Guard(cmd.Context(), o.deps.Getenv, authzPath, leaseTTL)
+			if err != nil {
+				return err
+			}
+			if err := o.push(cmd, platform, prop, journalRoot, guard); err != nil {
 				return err
 			}
 			return o.refreshSnapshot(cmd, platform, refresh)
@@ -70,10 +77,12 @@ func newDeployCmd(o *options) *cobra.Command {
 	f.BoolVar(&apply, "apply", false, "把变更下发到设备（默认只演练）")
 	f.BoolVar(&yes, "yes", false, "加 --apply 时不再询问确认")
 	f.StringVar(&journalRoot, "journal", defaultJournalRoot(), "下发日志目录")
+	f.StringVar(&authzPath, "authz", "", "权限策略文件（省略表示不做权限检查）")
+	f.DurationVar(&leaseTTL, "lease-ttl", time.Hour, "设备租约时长；进程异常退出后到期自动释放")
 	return cmd
 }
 
-func (o *options) push(cmd *cobra.Command, platform bootstrap.Platform, prop workflow.Proposal, journalRoot string) error {
+func (o *options) push(cmd *cobra.Command, platform bootstrap.Platform, prop workflow.Proposal, journalRoot string, guard deploy.Guard) error {
 	client, err := o.device.client(platform, o.deps.Getenv)
 	if err != nil {
 		return err
@@ -82,7 +91,7 @@ func (o *options) push(cmd *cobra.Command, platform bootstrap.Platform, prop wor
 	if err != nil {
 		return err
 	}
-	receipt, err := workflow.Apply(cmd.Context(), client, platform, prop, journal, o.deps.Now)
+	receipt, err := workflow.Apply(cmd.Context(), client, platform, prop, journal, guard, o.deps.Now)
 	p := &printer{w: cmd.OutOrStdout()}
 	p.f("\n下发结果：%s，日志 %s\n", receipt.Record.Status, dir)
 	if err != nil {

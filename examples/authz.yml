@@ -1,0 +1,13 @@
+# firemon authorization policy (netops authz), for
+#   firemon deploy --authz examples/authz.yml ...
+# The actor is $USER. Scope uses device selectors on the target device:
+# its management address or prefix, or id=/platform=.
+roles:
+  - name: dmz-change
+    permissions: [deploy]
+    scope: ["192.0.2.0/24"]
+  - name: security-admin
+    permissions: [admin]
+bindings:
+  alice: [dmz-change]
+  carol: [security-admin]

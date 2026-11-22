@@ -19,6 +19,7 @@ require (
 	github.com/gatework/expect v0.2.0 // indirect
 	github.com/gofrs/flock v0.13.2 // indirect
 	github.com/google/renameio/v2 v2.0.2 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-runewidth v0.0.31 // indirect
 	github.com/skeema/knownhosts v1.3.3 // indirect
@@ -27,7 +28,7 @@ require (
 )
 
 require (
-	github.com/gatework/netops v0.4.0
+	github.com/gatework/netops v0.5.2
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
 	golang.org/x/sys v0.50.0 // indirect

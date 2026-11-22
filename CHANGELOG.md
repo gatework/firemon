@@ -4,6 +4,12 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Added
+
+- `firemon deploy` leases the firewall by management address in the lease area every gatework tool shares (`~/.local/share/gatework/leases`, overridable with `$GATEWORK_LEASES_DIR`) before it opens a session, and releases the lease afterwards. A firewall that fabric or another tool is changing is refused with the holder's name; no command is sent. `--lease-ttl` bounds the lease (default 1h).
+- `--authz <policy>` checks `$USER`'s `deploy` permission with netops `authz` before any session opens. Without the flag, behavior is unchanged. See `examples/authz.yml`.
+- netops updated to v0.5.2.
+
 ## [0.4.2] - 2026-11-21
 
 - Use documentation IP ranges, example domains, and explicit dummy credential and certificate data in tests.
