@@ -4,6 +4,10 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-21
+
+- Update device sessions to net-connector v0.10.3 and the shared operations packages to netops v0.4.0.
+
 ## [0.4.0] - 2026-11-20
 
 ### Changed
