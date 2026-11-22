@@ -71,7 +71,7 @@ func sameRule(t *testing.T, base string, p *design.Plan, script design.Script) {
 
 func TestNATDesign_SourceBeforeInterfacePAT(t *testing.T) {
 	t.Parallel()
-	base, p, script := natPlan(t, "10.0.0.9", "8.8.8.8", "tcp/443", design.NATIntent{Mode: design.NATModeSource, Address: netip.MustParseAddr("198.51.100.200")})
+	base, p, script := natPlan(t, "10.0.0.9", "203.0.113.208", "tcp/443", design.NATIntent{Mode: design.NATModeSource, Address: netip.MustParseAddr("198.51.100.200")})
 	if p.NAT.Before != "snat-out" || p.NAT.Rule != "To_untrust_req7" {
 		t.Fatalf("outcome %+v", p.NAT)
 	}
@@ -89,7 +89,7 @@ func TestNATDesign_SourceBeforeInterfacePAT(t *testing.T) {
 
 func TestNATDesign_DestinationAndPreNATSecurityRule(t *testing.T) {
 	t.Parallel()
-	base, p, script := natPlan(t, "8.8.8.8", "172.16.0.20", "tcp/443", design.NATIntent{
+	base, p, script := natPlan(t, "203.0.113.208", "172.16.0.20", "tcp/443", design.NATIntent{
 		Mode: design.NATModeDestination, Address: netip.MustParseAddr("198.51.100.81"), Port: 8443,
 	})
 	text := strings.Join(script.Commands, "\n")
@@ -107,7 +107,7 @@ func TestNATDesign_DestinationAndPreNATSecurityRule(t *testing.T) {
 
 func TestNATDesign_StaticBidirectionalBeforeGenericPAT(t *testing.T) {
 	t.Parallel()
-	base, p, script := natPlan(t, "8.8.8.8", "172.16.0.21", "tcp/22", design.NATIntent{Mode: design.NATModeStatic, Address: netip.MustParseAddr("198.51.100.82")})
+	base, p, script := natPlan(t, "203.0.113.208", "172.16.0.21", "tcp/22", design.NATIntent{Mode: design.NATModeStatic, Address: netip.MustParseAddr("198.51.100.82")})
 	if p.NAT.Before != "snat-out" {
 		t.Fatalf("the server's outbound half must match before the interface PAT: %+v", p.NAT)
 	}

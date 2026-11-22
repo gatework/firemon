@@ -61,7 +61,7 @@ func TestInventory_ZoneBindingsLocateTheFarEnd(t *testing.T) {
 		dst, want, verdict string
 	}{
 		{"10.99.1.1", "fw1(l2-trust>l2-dmz)", "allowed"},
-		{"8.8.8.8", "fw1(l2-trust>l2-untrust)", "denied"},
+		{"203.0.113.208", "fw1(l2-trust>l2-untrust)", "denied"},
 	} {
 		tr, err := inv.Locate(request("10.250.1.1", tt.dst, "tcp/443"))
 		if err != nil {
@@ -72,7 +72,7 @@ func TestInventory_ZoneBindingsLocateTheFarEnd(t *testing.T) {
 		}
 	}
 	// An unprotected binding does not make the firewall own the address.
-	tr, err := inv.Locate(request("10.99.1.1", "8.8.8.8", "tcp/443"))
+	tr, err := inv.Locate(request("10.99.1.1", "203.0.113.208", "tcp/443"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestInventory_PlanAggregatesAFirewall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := request("10.250.1.1,8.8.4.4", "8.8.8.8,10.250.2.2", "tcp/443")
+	req := request("10.250.1.1,203.0.113.209", "203.0.113.208,10.250.2.2", "tcp/443")
 	plans, err := inv.Plan(design.Intent{Src: req.Src, Dst: req.Dst, Service: req.Service})
 	if err != nil {
 		t.Fatal(err)
@@ -134,11 +134,11 @@ func TestInventory_AmbiguousOnlyWhenShared(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr, err := inv.Locate(request("10.248.1.1,10.250.1.1", "8.8.8.8", "tcp/443"))
+	tr, err := inv.Locate(request("10.248.1.1,10.250.1.1", "203.0.113.208", "tcp/443"))
 	if err != nil || len(tr.Ambiguous) != 0 {
 		t.Fatalf("different networks: ambiguous %v %v", tr.Ambiguous, err)
 	}
-	tr, err = inv.Locate(request("10.99.0.5", "8.8.8.8", "tcp/443"))
+	tr, err = inv.Locate(request("10.99.0.5", "203.0.113.208", "tcp/443"))
 	if err != nil || len(tr.Ambiguous) != 1 || tr.Ambiguous[0] != "10.99.0.5" {
 		t.Fatalf("a shared network: ambiguous %v %v", tr.Ambiguous, err)
 	}

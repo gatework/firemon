@@ -96,13 +96,13 @@ func TestRoutingTable_Lookup(t *testing.T) {
 	if !ok {
 		t.Fatal("missing table")
 	}
-	dst, _ := traffic.ParseAddressSet("10.0.0.5, 10.9.0.0/16, 8.8.8.8")
+	dst, _ := traffic.ParseAddressSet("10.0.0.5, 10.9.0.0/16, 203.0.113.208")
 	egress, unrouted := table.Lookup(dst)
 	got := map[string]string{}
 	for _, e := range egress {
 		got[e.Addresses.String()] = e.Interface + "/" + e.Zone
 	}
-	want := map[string]string{"10.0.0.5": "eth0/1/trust", "10.9.0.0/16": "eth0/1/trust", "8.8.8.8": "eth0/0/untrust"}
+	want := map[string]string{"10.0.0.5": "eth0/1/trust", "10.9.0.0/16": "eth0/1/trust", "203.0.113.208": "eth0/0/untrust"}
 	if len(got) != len(want) || !unrouted.IsEmpty() {
 		t.Fatalf("got %v unrouted %s", got, unrouted)
 	}

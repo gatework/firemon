@@ -152,7 +152,7 @@ func TestEngine_Query(t *testing.T) {
 		{
 			name: "routing splits destinations by zone",
 			cfg:  lab(firemon.AddressStageOriginal, permit("1", "trust", "dmz", "", "", "https")),
-			src:  "10.0.0.9", dst: "172.16.0.10,8.8.8.8", service: "tcp/443", want: query.VerdictPartial, paths: 2,
+			src:  "10.0.0.9", dst: "172.16.0.10,203.0.113.208", service: "tcp/443", want: query.VerdictPartial, paths: 2,
 		},
 		{
 			name: "disabled rule is skipped",

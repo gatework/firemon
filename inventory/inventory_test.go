@@ -92,11 +92,11 @@ func TestInventory_Locate(t *testing.T) {
 		crossing []string
 		verdict  query.Verdict
 	}{
-		{"internet access crosses core and edge", lab(t, webOut), request("10.1.0.5", "8.8.8.8", "tcp/443"),
+		{"internet access crosses core and edge", lab(t, webOut), request("10.1.0.5", "203.0.113.208", "tcp/443"),
 			[]string{"core(users>transit)", "edge(inside>internet)"}, query.VerdictAllowed},
 		{"internal flow crosses only core", lab(t, webOut), request("10.1.0.5", "10.2.0.9", "tcp/22"),
 			[]string{"core(users>servers)"}, query.VerdictDenied},
-		{"denied on one firewall denies the trace", lab(t), request("10.1.0.5", "8.8.8.8", "tcp/443"),
+		{"denied on one firewall denies the trace", lab(t), request("10.1.0.5", "203.0.113.208", "tcp/443"),
 			[]string{"core(users>transit)", "edge(inside>internet)"}, query.VerdictPartial},
 	}
 	for _, tt := range tests {
@@ -117,7 +117,7 @@ func TestInventory_Plan(t *testing.T) {
 	t.Parallel()
 	in := design.Intent{Name: "req"}
 	in.Src, _ = traffic.ParseAddressSet("10.1.0.5")
-	in.Dst, _ = traffic.ParseAddressSet("8.8.8.8")
+	in.Dst, _ = traffic.ParseAddressSet("203.0.113.208")
 	in.Service, _ = traffic.ParseServiceSet("tcp/443")
 	cps, err := lab(t).Plan(in)
 	if err != nil {
@@ -160,14 +160,14 @@ func TestInventory_DeclaredProtectionWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr, err := inv.Locate(request("10.1.5.5, 172.31.0.1", "8.8.8.8", "tcp/443"))
+	tr, err := inv.Locate(request("10.1.5.5, 172.31.0.1", "203.0.113.208", "tcp/443"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := names(tr); !slices.Equal(got, []string{"a(lan>wan)"}) || tr.Crossings[0].Ownership != inventory.OwnershipDeclared {
 		t.Fatalf("crossings %v", got)
 	}
-	if tr.Excluded.Src.String() != "172.31.0.1" || tr.Excluded.Dst.String() != "8.8.8.8" {
+	if tr.Excluded.Src.String() != "172.31.0.1" || tr.Excluded.Dst.String() != "203.0.113.208" {
 		t.Fatalf("addresses no firewall owns must be excluded: %+v", tr.Excluded)
 	}
 }
@@ -181,7 +181,7 @@ func TestInventory_ClusterEvaluatedOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr, _ := inv.Locate(request("10.1.0.5", "8.8.8.8", "tcp/443"))
+	tr, _ := inv.Locate(request("10.1.0.5", "203.0.113.208", "tcp/443"))
 	if len(tr.Crossings) != 1 || tr.Crossings[0].Firewall != "fw1" || !slices.Equal(tr.Crossings[0].Members, []string{"fw1", "fw2"}) {
 		t.Fatalf("crossings %+v", tr.Crossings)
 	}

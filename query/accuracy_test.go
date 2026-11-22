@@ -42,7 +42,7 @@ func TestH2_OneBudgetPerQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := req(t, "10.0.0.9", "8.8.8.8", "tcp/443")
+	r := req(t, "10.0.0.9", "203.0.113.208", "tcp/443")
 	r.DstDomains = []string{"a.example", "b.example", "c.example"}
 	r.Applications = []string{"ssl", "web-browsing"}
 	res, err := query.New(fw, query.Options{MaxPaths: 2}).Query(r)
@@ -60,7 +60,7 @@ func TestH7_UnresolvedDomainFromIPv6Source(t *testing.T) {
 	cfg.Interfaces[0].Addresses = append(cfg.Interfaces[0].Addresses, prefix("2001:db8::2/64"))
 	cfg.Interfaces[1].Addresses = append(cfg.Interfaces[1].Addresses, prefix("2001:db8:1::1/64"))
 	cfg.Routes = append(cfg.Routes, firemon.Route{VirtualRouter: "vr", Destination: prefix("::/0"), NextHop: netip.MustParseAddr("2001:db8::1")})
-	r := req(t, "2001:db8:1::9", "8.8.8.8", "tcp/443")
+	r := req(t, "2001:db8:1::9", "203.0.113.208", "tcp/443")
 	r.Dst = r.Dst.Subtract(r.Dst)
 	r.DstDomains = []string{"www.example.com"}
 	res := queryOne(t, cfg, r)
@@ -91,7 +91,7 @@ func TestM3_StaticSourceNATIsFirstMatch(t *testing.T) {
 		{ID: "1", VirtualRouter: "vr", Real: inline("10.0.0.9/32"), Mapped: inline("198.51.100.9/32")},
 		{ID: "2", VirtualRouter: "vr", Real: inline("10.0.0.0/24"), Mapped: inline("198.51.100.0/24")},
 	}
-	res := queryOne(t, cfg, req(t, "10.0.0.9", "8.8.8.8", "tcp/443"))
+	res := queryOne(t, cfg, req(t, "10.0.0.9", "203.0.113.208", "tcp/443"))
 	if len(res.Paths) != 1 || len(res.Paths[0].SourceNAT) != 1 {
 		t.Fatalf("one mapping translates each source: %+v", res.Paths)
 	}

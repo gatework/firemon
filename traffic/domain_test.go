@@ -8,21 +8,21 @@ import (
 
 func TestDomainSet_Match(t *testing.T) {
 	t.Parallel()
-	d := traffic.NewDomainSet("Account.Live.com.", "*.example.com", "*npmmirror.com")
+	d := traffic.NewDomainSet("Account.Example.org.", "*.example.com", "*mirror.example.net")
 	tests := []struct {
 		name string
 		want bool
 	}{
-		{"account.live.com", true},
-		{"ACCOUNT.LIVE.COM.", true},
-		{"login.account.live.com", false},
+		{"account.example.org", true},
+		{"ACCOUNT.EXAMPLE.ORG.", true},
+		{"login.account.example.org", false},
 		{"a.example.com", true},
 		{"a.b.example.com", true},
 		{"example.com", false},
 		{"*.sub.example.com", true},
 		{"*.com", false},
-		{"registry.npmmirror.com", true},
-		{"npmmirror.com", true},
+		{"registry.mirror.example.net", true},
+		{"mirror.example.net", true},
 		{"", false},
 	}
 	for _, tt := range tests {
@@ -30,7 +30,7 @@ func TestDomainSet_Match(t *testing.T) {
 			t.Errorf("Match(%q) = %v, want %v", tt.name, got, tt.want)
 		}
 	}
-	if got := d.String(); got != "*.example.com,*npmmirror.com,account.live.com" {
+	if got := d.String(); got != "*.example.com,*mirror.example.net,account.example.org" {
 		t.Errorf("String() = %q", got)
 	}
 }

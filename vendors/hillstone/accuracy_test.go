@@ -101,7 +101,7 @@ func TestV1_IncompleteRulesNeverMatch(t *testing.T) {
 			t.Errorf("rule %s must be incomplete and ignored: %+v", id, r.Spec())
 		}
 	}
-	if id, o, _ := decidingRule(t, e, "10.0.3.5", "8.8.8.8", 80); id != "3" || o != query.OutcomeDeny {
+	if id, o, _ := decidingRule(t, e, "10.0.3.5", "203.0.113.208", 80); id != "3" || o != query.OutcomeDeny {
 		t.Fatalf("an action-only rule above must not permit: decided by %s %s", id, o)
 	}
 }
@@ -116,11 +116,11 @@ func TestV3_CertainPartOfUndecidableRuleDecides(t *testing.T) {
 	if _, ok := r.Certain(); !ok {
 		t.Fatal("an unknown service in a list can only add to the match")
 	}
-	if id, o, possible := decidingRule(t, e, "10.0.9.9", "8.8.8.8", 443); id != "7" || o != query.OutcomeDeny || possible != 0 {
+	if id, o, possible := decidingRule(t, e, "10.0.9.9", "203.0.113.208", 443); id != "7" || o != query.OutcomeDeny || possible != 0 {
 		t.Fatalf("HTTPS certainly matches rule 7: got %s %s (%d possible)", id, o, possible)
 	}
 	// Other ports may be MODEL-PORTS: rule 7 may deny them first.
-	if id, o, possible := decidingRule(t, e, "10.0.9.9", "8.8.8.8", 8080); id != "1" || o != query.OutcomeUnknown || possible != 1 {
+	if id, o, possible := decidingRule(t, e, "10.0.9.9", "203.0.113.208", 8080); id != "1" || o != query.OutcomeUnknown || possible != 1 {
 		t.Fatalf("tcp/8080 may be MODEL-PORTS: got %s %s (%d possible)", id, o, possible)
 	}
 }
@@ -129,7 +129,7 @@ func TestV5_ExclusionOnlyObjectIsEverythingElse(t *testing.T) {
 	t.Parallel()
 	fw, _ := accuracyEngine(t)
 	set, ok := fw.Address("public")
-	if !ok || !set.Contains(netip.MustParseAddr("8.8.8.8")) || set.Contains(netip.MustParseAddr("10.1.1.1")) {
+	if !ok || !set.Contains(netip.MustParseAddr("203.0.113.208")) || set.Contains(netip.MustParseAddr("10.1.1.1")) {
 		t.Fatalf("public = %s", set)
 	}
 }
@@ -164,7 +164,7 @@ exit
 		t.Fatal(err)
 	}
 	e := query.New(fw, query.Options{})
-	res := ask(t, e, "10.0.5.7", "8.8.8.8")
+	res := ask(t, e, "10.0.5.7", "203.0.113.208")
 	if len(res.Paths) != 1 || len(res.Paths[0].Conditions) != 0 || res.Paths[0].To != "inet" {
 		t.Fatalf("both branches of entry 8 reach inet for vip-users: %+v", res.Paths)
 	}

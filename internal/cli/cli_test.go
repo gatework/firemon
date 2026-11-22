@@ -83,7 +83,7 @@ func TestRun(t *testing.T) {
 func TestRun_QueryJSON(t *testing.T) {
 	t.Parallel()
 	code, out, errOut := run(t, "", "search", "--json", "--vendor", "paloalto", "--config", paloaltoConf,
-		"--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "udp/53")
+		"--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "udp/53")
 	var res struct {
 		Firewalls []struct {
 			Paths []struct {
@@ -112,7 +112,7 @@ func TestRun_CollectThenQuerySnapshot(t *testing.T) {
 		t.Fatalf("list: %d\n%s%s", code, out, errOut)
 	}
 	code, out, errOut = run(t, "", "search", "-v", "--snapshot", "pa1", "--store", store,
-		"--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "udp/53")
+		"--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "udp/53")
 	if code != cli.ExitNotAllowed || !strings.Contains(out, "路径 trust(ethernet1/2) → untrust") {
 		t.Fatalf("query snapshot: %d\n%s%s", code, out, errOut)
 	}
@@ -172,7 +172,7 @@ func TestRun_Check(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, out, errOut := run(t, "", "search", "-v", "--store", store, "--inventory", inv,
-		"--src", "10.0.5.0 255.255.255.0，172.31.0.9", "--dst", "8.8.8.8", "--service", "53/udp", "--name", "REQ-7")
+		"--src", "10.0.5.0 255.255.255.0，172.31.0.9", "--dst", "203.0.113.208", "--service", "53/udp", "--name", "REQ-7")
 	if code != cli.ExitNotAllowed {
 		t.Fatalf("a verified change is ready: code %d\n%s%s", code, out, errOut)
 	}
@@ -181,7 +181,7 @@ func TestRun_Check(t *testing.T) {
 			t.Fatalf("missing %q (code %d)\n%s%s", want, code, out, errOut)
 		}
 	}
-	code, out, _ = run(t, "", "search", "--json", "--store", store, "--inventory", inv, "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53")
+	code, out, _ = run(t, "", "search", "--json", "--store", store, "--inventory", inv, "--src", "10.0.5.1", "--dst", "203.0.113.208", "--service", "udp 53")
 	var rep struct {
 		Status    string `json:"status"`
 		Firewalls []struct {
@@ -216,16 +216,16 @@ func TestRun_CheckDefaults(t *testing.T) {
 	t.Parallel()
 	store, inv := fleet(t, "")
 	env := map[string]string{"FIREMON_STORE": store, "FIREMON_INVENTORY": inv}
-	code, out, errOut := runEnv(t, env, "", "search", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53")
+	code, out, errOut := runEnv(t, env, "", "search", "--src", "10.0.5.1", "--dst", "203.0.113.208", "--service", "udp 53")
 	if code != cli.ExitNotAllowed || !strings.Contains(out, "在 pa1 上执行") {
 		t.Fatalf("code %d\n%s%s", code, out, errOut)
 	}
 	_, invWithStore := fleet(t, "store: snapshots\n")
-	code, out, errOut = runEnv(t, map[string]string{"FIREMON_INVENTORY": invWithStore}, "", "search", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53", "--no-design")
+	code, out, errOut = runEnv(t, map[string]string{"FIREMON_INVENTORY": invWithStore}, "", "search", "--src", "10.0.5.1", "--dst", "203.0.113.208", "--service", "udp 53", "--no-design")
 	if code != cli.ExitUndecided || strings.Contains(out, "处置：在") || !strings.Contains(out, "■ pa1") {
 		t.Fatalf("inventory store, no design: code %d\n%s%s", code, out, errOut)
 	}
-	code, out, _ = runEnv(t, env, "", "search", "--json", "--src", "10.0.5.1", "--dst", "8.8.8.8", "--service", "udp 53")
+	code, out, _ = runEnv(t, env, "", "search", "--json", "--src", "10.0.5.1", "--dst", "203.0.113.208", "--service", "udp 53")
 	var rep struct {
 		Firewalls []struct {
 			Scripts []struct {

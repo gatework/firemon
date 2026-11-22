@@ -93,7 +93,7 @@ func TestNATDesign_SourcePlacedBeforeTheRuleThatMatchesFirst(t *testing.T) {
 
 func TestNATDesign_DestinationWithPortAndAccess(t *testing.T) {
 	t.Parallel()
-	in := natIntent(t, "8.8.8.8", "10.0.5.20", "tcp/443", design.NATIntent{
+	in := natIntent(t, "203.0.113.208", "10.0.5.20", "tcp/443", design.NATIntent{
 		Mode: design.NATModeDestination, Address: netip.MustParseAddr("198.51.100.50"), Port: 8443,
 	})
 	p, script := natPlan(t, natOrderConf, in)
@@ -113,7 +113,7 @@ func TestNATDesign_DestinationWithPortAndAccess(t *testing.T) {
 
 func TestNATDesign_DestinationNeedsAnAddress(t *testing.T) {
 	t.Parallel()
-	p, _ := natPlan(t, natOrderConf, natIntent(t, "8.8.8.8", "10.0.5.20", "tcp/443", design.NATIntent{Mode: design.NATModeDestination}))
+	p, _ := natPlan(t, natOrderConf, natIntent(t, "203.0.113.208", "10.0.5.20", "tcp/443", design.NATIntent{Mode: design.NATModeDestination}))
 	if p.NAT.Status != design.NATStatusNeedsAddress || p.Status != design.StatusIndeterminate || len(p.Changes) != 0 {
 		t.Fatalf("plan %+v", p.NAT)
 	}
@@ -121,7 +121,7 @@ func TestNATDesign_DestinationNeedsAnAddress(t *testing.T) {
 
 func TestNATDesign_Static(t *testing.T) {
 	t.Parallel()
-	in := natIntent(t, "8.8.8.8", "10.0.5.21", "tcp/22", design.NATIntent{Mode: design.NATModeStatic, Address: netip.MustParseAddr("198.51.100.51")})
+	in := natIntent(t, "203.0.113.208", "10.0.5.21", "tcp/22", design.NATIntent{Mode: design.NATModeStatic, Address: netip.MustParseAddr("198.51.100.51")})
 	p, script := natPlan(t, natOrderConf, in)
 	if p.NAT.Status != design.NATStatusAdded || !p.Verified {
 		t.Fatalf("plan %s %s %+v", p.Status, p.VerifyError, p.NAT)
@@ -148,8 +148,8 @@ func TestNATDesign_ReadbackMatchesPrediction(t *testing.T) {
 	intents := []design.Intent{
 		natIntent(t, "10.0.7.0/24", "192.0.2.10", "tcp/443", design.NATIntent{Mode: design.NATModeSource, Address: netip.MustParseAddr("198.51.100.77")}),
 		natIntent(t, "10.0.8.0/24", "192.0.2.10", "tcp/443", design.NATIntent{Mode: design.NATModeSource, Interface: "ethernet0/2", Address: netip.Addr{}}),
-		natIntent(t, "8.8.8.8", "10.0.5.20", "tcp/443", design.NATIntent{Mode: design.NATModeDestination, Address: netip.MustParseAddr("198.51.100.50"), Port: 8443}),
-		natIntent(t, "8.8.8.8", "10.0.5.21", "tcp/22", design.NATIntent{Mode: design.NATModeStatic, Address: netip.MustParseAddr("198.51.100.51")}),
+		natIntent(t, "203.0.113.208", "10.0.5.20", "tcp/443", design.NATIntent{Mode: design.NATModeDestination, Address: netip.MustParseAddr("198.51.100.50"), Port: 8443}),
+		natIntent(t, "203.0.113.208", "10.0.5.21", "tcp/22", design.NATIntent{Mode: design.NATModeStatic, Address: netip.MustParseAddr("198.51.100.51")}),
 	}
 	for _, in := range intents {
 		p, script := natPlan(t, natOrderConf, in)

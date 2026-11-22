@@ -73,10 +73,10 @@ func TestV2_InterfaceAddressIsTheHost(t *testing.T) {
 	t.Parallel()
 	cfg, _ := compileSet(t, `set rulebase nat rules out from inside to outside source any destination any service any
 set rulebase nat rules out source-translation dynamic-ip-and-port interface-address interface ethernet1/2
-set rulebase nat rules out source-translation dynamic-ip-and-port interface-address ip 103.24.178.130/28
+set rulebase nat rules out source-translation dynamic-ip-and-port interface-address ip 198.51.100.146/28
 `)
 	got := cfg.DynamicNATs[0].TranslatedSource.Addresses
-	if len(got) != 1 || got[0].Entry.Prefix.String() != "103.24.178.130/32" {
+	if len(got) != 1 || got[0].Entry.Prefix.String() != "198.51.100.146/32" {
 		t.Fatalf("interface address %+v", got)
 	}
 }
@@ -85,13 +85,13 @@ set rulebase nat rules out source-translation dynamic-ip-and-port interface-addr
 // address object written with the interface mask; it is still one host.
 func TestNAT_InterfaceAddressObjectIsHost(t *testing.T) {
 	t.Parallel()
-	cfg, _ := compileSet(t, `set address wan-ip ip-netmask 103.24.178.130/28
+	cfg, _ := compileSet(t, `set address wan-ip ip-netmask 198.51.100.146/28
 set rulebase nat rules out from inside to outside source any destination any service any
 set rulebase nat rules out source-translation dynamic-ip-and-port interface-address interface ethernet1/2
 set rulebase nat rules out source-translation dynamic-ip-and-port interface-address ip wan-ip
 `)
 	got := cfg.DynamicNATs[0].TranslatedSource.Addresses
-	if len(got) != 1 || !got[0].IsInline() || got[0].Entry.Prefix.String() != "103.24.178.130/32" {
+	if len(got) != 1 || !got[0].IsInline() || got[0].Entry.Prefix.String() != "198.51.100.146/32" {
 		t.Fatalf("interface address %+v", got)
 	}
 }
