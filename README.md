@@ -112,7 +112,7 @@ Addresses accept `10.0.0.1`, `10.0.0.0/24`, `10.0.0.1-10.0.0.9` and `any`; servi
 | `intake` | Tolerant reading of operator input with coded notes |
 | `report` | Per-firewall classification, candidate rules and plans |
 | `adapter/yamlfile`, `adapter/dns` | Operator inventory file; optional domain resolution |
-| `deploy` | Fingerprint-checked, journaled deployment on netops `apply` |
+| `deploy` | Fingerprint-checked, journaled deployment on netops `apply`; leases the firewall across gatework tools and, with `--authz`, checks the operator's permission |
 | `vendors/hillstone`, `vendors/paloalto` | Parsing and rendering per vendor |
 | `adapter/netconnector` | Device access through net-connector |
 | `adapter/filestore` | Snapshot directory: raw text, parsed configuration, fingerprint |
