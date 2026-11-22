@@ -58,6 +58,8 @@ const (
 	ItemKindNAT
 	// ItemKindDefault is a default action made explicit.
 	ItemKindDefault
+	ItemKindPolicyRoute
+	ItemKindPolicyBinding
 )
 
 // String returns the kind name.
@@ -87,6 +89,10 @@ func (k ItemKind) String() string {
 		return "rule"
 	case ItemKindNAT:
 		return "nat"
+	case ItemKindPolicyRoute:
+		return "policy-route"
+	case ItemKindPolicyBinding:
+		return "policy-binding"
 	case ItemKindDefault:
 		return "default"
 	default:
@@ -130,6 +136,11 @@ type Target struct {
 	Sanitize func(string) string
 	// Services are the target's predefined services.
 	Services firemon.ServiceBook
+	// Render writes a plan in the target's syntax and Parse reads a target
+	// configuration, so that a translation can be checked by parsing what
+	// it renders; nil when the caller does not provide them.
+	Render func(plan *design.Plan) (design.Script, error)
+	Parse  func(text string) (*firemon.Config, error)
 }
 
 // Result is a translation.

@@ -47,6 +47,7 @@ func MigrationTarget(p Platform) (migrate.Target, error) {
 	}
 	return migrate.Target{
 		Vendor: p.Vendor, Semantics: empty.Semantics, Capabilities: p.Capabilities, Sanitize: p.Naming.Sanitize, Services: p.Services,
+		Render: p.Render, Parse: p.Parse,
 	}, nil
 }
 

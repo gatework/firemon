@@ -1,6 +1,34 @@
 package design
 
-import "cmp"
+import (
+	"cmp"
+
+	"github.com/gatework/firemon/traffic"
+)
+
+// CandidateSearch records the cost order and verification trials for one
+// exact region on a zone pair. Candidates contains at most the trial limit.
+type CandidateSearch struct {
+	From       string           `json:"from"`
+	To         string           `json:"to"`
+	Traffic    string           `json:"traffic"`
+	Total      int              `json:"total"`
+	Exhausted  bool             `json:"exhausted,omitempty"`
+	Candidates []CandidateTrial `json:"candidates"`
+}
+
+// CandidateTrial describes an existing rule extension at the point it was
+// priced. Selected means that this particular extension passed verification.
+type CandidateTrial struct {
+	Rule     string           `json:"rule"`
+	Field    Field            `json:"field"`
+	Cost     int              `json:"cost"`
+	Src      traffic.Relation `json:"src"`
+	Dst      traffic.Relation `json:"dst"`
+	Service  traffic.Relation `json:"service"`
+	Selected bool             `json:"selected,omitempty"`
+	Error    string           `json:"error,omitempty"`
+}
 
 // CandidateKey is what ranks an existing rule as the one to modify for a
 // request.
@@ -17,13 +45,11 @@ type CandidateKey struct {
 	Position int
 }
 
-// CompareCandidates orders candidate rules best first: the rule that
-// already connects the same ends, then one that logs, then the smallest
-// change, then the earliest rule. The planner and the report rank with it
-// so that the recommended rule is the one the plan modifies.
+// CompareCandidates prefers the fewest configuration edits. Ties go to a
+// rule connecting the same endpoints, then a logging rule, then device order.
 func CompareCandidates(a, b CandidateKey) int {
-	return cmp.Or(compareTrueFirst(a.BothEnds, b.BothEnds), compareTrueFirst(a.Logs, b.Logs),
-		cmp.Compare(a.Cost, b.Cost), cmp.Compare(a.Position, b.Position))
+	return cmp.Or(cmp.Compare(a.Cost, b.Cost), compareTrueFirst(a.BothEnds, b.BothEnds),
+		compareTrueFirst(a.Logs, b.Logs), cmp.Compare(a.Position, b.Position))
 }
 
 func compareTrueFirst(a, b bool) int {

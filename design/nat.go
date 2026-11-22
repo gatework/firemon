@@ -135,18 +135,19 @@ var errNATUnplanned = errors.New("design: NAT")
 
 // natPlan is the NAT part being designed.
 type natPlan struct {
-	intent  Intent
-	req     query.Request // the traffic as it arrives, before NAT
-	paths   []query.Path
-	public  traffic.AddressSet
-	service traffic.ServiceSet // published service of destination NAT
+	intent      Intent
+	req         query.Request // the traffic as it arrives, before NAT
+	postRouting bool          // source NAT matches the translated traffic on separate lists
+	paths       []query.Path
+	public      traffic.AddressSet
+	service     traffic.ServiceSet // published service of destination NAT
 }
 
 // planNAT designs the NAT part of intent on p.fw. It returns the outcome,
 // the changes (with the objects they need), and the intent of the access
 // part: the traffic as the firewall sees it before NAT.
 func (p *Planner) planNAT(intent Intent, at time.Time) (NATOutcome, []Change, Intent) {
-	n := natPlan{intent: intent}
+	n := natPlan{intent: intent, postRouting: p.fw.Semantics().NATOrder != firemon.NATOrderSingle}
 	access := intent
 	access.NAT = nil
 	in := intent.NAT
@@ -174,8 +175,14 @@ func (p *Planner) planNAT(intent Intent, at time.Time) (NATOutcome, []Change, In
 	if err != nil || len(res.Paths) == 0 {
 		return NATOutcome{Status: NATStatusIndeterminate, Reason: "no path through the firewall"}, nil, access
 	}
+	if res.Incomplete || res.ZonesNeeded || !res.Unrouted.IsEmpty() {
+		return NATOutcome{Status: NATStatusIndeterminate, Reason: "NAT paths do not cover the whole request"}, nil, access
+	}
 	n.paths = res.Paths
 	if out, done := n.current(); done {
+		if out.Status == NATStatusSatisfied && !p.staticReturns(p.fw, n, at) {
+			return NATOutcome{Status: NATStatusConflict, Reason: "the outbound translation of the static mapping differs"}, nil, access
+		}
 		return out, nil, access
 	}
 	if out, taken := n.taken(); taken && !intent.OverrideNAT {
@@ -198,20 +205,52 @@ func (p *Planner) planNAT(intent Intent, at time.Time) (NATOutcome, []Change, In
 // every path as asked, or cannot be evaluated.
 func (n natPlan) current() (NATOutcome, bool) {
 	var existing []string
+	complete := true
 	for _, path := range n.paths {
-		if len(path.NATUncertain) > 0 {
-			return NATOutcome{Status: NATStatusIndeterminate, Reason: "NAT rules that cannot be evaluated may match first"}, true
+		if len(path.NATUncertain) > 0 || path.Incomplete {
+			return NATOutcome{Status: NATStatusIndeterminate, Reason: "NAT rules or paths cannot be evaluated completely"}, true
 		}
-		hit := n.hit(path)
-		if hit == nil || !n.wanted(*hit) {
-			return NATOutcome{}, false
-		}
-		id := hitID(*hit)
-		if !slices.Contains(existing, id) {
-			existing = append(existing, id)
+		ids, ok := n.translations(path)
+		complete = complete && ok
+		for _, id := range ids {
+			if !slices.Contains(existing, id) {
+				existing = append(existing, id)
+			}
 		}
 	}
+	if !complete || len(existing) == 0 {
+		return NATOutcome{}, false
+	}
 	return NATOutcome{Status: NATStatusSatisfied, Existing: existing}, true
+}
+
+// translations proves coverage of each packet on this path. Separate source
+// rules can jointly cover the path or leave an untranslated remainder.
+func (n natPlan) translations(path query.Path) ([]string, bool) {
+	if n.intent.NAT.Mode != NATModeSource {
+		h := path.DestinationNAT
+		if h == nil || !n.wanted(*h) {
+			return nil, false
+		}
+		return []string{hitID(*h)}, true
+	}
+	if n.intent.NAT.Interface != "" && n.intent.NAT.Interface != path.Egress {
+		return nil, false
+	}
+	space := path.Original
+	if n.postRouting {
+		space = path.Policy
+	}
+	missing := traffic.NewRegion(space)
+	var ids []string
+	for _, h := range path.SourceNAT {
+		if !n.wanted(h) {
+			return nil, false
+		}
+		missing = missing.SubtractRegion(h.Space)
+		ids = append(ids, hitID(h))
+	}
+	return ids, missing.IsEmpty()
 }
 
 // taken reports a published address and port that the first matching
@@ -238,17 +277,6 @@ func PublishedService(s traffic.ServiceSet, port uint16) (traffic.ServiceSet, er
 	return publishedService(s, port)
 }
 
-// hit returns the translation of the intent's side on a path.
-func (n natPlan) hit(path query.Path) *query.NATHit {
-	if n.intent.NAT.Mode == NATModeSource {
-		if len(path.SourceNAT) != 1 {
-			return nil // untranslated, or split between several rules
-		}
-		return &path.SourceNAT[0]
-	}
-	return path.DestinationNAT
-}
-
 // wanted reports whether a translation is the one asked for.
 func (n natPlan) wanted(h query.NATHit) bool {
 	in := n.intent.NAT
@@ -259,11 +287,18 @@ func (n natPlan) wanted(h query.NATHit) bool {
 		if !h.Translated.Equal(n.intent.Dst) {
 			return false
 		}
-		if h.Rule != nil && in.Port != 0 {
-			want, _ := singlePort(n.intent.Service)
-			return h.Rule.Translation(firemon.NATKindDestination).Port == want
+		if in.Mode == NATModeStatic && h.Static == nil {
+			return false
 		}
-		return in.Mode == NATModeDestination || h.Static != nil
+		var port uint16
+		if h.Rule != nil {
+			port = h.Rule.Translation(firemon.NATKindDestination).Port
+		}
+		if port == 0 {
+			return n.service.Equal(n.intent.Service)
+		}
+		want, ok := singlePort(n.intent.Service)
+		return ok && port == want
 	case NATModeUnset:
 	}
 	return false
@@ -539,16 +574,37 @@ func (p *Planner) verifyNAT(n natPlan, changes []Change, at time.Time) error {
 	if err != nil {
 		return err
 	}
-	if len(res.Paths) == 0 {
-		return fmt.Errorf("%w: no path after the change", errNATUnplanned)
+	if res.Incomplete || res.ZonesNeeded || !res.Unrouted.IsEmpty() {
+		return fmt.Errorf("%w: incomplete NAT paths", errNATUnplanned)
 	}
-	for _, path := range res.Paths {
-		hit := n.hit(path)
-		if hit == nil || !n.wanted(*hit) {
-			return fmt.Errorf("%w: %s -> %s is not translated as asked after the change", errNATUnplanned, path.From, path.To)
-		}
+	n.paths = res.Paths
+	if out, _ := n.current(); out.Status != NATStatusSatisfied || !p.staticReturns(after, n, at) {
+		return fmt.Errorf("%w: the effective translations do not cover the request", errNATUnplanned)
 	}
 	return nil
+}
+
+// staticReturns verifies the outbound half independently. An earlier source
+// rule can override it even when inbound packets reach the correct server.
+func (p *Planner) staticReturns(fw *firemon.Firewall, n natPlan, at time.Time) bool {
+	if n.intent.NAT.Mode != NATModeStatic {
+		return true
+	}
+	addr, ok := hostOf(n.public)
+	if !ok {
+		return false
+	}
+	in := n.intent
+	in.Src, in.Dst, in.Service = in.Dst, in.Src, traffic.AnyService()
+	in.FromZone, in.ToZone = in.ToZone, in.FromZone
+	in.NAT = &NATIntent{Mode: NATModeSource, Address: addr}
+	res, err := p.engine(fw, in).Query(in.request(at))
+	if err != nil || res.Incomplete || res.ZonesNeeded || !res.Unrouted.IsEmpty() {
+		return false
+	}
+	reverse := natPlan{intent: in, paths: res.Paths, postRouting: n.postRouting}
+	out, _ := reverse.current()
+	return out.Status == NATStatusSatisfied
 }
 
 // publishedService is the service clients reach: the intent's service on

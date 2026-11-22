@@ -14,6 +14,7 @@ const (
 	nsSchedule
 	nsRule
 	nsNAT
+	nsPolicyRoute
 )
 
 // namer gives source names unique, valid target names.

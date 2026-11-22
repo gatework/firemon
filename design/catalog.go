@@ -156,7 +156,7 @@ func (c *catalog) unique(name string) string {
 // groupAddresses aggregates names into one group when there are at least
 // threshold of them; a group already holding exactly set is reused.
 func (c *catalog) groupAddresses(names []string, set traffic.AddressSet, group string) []string {
-	if c.threshold < 0 || len(names) < c.threshold {
+	if len(names) <= 1 || c.threshold < 0 || len(names) < c.threshold {
 		return names
 	}
 	if name, ok := c.addresses[set.String()]; ok && !slices.Contains(names, name) {
@@ -170,7 +170,7 @@ func (c *catalog) groupAddresses(names []string, set traffic.AddressSet, group s
 
 // groupServices aggregates service names like groupAddresses.
 func (c *catalog) groupServices(names []string, set traffic.ServiceSet, group string) []string {
-	if c.threshold < 0 || len(names) < c.threshold {
+	if len(names) <= 1 || c.threshold < 0 || len(names) < c.threshold {
 		return names
 	}
 	if name, ok := c.services[set.String()]; ok && !slices.Contains(names, name) {
@@ -218,19 +218,9 @@ func (c *catalog) rollback(m int) {
 		case AddServiceGroup:
 			c.forget(v.Group.Name, c.services)
 		case AddAddress:
-			delete(c.taken, v.Address.Name)
-			for key, name := range c.addresses {
-				if name == v.Address.Name {
-					delete(c.addresses, key)
-				}
-			}
+			c.forget(v.Address.Name, c.addresses)
 		case AddService:
-			delete(c.taken, v.Service.Name)
-			for key, name := range c.services {
-				if name == v.Service.Name {
-					delete(c.services, key)
-				}
-			}
+			c.forget(v.Service.Name, c.services)
 		}
 	}
 	c.created = c.created[:m]

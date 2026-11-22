@@ -35,9 +35,17 @@ func (p *Planner) PlanBlock(intent Intent) (*BlockPlan, error) {
 	}
 	at := p.now()
 	plan := &Plan{Kind: PlanKindAccess, Intent: intent, Baseline: p.fw.Fingerprint()}
-	open, by := blocked(p.fw, space, at)
+	open, by, proofErr := blocked(p.fw, space, at, intent.Schedule)
+	if proofErr != nil && intent.Schedule != "" {
+		plan.Status, plan.VerifyError = StatusIndeterminate, proofErr.Error()
+		return &BlockPlan{Plan: plan}, nil
+	}
 	if !open {
 		plan.Status, plan.Verified = StatusNoChange, true
+		if err := plan.recordPart(p.fw, intent); err != nil {
+			return nil, err
+		}
+		plan.parts[0].block = &space
 		return &BlockPlan{Plan: plan, BlockedBy: by}, nil
 	}
 	cat := newCatalog(p.fw, p.naming)
@@ -47,7 +55,7 @@ func (p *Planner) PlanBlock(intent Intent) (*BlockPlan, error) {
 	if intent.Name == "" {
 		name = cat.dated("B", at) // B-20261118-001: a block of the day
 	}
-	r := firemon.SecurityRule{Name: cat.unique(name), Description: intent.Description, Action: firemon.ActionDeny}
+	r := firemon.SecurityRule{Name: cat.unique(name), Description: intent.Description, Action: firemon.ActionDeny, Schedule: intent.Schedule}
 	if r.Description == "" {
 		r.Description = r.Name + "-By-Firemon"
 	}
@@ -70,11 +78,15 @@ func (p *Planner) PlanBlock(intent Intent) (*BlockPlan, error) {
 	plan.Status = StatusChange
 	// A plan that fails verification is returned with the reason, not as
 	// an error: the caller reports it and prints no commands.
-	verr := p.verifyBlock(plan.Changes, space)
+	verr := p.verifyBlock(plan.Changes, space, intent.Schedule)
 	plan.Verified = verr == nil
 	if verr != nil {
 		plan.VerifyError = verr.Error()
 	}
+	if err := plan.recordPart(p.fw, intent); err != nil {
+		return nil, err
+	}
+	plan.parts[0].block = &space
 	return &BlockPlan{Plan: plan}, nil
 }
 
@@ -97,11 +109,46 @@ func firstOverlapping(fw *firemon.Firewall, s traffic.Space) *firemon.Rule {
 	return nil
 }
 
-// blocked evaluates the space on every zone pair: open reports traffic no
-// deny rule certainly decides; by names the deny rules that do.
-func blocked(fw *firemon.Firewall, s traffic.Space, at time.Time) (open bool, by []string) {
-	e := query.New(fw, query.Options{Now: func() time.Time { return at }})
+// blocked checks for an explicit deny on every zone pair throughout the
+// requested schedule. A permanent rule covering the whole space ends the
+// search for relevant schedules, since later rules cannot decide a packet.
+func blocked(fw *firemon.Firewall, s traffic.Space, at time.Time, schedule string) (bool, []string, error) {
+	var timed []*firemon.Rule
+	for _, r := range fw.Rules() {
+		if r.Ignored() || !r.Bound().Overlaps(s) {
+			continue
+		}
+		if r.Scheduled() {
+			timed = append(timed, r)
+			continue
+		}
+		from, to := r.Zones()
+		if len(from) == 0 && len(to) == 0 && r.Scope() == firemon.ZoneScopeAny && r.Decidable() && r.Match().ContainsSpace(s) {
+			break
+		}
+	}
+	times, err := fw.PolicyTimes(at, schedule, timed)
+	if err != nil {
+		return true, nil, err
+	}
+	e := query.New(fw, query.Options{})
 	zones := zoneNames(fw)
+	var rules []string
+	for _, instant := range times {
+		open, by := blockedAt(e, zones, s, instant)
+		if open {
+			return true, nil, nil
+		}
+		for _, id := range by {
+			if !slices.Contains(rules, id) {
+				rules = append(rules, id)
+			}
+		}
+	}
+	return false, rules, nil
+}
+
+func blockedAt(e *query.Engine, zones []string, s traffic.Space, at time.Time) (open bool, by []string) {
 	// Zone pairs are independent: each keeps only its outcome, read back
 	// in order so the result does not depend on scheduling.
 	type pair struct {
@@ -135,7 +182,7 @@ func blocked(fw *firemon.Firewall, s traffic.Space, at time.Time) (open bool, by
 
 // verifyBlock applies the changes to a copy and checks that the space is
 // denied on every zone pair.
-func (p *Planner) verifyBlock(changes []Change, s traffic.Space) error {
+func (p *Planner) verifyBlock(changes []Change, s traffic.Space, schedule string) error {
 	cfg := p.fw.Config()
 	if err := Apply(cfg, changes); err != nil {
 		return err
@@ -144,7 +191,11 @@ func (p *Planner) verifyBlock(changes []Change, s traffic.Space) error {
 	if err != nil {
 		return err
 	}
-	if open, _ := blocked(fw, s, p.now()); open {
+	open, _, err := blocked(fw, s, p.now(), schedule)
+	if err != nil {
+		return err
+	}
+	if open {
 		return ErrNotBlocked
 	}
 	return nil

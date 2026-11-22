@@ -13,6 +13,10 @@ import (
 	"github.com/gatework/firemon/query"
 )
 
+// ErrUnsupported reports an inventory feature locating does not honour
+// yet, rejected rather than ignored.
+var ErrUnsupported = errors.New("inventory: not supported yet")
+
 // ErrDuplicate reports two members with the same name.
 var ErrDuplicate = errors.New("inventory: duplicate firewall name")
 
@@ -29,15 +33,23 @@ type Member struct {
 	// Active marks the cluster member evaluated and planned on; without
 	// one, the first member by name is.
 	Active bool
+	// Host is the management address, for naming the device to operators.
+	Host string
+	// Capabilities are what the vendor's rules express (validity windows,
+	// inline entries), for the planner.
+	Capabilities firemon.Capabilities
 }
 
 // Protection declares networks a firewall protects, optionally behind one
 // of its zones (the protected networks of an operator inventory).
 type Protection struct {
 	Firewall string
-	Zone     string
-	Networks []netip.Prefix
-	Exclude  []netip.Prefix
+	// VirtualRouter would restrict the protection to one routing context;
+	// New rejects it until locating honours routing contexts.
+	VirtualRouter string
+	Zone          string
+	Networks      []netip.Prefix
+	Exclude       []netip.Prefix
 }
 
 // ZoneBinding binds networks to a zone of a firewall. Protected bindings
@@ -46,11 +58,14 @@ type Protection struct {
 // tells which zone an address is in on that firewall, for example
 // untrust = 0.0.0.0/0.
 type ZoneBinding struct {
-	Firewall  string
-	Zone      string
-	Networks  []netip.Prefix
-	Exclude   []netip.Prefix
-	Protected bool
+	Firewall string
+	// VirtualRouter would restrict the binding to one routing context; New
+	// rejects it until locating honours routing contexts.
+	VirtualRouter string
+	Zone          string
+	Networks      []netip.Prefix
+	Exclude       []netip.Prefix
+	Protected     bool
 }
 
 // Options configures an Inventory. The zero value evaluates at time.Now
@@ -72,10 +87,15 @@ type Inventory struct {
 	bindings  map[string][]binding
 	byAddress map[netip.Addr][]string // interface address -> clusters
 	now       func() time.Time
+	// opts and given are what New was called with, for Applied.
+	opts  Options
+	given []Member
 }
 
 type member struct {
 	name, cluster string
+	host          string
+	caps          firemon.Capabilities
 	active        bool
 	fw            *firemon.Firewall
 	engine        *query.Engine
@@ -90,15 +110,25 @@ func New(members []Member, opts Options) (*Inventory, error) {
 	if now == nil {
 		now = time.Now
 	}
-	inv := &Inventory{now: now, byAddress: map[netip.Addr][]string{}}
+	for _, p := range opts.Protections {
+		if p.VirtualRouter != "" {
+			return nil, fmt.Errorf("%w: %s: protected networks per virtual router (%s)", ErrUnsupported, p.Firewall, p.VirtualRouter)
+		}
+	}
+	for _, z := range opts.Zones {
+		if z.VirtualRouter != "" {
+			return nil, fmt.Errorf("%w: %s: zone %s bound per virtual router (%s)", ErrUnsupported, z.Firewall, z.Zone, z.VirtualRouter)
+		}
+	}
+	inv := &Inventory{now: now, byAddress: map[netip.Addr][]string{}, opts: opts, given: slices.Clone(members)}
 	for _, m := range members {
 		if slices.ContainsFunc(inv.members, func(x member) bool { return x.name == m.Name }) {
 			return nil, fmt.Errorf("%w: %q", ErrDuplicate, m.Name)
 		}
 		inv.members = append(inv.members, member{
-			name: m.Name, cluster: cmp.Or(m.Cluster, m.Name), fw: m.Firewall, active: m.Active,
+			name: m.Name, cluster: cmp.Or(m.Cluster, m.Name), fw: m.Firewall, active: m.Active, host: m.Host, caps: m.Capabilities,
 			engine:  query.New(m.Firewall, query.Options{Now: now}),
-			planner: design.New(m.Firewall, design.Options{Now: now, Naming: m.Naming}),
+			planner: design.New(m.Firewall, design.Options{Now: now, Naming: m.Naming, Capabilities: m.Capabilities}),
 			naming:  m.Naming,
 		})
 	}

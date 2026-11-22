@@ -33,12 +33,19 @@ const (
 	// CodeUnknownApplication: an application no configuration or
 	// application book knows.
 	CodeUnknownApplication
+	// CodeFullWidth: full-width characters (digits, dots, slashes) were read
+	// as their ASCII forms.
+	CodeFullWidth
+	// CodeNetworkHost: a host address is the network or broadcast address
+	// of its /24, often a network written without its mask.
+	CodeNetworkHost
 )
 
 // String returns the code name used in JSON output.
 func (c Code) String() string {
 	names := [...]string{"unset", "masked", "mask", "short-range", "wildcard", "domain", "default-tcp",
-		"inherited-protocol", "service-name", "application", "duplicate", "invalid", "unsupported", "unknown-application"}
+		"inherited-protocol", "service-name", "application", "duplicate", "invalid", "unsupported", "unknown-application",
+		"full-width", "network-host"}
 	if int(c) < len(names) {
 		return names[c]
 	}

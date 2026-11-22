@@ -2,6 +2,7 @@ package cli
 
 import (
 	"cmp"
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -22,8 +23,13 @@ type reportView struct {
 	plans     []inventory.ClusterPlan
 	platforms map[string]bootstrap.Platform
 	fws       map[string]*firemon.Firewall
-	verbose   bool
-	single    bool // one firewall from --config, --snapshot or --host: no inventory
+	// detail (-v) prints the reasoning: rule details, premises in full,
+	// risks and candidates; verbose (-vv) adds paths, NAT and objects and
+	// lifts the list bounds. Neither prints the brief answer.
+	detail  bool
+	verbose bool
+	single  bool // one firewall from --config, --snapshot or --host: no inventory
+	flows   bool // the flow table lists the deciding rules
 }
 
 // printReport writes what an operator acts on: per firewall the verdict,
@@ -31,26 +37,35 @@ type reportView struct {
 // paths, NAT, input notes, inferences and candidates.
 func printReport(cmd *cobra.Command, rep report.Report, v reportView) error {
 	p := &printer{w: cmd.OutOrStdout()}
-	p.f("结论：%s\n", conclusion(rep))
-	if v.verbose && len(rep.Notes) > 0 {
+	v.flows = flowTable(rep)
+	p.f("结论：%s%s\n", conclusion(rep), flowSummary(rep.Flows))
+	printPremises(p, rep, deviceLabels(rep), v.verbose)
+	if v.detail && len(rep.Notes) > 0 {
 		p.f("\n输入说明：\n")
 		printNotes(p, rep.Notes)
+	} else if warn := warningNotes(rep.Notes); len(warn) > 0 {
+		p.f("\n输入提示：\n")
+		printNotes(p, warn)
 	}
 	if rep.Excluded.Src != "" || rep.Excluded.Dst != "" {
-		p.f("\n不在任何防火墙的受保护网段内（库存未覆盖，或确实不经过防火墙）：源 %s  目的 %s\n", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst))
+		p.f("%s\n", cut(fmt.Sprintf("\n不在任何防火墙的受保护网段内（库存未覆盖，或确实不经过防火墙）：源 %s  目的 %s", orDash(rep.Excluded.Src), orDash(rep.Excluded.Dst)), v.verbose))
 	}
-	for _, in := range rep.Inside {
-		p.f("不经过防火墙：%s（两端都在 %s 的 %s 一侧）\n", in.Traffic, in.Cluster, in.Zone)
+	if !flowTable(rep) { // the flow table lists them otherwise
+		for _, in := range rep.Inside {
+			p.f("不经过防火墙：%s（两端都在 %s 的 %s 一侧）\n", in.Traffic, in.Cluster, in.Zone)
+		}
 	}
 	for _, name := range rep.ZonesNeeded {
 		p.f("提示：%s\n", zonesHint(name, rep, v.single))
 	}
 	for _, a := range rep.Ambiguous {
-		p.f("归属不唯一（多个防火墙同等声明，均已检查）：%s\n", a)
+		p.f("%s\n", cut("归属不唯一（多个防火墙同等声明，均已检查）："+a, v.verbose))
 	}
 	if len(rep.Firewalls) == 0 && rep.Excluded.Src == "" && rep.Excluded.Dst == "" && len(rep.Inside) == 0 && len(rep.ZonesNeeded) == 0 {
 		p.f("\n该流量不经过防火墙的策略检查：源和目的在防火墙同一侧（从同一接口进出），或没有到达目的的路由\n")
 	}
+	printZonePairs(p, rep)
+	printFlowTable(p, rep, v.verbose)
 	for _, f := range rep.Firewalls {
 		printFirewall(p, f, v)
 	}
@@ -83,6 +98,9 @@ func conclusion(rep report.Report) string {
 			return "需要新增策略（无法离线判定的部分，由已验证的方案确保放通）"
 		}
 		verdict := text(statusText, rep.Status, rep.Status.String())
+		if word := plannedWord(rep); word != "" && rep.Status != report.StatusIndeterminate {
+			verdict = word // what the verified plans do
+		}
 		if rep.Status != report.StatusIndeterminate && undecidedParts {
 			verdict += "（部分流量需确认）"
 		}
@@ -97,9 +115,24 @@ func conclusion(rep report.Report) string {
 }
 
 func printFirewall(p *printer, f report.Firewall, v reportView) {
-	p.f("\n■ %s：%s\n", f.Cluster, firewallVerdict(f))
+	verdict := firewallVerdict(f)
+	if v.flows {
+		verdict = flowVerdict(f)
+	}
+	p.f("\n■ %s：%s\n", firewallLabel(f), verdict)
+	if line := haLine(f); line != "" {
+		p.f("  %s\n", line)
+	}
 	if line := basisLine(f.Basis); line != "" {
-		p.f("  命中依据：%s\n", line)
+		p.f("  命中依据：%s\n", cut(line, v.verbose))
+	}
+	for _, conflict := range f.ZoneConflicts {
+		end := "目的"
+		if conflict.Source {
+			end = "源"
+		}
+		p.f("  需确认 %s：%s区域绑定为 %s，虚拟路由 %s 经 %s 指向 %s\n",
+			trafficText(conflict.Traffic), end, conflict.BoundZone, conflict.VirtualRouter, conflict.Interface, conflict.RouteZone)
 	}
 	if v.verbose {
 		p.f("  成员：%s（%s）\n", strings.Join(f.Members, "、"), text(ownershipText, f.Ownership, f.Ownership.String()))
@@ -110,7 +143,9 @@ func printFirewall(p *printer, f report.Firewall, v reportView) {
 	if !v.verbose {
 		printNATSummary(p, f.Paths)
 	}
-	printFlows(p, f, v.verbose)
+	if v.verbose || !v.flows {
+		printFlows(p, f, v.verbose) // the flow table lists them otherwise
+	}
 	if f.Unrouted != "" {
 		p.f("  无路由（会被丢弃）的目的：%s\n", f.Unrouted)
 	}
@@ -198,7 +233,7 @@ var partOf = regexp.MustCompile(`part of (.+?) \((\d+) pieces\)`)
 func trafficText(s string) string {
 	parts := strings.Split(s, "; ")
 	for i, part := range parts {
-		parts[i] = protocolNumbers(part)
+		parts[i] = anyTraffic(protocolNumbers(part))
 	}
 	return partOf.ReplaceAllString(strings.Join(parts, "; "), "$1 中的部分流量（共 $2 段，-v 或 --json 查看命中策略的定义）")
 }
@@ -228,7 +263,8 @@ func timeBound(d report.RuleDetail) string {
 		parts = append(parts, "时间计划 "+d.Schedule.Name+"（"+strings.Join(d.Schedule.Values, "；")+"）")
 	}
 	if d.Window != "" {
-		parts = append(parts, "有效期 "+d.Window)
+		w := strings.NewReplacer("until ", "至 ", "from ", "自 ", " ~ ", " 至 ").Replace(d.Window)
+		parts = append(parts, "有效期 "+w)
 	}
 	return strings.Join(parts, "，")
 }
@@ -255,7 +291,7 @@ func printUndecided(p *printer, f report.Firewall) {
 		}
 		names = append(names, hitLabel(h.Rule, h.Name)+"（"+actionWord(h.Action)+"，"+strings.Join(kinds, "、")+"）")
 	}
-	p.f("  需确认：%s\n", trafficText(f.UndecidedTraffic))
+	p.f("  需确认：%s\n", cut(trafficText(f.UndecidedTraffic), false))
 	p.f("    可能先命中并改变结论：%s\n", strings.Join(names, "，"))
 	for _, h := range f.Otherwise {
 		outcome := "拒绝"
@@ -277,8 +313,16 @@ func printCandidates(p *printer, cs []report.Candidate) {
 		for i, r := range c.Reasons {
 			reasons[i] = text(reasonText, r, string(r))
 		}
+		state := "尚未验证"
+		if c.Recommended {
+			state = "已验证"
+		}
+		if c.Cost != nil {
+			reasons = append(reasons, fmt.Sprintf("变更成本 %d", *c.Cost))
+		}
+		reasons = append(reasons, cmp.Or(c.ProofError, state))
 		p.f("  %s %s：源%s，目的%s，服务%s；%s\n", mark, hitLabel(c.Rule, c.Name), text(relationText, c.Src, c.Src.String()),
-			text(relationText, c.Dst, c.Dst.String()), text(relationText, c.Service, c.Service.String()), cmp.Or(strings.Join(reasons, "；"), "可直接扩展"))
+			text(relationText, c.Dst, c.Dst.String()), text(relationText, c.Service, c.Service.String()), strings.Join(reasons, "；"))
 	}
 }
 
@@ -312,7 +356,7 @@ func printAction(p *printer, f report.Firewall, v reportView) {
 			p.f("  处置：需确认，方案无法生成命令：%v\n", err)
 			continue
 		}
-		p.f("  处置：%s，在 %s 上执行%s（已验证：只放通本次请求）\n", actionSummary(cp.Plan), cp.Firewall, haNote(f.Members, cp.Firewall))
+		p.f("  处置：%s，在 %s 上执行%s（已验证：只放通本次请求）\n", actionSummary(cp.Plan), firewallLabel(f), haNote(f.Devices, cp.Firewall))
 		if ids := passedDenies(cp.Plan, v.fws[f.Cluster]); len(ids) > 0 {
 			them := "它"
 			if len(ids) > 1 {
@@ -320,13 +364,9 @@ func printAction(p *printer, f report.Firewall, v reportView) {
 			}
 			p.f("    ⚠ 放在拒绝策略 %s 之前，会绕过%s：请确认符合安全要求\n", strings.Join(ids, "、"), them)
 		}
-		n := 0
-		for _, c := range cp.Plan.Changes {
-			if line := ruleChangeText(c); line != "" || v.verbose {
-				n++
-				p.f("    %d. %s\n", n, cmp.Or(line, changeText(c)))
-			}
-		}
+		printChanges(p, f.Planned, cp.Plan.Changes, v.verbose)
+		printRisks(p, f.Risks)
+		printRejected(p, f, f.Planned)
 		p.f("    命令：\n")
 		for _, c := range script.Commands {
 			p.f("      %s\n", c)
@@ -342,6 +382,27 @@ func printAction(p *printer, f report.Firewall, v reportView) {
 		p.f("  处置：先确认上述策略是否命中\n")
 	case !designed:
 		p.f("  处置：%s（去掉 --no-design 可生成变更方案）\n", text(statusText, f.Status, f.Status.String()))
+	}
+}
+
+// printChanges numbers the changes of a plan: the rules it adds or
+// modifies in full, then the other changes worth a line (all with -v).
+func printChanges(p *printer, planned []report.PlannedRule, changes []design.Change, verbose bool) {
+	n := 0
+	for _, pr := range planned {
+		n++
+		printPlannedRule(p, n, pr)
+	}
+	for _, c := range changes {
+		_, rule := c.(design.AddRule)
+		_, ext := c.(design.ExtendRule)
+		if (rule || ext) && len(planned) > 0 {
+			continue // written in full above
+		}
+		if line := ruleChangeText(c); line != "" || verbose {
+			n++
+			p.f("    %d. %s\n", n, cmp.Or(line, changeText(c)))
+		}
 	}
 }
 
@@ -584,6 +645,9 @@ func basisLine(bs []report.Basis) string {
 		case inventory.OwnershipTransit, inventory.OwnershipZones, inventory.OwnershipUnset:
 			continue
 		}
+		if b.VirtualRouter != "" {
+			where += "（虚拟路由 " + b.VirtualRouter + "）"
+		}
 		parts = append(parts, end+" "+b.Addresses+" 属于"+where)
 	}
 	return strings.Join(parts, "；")
@@ -592,22 +656,37 @@ func basisLine(bs []report.Basis) string {
 // printNATSummary writes the translations the request goes through: they
 // change which rules match it. Paths in -v show the rest.
 func printNATSummary(p *printer, paths []report.Path) {
-	var seen []string
+	// One line per translation: the paths of one request (one per
+	// application or zone pair) often share it.
+	type line struct {
+		key, text string
+		parts     int
+	}
+	var lines []line
 	for _, path := range paths {
 		for _, n := range path.NAT {
-			line := "NAT 规则 " + n.Rule + " 可能生效，无法离线判定"
+			key := n.Rule + "|" + n.Side.String() + "|" + n.Translated
+			desc := "NAT 规则 " + n.Rule + " 可能生效，无法离线判定"
 			if !n.Uncertain {
 				order := ""
 				if n.Position > 0 {
 					order = "（第 " + itoa(n.Position) + " 条）"
 				}
-				line = text(natSideText, n.Side, n.Side.String()) + " " + n.Rule + order + "：" + cmp.Or(n.Traffic, "-") + " → " + n.Translated
+				desc = text(natSideText, n.Side, n.Side.String()) + " " + n.Rule + order + "：" + cmp.Or(n.Traffic, "-") + " → " + n.Translated
 			}
-			if !slices.Contains(seen, line) {
-				seen = append(seen, line)
-				p.f("  %s\n", line)
+			if i := slices.IndexFunc(lines, func(l line) bool { return l.key == key }); i >= 0 {
+				lines[i].parts++
+				continue
 			}
+			lines = append(lines, line{key: key, text: desc, parts: 1})
 		}
+	}
+	for _, l := range lines {
+		more := ""
+		if l.parts > 1 {
+			more = "（同一规则另转换 " + itoa(l.parts-1) + " 段流量）"
+		}
+		p.f("  %s%s\n", cut(l.text, false), more)
 	}
 }
 

@@ -35,6 +35,16 @@ func DefaultApplications() firemon.ServiceBook {
 	return book
 }
 
+// DefaultApplicationGroups returns the StoneOS predefined application
+// groups rules name, with the applications they hold.
+// APP_ROUTING_PROTOCOL holds the routing protocols on its standard ports
+// (tcp/179, ip/89, udp/520, ip/88).
+func DefaultApplicationGroups() map[string][]string {
+	return map[string][]string{
+		"app_routing_protocol": {"bgp", "ospf", "rip", "eigrp"},
+	}
+}
+
 // DefaultServices returns the embedded default service book.
 func DefaultServices() firemon.ServiceBook {
 	book, err := firemon.ParseServiceBook(predefinedServices)

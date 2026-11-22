@@ -27,6 +27,24 @@ type AddRoute struct {
 	Route firemon.Route `json:"route"`
 }
 
+// AddPolicyRoute appends one entry in forwarding evaluation order.
+type AddPolicyRoute struct {
+	Route firemon.PolicyRoute `json:"route"`
+}
+
+// AddPolicyBinding attaches a routing policy to one ingress zone or interface.
+type AddPolicyBinding struct {
+	Binding firemon.PolicyBinding `json:"binding"`
+}
+
+// String describes the change.
+func (c AddPolicyRoute) String() string {
+	return "add policy route " + c.Route.Policy + "/" + c.Route.ID
+}
+
+// String describes the change.
+func (c AddPolicyBinding) String() string { return "bind routing policy " + c.Binding.Policy }
+
 // String describes the change.
 func (c AddVirtualRouter) String() string { return "add virtual router " + c.VirtualRouter.Name }
 
@@ -45,6 +63,8 @@ func (AddVirtualRouter) change() {}
 func (AddZone) change()          {}
 func (AddInterface) change()     {}
 func (AddRoute) change()         {}
+func (AddPolicyRoute) change()   {}
+func (AddPolicyBinding) change() {}
 
 // applyNetwork applies the network changes; ok is false for other kinds.
 func applyNetwork(cfg *firemon.Config, ch Change) bool {
@@ -55,6 +75,10 @@ func applyNetwork(cfg *firemon.Config, ch Change) bool {
 		cfg.Zones = append(cfg.Zones, c.Zone)
 	case AddInterface:
 		cfg.Interfaces = append(cfg.Interfaces, c.Interface)
+	case AddPolicyRoute:
+		cfg.PolicyRoutes = append(cfg.PolicyRoutes, c.Route)
+	case AddPolicyBinding:
+		cfg.PolicyBindings = append(cfg.PolicyBindings, c.Binding)
 	case AddRoute:
 		cfg.Routes = append(cfg.Routes, c.Route)
 	default:

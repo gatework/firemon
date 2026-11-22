@@ -51,11 +51,14 @@ func (p *Parser) Parse(text string) (*firemon.Config, error) {
 	}
 	s := newState(content, p.location())
 	s.book = p.book()
-	for _, b := range segment(content) {
+	blocks := segment(content)
+	for _, b := range blocks {
 		s.dispatch(b)
 	}
 	cfg := s.finish()
+	recordSource(cfg, blocks)
 	cfg.Applications = p.applications()
+	cfg.ApplicationGroups = DefaultApplicationGroups()
 	return cfg, nil
 }
 
@@ -328,6 +331,60 @@ func Capabilities() firemon.Capabilities {
 	return firemon.Capabilities{
 		ExcludeEntries: true, MixedAddressObjects: true, GroupEntries: true, WildcardFQDN: true,
 		MultiProtocolServices: true, RuleWindows: true, InlineServices: true, InlineFQDN: true, LogDeny: true,
-		MaxNameLength: 95,
+		MonthlySchedules: true, ApplicationAlias: applicationAlias, MaxNameLength: 95,
+	}
+}
+
+// recordSource keeps the text of the blocks that define addresses,
+// services, schedules and rules, as the device wrote them. The running
+// configuration declares objects first with an empty block, then defines
+// them: an empty block is kept only for an object nothing else defines.
+func recordSource(cfg *firemon.Config, blocks []block) {
+	type text struct {
+		kind, name string
+		lines      []string
+		empty      bool
+	}
+	var all []text
+	defined := map[string]bool{}
+	for _, b := range blocks {
+		w := newWords(b.head.Text)
+		kind := ""
+		var name string
+		switch w.next() {
+		case "address":
+			kind, name = firemon.SourceAddress, w.next()
+		case "service":
+			kind, name = firemon.SourceService, w.next()
+		case "servgroup":
+			kind, name = firemon.SourceServiceGroup, w.next()
+		case "schedule":
+			kind, name = firemon.SourceSchedule, w.next()
+		case "rule":
+			if w.next() == "id" {
+				kind, name = firemon.SourceRule, w.next()
+			}
+		}
+		if kind == "" || name == "" {
+			continue
+		}
+		lines := []string{strings.TrimRight(b.head.Raw, "\r\n")}
+		for _, l := range b.body {
+			lines = append(lines, strings.TrimRight(l.Raw, "\r\n"))
+		}
+		if b.last != b.head.Number {
+			lines = append(lines, "exit")
+		}
+		empty := len(b.body) == 0
+		if !empty {
+			defined[firemon.SourceKey(kind, name)] = true
+		}
+		all = append(all, text{kind: kind, name: name, lines: lines, empty: empty})
+	}
+	for _, t := range all {
+		if t.empty && defined[firemon.SourceKey(t.kind, t.name)] {
+			continue
+		}
+		cfg.AddSource(t.kind, t.name, t.lines...)
 	}
 }

@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -59,6 +57,9 @@ func newDeployCmd(o *options) *cobra.Command {
 			if !yes && !confirm(cmd) {
 				return errors.New("未确认，没有发送任何命令")
 			}
+			if journalRoot == "" {
+				journalRoot = defaultJournalRoot(o.deps.Getenv)
+			}
 			if err := o.push(cmd, platform, prop, journalRoot); err != nil {
 				return err
 			}
@@ -69,7 +70,7 @@ func newDeployCmd(o *options) *cobra.Command {
 	f := cmd.Flags()
 	f.BoolVar(&apply, "apply", false, "把变更下发到设备（默认只演练）")
 	f.BoolVar(&yes, "yes", false, "加 --apply 时不再询问确认")
-	f.StringVar(&journalRoot, "journal", defaultJournalRoot(), "下发日志目录")
+	f.StringVar(&journalRoot, "journal", "", "下发日志目录（默认 ~/.local/share/gatework/firemon/deploy）")
 	return cmd
 }
 
@@ -99,12 +100,10 @@ func confirm(cmd *cobra.Command) bool {
 	return (err == nil || line != "") && strings.TrimSpace(line) == "yes"
 }
 
-func defaultJournalRoot() string {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return "firemon-journal"
-	}
-	return filepath.Join(dir, "firemon", "deploy")
+// defaultJournalRoot is the deploy journal root,
+// ~/.local/share/gatework/firemon/deploy.
+func defaultJournalRoot(getenv func(string) string) string {
+	return dataDir(getenv, "deploy", "firemon-journal")
 }
 
 // refreshSnapshot stores the device's configuration after a change, so

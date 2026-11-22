@@ -33,6 +33,11 @@ type Firewall struct {
 	refs        References
 	issues      []Issue
 	fingerprint string
+	// appClasses are the application book grouped by standard ports, most
+	// specific first; appGroups the predefined groups, expanded.
+	appClasses []appClass
+	appGroups  map[string][]string
+	appDisplay map[string]string // lowercase name -> spelling the rules use
 }
 
 // Compile resolves every reference in cfg and returns the evaluable
@@ -52,6 +57,9 @@ func Compile(cfg *Config) (*Firewall, error) {
 		interfaces:  make(map[string]Interface, len(cfg.Interfaces)),
 	}
 	fw.indexNetwork()
+	fw.appClasses = compileAppClasses(cfg.Applications)
+	fw.appGroups = expandAppGroups(cfg.ApplicationGroups)
+	fw.appDisplay = map[string]string{}
 	res := newResolver(cfg)
 	fw.compileObjects(res)
 	fw.compileRules(res)
@@ -104,6 +112,10 @@ func (fw *Firewall) RuleGroups() []RuleGroup { return slices.Clone(fw.cfg.RuleGr
 // NATRules returns the dynamic NAT rules in declaration order.
 func (fw *Firewall) NATRules() []*NATRule { return slices.Clone(fw.nat) }
 
+// PolicyRoutes returns every policy routing entry in device order, including
+// disabled entries and policies that have no ingress binding.
+func (fw *Firewall) PolicyRoutes() []*PBRRule { return slices.Clone(fw.pbr) }
+
 // NATRulesFor returns the rules that decide one side, in order.
 func (fw *Firewall) NATRulesFor(side NATKind) []*NATRule {
 	var out []*NATRule
@@ -130,8 +142,8 @@ func (fw *Firewall) Bridges() bool {
 	return false
 }
 
-// ZoneInterfaces returns how many interfaces are bound to a zone.
-func (fw *Firewall) ZoneInterfaces(zone string) int {
+// ZoneInterfaceCount returns how many interfaces are bound to a zone.
+func (fw *Firewall) ZoneInterfaceCount(zone string) int {
 	n := 0
 	for _, i := range fw.cfg.Interfaces {
 		if i.Zone == zone {
@@ -150,6 +162,8 @@ func (fw *Firewall) Zone(name string) (Zone, bool) {
 // Interface returns the interface with the given name.
 func (fw *Firewall) Interface(name string) (Interface, bool) {
 	i, ok := fw.interfaces[name]
+	i.Addresses = slices.Clone(i.Addresses)
+	i.AddressObjects = slices.Clone(i.AddressObjects)
 	return i, ok
 }
 
@@ -248,8 +262,18 @@ func (fw *Firewall) compileRules(res *resolver) {
 		r.issues = slices.Concat(r.issues, apps, semantic)
 		r.certain = certain && len(apps) == 0 && len(semantic) == 0
 		for _, a := range spec.Applications() {
-			r.apps = append(r.apps, strings.ToLower(a))
+			low := strings.ToLower(a)
+			r.apps = append(r.apps, low)
+			if _, ok := fw.appDisplay[low]; !ok {
+				fw.appDisplay[low] = a
+			}
 		}
+		r.appSet = slices.Clone(r.apps)
+		for _, a := range r.apps {
+			r.appSet = append(r.appSet, fw.appGroups[a]...)
+		}
+		slices.Sort(r.appSet)
+		r.appSet = slices.Compact(r.appSet)
 		if spec.Schedule != "" {
 			r.schedule = schedules[spec.Schedule]
 			switch {

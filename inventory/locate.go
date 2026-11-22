@@ -17,16 +17,26 @@ import (
 type Part struct {
 	Src, Dst   traffic.AddressSet
 	DstDomains []string
-	FromZone   string
-	ToZone     string
+	// Service is the service of the part when an earlier firewall's NAT
+	// changed it; empty means the request's.
+	Service  traffic.ServiceSet
+	FromZone string
+	ToZone   string
 }
 
 // Crossing is one cluster a request crosses.
 type Crossing struct {
 	Cluster string
-	// Firewall is the member evaluated; Members lists the whole cluster.
-	Firewall  string
-	Members   []string
+	// Firewall is the member evaluated; Members lists the whole cluster,
+	// and Devices names them to operators, the evaluated one first.
+	Firewall string
+	Members  []string
+	Devices  []Device
+	// Seq is the place of the crossing on the traffic's way, from 1.
+	Seq int
+	// Upstream lists the earlier firewalls whose NAT this crossing
+	// receives traffic from, translated.
+	Upstream  []Upstream
 	Ownership Ownership
 	// Basis says which ends of the request the cluster owns, and why.
 	Basis []Basis
@@ -43,9 +53,25 @@ type Crossing struct {
 	Incomplete bool
 	// ZonesNeeded reports layer-2 zones that routing cannot locate.
 	ZonesNeeded bool
+	// ZoneConflicts are request addresses an inventory zone binding places
+	// in one zone while the firewall's routing sends them through another.
+	// Locate does not detect them yet: the list is always empty.
+	ZoneConflicts []ZoneConflict
 	// Inside are the parts that stay behind one interface.
 	Inside  []Inside
 	Verdict query.Verdict
+}
+
+// ZoneConflict is request traffic whose inventory zone binding disagrees
+// with the firewall's routing on one end.
+type ZoneConflict struct {
+	// Source is true for the source end, false for the destination.
+	Source        bool
+	Space         traffic.Space
+	VirtualRouter string
+	BoundZone     string // the zone the inventory binds the addresses to
+	RouteZone     string // the zone of the interface routing chooses
+	Interface     string
 }
 
 // Excluded is the traffic no firewall of the inventory owns on either end.
@@ -71,6 +97,8 @@ type Trace struct {
 }
 
 // Locate finds the clusters req crosses and evaluates each on its part:
+// they are then chained (followNAT, sequence): a firewall whose NAT
+// rewrites the traffic hands the translated packet to the next one.
 //
 //   - the owners of the sources and of the destinations, declared protected
 //     networks first, longest prefix across the inventory, then routing;
@@ -82,7 +110,6 @@ func (inv *Inventory) Locate(req query.Request) (Trace, error) {
 	if err != nil {
 		return Trace{}, err
 	}
-	outcomes := map[query.Verdict]bool{}
 	for _, cluster := range sortedKeys(work) {
 		c, err := inv.evaluate(cluster, work[cluster], req)
 		if err != nil {
@@ -95,8 +122,15 @@ func (inv *Inventory) Locate(req query.Request) (Trace, error) {
 		if len(c.Paths) == 0 && !c.Incomplete {
 			continue
 		}
-		outcomes[c.Verdict] = true
 		t.Crossings = append(t.Crossings, c)
+	}
+	if err := inv.followNAT(&t, work, req); err != nil {
+		return Trace{}, err
+	}
+	inv.sequence(&t, req.VirtualRouter)
+	outcomes := map[query.Verdict]bool{}
+	for _, c := range t.Crossings {
+		outcomes[c.Verdict] = true
 	}
 	t.Verdict = overall(outcomes)
 	return t, nil
@@ -113,17 +147,20 @@ type assignment struct {
 // networks the cluster owns.
 type Basis struct {
 	// Source is true for the source end, false for the destination.
-	Source    bool
-	Addresses traffic.AddressSet
-	Zone      string
+	Source bool
+	// VirtualRouter is the routing context the request was located in;
+	// empty means the firewall's default.
+	VirtualRouter string
+	Addresses     traffic.AddressSet
+	Zone          string
 	// Networks are the owned networks the addresses fall in.
 	Networks  []string
 	Ownership Ownership
 }
 
 // basisOf is the basis an owned end gives its cluster.
-func basisOf(o owned, source bool) Basis {
-	return Basis{Source: source, Addresses: o.set, Zone: o.zone, Networks: o.networks, Ownership: o.ownership}
+func basisOf(o owned, source bool, vr string) Basis {
+	return Basis{Source: source, VirtualRouter: vr, Addresses: o.set, Zone: o.zone, Networks: o.networks, Ownership: o.ownership}
 }
 
 // works holds each cluster's assignment.
@@ -207,12 +244,12 @@ func (inv *Inventory) assignPair(sp, dp owned, p Part, vr string, add func(strin
 		if dp.cluster == sp.cluster && dp.ownership == OwnershipDeclared {
 			q := p
 			q.FromZone, q.ToZone = from, dp.zone
-			add(sp.cluster, sp.ownership, q, basisOf(sp, true), basisOf(dp, false))
+			add(sp.cluster, sp.ownership, q, basisOf(sp, true, vr), basisOf(dp, false, vr))
 		} else {
 			for _, z := range inv.zonesOf(sp.cluster, dp.set) {
 				q := p
 				q.Dst, q.FromZone, q.ToZone = z.set, from, z.zone
-				add(sp.cluster, sp.ownership, q, basisOf(sp, true))
+				add(sp.cluster, sp.ownership, q, basisOf(sp, true, vr))
 			}
 		}
 		for _, transit := range inv.chain(sp.cluster, p, vr) {
@@ -236,7 +273,7 @@ func (inv *Inventory) assignPair(sp, dp owned, p Part, vr string, add func(strin
 		for _, z := range inv.zonesOf(dp.cluster, sp.set) {
 			q := p
 			q.Src, q.FromZone, q.ToZone = z.set, z.zone, to
-			add(dp.cluster, dp.ownership, q, basisOf(dp, false))
+			add(dp.cluster, dp.ownership, q, basisOf(dp, false, vr))
 		}
 	}
 }
@@ -294,15 +331,18 @@ func (inv *Inventory) nextHops(m *member, dst traffic.AddressSet, vr string) []s
 // keeps the paths that cross the firewall.
 func (inv *Inventory) evaluate(cluster string, a *assignment, req query.Request) (Crossing, error) {
 	m := inv.primary(cluster)
-	c := Crossing{Cluster: cluster, Firewall: m.name, Members: inv.clusterMembers(cluster), Ownership: a.ownership, Parts: a.parts, Basis: a.basis}
+	c := Crossing{Cluster: cluster, Firewall: m.name, Members: inv.clusterMembers(cluster), Devices: inv.Devices(cluster), Ownership: a.ownership, Parts: a.parts, Basis: a.basis}
 	for _, p := range a.parts {
-		if p.FromZone != "" && p.FromZone == p.ToZone && m.fw.ZoneInterfaces(p.FromZone) == 1 {
+		if p.FromZone != "" && p.FromZone == p.ToZone && m.fw.ZoneInterfaceCount(p.FromZone) == 1 {
 			// Both ends behind one interface: the traffic does not cross.
 			c.Inside = append(c.Inside, Inside{Cluster: cluster, Zone: p.FromZone, Src: p.Src, Dst: p.Dst})
 			continue
 		}
 		r := req
 		r.Src, r.Dst, r.DstDomains = p.Src, p.Dst, p.DstDomains
+		if !p.Service.IsEmpty() {
+			r.Service = p.Service
+		}
 		r.FromZone, r.ToZone = cmp.Or(p.FromZone, req.FromZone), cmp.Or(p.ToZone, req.ToZone)
 		if halfBridged(m.fw, r.FromZone, r.ToZone) {
 			// One end is in a layer-2 zone and nothing binds the other:
@@ -391,15 +431,19 @@ func (inv *Inventory) PlanTrace(t Trace, intent design.Intent) ([]ClusterPlan, e
 func (inv *Inventory) planCluster(m *member, parts []Part, intent design.Intent) (*design.Plan, error) {
 	planner, fw := m.planner, m.fw
 	var plans []*design.Plan
+	var intents []design.Intent
 	for i, p := range parts {
 		part := intent
 		part.Src, part.Dst = p.Src, p.Dst
+		if !p.Service.IsEmpty() {
+			part.Service = p.Service
+		}
 		part.FromZone, part.ToZone = cmp.Or(p.FromZone, intent.FromZone), cmp.Or(p.ToZone, intent.ToZone)
 		plan, err := planner.Plan(part)
 		if err != nil {
 			return nil, err
 		}
-		plans = append(plans, plan)
+		plans, intents = append(plans, plan), append(intents, part)
 		if i == len(parts)-1 || len(plan.Changes) == 0 {
 			continue
 		}
@@ -410,9 +454,23 @@ func (inv *Inventory) planCluster(m *member, parts []Part, intent design.Intent)
 		if fw, err = firemon.Compile(cfg); err != nil {
 			return nil, err
 		}
-		planner = design.New(fw, design.Options{Now: inv.now, Naming: m.naming})
+		planner = design.New(fw, design.Options{Now: inv.now, Naming: m.naming, Capabilities: m.caps})
 	}
-	return design.Merge(plans...), nil
+	merged := design.Merge(plans...)
+	if len(plans) < 2 {
+		return merged, nil
+	}
+	// Merge leaves a plan of several parts unverified: the parts were each
+	// proved on the configuration the parts before them leave, so the
+	// combined changes are replayed from the firewall as it is now.
+	for _, p := range plans {
+		if !p.Verified {
+			merged.VerifyError = cmp.Or(p.VerifyError, "part not verified")
+			return merged, nil
+		}
+	}
+	_ = design.VerifyParts(m.fw, merged, intents, inv.now()) // records the outcome in the plan
+	return merged, nil
 }
 
 // ClusterPlan is the change on one cluster for every part of the request

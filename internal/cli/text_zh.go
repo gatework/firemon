@@ -74,6 +74,8 @@ var noteText = map[intake.Code]string{
 	intake.CodeInvalid:            "无法识别",
 	intake.CodeUnknownApplication: "未知应用：配置和预定义应用表中都没有",
 	intake.CodeUnsupported:        "此处不支持，已忽略",
+	intake.CodeFullWidth:          "全角字符已按半角读取",
+	intake.CodeNetworkHost:        "按单个主机处理；它是网络或广播地址，若指网段请写掩码（如 /24）",
 }
 
 var fieldText = map[intake.Field]string{
@@ -178,6 +180,8 @@ var itemKindText = map[migrate.ItemKind]string{
 	migrate.ItemKindZone:          "区域",
 	migrate.ItemKindInterface:     "接口",
 	migrate.ItemKindRoute:         "路由",
+	migrate.ItemKindPolicyRoute:   "策略路由",
+	migrate.ItemKindPolicyBinding: "策略路由入口绑定",
 	migrate.ItemKindSchedule:      "时间计划",
 	migrate.ItemKindAddress:       "地址",
 	migrate.ItemKindAddressGroup:  "地址组",
@@ -319,7 +323,7 @@ var planStatusText = map[design.Status]string{
 var countText = map[string]string{
 	"zones": "安全区域", "interfaces": "接口", "routes": "路由", "addresses": "地址对象",
 	"address_groups": "地址组", "services": "服务对象", "service_groups": "服务组", "schedules": "时间计划",
-	"rules": "策略", "undecidable_rules": "无法离线判定的策略", "static_nats": "静态 NAT", "dynamic_nats": "动态 NAT",
+	"rules": "策略", "conditional_rules": "按条件匹配的策略", "undecidable_rules": "无法离线判定的策略", "static_nats": "静态 NAT", "dynamic_nats": "动态 NAT",
 }
 
 func yesNo(b bool) string {

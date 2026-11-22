@@ -160,3 +160,24 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+func TestParse_FullWidthAndNetworkHost(t *testing.T) {
+	t.Parallel()
+	req, err := intake.Parse("１０．２４８．３０．５", "10.1.1.0／24，10.2.2.0", "ｔｃｐ／２２", intake.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.Src.String() != "10.248.30.5" || req.Dst.String() != "10.1.1.0/24,10.2.2.0" || req.Service.String() != "tcp/22" {
+		t.Fatalf("src %s dst %s service %s", req.Src, req.Dst, req.Service)
+	}
+	codes := map[intake.Code]int{}
+	for _, n := range req.Notes {
+		codes[n.Code]++
+	}
+	if codes[intake.CodeFullWidth] != 3 || codes[intake.CodeNetworkHost] != 1 {
+		t.Fatalf("notes %v", req.Notes)
+	}
+	if len(req.SrcItems) != 1 || len(req.DstItems) != 2 {
+		t.Fatalf("items %v %v", req.SrcItems, req.DstItems)
+	}
+}

@@ -91,26 +91,37 @@ func (e *Engine) applyPolicyRoute(r *firemon.PBRRule, w routed, domain string, r
 	}
 	match, bound, decidable := v.match, v.bound, v.decidable
 	id := r.Spec().Policy + "/" + r.Spec().ID
-	iface, zone := r.Egress()
-	out := &hop{vr: r.Spec().VirtualRouter, zone: zone, iface: iface, prefixLen: -1}
+	forward := func(t routed) []routed {
+		t.policy = id
+		exits := r.Egresses()
+		if len(exits) == 0 {
+			t.out = &hop{prefixLen: -1}
+			return []routed{t}
+		}
+		out := make([]routed, 0, len(exits))
+		for _, exit := range exits {
+			t.out = &hop{vr: exit.Route.VirtualRouter, zone: exit.Zone, iface: exit.Interface, prefixLen: -1}
+			out = append(out, t)
+		}
+		return out
+	}
 	if !decidable {
 		maybe := s.Intersect(bound)
 		if maybe.IsEmpty() {
 			return nil, []routed{w}
 		}
 		yes := w.restrict(maybe)
-		yes.out, yes.policy, yes.conditions = out, id, append(slices.Clip(w.conditions), Condition{PolicyRoute: id, Matches: true})
+		yes.conditions = append(slices.Clip(w.conditions), Condition{PolicyRoute: id, Matches: true})
 		no := w.restrict(maybe)
 		no.conditions = append(slices.Clip(w.conditions), Condition{PolicyRoute: id})
-		return []routed{yes}, append([]routed{no}, w.restrictAll(s.Subtract(bound))...)
+		return forward(yes), append([]routed{no}, w.restrictAll(s.Subtract(bound))...)
 	}
 	hit := s.Intersect(match)
 	if hit.IsEmpty() {
 		return nil, []routed{w}
 	}
 	t := w.restrict(hit)
-	t.out, t.policy = out, id
-	return []routed{t}, w.restrictAll(s.Subtract(match))
+	return forward(t), w.restrictAll(s.Subtract(match))
 }
 
 // restrict narrows a routed part to space s of its translated traffic.

@@ -25,14 +25,20 @@ func TestAccept_Matrix(t *testing.T) {
 		never string
 	}{
 		// Verdicts and the exit code contract.
-		{"full match", []string{"search", "--src", "203.0.113.9", "--dst", "172.16.0.10", "--service", "tcp/80"}, cli.ExitOK, "结论：完全命中", ""},
-		{"deny needs a rule before it", []string{"search", "--src", "203.0.113.9", "--dst", "10.0.0.5", "--service", "tcp/80"}, cli.ExitNotAllowed, "会绕过它", ""},
+		{"full match", []string{"search", "--src", "203.0.113.9", "--dst", "172.16.0.10", "--service", "tcp/80"}, cli.ExitOK, "结论：无需变更 —— 已有策略放通", ""},
+		{"deny needs a rule before it", []string{"search", "-v", "--src", "203.0.113.9", "--dst", "10.0.0.5", "--service", "tcp/80"}, cli.ExitNotAllowed, "会绕过它", ""},
 		{"range source, default deny", []string{"search", "--src", "10.0.0.5-10.0.0.9", "--dst", "203.0.113.208", "--service", "tcp/80"}, cli.ExitNotAllowed, "默认拒绝", ""},
 		{"undecided without design", []string{"search", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443", "--no-design"}, cli.ExitUndecided, "需确认", ""},
-		{"undecided settled by a plan", []string{"search", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443"}, cli.ExitNotAllowed, "由已验证的方案确保放通", "结论：需确认"},
+		{"undecided settled by a plan", []string{"search", "-v", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443"}, cli.ExitNotAllowed, "由已验证的方案确保放通", "结论：需确认"},
 		{"time-bound hit", []string{"search", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/22", "--at", "2026-11-20T10:00:00+08:00", "--timezone", "Asia/Shanghai"}, cli.ExitOK, "限时策略", ""},
-		{"NAT translates to the packet family", []string{"search", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443"}, cli.ExitNotAllowed, "源 NAT 1", "2001:db8:1::2"},
+		{"NAT translates to the packet family", []string{"search", "-v", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443"}, cli.ExitNotAllowed, "源 NAT 1", "2001:db8:1::2"},
 		{"protocol number reads as ip/N", []string{"search", "--src", "10.0.0.5", "--dst", "172.16.0.10", "--service", "proto/47", "--no-design"}, cli.ExitNotAllowed, "172.16.0.10 ip/47", ""},
+		// ADR 0017: flows, full planned rules, premises and input hints.
+		{"each source is a flow", []string{"search", "--src", "10.0.0.5,10.0.0.6", "--dst", "203.0.113.208", "--service", "tcp/80"}, cli.ExitNotAllowed, "10.0.0.6 → 203.0.113.208 tcp/80", ""},
+		{"a new rule is written in full", []string{"search", "-v", "--src", "203.0.113.9", "--dst", "10.0.0.5", "--service", "tcp/80"}, cli.ExitNotAllowed, "       区域：untrust → trust", ""},
+		{"an unknown criterion stays undecided in strict and default readings", []string{"search", "--strict", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443", "--no-design"}, cli.ExitUndecided, "需确认", ""},
+		{"a network address as host is flagged", []string{"search", "--src", "10.0.0.0", "--dst", "203.0.113.208", "--service", "tcp/80", "--no-design"}, cli.ExitNotAllowed, "若指网段请写掩码", ""},
+		{"full-width input", []string{"search", "--src", "１０．０．０．５", "--dst", "203.0.113.208", "--service", "tcp/80", "--no-design"}, cli.ExitNotAllowed, "默认拒绝", "无法识别"},
 		// Input that is not answered rather than answered in part.
 		{"unknown application", []string{"search", "--src", "10.0.0.5", "--dst", "172.16.0.10", "--service", "app:nosuch"}, cli.ExitUsage, "未知应用", ""},
 		{"port zero", []string{"search", "--src", "10.0.0.5", "--dst", "172.16.0.10", "--service", "tcp/0"}, cli.ExitUsage, "无法识别", "已忽略"},
@@ -81,6 +87,9 @@ func TestAccept_Matrix(t *testing.T) {
 // isCommand reports a device command line, which stays in the vendor's
 // language.
 func isCommand(line string) bool {
+	if strings.HasPrefix(line, "    ") {
+		return true // a script block: device syntax
+	}
 	trimmed := strings.TrimSpace(line)
 	for _, p := range []string{"address ", "rule id", "action ", "src-", "dst-", "service ", "name ", "description ", "log ", "exit", "no ", "ip ", "set ", "delete "} {
 		if strings.HasPrefix(trimmed, p) {

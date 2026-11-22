@@ -1793,5 +1793,149 @@
       "tcp/80",
       "tcp/443"
     ]
+  },
+  "source": {
+    "address:all-internal": [
+      "address \"all-internal\"",
+      "  member \"lan\"",
+      "  member \"web-servers\"",
+      "exit"
+    ],
+    "address:cdn": [
+      "address \"cdn\"",
+      "  host \"*.cdn.example.com\" vrouter \"trust-vr\"",
+      "exit"
+    ],
+    "address:lan": [
+      "address \"lan\"",
+      "  ip 10.0.0.0/16",
+      "  exclude ip 10.0.9.0/24",
+      "exit"
+    ],
+    "address:v6-net": [
+      "address \"v6-net\" ipv6",
+      "  ip 2001:db8:2::/48",
+      "exit"
+    ],
+    "address:web-servers": [
+      "address \"web-servers\"",
+      "  ip 172.16.0.10/32",
+      "  range 172.16.0.20 172.16.0.29",
+      "  description \"dmz web farm\"",
+      "exit"
+    ],
+    "rule:1": [
+      "rule id 1",
+      "  action permit",
+      "  log session-end",
+      "  src-zone \"untrust\"",
+      "  dst-zone \"dmz\"",
+      "  src-addr \"Any\"",
+      "  dst-addr \"web-servers\"",
+      "  service \"web\"",
+      "  name \"web-in\"",
+      "exit"
+    ],
+    "rule:10": [
+      "rule id 10",
+      "  name \"ops\"",
+      "  aggregate-type",
+      "exit"
+    ],
+    "rule:3": [
+      "rule id 3",
+      "  aggregate-rule 10",
+      "  action deny",
+      "  src-zone \"untrust\"",
+      "  dst-zone \"trust\"",
+      "  src-addr \"Any\"",
+      "  dst-addr \"lan\"",
+      "  service \"Any\"",
+      "  name \"block-inbound\"",
+      "exit"
+    ],
+    "rule:7": [
+      "rule id 7",
+      "  action permit",
+      "  disable",
+      "  src-ip 10.0.1.0/24",
+      "  src-range 10.0.2.5 10.0.2.9",
+      "  dst-host \"updates.example.com\"",
+      "  service \"HTTPS\"",
+      "exit"
+    ],
+    "rule:8": [
+      "rule id 8",
+      "  action permit",
+      "  src-zone \"trust\"",
+      "  dst-zone \"untrust\"",
+      "  src-addr \"lan\"",
+      "  dst-addr \"Any\"",
+      "  service-rule tcp dst-port 22 ",
+      "  schedule \"worktime\"",
+      "  start-time 11/1/2026 8:0:0",
+      "  expire-time 12/31/2026 23:59:59",
+      "  description \"temporary ssh\"",
+      "exit"
+    ],
+    "rule:9": [
+      "rule id 9",
+      "  action permit",
+      "  src-zone \"trust\"",
+      "  dst-zone \"untrust\"",
+      "  src-addr \"lan\"",
+      "  dst-addr \"Any\"",
+      "  service \"Any\"",
+      "  application \"HTTPS\"",
+      "  unknown-keyword 42",
+      "exit"
+    ],
+    "schedule:change-window": [
+      "schedule \"change-window\"",
+      "  absolute start 11/01/2026 00:00:00 end 12/01/2026 00:00:00",
+      "exit"
+    ],
+    "schedule:worktime": [
+      "schedule \"worktime\"",
+      "  periodic weekdays 08:00:00 to 18:30:00",
+      "  description \"office hours\"",
+      "exit"
+    ],
+    "service-group:web": [
+      "servgroup \"web\"",
+      "  service \"HTTP\"",
+      "  service \"HTTPS\"",
+      "  service \"TCP_8080\"",
+      "exit"
+    ],
+    "service:DNS_EXT": [
+      "service \"DNS_EXT\"",
+      "  udp dst-port 53 ",
+      "  tcp dst-port 53 ",
+      "exit"
+    ],
+    "service:FROM_443": [
+      "service \"FROM_443\"",
+      "  tcp dst-port 0 65535 src-port 443 ",
+      "exit"
+    ],
+    "service:TCP_8000-8010": [
+      "service \"TCP_8000-8010\"",
+      "  tcp dst-port 8000 8010 ",
+      "exit"
+    ],
+    "service:TCP_8080": [
+      "service \"TCP_8080\"",
+      "  tcp dst-port 8080 ",
+      "exit"
+    ]
+  },
+  "application_groups": {
+    "app_routing_protocol": [
+      "bgp",
+      "ospf",
+      "rip",
+      "eigrp"
+    ]
   }
 }

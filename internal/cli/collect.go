@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -103,12 +101,9 @@ func (o *options) loadSnapshot(ctx context.Context) (workflow.Loaded, bootstrap.
 	return loaded, p, err
 }
 
-func defaultStore() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "firemon-snapshots"
-	}
-	return filepath.Join(dir, "firemon", "snapshots")
+// defaultStore is the snapshot store, ~/.local/share/gatework/firemon/snapshots.
+func defaultStore(getenv func(string) string) string {
+	return dataDir(getenv, "snapshots", "firemon-snapshots")
 }
 
 // loadStored loads a snapshot; one stored by another firemon version is

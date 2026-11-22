@@ -17,30 +17,37 @@ func (w TimeWindow) Contains(t time.Time) bool {
 	return (w.Start.IsZero() || !t.Before(w.Start)) && (w.End.IsZero() || t.Before(w.End))
 }
 
-// Recurrence is a daily time-of-day interval on selected weekdays. Start and
-// End are offsets from local midnight and End is exclusive; End before Start
-// wraps past midnight, and End equal to Start covers the whole day.
+// Recurrence is a daily time-of-day interval on selected weekdays or days
+// of the month. Start and End are offsets from local midnight and End is
+// exclusive; End before Start wraps past midnight, and End equal to Start
+// covers the whole day.
 type Recurrence struct {
 	// Days lists the weekdays the interval starts on; empty means every day.
-	Days  []time.Weekday `json:"days,omitempty"`
-	Start time.Duration  `json:"start"`
-	End   time.Duration  `json:"end"`
+	Days []time.Weekday `json:"days,omitempty"`
+	// MonthDays lists the days of the month (1-31) the interval starts on;
+	// empty means every day. With Days as well, a day must be in both.
+	MonthDays []int         `json:"month_days,omitempty"`
+	Start     time.Duration `json:"start"`
+	End       time.Duration `json:"end"`
 }
 
 // Contains reports whether the wall-clock time of t falls inside the
 // recurrence. t must already be in the device time zone.
 func (r Recurrence) Contains(t time.Time) bool {
 	offset := time.Duration(t.Hour())*time.Hour + time.Duration(t.Minute())*time.Minute + time.Duration(t.Second())*time.Second
-	onDay := func(d time.Weekday) bool { return len(r.Days) == 0 || slices.Contains(r.Days, d) }
+	onDay := func(d time.Time) bool {
+		return (len(r.Days) == 0 || slices.Contains(r.Days, d.Weekday())) &&
+			(len(r.MonthDays) == 0 || slices.Contains(r.MonthDays, d.Day()))
+	}
 	if r.Start == r.End {
-		return onDay(t.Weekday())
+		return onDay(t)
 	}
 	if r.Start < r.End {
-		return onDay(t.Weekday()) && offset >= r.Start && offset < r.End
+		return onDay(t) && offset >= r.Start && offset < r.End
 	}
 	// Wrapping interval: the evening part belongs to today, the morning part
 	// to the interval that started yesterday.
-	return (onDay(t.Weekday()) && offset >= r.Start) || (onDay((t.Weekday()+6)%7) && offset < r.End)
+	return (onDay(t) && offset >= r.Start) || (onDay(t.AddDate(0, 0, -1)) && offset < r.End)
 }
 
 // Schedule is a named time restriction. A schedule is active when any

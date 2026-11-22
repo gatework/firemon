@@ -37,12 +37,22 @@ type Intent struct {
 	NoLog bool
 	// LogSetting names the log forwarding profile of new rules (PAN-OS).
 	LogSetting string
+	// Until makes the access temporary: new rules stop matching at that
+	// instant, through the rule's validity window where the vendor has one
+	// (Capabilities.RuleWindows), else through a schedule the plan creates.
+	Until time.Time
+	// Strict, Users and URLCategories are evaluated as in query.Request:
+	// the plan is verified under the same premises as the query.
+	Strict        bool
+	Users         []string
+	URLCategories []string
 }
 
 func (i Intent) request(at time.Time) query.Request {
 	return query.Request{
 		Src: i.Src, Dst: i.Dst, Service: i.Service, At: at,
 		FromZone: i.FromZone, ToZone: i.ToZone, VirtualRouter: i.VirtualRouter,
+		Strict: i.Strict, Users: i.Users, URLCategories: i.URLCategories,
 	}
 }
 

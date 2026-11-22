@@ -21,7 +21,7 @@ type Proposal struct {
 
 // Propose designs and renders the change that permits intent.
 func Propose(fw *firemon.Firewall, p bootstrap.Platform, intent design.Intent, now func() time.Time) (Proposal, error) {
-	plan, err := design.New(fw, design.Options{Now: now, Naming: p.Naming}).Plan(intent)
+	plan, err := design.New(fw, design.Options{Now: now, Naming: p.Naming, Capabilities: p.Capabilities}).Plan(intent)
 	if err != nil {
 		return Proposal{}, err
 	}

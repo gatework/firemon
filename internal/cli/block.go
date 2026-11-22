@@ -91,9 +91,9 @@ func (o *options) block(cmd *cobra.Command, req blockRequest) error {
 		}
 		r := blockResult{Cluster: cluster, Firewall: name, Members: inv.Members(cluster), BlockedBy: bp.BlockedBy, Plan: bp.Plan}
 		switch {
-		case len(bp.Changes) == 0:
 		case !bp.Verified:
 			undecided = true
+		case len(bp.Changes) == 0:
 		default:
 			script, err := platform.Render(bp.Plan)
 			if err != nil {
@@ -124,7 +124,7 @@ func printBlock(cmd *cobra.Command, notes []intake.Note, out []blockResult) erro
 	p := &printer{w: cmd.OutOrStdout()}
 	todo := 0
 	for _, r := range out {
-		if len(r.Plan.Changes) > 0 {
+		if len(r.Plan.Changes) > 0 || !r.Plan.Verified {
 			todo++
 		}
 	}
@@ -138,13 +138,13 @@ func printBlock(cmd *cobra.Command, notes []intake.Note, out []blockResult) erro
 	}
 	for _, r := range out {
 		switch {
-		case len(r.Plan.Changes) == 0:
+		case r.Plan.Verified && len(r.Plan.Changes) == 0:
 			p.f("\n■ %s：已封堵（拒绝策略 %s）\n", r.Cluster, joinIDs(r.BlockedBy))
 		case r.Script == nil:
 			p.f("\n■ %s：需确认，封堵方案验证未通过（%s），不输出命令\n", r.Cluster, r.Plan.VerifyError)
 		default:
 			p.f("\n■ %s：需新增封堵策略\n", r.Cluster)
-			p.f("  处置：%s，在 %s 上执行%s（已验证：所有区域之间都拒绝这些流量，其他流量不受影响）\n", actionSummary(r.Plan), r.Firewall, haNote(r.Members, r.Firewall))
+			p.f("  处置：%s，在 %s 上执行%s（已验证：所有区域之间都拒绝这些流量，其他流量不受影响）\n", actionSummary(r.Plan), r.Firewall, haNote(devicesOf(r.Members), r.Firewall))
 			n := 0
 			for _, c := range r.Plan.Changes {
 				if line := ruleChangeText(c); line != "" {

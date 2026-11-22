@@ -567,6 +567,9 @@
     }
   ],
   "applications": {
+    "cotp": [
+      "tcp/102"
+    ],
     "dns": [
       "tcp/53",
       "udp/53"
@@ -576,6 +579,11 @@
     ],
     "icmp": [
       "icmp"
+    ],
+    "jira": [
+      "tcp/80",
+      "tcp/443",
+      "tcp/8080"
     ],
     "kerberos": [
       "tcp/88",
@@ -589,10 +597,33 @@
       "tcp/139",
       "tcp/445"
     ],
+    "ms-ds-smb-base": [
+      "tcp/139",
+      "tcp/445"
+    ],
+    "ms-office365": [
+      "tcp/80",
+      "tcp/443"
+    ],
+    "ms-outlook-downloading": [
+      "tcp/80",
+      "tcp/443"
+    ],
+    "ms-outlook-personal-uploading": [
+      "tcp/80",
+      "tcp/443"
+    ],
+    "ms-outlook-send": [
+      "tcp/80",
+      "tcp/443"
+    ],
     "ms-rdp": [
       "tcp/3389"
     ],
     "msrpc": [
+      "tcp/135"
+    ],
+    "msrpc-base": [
       "tcp/135"
     ],
     "mssql-db": [
@@ -600,6 +631,9 @@
     ],
     "mysql": [
       "tcp/3306"
+    ],
+    "net.tcp": [
+      "tcp/808"
     ],
     "netbios-dg": [
       "udp/138"
@@ -616,6 +650,14 @@
     "oracle": [
       "tcp/1521"
     ],
+    "outlook-web": [
+      "tcp/80",
+      "tcp/443"
+    ],
+    "outlook-web-online": [
+      "tcp/80",
+      "tcp/443"
+    ],
     "ping": [
       "icmp/8"
     ],
@@ -628,6 +670,10 @@
     "snmp": [
       "udp/161"
     ],
+    "soap": [
+      "tcp/80",
+      "tcp/443"
+    ],
     "ssh": [
       "tcp/22"
     ],
@@ -637,14 +683,139 @@
     "syslog": [
       "udp/514"
     ],
+    "t.120": [
+      "tcp/1503"
+    ],
+    "teamviewer": [
+      "tcp/80",
+      "tcp/443",
+      "tcp/5938",
+      "udp/5938"
+    ],
+    "teamviewer-web": [
+      "tcp/80",
+      "tcp/443"
+    ],
     "telnet": [
       "tcp/23"
     ],
     "tftp": [
       "udp/69"
     ],
+    "traceroute": [
+      "icmp",
+      "udp/33434-33534"
+    ],
     "web-browsing": [
       "tcp/80"
+    ],
+    "websocket": [
+      "tcp/80",
+      "tcp/443"
+    ],
+    "zabbix": [
+      "tcp/10050-10051"
+    ]
+  },
+  "source": {
+    "address-group:tagged": [
+      "set address-group tagged dynamic filter 'prod'"
+    ],
+    "address-group:web-farm": [
+      "set address-group web-farm static [ web-01 web-02 dmz-range ]"
+    ],
+    "address:dmz-range": [
+      "set address dmz-range ip-range 172.16.0.20-172.16.0.29"
+    ],
+    "address:isp-gw": [
+      "set address isp-gw ip-netmask 203.0.113.1"
+    ],
+    "address:lan": [
+      "set address lan ip-netmask 10.0.0.0/16"
+    ],
+    "address:office uplink": [
+      "set address \"office uplink\" ip-netmask 203.0.113.2/30"
+    ],
+    "address:public-web": [
+      "set address public-web ip-netmask 198.51.100.80"
+    ],
+    "address:updates": [
+      "set address updates fqdn updates.example.com"
+    ],
+    "address:web-01": [
+      "set address web-01 ip-netmask 172.16.0.10"
+    ],
+    "address:web-02": [
+      "set address web-02 ip-netmask 172.16.0.11/32"
+    ],
+    "rule:Allow updates": [
+      "set rulebase security rules \"Allow updates\" from trust",
+      "set rulebase security rules \"Allow updates\" to untrust",
+      "set rulebase security rules \"Allow updates\" source lan",
+      "set rulebase security rules \"Allow updates\" destination updates",
+      "set rulebase security rules \"Allow updates\" application any",
+      "set rulebase security rules \"Allow updates\" service service-https",
+      "set rulebase security rules \"Allow updates\" action allow"
+    ],
+    "rule:apps": [
+      "set rulebase security rules apps from trust",
+      "set rulebase security rules apps to untrust",
+      "set rulebase security rules apps source lan",
+      "set rulebase security rules apps destination any",
+      "set rulebase security rules apps application [ ssl web-browsing ]",
+      "set rulebase security rules apps service application-default",
+      "set rulebase security rules apps action allow"
+    ],
+    "rule:block-bad": [
+      "set rulebase security rules block-bad from untrust",
+      "set rulebase security rules block-bad to any",
+      "set rulebase security rules block-bad source 192.0.2.0/24",
+      "set rulebase security rules block-bad destination any",
+      "set rulebase security rules block-bad application any",
+      "set rulebase security rules block-bad service any",
+      "set rulebase security rules block-bad action drop"
+    ],
+    "rule:not-lan": [
+      "set rulebase security rules not-lan from trust",
+      "set rulebase security rules not-lan to untrust",
+      "set rulebase security rules not-lan source lan",
+      "set rulebase security rules not-lan negate-source yes",
+      "set rulebase security rules not-lan destination any",
+      "set rulebase security rules not-lan service dns-udp",
+      "set rulebase security rules not-lan action deny",
+      "set rulebase security rules not-lan disabled yes",
+      "set rulebase security rules not-lan schedule office"
+    ],
+    "rule:web-in": [
+      "set rulebase security rules web-in from untrust",
+      "set rulebase security rules web-in to dmz",
+      "set rulebase security rules web-in source any",
+      "set rulebase security rules web-in destination public-web",
+      "set rulebase security rules web-in application any",
+      "set rulebase security rules web-in service web",
+      "set rulebase security rules web-in action allow",
+      "set rulebase security rules web-in log-end yes"
+    ],
+    "schedule:change-window": [
+      "set schedule change-window schedule-type non-recurring 2026/11/01@00:00-2026/12/01@00:00"
+    ],
+    "schedule:office": [
+      "set schedule office schedule-type recurring weekly monday [ 08:00-18:00 ]"
+    ],
+    "service-group:web": [
+      "set service-group web members [ service-http service-https tcp-8080 ]"
+    ],
+    "service:TCP 8000 8010": [
+      "set service \"TCP 8000 8010\" protocol tcp port 8000-8010 source-port 1024-65535"
+    ],
+    "service:dns-udp": [
+      "set service dns-udp protocol udp port 53"
+    ],
+    "service:tcp-8080": [
+      "set service tcp-8080 protocol tcp port 8080"
+    ],
+    "service:tcp-multi": [
+      "set service tcp-multi protocol tcp port 7020,15672,5672"
     ]
   }
 }

@@ -59,7 +59,9 @@ func crossCheck(fw *firemon.Firewall, maxMismatches int) stats {
 // point after translation are skipped.
 func compare(fw *firemon.Firewall, engine *query.Engine, r *firemon.Rule, p oracle.Packet) (msg string, ok, skipped bool) {
 	res, err := engine.Query(query.Request{
-		Src: host(p.Src), Dst: host(p.Dst), Service: p.Service(), FromZone: p.From, ToZone: p.To, At: at,
+		// The oracle models application rules as possible matches: compare
+		// with the strict engine (ADR 0017 inference is tested in query).
+		Src: host(p.Src), Dst: host(p.Dst), Service: p.Service(), FromZone: p.From, ToZone: p.To, At: at, Strict: true,
 	})
 	if err != nil {
 		return fmt.Sprintf("rule %s %v: engine error %v", r.ID(), p, err), false, false
@@ -88,8 +90,8 @@ func compare(fw *firemon.Firewall, engine *query.Engine, r *firemon.Rule, p orac
 			r.ID(), policy, name(d.Rule), ids(d.Possible), name(want.Rule), ids(want.Possible)), false, false
 	}
 	final := outcome(want)
-	if d.Final != final {
-		return fmt.Sprintf("packet %v: %s gives %s, want %s", policy, name(d.Rule), d.Final, final), false, false
+	if d.FallbackOutcome != final {
+		return fmt.Sprintf("packet %v: %s gives %s, want %s", policy, name(d.Rule), d.FallbackOutcome, final), false, false
 	}
 	if settled := d.Outcome != query.OutcomeUnknown; settled != want.Settled() {
 		return fmt.Sprintf("packet %v: engine outcome %s, oracle settled %v (possible %v)", policy, d.Outcome, want.Settled(), ids(want.Possible)), false, false

@@ -2,7 +2,6 @@ package firemon
 
 import (
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/gatework/firemon/traffic"
@@ -23,6 +22,7 @@ type Rule struct {
 	issues     []Issue // every reason the match is inexact
 	dstDomains traffic.DomainSet
 	apps       []string // normalized application names
+	appSet     []string // apps with the members of the groups they name, sorted
 	// certain is set when Match is certainly matched even though the rule
 	// is undecidable: its unresolved parts can only add to the match.
 	certain  bool
@@ -96,6 +96,27 @@ func (r *Rule) DecidableFor(domains, apps bool) bool {
 	return true
 }
 
+// ConditionKinds are the issue kinds of criteria a query settles under
+// premises or from its input (ADR 0017): applications, users, URL
+// categories and domain names.
+var ConditionKinds = []IssueKind{IssueKindApplication, IssueKindUser, IssueKindURLCategory, IssueKindDomain, IssueKindDestinationDomain}
+
+// Conditional reports a rule whose only unresolved parts are criteria a
+// query settles (ConditionKinds): it is not exact, but neither is it
+// undecidable.
+func (r *Rule) Conditional() bool { return !r.Decidable() && r.DecidableWithout(ConditionKinds...) }
+
+// DecidableWithout reports whether every issue of the rule is of one of
+// kinds: the rule is exact once those criteria are settled.
+func (r *Rule) DecidableWithout(kinds ...IssueKind) bool {
+	for _, is := range r.issues {
+		if !slices.Contains(kinds, is.Kind) {
+			return false
+		}
+	}
+	return true
+}
+
 // DstDomains returns the destination domain patterns of the rule.
 func (r *Rule) DstDomains() traffic.DomainSet { return r.dstDomains }
 
@@ -105,7 +126,7 @@ func (r *Rule) Applications() []string { return slices.Clone(r.apps) }
 
 // MatchesApplication reports whether the rule admits application app.
 func (r *Rule) MatchesApplication(app string) bool {
-	return len(r.apps) == 0 || slices.Contains(r.apps, strings.ToLower(app))
+	return r.MatchesAnyApplication([]string{app})
 }
 
 // Scheduled reports whether a schedule or validity window restricts the rule.

@@ -109,7 +109,7 @@ func designLoop(t *testing.T, d device, limit int) loopResult {
 // denied returns the packet as the policy sees it when the engine
 // certainly denies it on one untranslated path.
 func denied(engine *query.Engine, p oracle.Packet) (oracle.Packet, bool) {
-	res, err := engine.Query(query.Request{Src: host(p.Src), Dst: host(p.Dst), Service: p.Service(), FromZone: p.From, ToZone: p.To, At: at})
+	res, err := engine.Query(query.Request{Src: host(p.Src), Dst: host(p.Dst), Service: p.Service(), FromZone: p.From, ToZone: p.To, At: at, Strict: true})
 	if err != nil || res.Incomplete || len(res.Paths) != 1 || res.Verdict != query.VerdictDenied {
 		return p, false
 	}
@@ -124,7 +124,9 @@ func denied(engine *query.Engine, p oracle.Packet) (oracle.Packet, bool) {
 func proveDesign(d device, planner *design.Planner, p oracle.Packet, n int, res *loopResult) string {
 	intent := design.Intent{
 		Src: host(p.Src), Dst: host(p.Dst), Service: p.Service(), FromZone: p.From, ToZone: p.To,
-		Name: fmt.Sprintf("ORACLE-%d", n), Override: true,
+		// The oracle models application, user and URL rules as possible
+		// matches: design under the same strict reading.
+		Name: fmt.Sprintf("ORACLE-%d", n), Override: true, Strict: true,
 	}
 	plan, err := planner.Plan(intent)
 	if err != nil {

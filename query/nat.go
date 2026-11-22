@@ -208,7 +208,7 @@ func (e *Engine) splitDst(req Request, table *firemon.RoutingTable, s traffic.Sp
 	if req.ToZone != "" {
 		return []dstPart{{zone: req.ToZone, space: s}}
 	}
-	hops, lost := e.route(table, s.Dst, 0)
+	hops, lost := e.route(table, s.Dst)
 	out := make([]dstPart, 0, len(hops)+1)
 	for _, h := range hops {
 		part := s

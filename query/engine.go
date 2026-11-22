@@ -18,11 +18,20 @@ type Engine struct {
 	max       int
 	maxPaths  int
 	schedules ScheduleMode
+	activity  func(*firemon.Rule) Activity
 	bridges   bool // some zone forwards at layer 2
 	pre       []natEntry
-	// appPorts are the standard ports of the applications of the rules that
-	// match any service with applications all known to the port book.
+	// appPorts bounds application-default rules whose applications all
+	// have known standard ports.
 	appPorts map[*firemon.Rule]traffic.ServiceSet
+	// appRules are the rules restricted to applications, in order.
+	appRules []*firemon.Rule
+	// unknownApps marks application rules naming an application neither
+	// the book nor a group knows: on unidentified ports they may match.
+	unknownApps map[*firemon.Rule]bool
+	// urlRules reports rules by URL category, which identification
+	// settles for traffic that is not web.
+	urlRules bool
 }
 
 // New returns an engine for fw.
@@ -34,29 +43,41 @@ func New(fw *firemon.Firewall, opts Options) *Engine {
 	e := &Engine{
 		fw: fw, rules: fw.Rules(), now: now,
 		max: positiveOr(opts.MaxSpaces, DefaultMaxSpaces), maxPaths: positiveOr(opts.MaxPaths, DefaultMaxPaths),
-		schedules: opts.Schedules, bridges: fw.Bridges(),
+		schedules: opts.Schedules, activity: opts.Activity, bridges: fw.Bridges(),
 	}
 	e.pre = e.preEntries()
 	e.appPorts = applicationPorts(fw, e.rules)
+	for _, r := range e.rules {
+		if len(r.Applications()) > 0 {
+			e.appRules = append(e.appRules, r)
+		}
+		e.urlRules = e.urlRules || len(firemon.ConditionValues(r.Spec().Conditions, firemon.ConditionURLCategory)) > 0
+		for _, a := range r.Applications() {
+			if !fw.KnowsApplication(a) {
+				if e.unknownApps == nil {
+					e.unknownApps = map[*firemon.Rule]bool{}
+				}
+				e.unknownApps[r] = true
+			}
+		}
+	}
 	return e
 }
 
-// applicationPorts collects, for every rule that matches any service but
-// only some applications, the union of those applications' standard ports;
-// a rule naming an application the book does not know is left out and
-// stays a possible match on every port.
+// applicationPorts collects the port bound explicitly requested by each
+// application-default rule. An incomplete port book cannot bound the rule.
 func applicationPorts(fw *firemon.Firewall, rules []*firemon.Rule) map[*firemon.Rule]traffic.ServiceSet {
 	out := map[*firemon.Rule]traffic.ServiceSet{}
 	for _, r := range rules {
 		apps := r.Applications()
-		if len(apps) == 0 || r.DefaultPorts() || !r.Bound().Service.IsAny() {
+		if !r.DefaultPorts() || len(apps) == 0 {
 			continue
 		}
 		var ports traffic.ServiceSet
 		known := true
 		for _, a := range apps {
 			p, ok := fw.ApplicationPorts(a)
-			if !ok {
+			if !ok || p.IsEmpty() {
 				known = false
 				break
 			}
@@ -101,6 +122,9 @@ func (e *Engine) Query(req Request) (*Result, error) {
 	outcomes := map[Outcome]bool{}
 	if res.Incomplete {
 		outcomes[OutcomeUnknown] = true
+	}
+	for i := range res.Paths {
+		res.Paths[i].users, res.Paths[i].urlCategories, res.Paths[i].strict = req.Users, req.URLCategories, req.Strict
 	}
 	// Paths are independent: each evaluation writes only its own path.
 	Each(len(res.Paths), func(i int) { e.evaluate(&res.Paths[i], at) })

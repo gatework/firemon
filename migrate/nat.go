@@ -20,7 +20,7 @@ func (tr *translator) nat() {
 		translatesDst := d == firemon.TranslationModeAddress
 		translatesSrc := s == firemon.TranslationModeAddress || s == firemon.TranslationModeInterface
 		switch {
-		case translatesDst && translatesSrc && tr.t.Vendor == firemon.VendorHillstone:
+		case translatesDst && translatesSrc && tr.t.Semantics.NATOrder == firemon.NATOrderSeparate:
 			dn, sn := n, n
 			dn.TranslatedSource, sn.TranslatedDestination = firemon.Translation{}, firemon.Translation{}
 			dnat, snat = append(dnat, dn), append(snat, sn)
@@ -50,7 +50,7 @@ func (tr *translator) dynamicNAT(n firemon.DynamicNAT, both bool) {
 		Name: n.Name, Description: n.Description, From: tr.zones(n.From), To: tr.zones(n.To), Disabled: n.Disabled,
 		VirtualRouter: tr.vr(n.VirtualRouter),
 	}
-	if tr.t.Vendor == firemon.VendorPaloAlto {
+	if tr.t.Semantics.NATOrder == firemon.NATOrderSingle {
 		out.VirtualRouter = ""
 	}
 	if n.Egress != "" {
@@ -87,7 +87,7 @@ func (tr *translator) dynamicNAT(n firemon.DynamicNAT, both bool) {
 		out.Description = "[migrate] " + out.Description
 	}
 	out.ID = tr.natID(n, design.NATSide(out))
-	if tr.t.Vendor == firemon.VendorPaloAlto {
+	if !tr.t.Semantics.NumericRuleIDs {
 		out.Name = out.ID
 	}
 	tr.out.DynamicNATs = append(tr.out.DynamicNATs, out)
@@ -110,7 +110,7 @@ func (tr *translator) staticNAT(m firemon.StaticNAT) {
 		tr.item(ItemKindNAT, "static "+m.ID, FidelityUntranslatable, "the mapping's addresses cannot be translated")
 		return
 	}
-	if tr.t.Vendor == firemon.VendorPaloAlto {
+	if tr.t.Semantics.NATOrder == firemon.NATOrderSingle {
 		r := firemon.DynamicNAT{
 			From: tr.zones(m.From), To: tr.zones(m.Zones), Source: realRef, Disabled: m.Disabled,
 			TranslatedSource: firemon.Translation{Mode: firemon.TranslationModeAddress, Addresses: mappedRef},

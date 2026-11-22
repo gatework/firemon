@@ -12,7 +12,7 @@ import (
 )
 
 // Settings are the operator's defaults, read from the user configuration
-// file (for example ~/.config/firemon/config.yaml), so that everyday
+// file (~/.gatework/firemon.yml by default), so that everyday
 // commands need no repeated flags.
 type Settings struct {
 	// Store is the snapshot directory.

@@ -4,8 +4,8 @@
 // regions of traffic by splitting them: tests compare the two on boundary
 // packets of every rule to prove the engine's first-match decisions.
 //
-// A query that names no application judges rules restricted to
-// applications by those applications' standard ports, as the engine does.
+// Application-default rules may match a packet on their standard ports.
+// An application rule with an unrestricted service may match on any port.
 //
 // The oracle answers the policy question only: the packet is given as the
 // security rules see it (after any translation) together with its zones.
@@ -91,18 +91,16 @@ func Decide(fw *firemon.Firewall, p Packet, at time.Time) Verdict {
 	return v
 }
 
-// offAppPorts reports whether a rule that matches any service but only
-// some applications certainly misses the packet: every application has
-// standard ports in the firewall's book and the packet uses none of them,
-// so it is taken not to be one of those applications.
+// offAppPorts reports whether every application in an application-default
+// rule has a known standard service that excludes this packet.
 func offAppPorts(fw *firemon.Firewall, r *firemon.Rule, svc traffic.ServiceSet) bool {
 	apps := r.Applications()
-	if len(apps) == 0 || r.DefaultPorts() || !r.Bound().Service.IsAny() {
+	if !r.DefaultPorts() || len(apps) == 0 {
 		return false
 	}
 	for _, a := range apps {
 		ports, ok := fw.ApplicationPorts(a)
-		if !ok {
+		if !ok || ports.IsEmpty() {
 			return false // unknown ports: the rule may match any port
 		}
 		if ports.ContainsSet(svc) {

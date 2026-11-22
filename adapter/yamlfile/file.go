@@ -16,7 +16,9 @@ import (
 
 // Firewall is one inventory entry.
 type Firewall struct {
-	Name     string `yaml:"name"`
+	Name string `yaml:"name"`
+	// Host is the management address, shown with the name in reports.
+	Host     string `yaml:"host,omitempty"`
 	Cluster  string `yaml:"cluster,omitempty"`
 	Snapshot string `yaml:"snapshot,omitempty"`
 	// Role is active or backup within the cluster; the active member is
@@ -34,10 +36,11 @@ type Firewall struct {
 
 // Zone binds networks to one zone of a firewall.
 type Zone struct {
-	Zone      string   `yaml:"zone"`
-	Protected bool     `yaml:"protected,omitempty"`
-	Networks  []string `yaml:"networks"`
-	Exclude   []string `yaml:"exclude,omitempty"`
+	VirtualRouter string   `yaml:"virtual_router,omitempty"`
+	Zone          string   `yaml:"zone"`
+	Protected     bool     `yaml:"protected,omitempty"`
+	Networks      []string `yaml:"networks"`
+	Exclude       []string `yaml:"exclude,omitempty"`
 }
 
 // Active reports whether the firewall is its cluster's active member.
@@ -45,9 +48,10 @@ func (fw Firewall) Active() bool { return fw.Role == "active" }
 
 // Protected is one group of protected networks behind a zone.
 type Protected struct {
-	Zone     string   `yaml:"zone,omitempty"`
-	Networks []string `yaml:"networks"`
-	Exclude  []string `yaml:"exclude,omitempty"`
+	VirtualRouter string   `yaml:"virtual_router,omitempty"`
+	Zone          string   `yaml:"zone,omitempty"`
+	Networks      []string `yaml:"networks"`
+	Exclude       []string `yaml:"exclude,omitempty"`
 }
 
 // File is a decoded inventory file.
@@ -133,7 +137,7 @@ func (fw Firewall) bindings() ([]inventory.ZoneBinding, error) {
 	}
 	out := make([]inventory.ZoneBinding, 0, len(ps)+len(fw.Zones))
 	for _, p := range ps {
-		out = append(out, inventory.ZoneBinding{Firewall: p.Firewall, Zone: p.Zone, Networks: p.Networks, Exclude: p.Exclude, Protected: true})
+		out = append(out, inventory.ZoneBinding{Firewall: p.Firewall, VirtualRouter: p.VirtualRouter, Zone: p.Zone, Networks: p.Networks, Exclude: p.Exclude, Protected: true})
 	}
 	for _, z := range fw.Zones {
 		if z.Zone == "" {
@@ -147,7 +151,7 @@ func (fw Firewall) bindings() ([]inventory.ZoneBinding, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, inventory.ZoneBinding{Firewall: fw.Name, Zone: z.Zone, Networks: nets, Exclude: excl, Protected: z.Protected})
+		out = append(out, inventory.ZoneBinding{Firewall: fw.Name, VirtualRouter: z.VirtualRouter, Zone: z.Zone, Networks: nets, Exclude: excl, Protected: z.Protected})
 	}
 	return out, nil
 }
@@ -163,7 +167,7 @@ func (fw Firewall) protections() ([]inventory.Protection, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, inventory.Protection{Firewall: fw.Name, Zone: cmp.Or(p.Zone, fw.ProtectedZone), Networks: nets, Exclude: excl})
+		out = append(out, inventory.Protection{Firewall: fw.Name, VirtualRouter: p.VirtualRouter, Zone: cmp.Or(p.Zone, fw.ProtectedZone), Networks: nets, Exclude: excl})
 	}
 	return out, nil
 }

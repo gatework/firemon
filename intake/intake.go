@@ -40,20 +40,33 @@ type Request struct {
 	// Applications holds application names; with no port service given,
 	// Service is any and the applications decide.
 	Applications []string
-	Notes        []Note
+	// SrcItems and DstItems are the addresses of each accepted item, in
+	// input order: the flows a report lists are their pairs.
+	SrcItems, DstItems []traffic.AddressSet
+	Notes              []Note
 }
 
 // Parse reads the source, destination and service fields. It fails only
 // when a field yields nothing usable; every skipped item is in the notes
 // of the returned request, which is filled in even on error.
 func Parse(src, dst, service string, opts Options) (Request, error) {
+	var folded []Note
+	fold := func(text string, field Field) string {
+		if h := halfWidth(text); h != text {
+			folded = append(folded, Note{Field: field, Code: CodeFullWidth, Input: text, Result: h})
+			return h
+		}
+		return text
+	}
+	src, dst, service = fold(src, FieldSource), fold(dst, FieldDestination), fold(service, FieldService)
 	s := parseAddresses(src, FieldSource)
 	d := parseAddresses(dst, FieldDestination)
 	v := parseServices(service, opts)
 	req := Request{
 		Src: s.set, Dst: d.set, DstDomains: slices.Compact(slices.Sorted(slices.Values(d.domains))),
 		Service: v.set, Applications: slices.Compact(slices.Sorted(slices.Values(v.apps))),
-		Notes: slices.Concat(s.notes, d.notes, v.notes),
+		SrcItems: s.items, DstItems: d.items,
+		Notes: slices.Concat(folded, s.notes, d.notes, v.notes),
 	}
 	if req.Service.IsEmpty() && len(req.Applications) > 0 {
 		req.Service = traffic.AnyService()

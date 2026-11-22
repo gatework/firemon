@@ -135,3 +135,47 @@ func TestV1_IncompleteRuleIsReported(t *testing.T) {
 		t.Fatalf("findings %+v", rep.Findings)
 	}
 }
+
+// Rules restricted to applications take part in coverage: a later rule is
+// covered when an earlier one covers its five-tuple and admits every
+// application it names; a rule for any application is never covered by
+// one restricted to applications.
+func TestRun_ApplicationCoverage(t *testing.T) {
+	t.Parallel()
+	p, d := firemon.ActionPermit, firemon.ActionDeny
+	withApps := func(r firemon.SecurityRule, apps ...string) firemon.SecurityRule {
+		r.Conditions = []firemon.Condition{firemon.ApplicationCondition(apps...)}
+		return r
+	}
+	cfg := &firemon.Config{
+		Vendor: firemon.VendorHillstone,
+		Rules: []firemon.SecurityRule{
+			withApps(rule("1", d, nil, nil, "10.0.0.0/8", ""), "SSH", "RDP"),
+			withApps(rule("2", d, nil, nil, "10.1.0.0/16", ""), "ssh"),  // covered by 1: same action
+			withApps(rule("3", p, nil, nil, "10.2.0.0/16", ""), "SSH"),  // covered by 1: opposite action
+			withApps(rule("4", p, nil, nil, "10.3.0.0/16", ""), "HTTP"), // other application: reachable
+			rule("5", p, nil, nil, "10.4.0.0/16", ""),                   // any application: reachable
+			rule("6", p, nil, nil, "", ""),
+			withApps(rule("7", p, nil, nil, "10.5.0.0/16", ""), "DNS"), // covered by 6, which matches any application
+		},
+	}
+	fw, err := firemon.Compile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]audit.Kind{}
+	for _, f := range audit.Run(fw, audit.Options{Now: func() time.Time { return now }}).Findings {
+		if f.Kind == audit.KindRedundant || f.Kind == audit.KindShadowed {
+			kinds[f.Rule] = f.Kind
+		}
+	}
+	want := map[string]audit.Kind{"2": audit.KindRedundant, "3": audit.KindShadowed, "7": audit.KindRedundant}
+	if len(kinds) != len(want) {
+		t.Fatalf("got %v, want %v", kinds, want)
+	}
+	for id, k := range want {
+		if kinds[id] != k {
+			t.Fatalf("rule %s: got %v, want %v (all %v)", id, kinds[id], k, kinds)
+		}
+	}
+}

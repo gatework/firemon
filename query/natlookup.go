@@ -205,14 +205,14 @@ func ruleUses(r *firemon.NATRule, i int, list []*firemon.NATRule, addr traffic.A
 		}
 		return out
 	case r.Translates(firemon.NATKindDestination):
-		if m.Dst.Overlaps(addr) {
+		if m.Dst.Overlaps(addr) && m.Service.Overlaps(svc) {
 			add(NATRoleInbound, firemon.NATKindDestination)
 		}
-		if r.Translated(firemon.NATKindDestination).Overlaps(addr) {
+		if r.Translated(firemon.NATKindDestination).Overlaps(addr) && internal.Overlaps(svc) {
 			add(NATRolePublished, firemon.NATKindDestination)
 		}
 	}
-	if r.Translates(firemon.NATKindSource) && r.Translation(firemon.NATKindSource).Mode != firemon.TranslationModeNone {
+	if m.Service.Overlaps(svc) && r.Translates(firemon.NATKindSource) && r.Translation(firemon.NATKindSource).Mode != firemon.TranslationModeNone {
 		if m.Src.Overlaps(addr) {
 			add(NATRoleOutbound, firemon.NATKindSource)
 		}
@@ -238,7 +238,7 @@ func ruleState(r *firemon.NATRule, before []*firemon.NATRule) (NATState, string)
 		if s.Disabled || !e.Decidable() {
 			continue
 		}
-		if zonesCover(s.From, r.Spec().From) && zonesCover(s.To, r.Spec().To) && (s.Egress == "" || s.Egress == r.Spec().Egress) &&
+		if (s.VirtualRouter == "" || s.VirtualRouter == r.Spec().VirtualRouter) && zonesCover(s.From, r.Spec().From) && zonesCover(s.To, r.Spec().To) && (s.Egress == "" || s.Egress == r.Spec().Egress) &&
 			e.Match().ContainsSpace(r.Match()) {
 			return NATStateShadowed, s.ID
 		}
@@ -279,6 +279,12 @@ func staticUses(m *firemon.StaticMapping, addr traffic.AddressSet) []NATUse {
 		u.Match = traffic.Space{Src: traffic.AnyAddress(), Dst: m.ToMapped(inside), Service: traffic.AnyService()}
 		u.Translated = inside
 		out = append(out, u)
+		if !m.Spec().InboundOnly {
+			u.Role, u.Side = NATRoleOutbound, firemon.NATKindSource
+			u.Match.Src, u.Match.Dst = inside, traffic.AnyAddress()
+			u.Translated = m.ToMapped(inside)
+			out = append(out, u)
+		}
 	}
 	if mapped := m.Mapped().Intersect(addr); !mapped.IsEmpty() {
 		u := base
@@ -286,6 +292,12 @@ func staticUses(m *firemon.StaticMapping, addr traffic.AddressSet) []NATUse {
 		u.Match = traffic.Space{Src: traffic.AnyAddress(), Dst: mapped, Service: traffic.AnyService()}
 		u.Translated = m.ToReal(mapped)
 		out = append(out, u)
+		if !m.Spec().InboundOnly {
+			u.Role, u.Side = NATRolePool, firemon.NATKindSource
+			u.Match.Src, u.Match.Dst = m.ToReal(mapped), traffic.AnyAddress()
+			u.Translated = mapped
+			out = append(out, u)
+		}
 	}
 	return out
 }
@@ -337,7 +349,7 @@ func (e *Engine) natEffect(u NATUse, addr traffic.AddressSet) NATUse {
 	if u.State != NATStateActive && u.State != NATStateShadowed {
 		return u
 	}
-	req := Request{Src: u.Match.Src, Dst: u.Match.Dst, Service: u.Match.Service}
+	req := Request{Src: u.Match.Src, Dst: u.Match.Dst, Service: u.Match.Service, VirtualRouter: u.Rule.Spec().VirtualRouter, Strict: true}
 	switch u.Role {
 	case NATRoleOutbound:
 		req.Src = u.Match.Src.Intersect(addr)
@@ -349,16 +361,31 @@ func (e *Engine) natEffect(u NATUse, addr traffic.AddressSet) NATUse {
 	if err != nil || res.Incomplete {
 		return u
 	}
+	// A hit on any decided path proves the rule takes effect. Paths whose
+	// NAT cannot be decided may hide a hit: without one elsewhere the rule
+	// only possibly takes effect, and it is never called shadowed. So may
+	// traffic from unknown zones; unrouted traffic is never translated.
 	var others []string
+	uncertain, allShadowed := res.ZonesNeeded, true
 	for _, p := range res.Paths {
-		if len(p.NATUncertain) > 0 {
-			return u
+		if !natPathApplies(u, p) {
+			continue
 		}
+		if len(p.NATUncertain) > 0 {
+			uncertain = true
+			continue
+		}
+		input := p.Original
+		if u.Side == firemon.NATKindSource && e.fw.Semantics().NATOrder != firemon.NATOrderSingle {
+			input = p.Policy
+		}
+		missing := traffic.NewRegion(input)
 		for _, h := range pathHits(p, u.Side) {
 			if h.Rule == u.Rule {
 				u.State, u.ShadowedBy = NATStateActive, ""
 				return u
 			}
+			missing = missing.SubtractRegion(h.Space)
 			if h.Rule != nil && !slices.Contains(others, h.Rule.Spec().ID) {
 				others = append(others, h.Rule.Spec().ID)
 			}
@@ -366,11 +393,26 @@ func (e *Engine) natEffect(u NATUse, addr traffic.AddressSet) NATUse {
 				others = append(others, h.Static.Spec().ID)
 			}
 		}
+		allShadowed = allShadowed && missing.IsEmpty()
 	}
-	if len(others) > 0 {
+	switch {
+	case uncertain:
+		u.State, u.ShadowedBy = NATStatePossible, ""
+	case allShadowed && len(others) > 0:
 		u.State, u.ShadowedBy = NATStateShadowed, strings.Join(others, ",")
 	}
 	return u
+}
+
+// natPathApplies reports whether the rule of u may translate traffic on
+// path p: a source rule names the path's zones; a destination rule names
+// its ingress zone, its egress being the zone before translation.
+func natPathApplies(u NATUse, p Path) bool {
+	spec := u.Rule.Spec()
+	if u.Side == firemon.NATKindDestination {
+		return zoneApplies(spec.From, nil, p.From, p.To) != appliesNo
+	}
+	return zoneApplies(spec.From, spec.To, p.From, p.To) != appliesNo
 }
 
 // pathHits are the translations of one side on a path.

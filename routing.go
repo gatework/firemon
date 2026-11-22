@@ -2,6 +2,7 @@ package firemon
 
 import (
 	"cmp"
+	"maps"
 	"net/netip"
 	"slices"
 	"strings"
@@ -19,6 +20,8 @@ type Egress struct {
 	Connected bool
 	Interface string
 	Zone      string
+	// NextHop is the directly reachable gateway after recursive resolution.
+	NextHop   netip.Addr
 	Addresses traffic.AddressSet
 }
 
@@ -48,10 +51,12 @@ const maxLookups = 4096
 type routeEntry struct {
 	route     Route
 	connected bool
-	iface     string
-	zone      string
-	order     int
-	recursive bool // the interface was resolved through the next hop
+	exits     []routeExit
+}
+
+type routeExit struct {
+	iface, zone string
+	hop         netip.Addr
 }
 
 // Name returns the virtual router name.
@@ -92,13 +97,47 @@ func (t *RoutingTable) lookup(dst traffic.AddressSet) (egress []Egress, unrouted
 		if dest := t.dest(i); remaining.Overlaps(dest) {
 			hit := remaining.Intersect(dest)
 			for _, e := range t.entries[i:j] {
-				egress = append(egress, Egress{Route: e.route, Connected: e.connected, Interface: e.iface, Zone: e.zone, Addresses: hit})
+				for _, exit := range e.exits {
+					egress = append(egress, Egress{Route: e.route, Connected: e.connected, Interface: exit.iface, Zone: exit.zone, NextHop: exit.hop, Addresses: hit})
+				}
 			}
 			remaining = remaining.Subtract(hit)
 		}
 		i = j
 	}
 	return egress, remaining
+}
+
+// Forward resolves dst to physical egresses in vr, following next-VR routes.
+// A missing table, discard or forwarding loop loses exactly its branch's addresses.
+func (fw *Firewall) Forward(vr string, dst traffic.AddressSet) ([]Egress, traffic.AddressSet) {
+	return fw.forward(vr, dst, make(map[string]bool))
+}
+
+func (fw *Firewall) forward(vr string, dst traffic.AddressSet, visiting map[string]bool) ([]Egress, traffic.AddressSet) {
+	table, ok := fw.RoutingTable(vr)
+	if !ok || visiting[vr] {
+		return nil, dst
+	}
+	visiting[vr] = true
+	defer delete(visiting, vr)
+	exits, lost := table.Lookup(dst)
+	var out []Egress
+	for _, e := range exits {
+		switch {
+		case e.Route.Discard:
+			lost = lost.Union(e.Addresses)
+		case e.Route.NextVirtualRouter != "":
+			more, dropped := fw.forward(e.Route.NextVirtualRouter, e.Addresses, visiting)
+			out = append(out, more...)
+			lost = lost.Union(dropped)
+		case e.Interface == "":
+			lost = lost.Union(e.Addresses)
+		default:
+			out = append(out, e)
+		}
+	}
+	return out, lost
 }
 
 // dest is the destination of entry i as an address set.
@@ -129,117 +168,143 @@ func buildRoutingTables(cfg *Config, ifaces map[string]Interface) (map[string]*R
 	for _, vr := range cfg.VirtualRouters {
 		table(vr.Name)
 	}
-	order := 0
 	for _, i := range cfg.Interfaces {
 		for _, p := range i.Addresses {
 			t := table(i.VirtualRouter)
 			r := Route{VirtualRouter: i.VirtualRouter, Destination: p.Masked(), Interface: i.Name}
-			t.entries = append(t.entries, routeEntry{route: r, connected: true, iface: i.Name, zone: i.Zone, order: order})
-			order++
+			t.entries = append(t.entries, routeEntry{route: r, connected: true})
 		}
 	}
-	pending := make([]routeEntry, 0, len(cfg.Routes))
 	for _, r := range cfg.Routes {
-		pending = append(pending, routeEntry{route: r, iface: r.Interface, zone: ifaces[r.Interface].Zone, order: order})
-		order++
-	}
-	// Resolve next hops recursively: a pass installs every route whose next
-	// hop the installed routes reach, until nothing changes.
-	for changed := true; changed; {
-		changed = false
-		next := pending[:0]
-		for _, e := range pending {
-			t := table(e.route.VirtualRouter)
-			if !installable(&e, t, ifaces) {
-				next = append(next, e)
-				continue
-			}
-			t.entries = append(t.entries, e)
-			changed = true
-		}
-		pending = next
-	}
-	for _, t := range tables {
-		t.settle(ifaces)
+		t := table(r.VirtualRouter)
+		t.entries = append(t.entries, routeEntry{route: r})
 	}
 	var issues []Issue
-	for _, e := range pending {
-		// The routing context names the route: the same destination is
-		// often configured in several virtual routers.
-		object := strings.TrimSpace("route " + e.route.VirtualRouter + " " + e.route.Destination.String())
-		issues = append(issues, Issue{Kind: IssueKindConfig, Object: object, Reason: "not installed: no route reaches next hop " + e.route.NextHop.String()})
-	}
-	for _, t := range tables {
-		slices.SortStableFunc(t.entries, func(a, b routeEntry) int {
-			return cmp.Or(
-				cmp.Compare(b.route.Destination.Bits(), a.route.Destination.Bits()),
-				// Same-length prefixes stay together, so equal-cost routes
-				// declared apart are found as one group.
-				a.route.Destination.Addr().Compare(b.route.Destination.Addr()),
-				cmp.Compare(a.route.Distance, b.route.Distance),
-				cmp.Compare(a.route.Metric, b.route.Metric),
-				cmp.Compare(a.order, b.order),
-			)
-		})
-		t.dests = make([]traffic.AddressSet, len(t.entries))
-		for i, e := range t.entries {
-			t.dests[i] = traffic.NewAddressSet(e.route.Destination)
-		}
+	for _, name := range slices.Sorted(maps.Keys(tables)) {
+		t := tables[name]
+		issues = append(issues, t.install(ifaces)...)
 	}
 	return tables, issues
 }
 
-// installable resolves the egress of a static route and reports whether
-// the route can be installed now.
-func installable(e *routeEntry, t *RoutingTable, ifaces map[string]Interface) bool {
-	switch {
-	case e.route.Discard, e.route.NextVirtualRouter != "", e.iface != "":
-		return true
-	case !e.route.NextHop.IsValid():
-		return false
+// install resolves recursive routes in two steps. First find which routes
+// have a path to an interface. Then select the best installed routes to
+// each gateway and propagate all their physical exits. A cycle without
+// an exit never contributes an interface to the forwarding table.
+func (t *RoutingTable) install(ifaces map[string]Interface) []Issue {
+	slices.SortStableFunc(t.entries, func(a, b routeEntry) int {
+		return cmp.Or(cmp.Compare(b.route.Destination.Bits(), a.route.Destination.Bits()),
+			a.route.Destination.Addr().Compare(b.route.Destination.Addr()),
+			cmp.Compare(a.route.Distance, b.route.Distance), cmp.Compare(a.route.Metric, b.route.Metric))
+	})
+	reachable, via := t.directExits(ifaces)
+	closeReachability(reachable, via)
+	t.preferBest(reachable, via)
+	t.propagateExits(via)
+	issues := t.dropUnresolved()
+	t.dests = make([]traffic.AddressSet, len(t.entries))
+	for i, e := range t.entries {
+		t.dests[i] = traffic.NewAddressSet(e.route.Destination)
 	}
-	iface := t.resolve(e.route.NextHop)
-	if iface == "" {
-		return false
-	}
-	e.iface, e.zone, e.recursive = iface, ifaces[iface].Zone, true
-	return true
+	return issues
 }
 
-// settle re-resolves recursive next hops against the whole table until
-// they no longer change, so the result does not depend on the order in
-// which routes became installable: a more specific route installed later
-// wins, as on the device.
-func (t *RoutingTable) settle(ifaces map[string]Interface) {
-	for range len(t.entries) + 1 {
-		changed := false
-		for i := range t.entries {
-			e := &t.entries[i]
-			if !e.recursive {
+// directExits gives routes with an interface or no forwarding their exits,
+// and lists for each next-hop route the routes that contain its next hop.
+func (t *RoutingTable) directExits(ifaces map[string]Interface) (reachable []bool, via [][]int) {
+	reachable = make([]bool, len(t.entries))
+	via = make([][]int, len(t.entries))
+	for i, e := range t.entries {
+		switch r := e.route; {
+		case r.Discard || r.NextVirtualRouter != "":
+			t.entries[i].exits = []routeExit{{}}
+		case r.Interface != "":
+			t.entries[i].exits = []routeExit{{iface: r.Interface, zone: ifaces[r.Interface].Zone, hop: r.NextHop}}
+			reachable[i] = true
+		case r.NextHop.IsValid():
+			for j, candidate := range t.entries {
+				if j != i && candidate.route.Destination.Contains(r.NextHop) {
+					via[i] = append(via[i], j)
+				}
+			}
+		}
+	}
+	return reachable, via
+}
+
+// closeReachability marks a route reachable when a route to its next hop is.
+func closeReachability(reachable []bool, via [][]int) {
+	for changed := true; changed; {
+		changed = false
+		for i, candidates := range via {
+			if !reachable[i] && slices.ContainsFunc(candidates, func(j int) bool { return reachable[j] }) {
+				reachable[i], changed = true, true
+			}
+		}
+	}
+}
+
+// preferBest keeps, for each next hop, the usable routes of the best rank.
+func (t *RoutingTable) preferBest(reachable []bool, via [][]int) {
+	for i, candidates := range via {
+		best := candidates[:0]
+		for _, j := range candidates {
+			if !reachable[j] && len(t.entries[j].exits) == 0 {
 				continue
 			}
-			if iface := t.resolveExcept(e.route.NextHop, i); iface != "" && iface != e.iface {
-				e.iface, e.zone, changed = iface, ifaces[iface].Zone, true
+			if len(best) > 0 && !sameRank(t.entries[best[0]], t.entries[j]) {
+				break
 			}
+			best = append(best, j)
 		}
-		if !changed {
-			return
+		via[i] = best
+	}
+}
+
+// propagateExits gives next-hop routes the exits of the routes that reach
+// their next hop, until nothing changes.
+func (t *RoutingTable) propagateExits(via [][]int) {
+	for changed := true; changed; {
+		changed = false
+		for i, candidates := range via {
+			if t.inherit(i, candidates) {
+				changed = true
+			}
 		}
 	}
 }
 
-// resolve returns the egress interface of the most specific installed route
-// containing hop.
-func (t *RoutingTable) resolve(hop netip.Addr) string { return t.resolveExcept(hop, -1) }
-
-// resolveExcept is resolve ignoring entry skip, a route that cannot
-// resolve its own next hop.
-func (t *RoutingTable) resolveExcept(hop netip.Addr, skip int) string {
-	best, bits := "", -1
-	for i, e := range t.entries {
-		if i != skip && e.iface != "" && e.route.Destination.Contains(hop) && e.route.Destination.Bits() > bits {
-			best, bits = e.iface, e.route.Destination.Bits()
+// inherit adds the interface exits of candidates to route i.
+func (t *RoutingTable) inherit(i int, candidates []int) bool {
+	e := &t.entries[i]
+	changed := false
+	for _, j := range candidates {
+		for _, exit := range t.entries[j].exits {
+			if exit.iface == "" {
+				continue
+			}
+			if !exit.hop.IsValid() {
+				exit.hop = e.route.NextHop
+			}
+			if !slices.Contains(e.exits, exit) {
+				e.exits = append(e.exits, exit)
+				changed = true
+			}
 		}
 	}
-	return best
+	return changed
+}
+
+// dropUnresolved removes routes whose next hop no route reaches.
+func (t *RoutingTable) dropUnresolved() []Issue {
+	var issues []Issue
+	t.entries = slices.DeleteFunc(t.entries, func(e routeEntry) bool {
+		if len(e.exits) > 0 {
+			return false
+		}
+		object := strings.TrimSpace("route " + t.name + " " + e.route.Destination.String())
+		issues = append(issues, Issue{Kind: IssueKindConfig, Object: object, Reason: "not installed: no route reaches next hop " + e.route.NextHop.String()})
+		return true
+	})
+	return issues
 }

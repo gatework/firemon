@@ -51,7 +51,9 @@ func TestApplicationTarget(t *testing.T) {
 	}{
 		{"named application on its default port", query.Request{Src: addrs(t, "10.0.0.9"), Dst: addrs(t, "172.16.0.10"), Service: svc(t, "any"), Applications: []string{"ssh"}}, query.VerdictAllowed},
 		{"other application is not matched", query.Request{Src: addrs(t, "10.0.0.9"), Dst: addrs(t, "172.16.0.10"), Service: svc(t, "any"), Applications: []string{"ms-rdp"}}, query.VerdictDenied},
-		{"no application named stays undecided", query.Request{Src: addrs(t, "10.0.0.9"), Dst: addrs(t, "172.16.0.10"), Service: svc(t, "tcp/22")}, query.VerdictIndeterminate},
+		{"strict: no application named stays undecided", query.Request{Src: addrs(t, "10.0.0.9"), Dst: addrs(t, "172.16.0.10"), Service: svc(t, "tcp/22"), Strict: true}, query.VerdictIndeterminate},
+		{"tcp/22 is taken to be SSH", query.Request{Src: addrs(t, "10.0.0.9"), Dst: addrs(t, "172.16.0.10"), Service: svc(t, "tcp/22")}, query.VerdictAllowed},
+		{"a port without a standard application is not SSH", query.Request{Src: addrs(t, "10.0.0.9"), Dst: addrs(t, "172.16.0.10"), Service: svc(t, "tcp/2222")}, query.VerdictDenied},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -63,10 +65,8 @@ func TestApplicationTarget(t *testing.T) {
 	}
 }
 
-// A rule that matches any service but only some applications is judged by
-// the applications' standard ports when the request names no application:
-// off those ports it does not match; on them it may; a rule with its own
-// service is not narrowed, since it names the port the application uses.
+// An application's standard ports constrain a port-only query when the rule
+// explicitly uses application-default.
 func TestApplicationRule_StandardPorts(t *testing.T) {
 	t.Parallel()
 	req := func(s string) query.Request {
@@ -78,15 +78,29 @@ func TestApplicationRule_StandardPorts(t *testing.T) {
 		service string
 		want    query.Verdict
 		noted   bool
+		strict  bool
 	}{
-		{"off the application's ports the rule does not match", []string{"no-ssh", "rest"}, "tcp/12345", query.VerdictAllowed, true},
-		{"on its port it may match", []string{"no-ssh", "rest"}, "tcp/22", query.VerdictIndeterminate, false},
-		{"a rule with its own service is not narrowed", []string{"web-8080", "rest"}, "tcp/8080", query.VerdictIndeterminate, false},
-		{"an application without known ports may match any port", []string{"unknown-app", "rest"}, "tcp/12345", query.VerdictAllowed, false},
-		{"an unknown application may still change the outcome", []string{"unknown-app", "no-ssh"}, "tcp/12345", query.VerdictIndeterminate, true},
+		// Strict: application rules stay possible matches (ADR 0016).
+		{"service any permits application identification on another port", []string{"no-ssh", "rest"}, "tcp/12345", query.VerdictIndeterminate, false, true},
+		{"application-default excludes other ports", []string{"default-ssh", "rest"}, "tcp/12345", query.VerdictAllowed, true, true},
+		{"application-default on its port still needs identification", []string{"default-ssh", "rest"}, "tcp/22", query.VerdictIndeterminate, false, true},
+		{"on its port it may match", []string{"no-ssh", "rest"}, "tcp/22", query.VerdictIndeterminate, false, true},
+		{"a rule with its own service is not narrowed", []string{"web-8080", "rest"}, "tcp/8080", query.VerdictIndeterminate, false, true},
+		{"an application without known ports may match any port", []string{"unknown-app", "rest"}, "tcp/12345", query.VerdictAllowed, false, true},
+		{"an unknown application may still change the outcome", []string{"unknown-app", "no-ssh"}, "tcp/12345", query.VerdictIndeterminate, false, true},
+		{"incomplete default port book leaves rule possible", []string{"some-unknown", "rest"}, "tcp/12345", query.VerdictIndeterminate, false, true},
+		// Inferred (ADR 0017): the traffic is the standard application of its port.
+		{"inferred: SSH deny does not match an unidentified port", []string{"no-ssh", "rest"}, "tcp/12345", query.VerdictAllowed, false, false},
+		{"inferred: SSH deny matches tcp/22", []string{"no-ssh", "rest"}, "tcp/22", query.VerdictDenied, false, false},
+		{"inferred: application-default SSH deny matches tcp/22", []string{"default-ssh", "rest"}, "tcp/22", query.VerdictDenied, false, false},
+		{"inferred: HTTP rule on its own service does not match other traffic", []string{"web-8080", "rest"}, "tcp/8080", query.VerdictAllowed, false, false},
+		{"inferred: an unknown application may use an unclaimed port", []string{"unknown-app", "no-ssh"}, "tcp/12345", query.VerdictIndeterminate, false, false},
+		{"inferred: an unknown application does not claim a standard port", []string{"unknown-app", "no-ssh"}, "tcp/22", query.VerdictDenied, false, false},
 	}
 	all := lab(firemon.AddressStageOriginal,
 		firemon.SecurityRule{ID: "no-ssh", Action: firemon.ActionDeny, Conditions: []firemon.Condition{firemon.ApplicationCondition("SSH")}},
+		firemon.SecurityRule{ID: "default-ssh", Action: firemon.ActionDeny, Conditions: []firemon.Condition{firemon.ApplicationCondition("SSH")}, DefaultPorts: true},
+		firemon.SecurityRule{ID: "some-unknown", Action: firemon.ActionDeny, Conditions: []firemon.Condition{firemon.ApplicationCondition("SSH", "Acme")}, DefaultPorts: true},
 		firemon.SecurityRule{ID: "web-8080", Action: firemon.ActionDeny, Conditions: []firemon.Condition{firemon.ApplicationCondition("HTTP")}, Services: []string{"tcp-8080"}},
 		firemon.SecurityRule{ID: "unknown-app", Action: firemon.ActionPermit, Conditions: []firemon.Condition{firemon.ApplicationCondition("Acme")}},
 		permit("rest", "", "", "", ""))
@@ -104,7 +118,9 @@ func TestApplicationRule_StandardPorts(t *testing.T) {
 			}
 			c.Services = append(c.Services, firemon.Service{Name: "tcp-8080", Entries: []firemon.ServiceEntry{firemon.PortEntry(6, portOf(8080))}})
 			c.Applications = firemon.ServiceBook{"ssh": {firemon.PortEntry(6, portOf(22))}, "http": {firemon.PortEntry(6, portOf(80))}}
-			res := queryOne(t, &c, req(tt.service))
+			r := req(tt.service)
+			r.Strict = tt.strict
+			res := queryOne(t, &c, r)
 			if res.Verdict != tt.want {
 				t.Fatalf("got %s, want %s", res.Verdict, tt.want)
 			}

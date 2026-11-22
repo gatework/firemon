@@ -10,6 +10,7 @@ declared:
   - ./audit
   - ./hits
   - ./converge
+  - ./health
   - ./migrate
   - ./inventory
   - ./intake
@@ -28,7 +29,7 @@ declared:
 
 rules:
   - name: domain packages stay free of I/O
-    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./hits, ./converge, ./migrate, ./inventory, ./intake, ./report, ./vendors/...]
+    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./hits, ./converge, ./health, ./migrate, ./inventory, ./intake, ./report, ./vendors/...]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
 
@@ -76,6 +77,10 @@ rules:
     packages: [./intake]
     only_local: [., ./traffic]
 
+  - name: health scores convergence reviews as stated deductions
+    packages: [./health]
+    only_local: [., ./converge]
+
   - name: reports describe evaluations without vendor syntax
     packages: [./report]
     only_local: [., ./traffic, ./query, ./design, ./inventory, ./intake]
@@ -106,7 +111,7 @@ rules:
 
   - name: the retired kernels are not used
     packages: [./...]
-    deny: [github.com/gatework/go-netops/..., github.com/gatework/parser/..., github.com/gatework/set/..., github.com/gatework/go-expect/...]
+    deny: [github.com/gatework/go-netops/..., github.com/gatework/parser/...]
     transitive: true
 
   - name: only the netconnector adapter imports net-connector

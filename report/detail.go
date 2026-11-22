@@ -253,7 +253,14 @@ func windowText(w firemon.TimeWindow) string {
 	if !w.End.IsZero() {
 		to = w.End.Format(layout)
 	}
-	return from + " ~ " + to
+	switch {
+	case from == "":
+		return "until " + to
+	case to == "":
+		return "from " + from
+	default:
+		return from + " ~ " + to
+	}
 }
 
 func recurrenceText(r firemon.Recurrence) string {

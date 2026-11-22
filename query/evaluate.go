@@ -13,6 +13,7 @@ import (
 type piece struct {
 	space    traffic.Space
 	possible []*firemon.Rule
+	assumed  []*firemon.Rule // rules taken not to match: premises
 }
 
 // applicability is whether a rule's zones cover a path.
@@ -47,30 +48,7 @@ func (e *Engine) evaluate(p *Path, at time.Time) {
 		if len(ev.pieces) == 0 {
 			break
 		}
-		if e.inactive(r, at) {
-			continue
-		}
-		applies := zoneApplicability(r, p.From, p.To)
-		if applies == appliesNo {
-			continue
-		}
-		v := e.ruleView(r, p)
-		if v.skip {
-			continue
-		}
-		switch {
-		case applies == appliesMaybe:
-			ev.taint(r, v.bound)
-		case !v.decidable:
-			// First match: what the rule certainly matches is decided here,
-			// the rest of its bound only possibly.
-			if !v.certain.IsEmpty() {
-				ev.decide(r, v.certain, outcomeOf(r.Action()))
-			}
-			ev.taint(r, v.bound)
-		default:
-			ev.decide(r, v.match, outcomeOf(r.Action()))
-		}
+		e.apply(ev, r, at)
 		if ev.overBudget() {
 			p.Incomplete = true
 			break
@@ -90,17 +68,82 @@ func (e *Engine) evaluate(p *Path, at time.Time) {
 	p.Verdict = verdictOf(outcomes)
 }
 
+// reaches reports whether s overlaps undecided traffic.
+func (ev *evaluator) reaches(s traffic.Space) bool {
+	for _, pc := range ev.pieces {
+		if addressesOverlap(pc.space, s) && pc.space.Overlaps(s) {
+			return true
+		}
+	}
+	return false
+}
+
+// apply evaluates one rule against the undecided pieces of ev's path:
+// it decides what the rule matches, marks what it may match, or records
+// the premise it was taken not to match under (ADR 0017).
+func (e *Engine) apply(ev *evaluator, r *firemon.Rule, at time.Time) {
+	p := ev.path
+	applies := zoneApplicability(r, p.From, p.To)
+	if p.AppInferred && !p.AppDecisive && applies != appliesNo && len(r.Applications()) > 0 && ev.reaches(r.Bound()) {
+		p.AppDecisive = true
+	}
+	if e.inactive(r, at) {
+		if applies != appliesNo && e.offSchedule(r, at) {
+			// Inactive now, active at other times: the result holds at the
+			// instant evaluated, which is a premise.
+			if v := e.ruleView(r, p); !v.skip {
+				ev.assume(r, v.bound)
+			}
+		}
+		return
+	}
+	if applies == appliesNo {
+		return
+	}
+	v := e.ruleView(r, p)
+	switch {
+	case v.skip:
+		if v.assumed {
+			ev.assume(r, v.bound)
+		}
+	case applies == appliesMaybe:
+		ev.taint(r, v.bound)
+	case !v.decidable:
+		// First match: what the rule certainly matches is decided here. The
+		// rest of its bound is possible, or, when only the domain names the
+		// rule may resolve to are unknown, taken not to be the requested
+		// addresses.
+		if !v.certain.IsEmpty() {
+			ev.decide(r, v.certain, outcomeOf(r.Action()))
+		}
+		if v.domainPremise {
+			ev.assume(r, v.bound)
+		} else {
+			ev.taint(r, v.bound)
+		}
+	default:
+		ev.decide(r, v.match, outcomeOf(r.Action()))
+	}
+}
+
 // taint marks the parts of every piece an undecidable rule might match.
 func (ev *evaluator) taint(r *firemon.Rule, bound traffic.Space) {
 	ev.split(bound, func(pc piece, hit traffic.Space) []piece {
-		return []piece{{space: hit, possible: append(slices.Clip(pc.possible), r)}}
+		return []piece{{space: hit, possible: append(slices.Clip(pc.possible), r), assumed: pc.assumed}}
+	})
+}
+
+// assume marks the parts of every piece a rule was taken not to match.
+func (ev *evaluator) assume(r *firemon.Rule, bound traffic.Space) {
+	ev.split(bound, func(pc piece, hit traffic.Space) []piece {
+		return []piece{{space: hit, possible: pc.possible, assumed: append(slices.Clip(pc.assumed), r)}}
 	})
 }
 
 // decide removes the packets r matches from every piece and records them.
 func (ev *evaluator) decide(r *firemon.Rule, match traffic.Space, o Outcome) {
 	ev.split(match, func(pc piece, hit traffic.Space) []piece {
-		ev.record(r, o, pc.possible, hit)
+		ev.record(r, o, pc, hit)
 		return nil
 	})
 }
@@ -129,7 +172,7 @@ func (ev *evaluator) split(s traffic.Space, onHit func(pc piece, hit traffic.Spa
 		}
 		next = append(next, onHit(pc, hit)...)
 		for _, rest := range pc.space.Subtract(s) {
-			next = append(next, piece{space: rest, possible: pc.possible})
+			next = append(next, piece{space: rest, possible: pc.possible, assumed: pc.assumed})
 		}
 	}
 	if changed {
@@ -144,10 +187,10 @@ func (ev *evaluator) split(s traffic.Space, onHit func(pc piece, hit traffic.Spa
 func (ev *evaluator) finish(o Outcome) {
 	for _, pc := range ev.pieces {
 		if ev.path.Incomplete {
-			ev.record(nil, OutcomeUnknown, pc.possible, pc.space)
+			ev.record(nil, OutcomeUnknown, pc, pc.space)
 			continue
 		}
-		ev.record(nil, o, pc.possible, pc.space)
+		ev.record(nil, o, pc, pc.space)
 	}
 	for i := range ev.decisions {
 		ev.decisions[i].Space = traffic.DisjointRegion(ev.spaces[i]...) // pieces of one partition never overlap
@@ -156,19 +199,20 @@ func (ev *evaluator) finish(o Outcome) {
 }
 
 // record adds space to the decision of rule r with the same possible set.
-func (ev *evaluator) record(r *firemon.Rule, final Outcome, possible []*firemon.Rule, s traffic.Space) {
+func (ev *evaluator) record(r *firemon.Rule, final Outcome, pc piece, s traffic.Space) {
+	possible := pc.possible
 	o := final
 	if !agree(final, possible) {
 		o = OutcomeUnknown
 	}
 	for i := range ev.decisions {
 		d := &ev.decisions[i]
-		if d.Rule == r && d.Outcome == o && d.Final == final && slices.Equal(d.Possible, possible) {
+		if d.Rule == r && d.Outcome == o && d.FallbackOutcome == final && slices.Equal(d.Possible, possible) && slices.Equal(d.Assumed, pc.assumed) {
 			ev.spaces[i] = append(ev.spaces[i], s)
 			return
 		}
 	}
-	ev.decisions = append(ev.decisions, Decision{Rule: r, Outcome: o, Final: final, Possible: slices.Clone(possible)})
+	ev.decisions = append(ev.decisions, Decision{Rule: r, Outcome: o, FallbackOutcome: final, Possible: slices.Clone(possible), Assumed: slices.Clone(pc.assumed)})
 	ev.spaces = append(ev.spaces, []traffic.Space{s})
 }
 
@@ -178,7 +222,19 @@ func (ev *evaluator) record(r *firemon.Rule, final Outcome, possible []*firemon.
 func (d Decision) Deciders() []*firemon.Rule {
 	var out []*firemon.Rule
 	for _, r := range d.Possible {
-		if !agree(d.Final, []*firemon.Rule{r}) {
+		if !agree(d.FallbackOutcome, []*firemon.Rule{r}) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// Conditional returns the assumed rules that would change the outcome if
+// their unknown criterion held: the premises worth stating.
+func (d Decision) Conditional() []*firemon.Rule {
+	var out []*firemon.Rule
+	for _, r := range d.Assumed {
+		if !agree(d.FallbackOutcome, []*firemon.Rule{r}) {
 			out = append(out, r)
 		}
 	}
@@ -209,11 +265,33 @@ func (e *Engine) inactive(r *firemon.Rule, at time.Time) bool {
 		return r.Ignored() || r.ExpiredAt(at)
 	case ScheduleNeverActive:
 		return r.Ignored() || r.Scheduled()
+	case ScheduleWorstCase:
+		if r.Ignored() || !r.Scheduled() {
+			return r.Ignored()
+		}
+		activity := ActivityPartial
+		if e.activity != nil {
+			activity = e.activity(r)
+		}
+		switch activity {
+		case ActivityAlways:
+			return false
+		case ActivityNever:
+			return true
+		case ActivityPartial:
+		}
+		return r.Action() != firemon.ActionDeny
 	case ScheduleAt:
 		return r.InactiveAt(at)
 	default:
 		return r.InactiveAt(at)
 	}
+}
+
+// offSchedule reports a rule a schedule keeps inactive at t that is in
+// force at other times.
+func (e *Engine) offSchedule(r *firemon.Rule, at time.Time) bool {
+	return e.schedules == ScheduleAt && r.Scheduled() && !r.Ignored() && !r.ExpiredAt(at)
 }
 
 // defaultOutcome is the vendor default action for the path's zones.

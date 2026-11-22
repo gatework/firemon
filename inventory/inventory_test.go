@@ -186,3 +186,20 @@ func TestInventory_ClusterEvaluatedOnce(t *testing.T) {
 		t.Fatalf("crossings %+v", tr.Crossings)
 	}
 }
+
+func TestDevice_Label(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		d    inventory.Device
+		want string
+	}{
+		{inventory.Device{Name: "SZX9-IN-FW01-10.251.8.203", Host: "10.251.8.203"}, "SZX9-IN-FW01(10.251.8.203)"},
+		{inventory.Device{Name: "SZX9-IN-FW01-10.251.8.203"}, "SZX9-IN-FW01(10.251.8.203)"},
+		{inventory.Device{Name: "edge1", Host: "192.0.2.1"}, "edge1(192.0.2.1)"},
+		{inventory.Device{Name: "edge1"}, "edge1"},
+	} {
+		if got := tt.d.Label(); got != tt.want {
+			t.Errorf("%+v: got %q, want %q", tt.d, got, tt.want)
+		}
+	}
+}

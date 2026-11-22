@@ -1,6 +1,7 @@
 package firemon
 
 import (
+	"maps"
 	"slices"
 	"time"
 )
@@ -16,7 +17,7 @@ type Diagnostic struct {
 // ModelVersion numbers the shape of Config and what its fingerprint
 // covers. It changes whenever either does: a configuration stored by an
 // older version is parsed again from its text rather than trusted.
-const ModelVersion = 4
+const ModelVersion = 6
 
 // Config is the declarative configuration of one firewall as produced by a
 // vendor parser. Order is significant for Rules, DynamicNATs and
@@ -54,6 +55,13 @@ type Config struct {
 	// Applications maps lowercase application names to their default
 	// ports, for application-default services and application queries.
 	Applications ServiceBook `json:"applications,omitempty"`
+	// Source holds the configuration text of each object as the device
+	// writes it, by SourceKey: what a query shows for a rule it hits, with
+	// the objects the rule names. It is not part of the fingerprint.
+	Source map[string][]string `json:"source,omitempty"`
+	// ApplicationGroups maps lowercase predefined application group names
+	// to their members (applications or groups), for rules that name a group.
+	ApplicationGroups map[string][]string `json:"application_groups,omitempty"`
 }
 
 // Clone returns a deep copy of c that shares no slices with it.
@@ -89,6 +97,7 @@ func (c *Config) Clone() *Config {
 		s.Windows = slices.Clone(s.Windows)
 		s.Recurrences = cloneEach(s.Recurrences, func(r Recurrence) Recurrence {
 			r.Days = slices.Clone(r.Days)
+			r.MonthDays = slices.Clone(r.MonthDays)
 			return r
 		})
 		return s
@@ -117,6 +126,8 @@ func (c *Config) Clone() *Config {
 	out.ExternalUses = slices.Clone(c.ExternalUses)
 	out.Diagnostics = slices.Clone(c.Diagnostics)
 	out.Applications = c.Applications.With(nil)
+	out.ApplicationGroups = maps.Clone(c.ApplicationGroups)
+	out.Source = maps.Clone(c.Source)
 	return &out
 }
 
@@ -146,4 +157,26 @@ func cloneEach[T any](in []T, clone func(T) T) []T {
 		out[i] = clone(v)
 	}
 	return out
+}
+
+// Source kinds, the first part of a SourceKey.
+const (
+	SourceAddress      = "address"
+	SourceAddressGroup = "address-group"
+	SourceService      = "service"
+	SourceServiceGroup = "service-group"
+	SourceSchedule     = "schedule"
+	SourceRule         = "rule"
+)
+
+// SourceKey names an object in Config.Source.
+func SourceKey(kind, name string) string { return kind + ":" + name }
+
+// AddSource appends the configuration lines of an object.
+func (c *Config) AddSource(kind, name string, lines ...string) {
+	if c.Source == nil {
+		c.Source = map[string][]string{}
+	}
+	key := SourceKey(kind, name)
+	c.Source[key] = append(c.Source[key], lines...)
 }

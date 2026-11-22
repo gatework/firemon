@@ -1,5 +1,7 @@
 package firemon
 
+import "github.com/gatework/firemon/traffic"
+
 // Capabilities describe what a vendor's configuration can express, so that
 // a translation from another vendor knows what to rewrite and what it
 // cannot carry over.
@@ -31,6 +33,22 @@ type Capabilities struct {
 	InlineServices bool
 	// InlineFQDN: rules carry inline domain names.
 	InlineFQDN bool
+	// DynamicAddressGroups supports a group whose members follow a filter.
+	DynamicAddressGroups bool
+	// DiscardRoutes supports rendering a static discard route.
+	DiscardRoutes bool
+	// MinuteSchedules supports one period type per schedule with minute precision.
+	MinuteSchedules bool
+	// MonthlySchedules supports days of the month in recurring schedules.
+	MonthlySchedules bool
+	// PerRulePolicyRouteID is the normalized entry ID when each forwarding
+	// rule owns its bindings. An empty ID denotes ordered, numeric entries
+	// in one routing policy per ingress zone or interface.
+	PerRulePolicyRouteID string
+	// ApplicationAlias maps a source application to a target signature.
+	ApplicationAlias func(Vendor, string) (string, bool)
+	// ServiceApplication maps a portless service to a target application.
+	ServiceApplication func(traffic.ServiceSet) (string, bool)
 	// MaxNameLength bounds object and rule names; zero means no limit.
 	MaxNameLength int
 }

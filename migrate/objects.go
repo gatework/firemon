@@ -98,7 +98,7 @@ func (tr *translator) addressGroup(g firemon.AddressGroup) {
 	case len(g.Invalid) > 0:
 		fail("the source group has lines that were not parsed")
 		return
-	case g.Filter != "" && tr.t.Vendor != firemon.VendorPaloAlto:
+	case g.Filter != "" && !tr.caps.DynamicAddressGroups:
 		fail("dynamic address groups have no static form")
 		return
 	}
@@ -356,7 +356,10 @@ func (tr *translator) schedule(s firemon.Schedule) (firemon.Schedule, string, Fi
 	if s.Unsupported != "" {
 		return firemon.Schedule{}, "unsupported period " + s.Unsupported, FidelityUntranslatable
 	}
-	if tr.t.Vendor != firemon.VendorPaloAlto {
+	if !tr.caps.MonthlySchedules && slices.ContainsFunc(s.Recurrences, func(r firemon.Recurrence) bool { return len(r.MonthDays) != 0 }) {
+		return firemon.Schedule{}, "the target cannot select days of the month", FidelityUntranslatable
+	}
+	if !tr.caps.MinuteSchedules {
 		return s, "", FidelityExact
 	}
 	daily, weekly := false, false
@@ -377,9 +380,10 @@ func (tr *translator) schedule(s firemon.Schedule) (firemon.Schedule, string, Fi
 		return c
 	}
 	for _, w := range s.Windows {
-		if w.Start.IsZero() {
-			return firemon.Schedule{}, "a window without a start", FidelityUntranslatable
+		if w.Start.IsZero() || w.End.IsZero() {
+			return firemon.Schedule{}, "the target requires both start and end of an absolute window", FidelityUntranslatable
 		}
+		rounded = rounded || !w.Start.Equal(w.Start.Truncate(time.Minute))
 		end := w.End.Truncate(time.Minute)
 		if end.Before(w.End) {
 			end, rounded = end.Add(time.Minute), true
@@ -387,10 +391,11 @@ func (tr *translator) schedule(s firemon.Schedule) (firemon.Schedule, string, Fi
 		out.Windows = append(out.Windows, firemon.TimeWindow{Start: w.Start.Truncate(time.Minute), End: end})
 	}
 	for _, r := range s.Recurrences {
-		out.Recurrences = append(out.Recurrences, firemon.Recurrence{Days: r.Days, Start: r.Start.Truncate(time.Minute), End: min(ceil(r.End), 24*time.Hour)})
+		rounded = rounded || r.Start != r.Start.Truncate(time.Minute)
+		out.Recurrences = append(out.Recurrences, firemon.Recurrence{Days: r.Days, MonthDays: r.MonthDays, Start: r.Start.Truncate(time.Minute), End: min(ceil(r.End), 24*time.Hour)})
 	}
 	if rounded {
-		return out, "ends rounded up to the minute (PAN-OS counts minutes)", FidelityApproximate
+		return out, "period boundaries rounded outward to the target minute precision", FidelityApproximate
 	}
 	return out, "", FidelityExact
 }

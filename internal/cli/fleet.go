@@ -21,12 +21,16 @@ import (
 
 type fleetMember struct {
 	name, cluster, snapshot string
+	host                    string
 	active                  bool
 }
 
 // inventory loads the fleet: the firewalls of --inventory with their
 // clusters and protected networks, or every stored snapshot.
 func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[string]bootstrap.Platform, error) {
+	if isDir(o.inventoryFile) {
+		return o.backupInventory(cmd, o.inventoryFile)
+	}
 	store, err := bootstrap.OpenSnapshots(o.store)
 	if err != nil {
 		return nil, nil, err
@@ -51,7 +55,7 @@ func (o *options) inventory(cmd *cobra.Command) (*inventory.Inventory, map[strin
 		}
 		members = append(members, inventory.Member{
 			Name: fm.name, Cluster: fm.cluster, Firewall: loaded.Firewall, Naming: platforms[fm.name].Naming,
-			Active: fm.active,
+			Active: fm.active, Host: fm.host, Capabilities: platforms[fm.name].Capabilities,
 		})
 	}
 	warnInventory(cmd.ErrOrStderr(), fleet, members, zones)
@@ -100,6 +104,9 @@ func warnInventory(w io.Writer, fleet []fleetMember, members []inventory.Member,
 }
 
 func (o *options) fleet(cmd *cobra.Command, store *filestore.Store) ([]fleetMember, []inventory.ZoneBinding, error) {
+	if isDir(o.inventoryFile) {
+		return nil, nil, &usageError{fmt.Errorf("--inventory %s 是配置备份目录：该命令需要库存文件（YAML）与快照目录", o.inventoryFile)}
+	}
 	if o.inventoryFile != "" {
 		f, err := yamlfile.Load(o.inventoryFile)
 		if err != nil {
@@ -111,7 +118,7 @@ func (o *options) fleet(cmd *cobra.Command, store *filestore.Store) ([]fleetMemb
 		}
 		out := make([]fleetMember, 0, len(f.Firewalls))
 		for _, fw := range f.Firewalls {
-			out = append(out, fleetMember{name: fw.Name, cluster: fw.Cluster, snapshot: fw.SnapshotOf(), active: fw.Active()})
+			out = append(out, fleetMember{name: fw.Name, cluster: fw.Cluster, snapshot: fw.SnapshotOf(), active: fw.Active(), host: fw.Host})
 		}
 		return out, zones, nil
 	}

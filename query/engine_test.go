@@ -107,6 +107,7 @@ func TestEngine_Query(t *testing.T) {
 		service  string
 		want     query.Verdict
 		paths    int
+		strict   bool
 	}{
 		{
 			name: "permit covers request",
@@ -136,11 +137,19 @@ func TestEngine_Query(t *testing.T) {
 			src:  "10.0.0.9", dst: "172.16.0.10", service: "tcp/443", want: query.VerdictDenied, paths: 1,
 		},
 		{
-			name: "undecidable rule before permit is indeterminate",
+			name: "strict: undecidable rule before permit is indeterminate",
 			cfg: lab(firemon.AddressStageOriginal,
 				firemon.SecurityRule{ID: "1", Action: firemon.ActionDeny, Destination: []firemon.AddressRef{firemon.NamedAddress("cdn")}},
 				permit("2", "", "", "", "", "https")),
-			src: "10.0.0.9", dst: "172.16.0.10", service: "tcp/443", want: query.VerdictIndeterminate, paths: 1,
+			src: "10.0.0.9", dst: "172.16.0.10", service: "tcp/443", want: query.VerdictIndeterminate, paths: 1, strict: true,
+		},
+		{
+			// ADR 0017: the address is taken not to be one cdn resolves to.
+			name: "deny by domain name before permit is a premise",
+			cfg: lab(firemon.AddressStageOriginal,
+				firemon.SecurityRule{ID: "1", Action: firemon.ActionDeny, Destination: []firemon.AddressRef{firemon.NamedAddress("cdn")}},
+				permit("2", "", "", "", "", "https")),
+			src: "10.0.0.9", dst: "172.16.0.10", service: "tcp/443", want: query.VerdictAllowed, paths: 1,
 		},
 		{
 			name: "undecidable rule that cannot overlap is ignored",
@@ -176,7 +185,7 @@ func TestEngine_Query(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			res, err := engine(t, tt.cfg).Query(query.Request{Src: addrs(t, tt.src), Dst: addrs(t, tt.dst), Service: svc(t, tt.service)})
+			res, err := engine(t, tt.cfg).Query(query.Request{Src: addrs(t, tt.src), Dst: addrs(t, tt.dst), Service: svc(t, tt.service), Strict: tt.strict})
 			if err != nil {
 				t.Fatal(err)
 			}

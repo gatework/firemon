@@ -7,9 +7,6 @@ import (
 	"github.com/gatework/firemon/traffic"
 )
 
-// maxNextVR bounds next-vr recursion between routing tables.
-const maxNextVR = 4
-
 // hop is the part of an address set one interface reaches.
 type hop struct {
 	vr          string // routing context of the interface
@@ -75,8 +72,9 @@ func (e *Engine) path(in, out hop, pc natPiece) Path {
 	}
 	p := Path{
 		From: in.zone, To: out.zone, Ingress: in.iface, Egress: out.iface,
+		VirtualRouter: in.vr, EgressVirtualRouter: out.vr,
 		IngressPrefixLen: in.prefixLen, EgressPrefixLen: out.prefixLen,
-		Original: original, Policy: policy, DestinationNAT: pc.dstHit, NATUncertain: slices.Clone(pc.uncertain),
+		Original: original, Policy: policy, Translated: translated, DestinationNAT: pc.dstHit, NATUncertain: slices.Clone(pc.uncertain),
 		NATSkipped: slices.Clone(pc.skipped),
 	}
 	if pc.srcHit != nil {
@@ -121,7 +119,7 @@ func (e *Engine) ingress(req Request, table *firemon.RoutingTable) []hop {
 	if req.FromZone != "" {
 		return []hop{{vr: tableName(table), zone: req.FromZone, prefixLen: -1, addrs: req.Src}}
 	}
-	hops, lost := e.route(table, req.Src, 0)
+	hops, lost := e.route(table, req.Src)
 	if !lost.IsEmpty() {
 		hops = append(hops, hop{vr: tableName(table), prefixLen: -1, addrs: lost}) // unknown zone
 	}
@@ -133,36 +131,19 @@ func (e *Engine) egress(req Request, table *firemon.RoutingTable, dst traffic.Ad
 	if req.ToZone != "" {
 		return []hop{{vr: tableName(table), zone: req.ToZone, prefixLen: -1, addrs: dst}}, traffic.AddressSet{}
 	}
-	return e.route(table, dst, 0)
+	return e.route(table, dst)
 }
 
 // route looks dst up in table, following next-vr hops. Discarded and
 // unrouted addresses are returned as lost.
-func (e *Engine) route(table *firemon.RoutingTable, dst traffic.AddressSet, depth int) ([]hop, traffic.AddressSet) {
+func (e *Engine) route(table *firemon.RoutingTable, dst traffic.AddressSet) ([]hop, traffic.AddressSet) {
 	if table == nil {
 		return nil, dst
 	}
-	egress, lost := table.Lookup(dst)
-	var hops []hop
-	for _, g := range egress {
-		next := g.Route.NextVirtualRouter
-		switch {
-		case g.Route.Discard:
-			lost = lost.Union(g.Addresses)
-		case next == "" && g.Interface == "":
-			lost = lost.Union(g.Addresses)
-		case next == "":
-			hops = append(hops, hop{vr: table.Name(), zone: g.Zone, iface: g.Interface, prefixLen: g.Route.Destination.Bits(), addrs: g.Addresses})
-		default:
-			nextTable, ok := e.fw.RoutingTable(next)
-			if !ok || depth >= maxNextVR {
-				lost = lost.Union(g.Addresses)
-				continue
-			}
-			more, moreLost := e.route(nextTable, g.Addresses, depth+1)
-			hops = append(hops, more...)
-			lost = lost.Union(moreLost)
-		}
+	exits, lost := e.fw.Forward(table.Name(), dst)
+	hops := make([]hop, 0, len(exits))
+	for _, g := range exits {
+		hops = append(hops, hop{vr: g.Route.VirtualRouter, zone: g.Zone, iface: g.Interface, prefixLen: g.Route.Destination.Bits(), addrs: g.Addresses})
 	}
 	return mergeHops(hops), lost
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"cmp"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -35,8 +36,11 @@ func newParseCmd(o *options) *cobra.Command {
 			}
 			for _, i := range s.Issues {
 				label := "无法离线判定"
-				if i.Kind == firemon.IssueKindConfig {
+				switch {
+				case i.Kind == firemon.IssueKindConfig:
 					label = "配置问题"
+				case slices.Contains(firemon.ConditionKinds, i.Kind):
+					label = "按条件匹配（查询时按前提判定）"
 				}
 				p.f("%s：%s\n", label, zhIssue(i))
 			}
@@ -61,15 +65,17 @@ type summary struct {
 	Issues []firemon.Issue `json:"issues"`
 }
 
-var countOrder = []string{"zones", "interfaces", "routes", "addresses", "address_groups", "services", "service_groups", "schedules", "rules", "undecidable_rules", "static_nats", "dynamic_nats"}
+var countOrder = []string{"zones", "interfaces", "routes", "addresses", "address_groups", "services", "service_groups", "schedules", "rules", "conditional_rules", "undecidable_rules", "static_nats", "dynamic_nats"}
 
 func summarize(cfg *firemon.Config, fw *firemon.Firewall) summary {
-	undecidable := 0
+	undecidable, conditional := 0, 0
 	idle := map[string]bool{} // rules that decide nothing: disabled or incomplete
 	for _, r := range fw.Rules() {
 		switch {
 		case r.Ignored() || r.Spec().Disabled:
 			idle["rule "+r.ID()] = true
+		case r.Conditional():
+			conditional++
 		case !r.Decidable():
 			undecidable++
 		}
@@ -86,7 +92,7 @@ func summarize(cfg *firemon.Config, fw *firemon.Firewall) summary {
 			"zones": len(cfg.Zones), "interfaces": len(cfg.Interfaces), "routes": len(cfg.Routes),
 			"addresses": len(cfg.Addresses), "address_groups": len(cfg.AddressGroups), "services": len(cfg.Services),
 			"service_groups": len(cfg.ServiceGroups), "schedules": len(cfg.Schedules), "rules": len(cfg.Rules),
-			"undecidable_rules": undecidable, "static_nats": len(cfg.StaticNATs), "dynamic_nats": len(cfg.DynamicNATs),
+			"conditional_rules": conditional, "undecidable_rules": undecidable, "static_nats": len(cfg.StaticNATs), "dynamic_nats": len(cfg.DynamicNATs),
 		},
 		Diagnostics: append([]firemon.Diagnostic{}, cfg.Diagnostics...),
 		Issues:      issues,

@@ -12,6 +12,7 @@ import (
 type addressSide struct {
 	field   Field
 	set     traffic.AddressSet
+	items   []traffic.AddressSet // each accepted item, in input order
 	domains []string
 	notes   []Note
 }
@@ -48,7 +49,12 @@ func (s *addressSide) item(tok string) {
 		s.prefixItem(tok)
 	case isAddr(tok):
 		a, _ := netip.ParseAddr(tok)
-		s.merge(tok, traffic.NewAddressSet(netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen())), CodeUnset)
+		a = a.Unmap()
+		s.merge(tok, traffic.NewAddressSet(netip.PrefixFrom(a, a.BitLen())), CodeUnset)
+		if a.Is4() && (a.As4()[3] == 0 || a.As4()[3] == 255) {
+			// Taken as the host it names; the note asks whether a mask is missing.
+			s.notes = append(s.notes, Note{Field: s.field, Code: CodeNetworkHost, Input: tok, Result: a.String() + "/32"})
+		}
 	case looksLikeDomain(tok):
 		if s.field != FieldDestination {
 			s.notes = append(s.notes, Note{Field: s.field, Code: CodeUnsupported, Input: tok})
@@ -79,6 +85,7 @@ func (s *addressSide) merge(input string, set traffic.AddressSet, code Code) {
 		return
 	}
 	s.set = s.set.Union(set)
+	s.items = append(s.items, set)
 	if code != CodeUnset {
 		s.notes = append(s.notes, Note{Field: s.field, Code: code, Input: input, Result: set.String()})
 	}

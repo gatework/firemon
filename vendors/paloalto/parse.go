@@ -74,7 +74,44 @@ func (p *Parser) Parse(text string) (*firemon.Config, error) {
 	}
 	cfg := s.finish()
 	cfg.Applications = p.applications()
+	recordSource(cfg, content, stmts)
 	return cfg, nil
+}
+
+// recordSource keeps the set statements that define addresses, services,
+// schedules and security rules, as the device wrote them.
+func recordSource(cfg *firemon.Config, content *parse.Content, stmts []statement) {
+	raw := map[int]string{}
+	for _, l := range content.Lines() {
+		raw[l.Number] = strings.TrimRight(l.Raw, "\r\n")
+	}
+	kinds := map[string]string{
+		"address": firemon.SourceAddress, "address-group": firemon.SourceAddressGroup, "service": firemon.SourceService,
+		"service-group": firemon.SourceServiceGroup, "schedule": firemon.SourceSchedule,
+	}
+	for _, st := range stmts {
+		w := st.words
+		if len(w) > 0 && w[0].text == "shared" {
+			w = w[1:]
+		} else if len(w) > 1 && w[0].text == "vsys" {
+			w = w[2:]
+		}
+		kind, name := "", ""
+		switch {
+		case len(w) >= 2 && kinds[w[0].text] != "":
+			kind, name = kinds[w[0].text], w[1].text
+		case len(w) >= 4 && w[0].text == "rulebase" && w[1].text == "security" && w[2].text == "rules":
+			kind, name = firemon.SourceRule, w[3].text
+		}
+		if kind == "" || name == "" {
+			continue
+		}
+		for n := st.first; n <= st.last; n++ {
+			if text, ok := raw[n]; ok {
+				cfg.AddSource(kind, name, text)
+			}
+		}
+	}
 }
 
 // systemInfo reads a "key: value" line of "show system info".
@@ -298,5 +335,9 @@ func (p *Parser) applications() firemon.ServiceBook {
 
 // Capabilities describes what PAN-OS configurations express.
 func Capabilities() firemon.Capabilities {
-	return firemon.Capabilities{NegateAddresses: true, RuleTypes: true, ApplicationDefault: true, MaxNameLength: maxNameLength}
+	return firemon.Capabilities{
+		NegateAddresses: true, RuleTypes: true, ApplicationDefault: true, DynamicAddressGroups: true,
+		DiscardRoutes: true, MinuteSchedules: true, PerRulePolicyRouteID: pbfPolicyID,
+		ApplicationAlias: applicationAlias, ServiceApplication: serviceApplication, MaxNameLength: maxNameLength,
+	}
 }

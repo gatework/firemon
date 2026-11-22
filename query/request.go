@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/traffic"
 )
 
@@ -36,6 +37,21 @@ type Request struct {
 	// applications do not match; with Service any, the application's
 	// default ports are evaluated.
 	Applications []string
+	// Strict keeps rules by application, user and URL category possible
+	// matches when the request does not give those criteria, the
+	// conservative reading of ADR 0016. By default the request is taken to be the
+	// standard application of its ports (tcp/22 is SSH): rules restricted
+	// to other applications do not match, and each path records the
+	// application it assumed.
+	Strict bool
+	// Users are the users, groups or roles the source is known to be. Rules
+	// that match by user are matched against them; with none given they are
+	// taken not to match, a premise every path records.
+	Users []string
+	// URLCategories are the URL categories of the request, matched the same
+	// way. Rules by URL category never match traffic identified as an
+	// application that is not web traffic.
+	URLCategories []string
 }
 
 // Space returns the request as one traffic space.
@@ -59,6 +75,10 @@ type Options struct {
 	MaxPaths int
 	// Schedules selects how rules with schedules or validity windows count.
 	Schedules ScheduleMode
+	// Activity tells, under ScheduleWorstCase, how each timed rule behaves
+	// over the evaluated period. Nil, or a rule it does not know, is
+	// ActivityPartial.
+	Activity func(*firemon.Rule) Activity
 }
 
 // ScheduleMode tells how scheduled rules take part in evaluation.
@@ -74,6 +94,25 @@ const (
 	// ScheduleNeverActive ignores scheduled rules, for checking permanent
 	// access: a rule that permits only part of the time does not count.
 	ScheduleNeverActive
+	// ScheduleWorstCase reads each timed rule by Options.Activity over the
+	// period access must hold: a rule in force throughout is active, one
+	// never in force is inactive, and one in force only part of the time
+	// counts against the traffic: a deny is active, any other rule is not.
+	ScheduleWorstCase
+)
+
+// Activity is how a timed rule behaves over an evaluated period.
+type Activity uint8
+
+// Activities.
+const (
+	// ActivityPartial: in force for part of the period, or not provably
+	// either way.
+	ActivityPartial Activity = iota
+	// ActivityAlways: in force throughout the period.
+	ActivityAlways
+	// ActivityNever: never in force during the period.
+	ActivityNever
 )
 
 // Default evaluation budgets.

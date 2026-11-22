@@ -12,25 +12,95 @@ import (
 // destination addresses and each destination domain, times each
 // application, and discovers the paths of every target.
 func (e *search) discoverTargets(req Request, table *firemon.RoutingTable) (paths []Path, unrouted traffic.AddressSet, incomplete bool) {
-	apps := req.Applications
-	if len(apps) == 0 {
-		apps = []string{""}
-	}
-	for _, app := range apps {
+	for _, t := range e.appTargets(req) {
 		base := req
-		base.Service = e.applicationService(req.Service, app)
+		base.Service = t.service
 		if !base.Dst.IsEmpty() {
 			e.domain, e.resolved = "", false
 			ps, lost, inc := e.discover(base, table)
-			paths, unrouted, incomplete = append(paths, tag(ps, "", false, app)...), unrouted.Union(lost), incomplete || inc
+			paths, unrouted, incomplete = append(paths, t.tag(ps, "", false)...), unrouted.Union(lost), incomplete || inc
 		}
 		for _, d := range req.DstDomains {
 			e.domain, e.resolved = d, len(req.Resolved[d]) > 0
 			ps, lost, inc := e.discoverDomain(base, table, d)
-			paths, unrouted, incomplete = append(paths, tag(ps, d, len(req.Resolved[d]) > 0, app)...), unrouted.Union(lost), incomplete || inc
+			paths, unrouted, incomplete = append(paths, t.tag(ps, d, len(req.Resolved[d]) > 0)...), unrouted.Union(lost), incomplete || inc
 		}
 	}
 	return paths, unrouted, incomplete || e.incomplete
+}
+
+// appTarget is the application a part of the request is evaluated as.
+type appTarget struct {
+	service      traffic.ServiceSet
+	app          string   // named or inferred application; empty when several or none
+	family       []string // applications matched against rules
+	inferred     bool
+	unidentified bool
+}
+
+func (t appTarget) tag(paths []Path, domain string, resolved bool) []Path {
+	for i := range paths {
+		p := &paths[i]
+		p.Domain, p.DomainResolved, p.Application = domain, resolved, t.app
+		p.AppFamily, p.AppInferred, p.AppUnidentified = slices.Clone(t.family), t.inferred, t.unidentified
+	}
+	return paths
+}
+
+// appTargets splits a request by application. Named applications are
+// targets of their own. Otherwise, unless the request is strict, the
+// service is split by the standard application of its ports; parts that
+// every application rule of the firewall treats alike are evaluated
+// together, so a wide service costs one path per distinct treatment.
+func (e *Engine) appTargets(req Request) []appTarget {
+	if len(req.Applications) > 0 {
+		out := make([]appTarget, len(req.Applications))
+		for i, app := range req.Applications {
+			out[i] = appTarget{service: e.applicationService(req.Service, app), app: app}
+		}
+		return out
+	}
+	if req.Strict || (len(e.appRules) == 0 && !e.urlRules) {
+		return []appTarget{{service: req.Service}}
+	}
+	var out []appTarget
+	var keys []string
+	for _, g := range e.fw.IdentifyApplications(req.Service) {
+		key := e.appSignature(g.Apps)
+		if g.Unidentified() {
+			key += "?" // unknown applications may match only here
+		} else if e.urlRules && !e.webApps(g.Apps) {
+			key += "-" // URL categories cannot match
+		}
+		i := slices.Index(keys, key)
+		if i < 0 {
+			keys = append(keys, key)
+			out = append(out, appTarget{inferred: true})
+			i = len(out) - 1
+		}
+		t := &out[i]
+		t.service = t.service.Union(g.Service)
+		t.family = append(t.family, g.Apps...)
+		t.unidentified = t.unidentified || g.Unidentified()
+		if t.app == "" && len(g.Apps) > 0 && !t.unidentified && len(t.family) == len(g.Apps) {
+			t.app = g.Apps[0]
+		} else if len(t.family) != len(g.Apps) || t.unidentified {
+			t.app = ""
+		}
+	}
+	return out
+}
+
+// appSignature names the application rules that admit one of apps: parts
+// of a request with the same signature are decided alike.
+func (e *Engine) appSignature(apps []string) string {
+	b := make([]byte, (len(e.appRules)+7)/8)
+	for i, r := range e.appRules {
+		if r.MatchesAnyApplication(apps) {
+			b[i/8] |= 1 << (i % 8)
+		}
+	}
+	return string(b)
 }
 
 // applicationService is the service evaluated for an application target:
@@ -112,13 +182,6 @@ func (e *Engine) defaultEgress(req Request, table *firemon.RoutingTable, family 
 	return hop{}, false
 }
 
-func tag(paths []Path, domain string, resolved bool, app string) []Path {
-	for i := range paths {
-		paths[i].Domain, paths[i].DomainResolved, paths[i].Application = domain, resolved, app
-	}
-	return paths
-}
-
 // view is how one rule matches one path's target.
 type view struct {
 	match, bound traffic.Space
@@ -127,6 +190,13 @@ type view struct {
 	certain   traffic.Space
 	decidable bool
 	skip      bool // the rule certainly does not match this target
+	// assumed: the rule is skipped because a criterion the request did not
+	// give is taken not to hold (a premise of the result).
+	assumed bool
+	// domainPremise: the rule is undecidable only by domain names it may
+	// resolve to; its certain part decides, and the rest is taken not to
+	// match an address target (a premise).
+	domainPremise bool
 }
 
 // ruleView adapts a rule to the target of path p: an application target
@@ -134,40 +204,76 @@ type view struct {
 // for application-default services; a domain target matches the rule's
 // domain patterns by name and its addresses through the resolution.
 func (e *Engine) ruleView(r *firemon.Rule, p *Path) view {
-	v := view{match: r.Match(), bound: r.Bound(), decidable: r.DecidableFor(p.Domain != "", p.Application != "")}
+	apps := p.matchApps()
+	named := len(apps) > 0 || p.AppUnidentified
+	v := view{match: r.Match(), bound: r.Bound(), decidable: r.DecidableFor(p.Domain != "", named)}
 	v.certain, _ = r.Certain()
-	if p.Application != "" {
-		if !r.MatchesApplication(p.Application) {
-			return view{skip: true}
+	unknownApp := false
+	if named {
+		if !r.MatchesAnyApplication(apps) {
+			if !p.AppUnidentified || !e.unknownApps[r] {
+				return view{skip: true}
+			}
+			// An application the book does not know may use any port the
+			// book leaves unclaimed.
+			v.decidable, v.certain, unknownApp = false, traffic.Space{}, true
 		}
-		if r.DefaultPorts() {
-			if ports, ok := e.fw.ApplicationPorts(p.Application); ok {
+		if r.DefaultPorts() && v.decidable {
+			if ports, ok := e.admittedPorts(r, apps); ok {
 				v.match.Service, v.bound.Service = ports, ports
 			} else {
 				v.decidable = false
 			}
 		}
-	}
-	if p.Application == "" {
-		if ports, ok := e.appPorts[r]; ok {
-			v = appPortsView(v, r, ports, p)
-			if v.skip {
-				return v
-			}
+	} else if ports, ok := e.appPorts[r]; ok {
+		v = appPortsView(v, r, ports, p)
+		if v.skip {
+			return v
 		}
 	}
-	if p.Domain == "" {
+	if v = e.conditionView(r, p, v, named); v.skip {
 		return v
 	}
-	return domainView(v, r.DstDomains(), r.DecidableFor(true, p.Application != ""), p.Domain, p.DomainResolved, p.Policy.Dst)
+	if p.Domain == "" {
+		if !v.decidable && !p.strict && !unknownApp && byDomain(r) && r.DecidableWithout(e.settledKinds(named)...) {
+			v.domainPremise = true
+		}
+		return v
+	}
+	return domainView(v, r.DstDomains(), r.DecidableFor(true, named), p.Domain, p.DomainResolved, p.Policy.Dst)
 }
 
-// appPortsView narrows a rule that matches any service but only some
-// applications to those applications' standard ports, for a target that
-// names no application: traffic on other ports is taken not to be the
-// application. Within the ports the rule stays a possible match, since a
-// port alone does not identify an application. The path records the
-// rule when the narrowing changed what it might match.
+// matchApps are the applications a path is matched as: the family of an
+// inferred target, the named application, or none.
+func (p *Path) matchApps() []string {
+	if len(p.AppFamily) > 0 {
+		return p.AppFamily
+	}
+	if p.Application != "" {
+		return []string{p.Application}
+	}
+	return nil
+}
+
+// admittedPorts are the standard ports of the applications of apps that
+// an application-default rule admits; false when one is unknown.
+func (e *Engine) admittedPorts(r *firemon.Rule, apps []string) (traffic.ServiceSet, bool) {
+	var out traffic.ServiceSet
+	for _, a := range apps {
+		if !r.MatchesApplication(a) {
+			continue
+		}
+		ports, ok := e.fw.ApplicationPorts(a)
+		if !ok || ports.IsEmpty() {
+			return traffic.ServiceSet{}, false
+		}
+		out = out.Union(ports)
+	}
+	return out, !out.IsEmpty()
+}
+
+// appPortsView applies a rule's application-default service to a port-only
+// request. Inside that service, application identification remains unknown.
 func appPortsView(v view, r *firemon.Rule, ports traffic.ServiceSet, p *Path) view {
 	if v.bound.Overlaps(p.Policy) && !p.Policy.Service.Intersect(v.bound.Service).Subtract(ports).IsEmpty() &&
 		!slices.ContainsFunc(p.AppPorts, func(a AppPorts) bool { return a.Rule == r }) {

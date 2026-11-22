@@ -69,8 +69,8 @@ func (tr *translator) network() {
 
 func (tr *translator) route(r firemon.Route) {
 	id := r.VirtualRouter + " " + r.Destination.String()
-	if r.Discard && tr.t.Vendor == firemon.VendorHillstone {
-		tr.item(ItemKindRoute, id, FidelityUntranslatable, "discard routes are not written for StoneOS")
+	if r.Discard && !tr.caps.DiscardRoutes {
+		tr.item(ItemKindRoute, id, FidelityUntranslatable, "the target cannot render a discard route")
 		return
 	}
 	out := r
@@ -83,6 +83,7 @@ func (tr *translator) route(r firemon.Route) {
 		out.Interface = tr.iface(r.Interface)
 	}
 	if out.Distance == defaultDistance(tr.src.Vendor) {
+		// The source's default stays the default on the target.
 		out.Distance = defaultDistance(tr.t.Vendor)
 	}
 	tr.out.Routes = append(tr.out.Routes, out)

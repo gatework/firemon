@@ -1,6 +1,7 @@
 package inventory_test
 
 import (
+	"errors"
 	"net/netip"
 	"testing"
 	"time"
@@ -141,5 +142,18 @@ func TestInventory_AmbiguousOnlyWhenShared(t *testing.T) {
 	tr, err = inv.Locate(request("10.99.0.5", "203.0.113.208", "tcp/443"))
 	if err != nil || len(tr.Ambiguous) != 1 || tr.Ambiguous[0] != "10.99.0.5" {
 		t.Fatalf("a shared network: ambiguous %v %v", tr.Ambiguous, err)
+	}
+}
+
+func TestNew_rejectsVirtualRouterBindings(t *testing.T) {
+	t.Parallel()
+	opts := []inventory.Options{
+		{Zones: []inventory.ZoneBinding{{Firewall: "fw1", VirtualRouter: "trust-vr", Zone: "trust"}}},
+		{Protections: []inventory.Protection{{Firewall: "fw1", VirtualRouter: "trust-vr"}}},
+	}
+	for _, o := range opts {
+		if _, err := inventory.New(nil, o); !errors.Is(err, inventory.ErrUnsupported) {
+			t.Errorf("err = %v, want ErrUnsupported", err)
+		}
 	}
 }

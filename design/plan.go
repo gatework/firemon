@@ -228,6 +228,8 @@ type Plan struct {
 	// Warnings note planned parts that undecidable permit rules may already
 	// allow.
 	Warnings []string `json:"warnings,omitempty"`
+	// Searches explain which existing rules were priced and verified.
+	Searches []CandidateSearch `json:"searches,omitempty"`
 	// Verified reports that applying Changes permits the planned need and
 	// nothing outside the intent.
 	Verified bool `json:"verified"`
@@ -238,6 +240,10 @@ type Plan struct {
 	// Bypassed are the deny rules the new rules are placed before, in rule
 	// order: the change overrides them for the traffic it permits.
 	Bypassed []string `json:"bypassed,omitempty"`
+
+	parts   []planPart
+	access  []accessProof
+	cleanup *cleanupProof
 }
 
 // Merge combines the plans of the parts of one request on one firewall,
@@ -252,11 +258,20 @@ func Merge(plans ...*Plan) *Plan {
 	out := *plans[0]
 	out.Changes = slices.Clone(out.Changes)
 	out.Bypassed = slices.Clone(out.Bypassed)
+	out.Conflicts = slices.Clone(out.Conflicts)
+	out.Unknown = slices.Clone(out.Unknown)
+	out.Warnings = slices.Clone(out.Warnings)
+	out.Searches = slices.Clone(out.Searches)
+	out.parts = slices.Clone(out.parts)
+	out.access = slices.Clone(out.access)
 	for _, p := range plans[1:] {
 		out.Changes = append(out.Changes, p.Changes...)
 		out.Conflicts = append(out.Conflicts, p.Conflicts...)
 		out.Unknown = append(out.Unknown, p.Unknown...)
 		out.Warnings = append(out.Warnings, p.Warnings...)
+		out.Searches = append(out.Searches, p.Searches...)
+		out.parts = append(out.parts, p.parts...)
+		out.access = append(out.access, p.access...)
 		for _, id := range p.Bypassed {
 			if !slices.Contains(out.Bypassed, id) {
 				out.Bypassed = append(out.Bypassed, id)
@@ -268,6 +283,9 @@ func Merge(plans ...*Plan) *Plan {
 		if out.NAT == nil {
 			out.NAT = p.NAT
 		}
+	}
+	if len(plans) > 1 {
+		out.Verified = false // VerifyParts checks all scopes on the combined result.
 	}
 	return &out
 }

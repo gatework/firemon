@@ -1,6 +1,7 @@
 package report
 
 import (
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -74,6 +75,14 @@ type Report struct {
 	// Inside is traffic that stays on one side of a firewall.
 	Inside    []Inside   `json:"inside,omitempty"`
 	Firewalls []Firewall `json:"firewalls"`
+	// Flows follow each source and destination item of the request through
+	// the firewalls it crosses; filled by the caller with Flows.
+	Flows []Flow `json:"flows,omitempty"`
+	// Premises are the assumptions the result rests on, over every firewall.
+	Premises []Premise `json:"premises,omitempty"`
+	// Devices group the result by firewall, in the order flows cross them;
+	// set with Flows by WithFlows.
+	Devices []DeviceView `json:"devices,omitempty"`
 	// Status is the worst status over the firewalls.
 	Status Status `json:"status"`
 }
@@ -86,18 +95,26 @@ type Excluded struct {
 
 // Firewall is the result on one cluster.
 type Firewall struct {
-	Cluster   string              `json:"cluster"`
-	Firewall  string              `json:"firewall"`
-	Members   []string            `json:"members"`
+	Cluster  string   `json:"cluster"`
+	Firewall string   `json:"firewall"`
+	Members  []string `json:"members"`
+	// Devices name the members, the evaluated one first.
+	Devices   []inventory.Device  `json:"devices,omitempty"`
 	Ownership inventory.Ownership `json:"ownership"`
 	// Basis says which ends of the request fall in networks the firewall
 	// owns: why the request reaches it.
-	Basis     []Basis `json:"basis,omitempty"`
-	Paths     []Path  `json:"paths"`
-	Status    Status  `json:"status"`
-	Permitted []Hit   `json:"permitted,omitempty"`
-	Blocked   []Hit   `json:"blocked,omitempty"`
-	Undecided []Hit   `json:"undecided,omitempty"`
+	Basis         []Basis        `json:"basis,omitempty"`
+	ZoneConflicts []ZoneConflict `json:"zone_conflicts,omitempty"`
+	Paths         []Path         `json:"paths"`
+	// FlowCounts count the request's flows by what this firewall does to
+	// them; set by AttachFlows.
+	FlowCounts FlowCounts `json:"flow_counts,omitzero"`
+	// ZonePairs summarize the decisions by zone pair.
+	ZonePairs []ZonePair `json:"zone_pairs,omitempty"`
+	Status    Status     `json:"status"`
+	Permitted []Hit      `json:"permitted,omitempty"`
+	Blocked   []Hit      `json:"blocked,omitempty"`
+	Undecided []Hit      `json:"undecided,omitempty"`
 	// UndecidedTraffic is the traffic the undecided rules may decide.
 	UndecidedTraffic string `json:"undecided_traffic,omitempty"`
 	// Otherwise are the rules (or the default action) that decide the
@@ -116,6 +133,10 @@ type Firewall struct {
 	// objects expanded, for comparing with the device.
 	Rules []RuleDetail `json:"rules,omitempty"`
 	Plan  *design.Plan `json:"plan,omitempty"`
+	// Planned are the rules the plan adds or modifies, in full.
+	Planned []PlannedRule `json:"planned,omitempty"`
+	// Risks grade what the plan opens and the denies it bypasses.
+	Risks []design.Risk `json:"risks,omitempty"`
 	// Scripts are the commands and rollback of the verified plans, one per
 	// part of the request crossing the firewall; filled by the caller,
 	// which knows the vendor.
@@ -124,33 +145,51 @@ type Firewall struct {
 
 // Basis is one end of the request a firewall owns.
 type Basis struct {
-	Source    bool                `json:"source"`
-	Addresses string              `json:"addresses"`
-	Zone      string              `json:"zone,omitempty"`
-	Networks  []string            `json:"networks,omitempty"`
-	Ownership inventory.Ownership `json:"ownership"`
+	Source        bool                `json:"source"`
+	VirtualRouter string              `json:"virtual_router,omitempty"`
+	Addresses     string              `json:"addresses"`
+	Zone          string              `json:"zone,omitempty"`
+	Networks      []string            `json:"networks,omitempty"`
+	Ownership     inventory.Ownership `json:"ownership"`
+}
+
+// ZoneConflict shows which original packets have conflicting inventory
+// and device routing evidence on one side of the firewall.
+type ZoneConflict struct {
+	Source        bool   `json:"source"`
+	Traffic       string `json:"traffic"`
+	VirtualRouter string `json:"virtual_router"`
+	BoundZone     string `json:"bound_zone"`
+	RouteZone     string `json:"route_zone"`
+	Interface     string `json:"interface"`
 }
 
 // Path summarizes one path through a firewall.
 type Path struct {
-	From        string            `json:"from"`
-	To          string            `json:"to"`
-	Ingress     string            `json:"ingress,omitempty"`
-	Egress      string            `json:"egress,omitempty"`
-	Domain      string            `json:"domain,omitempty"`
-	Application string            `json:"application,omitempty"`
-	PolicyRoute string            `json:"policy_route,omitempty"`
-	Conditions  []query.Condition `json:"conditions,omitempty"`
-	NAT         []NAT             `json:"nat,omitempty"`
-	NATSkipped  []query.NATRef    `json:"nat_skipped,omitempty"`
-	// AppPorts are the application rules judged by their applications'
-	// standard ports, which do not include the request's.
+	VirtualRouter       string `json:"virtual_router,omitempty"`
+	EgressVirtualRouter string `json:"egress_virtual_router,omitempty"`
+	From                string `json:"from"`
+	To                  string `json:"to"`
+	Ingress             string `json:"ingress,omitempty"`
+	Egress              string `json:"egress,omitempty"`
+	Domain              string `json:"domain,omitempty"`
+	Application         string `json:"application,omitempty"`
+	// Applications are those matched against rules; AppInferred that they
+	// were inferred from the ports, AppUnidentified that the ports belong
+	// to no standard application.
+	Applications    []string          `json:"applications,omitempty"`
+	AppInferred     bool              `json:"app_inferred,omitempty"`
+	AppUnidentified bool              `json:"app_unidentified,omitempty"`
+	PolicyRoute     string            `json:"policy_route,omitempty"`
+	Conditions      []query.Condition `json:"conditions,omitempty"`
+	NAT             []NAT             `json:"nat,omitempty"`
+	NATSkipped      []query.NATRef    `json:"nat_skipped,omitempty"`
+	// AppPorts explains exclusions proven by an application-default service.
 	AppPorts []AppPorts    `json:"app_ports,omitempty"`
 	Verdict  query.Verdict `json:"verdict"`
 }
 
-// AppPorts is an application rule taken not to match the request because
-// the request's ports are not its applications' standard ports.
+// AppPorts identifies the application-default rule and its known ports.
 type AppPorts struct {
 	Rule         string   `json:"rule"`
 	Name         string   `json:"name,omitempty"`
@@ -199,7 +238,20 @@ func Build(notes []intake.Note, t inventory.Trace, fws map[string]*firemon.Firew
 	}
 	for _, c := range t.Crossings {
 		f := firewallReport(c)
+		f.ZonePairs = zonePairs(c)
+		for _, pr := range premisesOf(c) {
+			if fw := fws[c.Cluster]; fw != nil {
+				for i, a := range pr.Applications {
+					pr.Applications[i] = fw.ApplicationDisplay(a)
+				}
+			}
+			r.Premises = mergePremise(r.Premises, pr)
+		}
 		f.Plan = planFor(plans, c.Cluster)
+		if f.Plan != nil && f.Plan.Verified {
+			f.Planned = plannedRules(fws[c.Cluster], f.Plan)
+			f.Risks = f.Plan.Risks(fws[c.Cluster])
+		}
 		f.Status = max(f.Status, natStatus(f.Plan))
 		f.Rules = details(fws[c.Cluster], decidingRules(f), decidedSpaces(c))
 		if fw := fws[c.Cluster]; fw != nil && f.Status != StatusFullMatch && f.Status != StatusUnset {
@@ -270,18 +322,24 @@ func planFor(plans []inventory.ClusterPlan, cluster string) *design.Plan {
 // firewallReport classifies one crossing.
 func firewallReport(c inventory.Crossing) Firewall {
 	f := Firewall{
-		Cluster: c.Cluster, Firewall: c.Firewall, Members: c.Members, Ownership: c.Ownership,
+		Cluster: c.Cluster, Firewall: c.Firewall, Members: c.Members, Devices: c.Devices, Ownership: c.Ownership,
 		Incomplete: c.Incomplete,
 	}
 	for _, b := range c.Basis {
-		f.Basis = append(f.Basis, Basis{Source: b.Source, Addresses: b.Addresses.String(), Zone: b.Zone, Networks: b.Networks, Ownership: b.Ownership})
+		f.Basis = append(f.Basis, Basis{Source: b.Source, Addresses: b.Addresses.String(), Zone: b.Zone, Networks: b.Networks, Ownership: b.Ownership, VirtualRouter: b.VirtualRouter})
+	}
+	for _, z := range c.ZoneConflicts {
+		f.ZoneConflicts = append(f.ZoneConflicts, ZoneConflict{Source: z.Source, Traffic: z.Space.String(),
+			VirtualRouter: z.VirtualRouter, BoundZone: z.BoundZone, RouteZone: z.RouteZone, Interface: z.Interface})
 	}
 	if !c.Unrouted.IsEmpty() {
 		f.Unrouted = c.Unrouted.String()
 	}
 	// Only whether anything is permitted or undecided matters: those are
-	// not accumulated, as overlap checks across many paths are costly.
-	var blocked, deflt traffic.Region
+	// not accumulated. Denied and defaulted traffic is gathered as spaces
+	// and written once: merging regions piece by piece is quadratic, and a
+	// wide request has thousands of pieces.
+	var blocked, deflt []traffic.Space
 	var permitted, unknown bool
 	var acc hitSets
 	for _, p := range c.Paths {
@@ -292,10 +350,10 @@ func firewallReport(c inventory.Crossing) Firewall {
 				permitted = permitted || !d.Space.IsEmpty()
 				acc.add(&acc.permitted, d.Rule, p, d.Space, nil)
 			case query.OutcomeDeny:
-				blocked = blocked.Union(d.Space)
+				blocked = append(blocked, d.Space.Spaces()...)
 				acc.add(&acc.blocked, d.Rule, p, d.Space, nil)
 			case query.OutcomeDefault:
-				deflt = deflt.Union(d.Space)
+				deflt = append(deflt, d.Space.Spaces()...)
 			case query.OutcomeUnknown:
 				unknown = unknown || !d.Space.IsEmpty()
 				acc.unknown = append(acc.unknown, labelled{p, d.Space})
@@ -310,7 +368,7 @@ func firewallReport(c inventory.Crossing) Firewall {
 					acc.add(&acc.undecided, nil, p, traffic.Region{}, []string{"nat"})
 				}
 				acc.add(&acc.otherwise, d.Rule, p, d.Space, nil)
-				acc.otherwise.final(d.Rule, d.Final)
+				acc.otherwise.final(d.Rule, d.FallbackOutcome)
 			case query.OutcomeUnset:
 			}
 		}
@@ -318,13 +376,13 @@ func firewallReport(c inventory.Crossing) Firewall {
 	f.Permitted, f.Blocked = acc.permitted.hits(), acc.blocked.hits()
 	f.Undecided, f.Otherwise = acc.undecided.hits(), acc.otherwise.hits()
 	f.UndecidedTraffic = describeAll(acc.unknown)
-	if !deflt.IsEmpty() {
-		f.Defaulted = compact(deflt)
+	if len(deflt) > 0 {
+		f.Defaulted = boundedText(deflt)
 	}
-	if rest := blocked.Union(deflt); !rest.IsEmpty() {
-		f.Remaining = rest.String()
+	if rest := slices.Concat(blocked, deflt); len(rest) > 0 {
+		f.Remaining = boundedText(rest)
 	}
-	f.Status = classify(permitted, !blocked.IsEmpty(), !deflt.IsEmpty() || f.Unrouted != "", unknown || c.Incomplete)
+	f.Status = classify(permitted, len(blocked) > 0, len(deflt) > 0 || f.Unrouted != "", unknown || c.Incomplete || len(f.ZoneConflicts) > 0)
 	return f
 }
 
@@ -455,6 +513,73 @@ func compactSpaces(spaces []traffic.Space) string {
 	return traffic.NewRegion(spaces...).String()
 }
 
+// maxTrafficText bounds a traffic description: longer ones are written as
+// the box holding them and how many pieces it has, as compactSpaces does
+// for many pieces.
+const maxTrafficText = 240
+
+// boundedText writes spaces within maxTrafficText: longer descriptions
+// are written as the hull of their addresses and ports with the number of
+// pieces, which the CLI reads as "中的部分流量（共 N 段）".
+func boundedText(spaces []traffic.Space) string {
+	if len(spaces) > 4*maxListedSpaces {
+		// Too many to list: their hull and count, without merging them.
+		return hullOf(spaces)
+	}
+	text := compactSpaces(spaces)
+	if len(text) <= maxTrafficText {
+		return text
+	}
+	box := bounds(spaces)
+	return "part of " + hullText(box.Src) + " -> " + hullText(box.Dst) + " " + serviceHull(box.Service) +
+		" (" + strconv.Itoa(len(spaces)) + " pieces)"
+}
+
+// hullText writes the smallest address range holding s, per family.
+func hullText(s traffic.AddressSet) string {
+	if text := s.String(); len(text) <= maxTrafficText/4 {
+		return text
+	}
+	var parts []string
+	for _, fam := range []traffic.AddressSet{traffic.AnyIPv4(), traffic.AnyIPv6()} {
+		rs := s.Intersect(fam).Ranges()
+		if len(rs) == 0 {
+			continue
+		}
+		parts = append(parts, rs[0].From().String()+"-"+rs[len(rs)-1].To().String())
+	}
+	return strings.Join(parts, ",")
+}
+
+// serviceHull writes, per protocol, the destination port range holding s.
+func serviceHull(s traffic.ServiceSet) string {
+	if text := s.String(); len(text) <= maxTrafficText/4 {
+		return text
+	}
+	type span struct{ lo, hi uint16 }
+	spans := map[traffic.Protocol]*span{}
+	var order []traffic.Protocol
+	for r := range s.All() {
+		for p := int(r.ProtocolLow); p <= int(r.ProtocolHigh); p++ {
+			proto := traffic.Protocol(p)
+			sp, ok := spans[proto]
+			if !ok {
+				sp = &span{lo: r.Dst.Low, hi: r.Dst.High}
+				spans[proto], order = sp, append(order, proto)
+			}
+			sp.lo, sp.hi = min(sp.lo, r.Dst.Low), max(sp.hi, r.Dst.High)
+		}
+	}
+	if len(order) > 4 {
+		return "any"
+	}
+	var parts []string
+	for _, p := range order {
+		parts = append(parts, traffic.PortService(p, traffic.PortRange{Low: spans[p].lo, High: spans[p].hi}).String())
+	}
+	return strings.Join(parts, ",")
+}
+
 // compact writes a region as one box when that box holds exactly the
 // region, which is the common case after merging pieces.
 func compact(r traffic.Region) string {
@@ -521,6 +646,8 @@ func classify(permitted, blocked, deflt, unknown bool) Status {
 func pathSummary(p query.Path) Path {
 	out := Path{
 		From: p.From, To: p.To, Ingress: p.Ingress, Egress: p.Egress, Domain: p.Domain, Application: p.Application,
+		Applications: p.AppFamily, AppInferred: p.AppInferred, AppUnidentified: p.AppUnidentified,
+		VirtualRouter: p.VirtualRouter, EgressVirtualRouter: p.EgressVirtualRouter,
 		PolicyRoute: p.PolicyRoute, Conditions: p.Conditions, NATSkipped: p.NATSkipped, Verdict: p.Verdict,
 	}
 	for _, a := range p.AppPorts {
@@ -590,4 +717,43 @@ type Inside struct {
 	Cluster string `json:"cluster"`
 	Zone    string `json:"zone"`
 	Traffic string `json:"traffic"`
+}
+
+// hullOf writes the smallest ranges holding spaces: per family the lowest
+// and highest source and destination, per protocol the destination ports,
+// and how many pieces they are.
+func hullOf(spaces []traffic.Space) string {
+	type span struct{ lo, hi netip.Addr }
+	grow := func(m map[bool]*span, a traffic.AddressSet) {
+		for _, r := range a.Ranges() {
+			v4 := r.From().Is4()
+			if sp, ok := m[v4]; !ok {
+				m[v4] = &span{r.From(), r.To()}
+			} else {
+				if r.From().Less(sp.lo) {
+					sp.lo = r.From()
+				}
+				if sp.hi.Less(r.To()) {
+					sp.hi = r.To()
+				}
+			}
+		}
+	}
+	src, dst := map[bool]*span{}, map[bool]*span{}
+	var svc traffic.ServiceSet
+	for _, s := range spaces {
+		grow(src, s.Src)
+		grow(dst, s.Dst)
+		svc = svc.Union(s.Service)
+	}
+	text := func(m map[bool]*span) string {
+		var parts []string
+		for _, v4 := range []bool{true, false} {
+			if sp, ok := m[v4]; ok {
+				parts = append(parts, sp.lo.String()+"-"+sp.hi.String())
+			}
+		}
+		return strings.Join(parts, ",")
+	}
+	return "part of " + text(src) + " -> " + text(dst) + " " + serviceHull(svc) + " (" + strconv.Itoa(len(spaces)) + " pieces)"
 }

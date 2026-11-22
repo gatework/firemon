@@ -80,19 +80,9 @@ func Plan(fw *firemon.Firewall, rep Report, sel Selection, opts PlanOptions) (*d
 			return nil, err
 		}
 	}
-	plan := &design.Plan{Kind: design.PlanKindCleanup, Baseline: fw.Fingerprint(), Status: design.StatusChange, Changes: b.changes()}
-	if len(plan.Changes) == 0 {
-		plan.Status, plan.Verified = design.StatusNoChange, true
-		return plan, nil
-	}
-	// A failed verification is a result: the plan is returned unverified
-	// with the reason, never deployed.
-	verr := verify(fw, plan.Changes, b.affected, b.merged, now())
-	plan.Verified = verr == nil
-	if verr != nil {
-		plan.VerifyError = verr.Error()
-	}
-	return plan, nil
+	return design.NewCleanupPlan(fw, b.changes(), now(), func(before, after *firemon.Firewall, at time.Time) error {
+		return verify(before, after, b.affected, b.merged, at)
+	})
 }
 
 func selectFindings(rep Report, sel Selection) ([]Finding, error) {
@@ -154,12 +144,11 @@ func (b *builder) add(f Finding) error {
 		}
 	case CategoryNeverMatches, CategoryIncomplete, CategoryDisabled, CategoryExpired:
 		for _, id := range f.Rules {
-			if _, ok := b.fw.Rule(id); !ok {
+			r, ok := b.fw.Rule(id)
+			if !ok {
 				return fmt.Errorf("%w %q", ErrUnknownRule, id)
 			}
-			// The engine ignores the rule in every schedule mode (disabled,
-			// incomplete, expired for good, or an empty match): deleting
-			// it changes no decision, so there is nothing to verify.
+			b.affect(r)
 			b.deleteRules[id] = true
 		}
 	case CategoryMergeable:
@@ -302,44 +291,34 @@ func (b *builder) changes() []design.Change {
 	return out
 }
 
-// verify applies the changes and compares the decisions before and after,
-// for each changed rule's traffic on every zone pair the rule applies to,
-// with schedules as they are now, all active and all inactive: a cleanup
-// only moves or removes the decisions of that traffic. A merged rule must
-// match exactly what it and the rules merged into it matched. Deleting an
-// object something still uses fails in Apply, as on the device.
-func verify(fw *firemon.Firewall, changes []design.Change, affected []*firemon.Rule, merged []mergeCheck, at time.Time) error {
-	cfg := fw.Config()
-	if err := design.Apply(cfg, changes); err != nil {
-		return err
-	}
-	after, err := firemon.Compile(cfg)
-	if err != nil {
-		return err
-	}
+// verify compares each affected rule's possible traffic across all relevant
+// time states. Merged rules must also preserve the union of their matches.
+func verify(fw, after *firemon.Firewall, affected []*firemon.Rule, merged []mergeCheck, at time.Time) error {
 	for _, m := range merged {
 		r, ok := after.Rule(m.keep)
 		if !ok || !sameRegion(traffic.NewRegion(r.Match()), m.want) {
 			return fmt.Errorf("%w: merged rule %s does not match exactly what it replaces", ErrPolicyChanged, m.keep)
 		}
 	}
-	zones := zoneNames(cfg)
-	type engines struct{ before, after *query.Engine }
-	modes := map[query.ScheduleMode]engines{}
-	for _, mode := range []query.ScheduleMode{query.ScheduleAt, query.ScheduleAlwaysActive, query.ScheduleNeverActive} {
-		modes[mode] = engines{query.New(fw, query.Options{Schedules: mode}), query.New(after, query.Options{Schedules: mode})}
-	}
+	zones := zoneNames(fw.Config())
+	beforeEngine, afterEngine := query.New(fw, query.Options{}), query.New(after, query.Options{})
 	timed := slices.Concat(scheduledRules(fw), scheduledRules(after))
 	return parallel(affected, func(r *firemon.Rule) error {
-		// The schedule modes treat only rules with a schedule or a
-		// validity window differently: when none of them can match the
-		// rule's traffic, every mode decides it alike and one suffices.
-		check := []query.ScheduleMode{query.ScheduleAt}
-		if slices.ContainsFunc(timed, func(s *firemon.Rule) bool { return s.Bound().Overlaps(r.Match()) }) {
-			check = append(check, query.ScheduleAlwaysActive, query.ScheduleNeverActive)
+		if r.Ignored() || r.ExpiredAt(at) || r.Bound().IsEmpty() {
+			return nil
 		}
-		for _, mode := range check {
-			if err := sameDecisions(modes[mode].before, modes[mode].after, r, zones, at); err != nil {
+		var relevant []*firemon.Rule
+		for _, s := range timed {
+			if s.Bound().Overlaps(r.Bound()) && zonesMeet(s, r) {
+				relevant = append(relevant, s)
+			}
+		}
+		times, err := fw.PolicyTimes(at, "", relevant)
+		if err != nil {
+			return fmt.Errorf("converge: schedule proof for rule %s: %w", r.ID(), err)
+		}
+		for _, instant := range times {
+			if err := sameDecisions(beforeEngine, afterEngine, r, zones, instant); err != nil {
 				return err
 			}
 		}
@@ -356,7 +335,7 @@ func scheduledRules(fw *firemon.Firewall) []*firemon.Rule {
 // after on every zone pair r applies to.
 func sameDecisions(before, after *query.Engine, r *firemon.Rule, zones []string, at time.Time) error {
 	for _, pair := range pairsOf(r, zones) {
-		a, b := before.Evaluate(pair.from, pair.to, r.Match(), at), after.Evaluate(pair.from, pair.to, r.Match(), at)
+		a, b := before.Evaluate(pair.from, pair.to, r.Bound(), at), after.Evaluate(pair.from, pair.to, r.Bound(), at)
 		if a.Incomplete || b.Incomplete {
 			return fmt.Errorf("converge: verification of rule %s exceeded the budget", r.ID())
 		}

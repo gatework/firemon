@@ -91,10 +91,15 @@ type Decision struct {
 	// Possible lists undecidable rules that might have matched this space
 	// before Rule did.
 	Possible []*firemon.Rule
-	// Final is the outcome Rule (or the default action) gives. It equals
+	// Assumed lists the rules taken not to match this space because a
+	// criterion the request did not give (user, URL category) is unknown:
+	// the premises of the decision. Conditional returns those that would
+	// change it.
+	Assumed []*firemon.Rule
+	// FallbackOutcome is the outcome Rule (or the default action) gives. It equals
 	// Outcome unless a possible rule with a different action makes the
 	// outcome unknown.
-	Final Outcome
+	FallbackOutcome Outcome
 }
 
 // NATHit records a NAT rule applied on a path.
@@ -119,6 +124,12 @@ type Path struct {
 	To      string
 	Ingress string
 	Egress  string
+	// VirtualRouter is the routing context of the ingress interface, and
+	// EgressVirtualRouter that of the egress interface; they differ when
+	// the traffic crosses between virtual routers. Empty when unknown, as
+	// for zone-pair evaluations without path discovery.
+	VirtualRouter       string
+	EgressVirtualRouter string
 	// IngressPrefixLen and EgressPrefixLen are the shortest prefix lengths
 	// of the routes that reach the sources and the destinations on this
 	// path; 0 means a default route, -1 that a zone was given instead.
@@ -128,6 +139,9 @@ type Path struct {
 	Original traffic.Space
 	// Policy is the same traffic as the security rules see it.
 	Policy traffic.Space
+	// Translated is the traffic after destination NAT (addresses and
+	// port); Leaving adds source NAT.
+	Translated traffic.Space
 	// DestinationNAT and SourceNAT are the translations applied, if any.
 	DestinationNAT *NATHit
 	SourceNAT      []NATHit
@@ -137,6 +151,19 @@ type Path struct {
 	Domain         string
 	DomainResolved bool
 	Application    string
+	// AppFamily are the applications matched against rules: those sharing
+	// the standard ports of an inferred target, or Application alone.
+	AppFamily []string
+	// AppInferred reports that the application was inferred from the
+	// standard ports of the service, a premise of the result.
+	AppInferred bool
+	// AppUnidentified reports traffic on ports no application of the book
+	// uses: rules restricted to applications do not match it.
+	AppUnidentified bool
+	// AppDecisive reports that a rule restricted to applications reached
+	// undecided traffic of an inferred path: the inference decided which
+	// rules match, so the result rests on it.
+	AppDecisive bool
 	// Conditions hold for this path to be taken, when policy routes that
 	// cannot be decided offline split the traffic.
 	Conditions []Condition
@@ -149,14 +176,48 @@ type Path struct {
 	// NATSkipped names disabled NAT rules that would otherwise have matched
 	// before the one that applied.
 	NATSkipped []NATRef
-	// AppPorts are the application rules judged by their applications'
-	// standard ports: the request names no application, so traffic outside
-	// those ports is taken not to be that application.
-	AppPorts  []AppPorts
-	Decisions []Decision
-	Verdict   Verdict
+	// AppPorts lists application-default rules whose port bound excluded
+	// some of this request.
+	AppPorts []AppPorts
+	// users and urlCategories are the request criteria rules by user and
+	// URL category are matched against.
+	users, urlCategories []string
+	strict               bool
+	Decisions            []Decision
+	Verdict              Verdict
 	// Incomplete reports that the evaluation budget was exhausted.
 	Incomplete bool
+}
+
+// Leaving is the traffic as it leaves the firewall: destination and port
+// after destination NAT, sources after source NAT. A part of the sources
+// no source NAT rule translates leaves as it came.
+func (p *Path) Leaving() traffic.Space {
+	out := p.Translated
+	if out.Src.IsEmpty() {
+		out = p.Original
+	}
+	if len(p.SourceNAT) == 0 {
+		return out
+	}
+	src := out.Src
+	var translated traffic.AddressSet
+	for _, h := range p.SourceNAT {
+		covered := h.Space.Bounds().Src
+		if h.Space.IsEmpty() {
+			covered = src
+		}
+		src = src.Subtract(covered)
+		translated = translated.Union(h.Translated)
+	}
+	out.Src = src.Union(translated)
+	return out
+}
+
+// NATChanges reports whether NAT on the path rewrites addresses or ports.
+func (p *Path) NATChanges() bool {
+	l := p.Leaving()
+	return !l.Src.Equal(p.Original.Src) || !l.Dst.Equal(p.Original.Dst) || !l.Service.Equal(p.Original.Service)
 }
 
 // Region returns the policy-space region with the given outcome.
@@ -218,8 +279,7 @@ func (c Condition) String() string {
 	return "policy route " + c.PolicyRoute + " does not match"
 }
 
-// AppPorts records that a rule restricted to applications, with any
-// service, was evaluated on the applications' standard ports only.
+// AppPorts records a rule whose service is application-default.
 type AppPorts struct {
 	Rule *firemon.Rule
 	// Ports are the standard ports of the rule's applications.

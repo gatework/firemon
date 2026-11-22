@@ -49,14 +49,10 @@ type Candidate struct {
 	Extendable  bool             `json:"extendable"`
 	Recommended bool             `json:"recommended,omitempty"`
 	Reasons     []Reason         `json:"reasons,omitempty"`
-	position    int
-	logs        bool
-}
-
-// key ranks the candidate the way the planner ranks the rules it may
-// extend.
-func (c Candidate) key() design.CandidateKey {
-	return design.CandidateKey{BothEnds: c.Src.Covers() && c.Dst.Covers(), Logs: c.logs, Position: c.position}
+	Field       design.Field     `json:"field,omitzero"`
+	Cost        *int             `json:"cost,omitempty"`
+	Traffic     string           `json:"traffic,omitempty"`
+	ProofError  string           `json:"proof_error,omitempty"`
 }
 
 // pairNeed is what one zone pair still needs and the request scope there.
@@ -74,29 +70,46 @@ type pairNeed struct {
 // candidates ranks the permit rules that could be modified to carry the
 // remaining traffic of the paths.
 func candidates(fw *firemon.Firewall, paths []query.Path, plan *design.Plan) []Candidate {
-	recommended := map[string]bool{} // the rules the plan extends, one per zone pair
-	if plan != nil {
-		for _, ch := range plan.Changes {
-			if x, ok := ch.(design.ExtendRule); ok {
-				recommended[x.RuleID] = true
-			}
-		}
-	}
 	var out []Candidate
-	for _, pn := range needsByPair(paths) {
-		for _, r := range fw.Rules() {
-			// A rule after the deny that decides the request never sees
-			// it: changing it would not help.
-			if c, ok := assess(r, pn); ok && !slices.Contains(c.Reasons, ReasonAfterDeny) {
-				c.Recommended = recommended[c.Rule]
+	type identity struct{ from, to, rule string }
+	priced := map[identity]bool{}
+	if plan != nil {
+		for _, search := range plan.Searches {
+			for _, trial := range search.Candidates {
+				c := Candidate{Rule: trial.Rule, From: search.From, To: search.To, Traffic: search.Traffic,
+					Field: trial.Field, Cost: &trial.Cost, ProofError: trial.Error,
+					Recommended: plan.Verified && trial.Selected, Src: trial.Src, Dst: trial.Dst, Service: trial.Service}
+				c.Extendable = c.Recommended
+				for _, rel := range []traffic.Relation{c.Src, c.Dst, c.Service} {
+					if rel.Covers() {
+						c.Covers++
+					}
+				}
+				if r, ok := fw.Rule(c.Rule); ok {
+					c.Name = r.Spec().Name
+				}
+				priced[identity{c.From, c.To, c.Rule}] = true
 				out = append(out, c)
 			}
 		}
+		// Keep each search in planner cost order while surfacing verified choices first.
+		slices.SortStableFunc(out, func(a, b Candidate) int { return compareBool(b.Recommended, a.Recommended) })
 	}
-	slices.SortStableFunc(out, func(a, b Candidate) int {
-		return cmp.Or(compareBool(b.Recommended, a.Recommended), compareBool(b.Extendable, a.Extendable),
-			design.CompareCandidates(a.key(), b.key()), cmp.Compare(b.Covers, a.Covers), cmp.Compare(len(a.Reasons), len(b.Reasons)))
+	var details []Candidate
+	for _, pn := range needsByPair(paths) {
+		for _, r := range fw.Rules() {
+			if priced[identity{pn.from, pn.to, r.ID()}] {
+				continue
+			}
+			if c, ok := assess(r, pn); ok && !slices.Contains(c.Reasons, ReasonAfterDeny) {
+				details = append(details, c)
+			}
+		}
+	}
+	slices.SortStableFunc(details, func(a, b Candidate) int {
+		return cmp.Or(cmp.Compare(b.Covers, a.Covers), cmp.Compare(len(a.Reasons), len(b.Reasons)))
 	})
+	out = append(out, details...)
 	return out[:min(len(out), MaxCandidates)]
 }
 
@@ -140,7 +153,7 @@ func assess(r *firemon.Rule, pn pairNeed) (Candidate, bool) {
 	}
 	need, scope, m := pn.needBounds, pn.scopeBounds, r.Match()
 	c := Candidate{
-		Rule: r.ID(), Name: spec.Name, From: pn.from, To: pn.to, position: r.Position(), logs: spec.Log.Enabled(),
+		Rule: r.ID(), Name: spec.Name, From: pn.from, To: pn.to,
 		Src: m.Src.Relation(need.Src), Dst: m.Dst.Relation(need.Dst), Service: m.Service.Relation(need.Service),
 	}
 	if c.Src == traffic.RelationDisjoint && c.Dst == traffic.RelationDisjoint && c.Service == traffic.RelationDisjoint {
@@ -161,7 +174,6 @@ func assess(r *firemon.Rule, pn pairNeed) (Candidate, bool) {
 		}
 	}
 	c.Reasons = reasons(r, pn, c.Covers, wider)
-	c.Extendable = len(c.Reasons) == 0
 	return c, true
 }
 
@@ -189,7 +201,6 @@ func reasons(r *firemon.Rule, pn pairNeed, covers int, wider bool) []Reason {
 	return out
 }
 
-// box returns the smallest space containing every space of r.
 func compareBool(a, b bool) int {
 	switch {
 	case a == b:

@@ -2,7 +2,6 @@ package design
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -57,6 +56,17 @@ type need struct {
 // translate it. The NAT part comes first: access is then designed on the
 // configuration with the NAT change, for the traffic as it arrives.
 func (p *Planner) Plan(intent Intent) (*Plan, error) {
+	plan, err := p.plan(intent)
+	if err != nil {
+		return nil, err
+	}
+	if err := plan.recordPart(p.fw, intent); err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
+func (p *Planner) plan(intent Intent) (*Plan, error) {
 	if intent.NAT == nil || intent.NAT.Mode == NATModeUnset {
 		return p.planAccess(intent)
 	}
@@ -104,6 +114,16 @@ func (p *Planner) Plan(intent Intent) (*Plan, error) {
 // planAccess designs the security rule changes that permit intent.
 func (p *Planner) planAccess(intent Intent) (*Plan, error) {
 	at := p.now()
+	var until []Change
+	if !intent.Until.IsZero() && !p.caps.RuleWindows && intent.Schedule == "" {
+		// The vendor's rules carry no validity window: a one-time schedule
+		// ends the access instead.
+		s := untilSchedule(at, intent.Until)
+		if _, exists := p.scheduleNamed(s.Name); !exists {
+			until = append(until, AddSchedule{Schedule: s})
+		}
+		intent.Schedule = s.Name
+	}
 	res, err := p.engine(p.fw, intent).Query(intent.request(at))
 	if err != nil {
 		return nil, err
@@ -115,16 +135,19 @@ func (p *Planner) planAccess(intent Intent) (*Plan, error) {
 	}
 	needs := p.needs(res, intent, plan)
 	if len(needs) == 0 {
+		// Nothing can be opened: no change is proved to permit the intent.
 		plan.Status = p.blockedStatus(plan)
-		plan.Verified = true
 		return plan, nil
 	}
 	cat := newCatalog(p.fw, p.naming)
 	cat.threshold = p.threshold
+	// Every trial is verified with the catalog's changes: the schedule a
+	// temporary access creates goes first.
+	cat.created = append(cat.created, until...)
 	var ruleChanges []Change
 	var opened []need
 	for _, n := range needs {
-		changes, err := p.open(n, intent, cat, at)
+		changes, err := p.open(n, intent, cat, at, plan)
 		if err != nil {
 			// One zone pair that cannot be opened safely does not hide the
 			// plan for the others.
@@ -143,6 +166,9 @@ func (p *Planner) planAccess(intent Intent) (*Plan, error) {
 		}
 	}
 	plan.Changes = append(slices.Clone(cat.created), ruleChanges...)
+	if len(ruleChanges) == 0 {
+		plan.Changes = nil // the schedule alone changes nothing
+	}
 	plan.Verified = true
 	if len(plan.Changes) > 0 {
 		if err := p.verify(plan.Changes, intent, opened, at); err != nil {
@@ -159,15 +185,64 @@ func (p *Planner) planAccess(intent Intent) (*Plan, error) {
 	return plan, nil
 }
 
-// engine evaluates fw for intent: permanent access ignores rules that
-// permit or deny only part of the time; scheduled access assumes every
-// unexpired scheduled rule is active.
+// engine evaluates fw for intent over the period the access must hold:
+// from now on, within the intent's schedule and before its end. A timed
+// rule that is in force only part of that period counts against the
+// access: such a deny blocks it and such a permit does not grant it.
 func (p *Planner) engine(fw *firemon.Firewall, intent Intent) *query.Engine {
-	mode := query.ScheduleNeverActive
-	if intent.Schedule != "" {
-		mode = query.ScheduleAlwaysActive
+	at := p.now()
+	return query.New(fw, query.Options{
+		Now: p.now, Schedules: query.ScheduleWorstCase,
+		Activity: activities(fw, intent, at),
+	})
+}
+
+// activities classifies every timed rule of fw over the period of intent.
+// A rule whose activity cannot be proved is partial.
+func activities(fw *firemon.Firewall, intent Intent, at time.Time) func(*firemon.Rule) query.Activity {
+	schedule := intent.Schedule
+	if schedule != "" && !hasSchedule(fw, schedule) && !intent.Until.IsZero() {
+		// The one-time schedule of a temporary access is not created
+		// yet: the period is bounded by Until alone.
+		schedule = ""
 	}
-	return query.New(fw, query.Options{Now: p.now, Schedules: mode})
+	out := map[*firemon.Rule]query.Activity{}
+	for _, r := range fw.Rules() {
+		if r.Ignored() || !r.Scheduled() {
+			continue
+		}
+		out[r] = activity(fw, r, schedule, intent.Until, at)
+	}
+	return func(r *firemon.Rule) query.Activity { return out[r] }
+}
+
+func activity(fw *firemon.Firewall, r *firemon.Rule, schedule string, until, at time.Time) query.Activity {
+	times, err := fw.PolicyTimes(at, schedule, []*firemon.Rule{r})
+	if err != nil || !r.Decidable() {
+		return query.ActivityPartial
+	}
+	var active, inactive bool
+	for _, t := range times {
+		if !until.IsZero() && !t.Before(until) {
+			continue
+		}
+		if r.ActiveAt(t) {
+			active = true
+		} else {
+			inactive = true
+		}
+	}
+	switch {
+	case active && !inactive:
+		return query.ActivityAlways
+	case inactive && !active:
+		return query.ActivityNever
+	}
+	return query.ActivityPartial
+}
+
+func hasSchedule(fw *firemon.Firewall, name string) bool {
+	return slices.ContainsFunc(fw.Config().Schedules, func(s firemon.Schedule) bool { return s.Name == name })
 }
 
 func (p *Planner) blockedStatus(plan *Plan) Status {
@@ -235,18 +310,10 @@ func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan)
 	case outcome == query.OutcomeUnknown && onlyPermits(d.Possible):
 		// Undecidable permit rules can only allow more; plan as if the
 		// final decision applied and say so.
-		outcome = d.Final
+		outcome = d.FallbackOutcome
 		if outcome != query.OutcomePermit {
 			plan.Warnings = append(plan.Warnings, d.Space.String()+" may already be permitted by undecidable rules "+ruleIDs(d.Possible))
 		}
-	case outcome == query.OutcomeUnknown && onlyNarrowing(d.Possible):
-		// The rules that may match first only add applications, URL
-		// categories or users to their match: they act on part of any
-		// traffic, and a permit for the rest is what the intent asks.
-		// Verification accepts the same (onlyNarrowDenies).
-		outcome = d.Final
-		plan.Warnings = append(plan.Warnings, d.Space.String()+": rules "+ruleIDs(d.Possible)+
-			" that match applications, URL categories or users may still decide part of it first")
 	}
 	switch outcome {
 	case query.OutcomeDefault:
@@ -262,7 +329,9 @@ func (p *Planner) classify(n *need, d query.Decision, intent Intent, plan *Plan)
 		n.goBefore(d.Rule)
 		p.narrowDenies(n, d, intent, plan)
 	case query.OutcomeUnknown:
-		plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": "+d.Space.String())
+		// A rule that may match first could decide all of it, as an
+		// application deny on a port no application claims (ADR 0017).
+		plan.Unknown = append(plan.Unknown, n.from+" -> "+n.to+": "+d.Space.String()+" may be decided by rules "+ruleIDs(d.Possible))
 		n.keeps = append(n.keeps, d.Space.Spaces()...) // never opened blindly
 	case query.OutcomePermit, query.OutcomeUnset:
 	}
@@ -327,123 +396,25 @@ func catchAll(r *firemon.Rule) bool {
 		len(s.From) == 0 && len(s.To) == 0 && s.Scope == firemon.ZoneScopeAny
 }
 
-// maxTrials bounds the rule extensions verified per zone pair (ALG-2).
-const maxTrials = 8
-
-// open returns the cheapest verified changes that permit n.
-func (p *Planner) open(n need, intent Intent, cat *catalog, at time.Time) ([]Change, error) {
-	if n.from == "" || n.to == "" {
-		return nil, fmt.Errorf("design: zones of %s are unknown; set the from and to zones", n.region)
-	}
-	target := n.region.Bounds()
-	cands := p.extensions(n, target, cat)
-	// Each trial recompiles the firewall; the cheapest few are enough.
-	for _, cand := range cands[:min(len(cands), maxTrials)] {
-		mark := cat.mark()
-		changes := cand.changes(cat)
-		all := append(slices.Clone(cat.created), changes...)
-		if p.verify(all, intent, []need{n}, at) == nil {
-			return changes, nil
-		}
-		cat.rollback(mark)
-	}
-	mark := cat.mark()
-	rule := p.newRule(n, target, intent, cat)
-	changes := []Change{rule}
-	if p.verify(append(slices.Clone(cat.created), changes...), intent, []need{n}, at) == nil {
-		return changes, nil
-	}
-	cat.rollback(mark)
-	// The bounding box would reopen conflicting packets: one rule per space.
-	changes = nil
-	for _, s := range n.region.Spaces() {
-		changes = append(changes, p.newRule(n, s, intent, cat))
-	}
-	if err := p.verify(append(slices.Clone(cat.created), changes...), intent, []need{n}, at); err != nil {
-		cat.rollback(mark)
-		return nil, fmt.Errorf("%w for %s -> %s: %w", ErrUnverifiable, n.from, n.to, err)
-	}
-	return changes, nil
-}
-
-// extension is a candidate: add the target's field set to one rule.
-type extension struct {
-	rule  *firemon.Rule
-	field Field
-	add   traffic.Space // only the field dimension is used
-	// whole is the requested set of the field on this zone pair; an
-	// existing object equal to it adds the same traffic as add.
-	whole traffic.Space
-	cost  int
-}
-
-// changes adds the missing part of the field, or one existing object
-// holding the whole target set when there is one: a /24 stays one object
-// rather than ranges around what the rule already has.
-func (x extension) changes(cat *catalog) []Change {
-	var names []string
-	switch x.field {
-	case FieldSource:
-		names = cat.wholeOr(x.whole.Src, x.add.Src)
-	case FieldDestination:
-		names = cat.wholeOr(x.whole.Dst, x.add.Dst)
-	case FieldService:
-		if name, ok := cat.services[x.whole.Service.String()]; ok {
-			names = []string{name}
-		} else {
-			names = cat.serviceNames(x.add.Service)
-		}
-	case FieldUnset:
-	}
-	return []Change{ExtendRule{RuleID: x.rule.ID(), Field: x.field, Names: names}}
-}
-
-// extensions lists the rules that can absorb target by growing one
-// dimension, cheapest first.
-func (p *Planner) extensions(n need, target traffic.Space, cat *catalog) []extension {
-	var out []extension
-	scope := n.scope.Bounds()
-	for _, r := range p.fw.Rules() {
-		if n.before != nil && r.Position() >= n.before.Position() {
-			break
-		}
-		if !extendable(r, n.from, n.to) {
-			continue
-		}
-		m := r.Match()
-		fits := func(a, b traffic.Space) bool { return a.ContainsSpace(b) }
-		if m.Dst.ContainsSet(target.Dst) && m.Service.ContainsSet(target.Service) && fits(scope, traffic.Space{Src: scope.Src, Dst: m.Dst, Service: m.Service}) {
-			add := target.Src.Subtract(m.Src)
-			out = append(out, extension{rule: r, field: FieldSource, add: traffic.Space{Src: add}, whole: scope, cost: len(add.Ranges())})
-		}
-		if m.Src.ContainsSet(target.Src) && m.Service.ContainsSet(target.Service) && fits(scope, traffic.Space{Src: m.Src, Dst: scope.Dst, Service: m.Service}) {
-			add := target.Dst.Subtract(m.Dst)
-			out = append(out, extension{rule: r, field: FieldDestination, add: traffic.Space{Dst: add}, whole: scope, cost: len(add.Ranges())})
-		}
-		if m.Src.ContainsSet(target.Src) && m.Dst.ContainsSet(target.Dst) && fits(scope, traffic.Space{Src: m.Src, Dst: m.Dst, Service: scope.Service}) {
-			add := target.Service.Subtract(m.Service)
-			cost := 0
-			for range add.All() {
-				cost++
-			}
-			out = append(out, extension{rule: r, field: FieldService, add: traffic.Space{Service: add}, whole: scope, cost: cost})
-		}
-	}
-	slices.SortStableFunc(out, func(a, b extension) int { return CompareCandidates(a.key(), b.key()) })
-	return out
-}
-
-func (x extension) key() CandidateKey {
-	return CandidateKey{BothEnds: x.field == FieldService, Logs: x.rule.Spec().Log.Enabled(), Cost: x.cost, Position: x.rule.Position()}
-}
-
 // extendable reports whether growing r cannot affect other zone pairs and
 // r's match is exact and unconditional.
-func extendable(r *firemon.Rule, from, to string) bool {
+func extendable(r *firemon.Rule, from, to string, intent Intent) bool {
 	s := r.Spec()
-	return r.Action() == firemon.ActionPermit && r.Decidable() && !r.Scheduled() && !r.Ignored() &&
+	return r.Action() == firemon.ActionPermit && r.Decidable() && !r.Ignored() && sameTime(r, intent) &&
 		slices.Equal(s.From, []string{from}) && slices.Equal(s.To, []string{to}) &&
 		!s.NegateSource && !s.NegateDestination && len(s.ServiceEntries) == 0 && len(s.Applications()) == 0
+}
+
+// sameTime reports whether r is in force exactly when the intent asks:
+// growing a rule extends the new traffic to the rule's own schedule, so a
+// permanent intent grows only permanent rules and a scheduled one only rules
+// on the same schedule.
+func sameTime(r *firemon.Rule, intent Intent) bool {
+	s := r.Spec()
+	if s.Window != (firemon.TimeWindow{}) || !intent.Until.IsZero() {
+		return false
+	}
+	return s.Schedule == intent.Schedule
 }
 
 func (p *Planner) newRule(n need, s traffic.Space, intent Intent, cat *catalog) AddRule {
@@ -455,6 +426,9 @@ func (p *Planner) newRule(n need, s traffic.Space, intent Intent, cat *catalog) 
 	r := firemon.SecurityRule{
 		Name: cat.unique(name), Description: intent.Description,
 		From: []string{n.from}, To: []string{n.to}, Action: firemon.ActionPermit, Schedule: intent.Schedule,
+	}
+	if !intent.Until.IsZero() && p.caps.RuleWindows && intent.Schedule == "" {
+		r.Window = firemon.TimeWindow{End: intent.Until}
 	}
 	s.Src, s.Dst = cat.anyFor(s.Src, s.Dst), cat.anyFor(s.Dst, s.Src)
 	// Best practice: a rule says why it exists and logs its sessions.
@@ -508,13 +482,22 @@ func natIDs(refs []query.NATRef) string {
 	return strings.Join(ids, ",")
 }
 
-// onlyNarrowing reports whether every rule is a permit, or a deny that
-// only narrows by application, URL category or user.
-func onlyNarrowing(rules []*firemon.Rule) bool {
-	for _, r := range rules {
-		if r.Action() != firemon.ActionPermit && !onlyNarrowDenies([]*firemon.Rule{r}) {
-			return false
+// untilSchedule is the one-time schedule from now to until, named after
+// its end so that requests ending the same day share it.
+func untilSchedule(now, until time.Time) firemon.Schedule {
+	return firemon.Schedule{
+		Name:        "Until-" + until.Format("20060102-1504"),
+		Description: "firemon: temporary access until " + until.Format("2006-01-02 15:04"),
+		Windows:     []firemon.TimeWindow{{Start: now.Truncate(time.Minute), End: until}},
+	}
+}
+
+// scheduleNamed returns the schedule of the configuration with name.
+func (p *Planner) scheduleNamed(name string) (firemon.Schedule, bool) {
+	for _, s := range p.fw.Config().Schedules {
+		if s.Name == name {
+			return s, true
 		}
 	}
-	return len(rules) > 0
+	return firemon.Schedule{}, false
 }

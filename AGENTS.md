@@ -17,7 +17,7 @@ v2 is a rewrite and is not in production: no compatibility promise (GEN-1). The 
 
 ## Semantics that must not regress
 
-- Never widen what cannot be evaluated. Domain names, dynamic groups, application matches, unknown objects and cycles make a rule undecidable (`Rule.Decidable() == false`); evaluation treats it as a possible match and reports `Indeterminate`, never `Allowed`.
+- Never widen what cannot be evaluated. Domain names, dynamic groups, application matches, unknown objects and cycles make a rule undecidable (`Rule.Decidable() == false`). Evaluation either settles the rule under a premise it records, or treats it as a possible match and reports `Indeterminate`, never `Allowed`. Premises are the standard application of the ports and user, URL-category, domain-name and schedule criteria the request does not give ([ADR 0017](docs/adr/0017-determinate-verdicts-with-premises.md)). An unrecorded assumption must never make a result `Allowed`, and inference must agree with `Strict` wherever `Strict` decides.
 - Rules are evaluated in device order, first match wins, deny rules included.
 - A design plan is accepted only if, applied to the configuration, it makes the intent allowed and permits nothing outside the intent.
 - Deploy is dry-run unless explicitly applied, refuses a device whose configuration fingerprint differs from the plan baseline, and never retries a partially sent script.

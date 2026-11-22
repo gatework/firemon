@@ -20,6 +20,7 @@ func (fw *Firewall) Fingerprint() string { return fw.fingerprint }
 func fingerprint(cfg *Config) string {
 	c := *cfg.Clone()
 	c.Diagnostics = nil
+	c.Source = nil // how the text is written does not change the firewall
 	byName := func(a, b string) int { return strings.Compare(a, b) }
 	slices.SortFunc(c.VirtualRouters, func(a, b VirtualRouter) int { return byName(a.Name, b.Name) })
 	slices.SortFunc(c.Zones, func(a, b Zone) int { return byName(a.Name, b.Name) })

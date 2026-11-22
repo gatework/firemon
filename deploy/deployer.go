@@ -134,6 +134,8 @@ func (d *Deployer) Deploy(ctx context.Context, req Request) (Receipt, error) {
 		// The session never opened: nothing was journaled or sent.
 		rec.Status, rec.Failure = apply.StatusFailed, failure.Primary(opErr)
 	} else {
+		// A close failure after the run can make success uncertain: the
+		// journal must hold the settled record, not the run's last one.
 		rec, closeChanged = apply.Settle(rec, closeErr)
 		if closeChanged {
 			pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), apply.DefaultPersistTimeout)
@@ -204,6 +206,9 @@ func (p *checkedPlan) Precheck(before *firemon.Config) (change.Readiness, error)
 	if fw.Fingerprint() != p.plan.Baseline {
 		return 0, failure.Wrap(failure.CodeDrifted, "deploy", ErrDrift)
 	}
+	if err := p.plan.VerifyBefore(fw, p.now()); err != nil {
+		return 0, failure.Wrap(failure.CodeDrifted, "deploy", err)
+	}
 	return change.Ready, nil
 }
 
@@ -225,15 +230,8 @@ func (p *checkedPlan) Verify(before, after *firemon.Config) (evidence.Digest, er
 	if want.Fingerprint() != fw.Fingerprint() {
 		return "", failure.Wrap(failure.CodeUnconfirmed, "deploy", ErrUnexpectedReadback)
 	}
-	if p.plan.Kind != design.PlanKindCleanup {
-		again, err := design.New(fw, design.Options{Now: p.now}).Plan(p.plan.Intent)
-		if err != nil {
-			return "", err
-		}
-		clean := len(p.plan.Conflicts) == 0 && len(p.plan.Unknown) == 0
-		if len(again.Changes) > 0 || (clean && again.Status != design.StatusNoChange) {
-			return "", failure.Wrap(failure.CodeUnconfirmed, "deploy", ErrNotApplied)
-		}
+	if err := p.plan.VerifyResult(fw, p.now()); err != nil {
+		return "", failure.Wrap(failure.CodeUnconfirmed, "deploy", fmt.Errorf("%w: %w", ErrNotApplied, err))
 	}
 	return fingerprint(fw.Fingerprint()), nil
 }

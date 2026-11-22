@@ -7,6 +7,7 @@ import (
 
 	"github.com/gatework/firemon"
 	"github.com/gatework/firemon/design"
+	"github.com/gatework/firemon/query"
 	"github.com/gatework/firemon/traffic"
 )
 
@@ -131,5 +132,54 @@ func TestAggregation_ReusesAnEqualGroup(t *testing.T) {
 	rule := p.Changes[len(p.Changes)-1].(design.AddRule).Rule
 	if len(p.Changes) != 1 || rule.Source[0].Name != "jump-hosts" {
 		t.Fatalf("changes %v", describe(p.Changes))
+	}
+}
+
+func TestPlan_PermitsOnlyDuringRequestedSchedule(t *testing.T) {
+	t.Parallel()
+	r := rule("5", firemon.ActionPermit, "trust", "dmz", []firemon.AddressRef{firemon.NamedAddress("ops")}, []firemon.AddressRef{firemon.NamedAddress("web")}, "HTTPS")
+	cfg := lab(r)
+	cfg.Schedules = []firemon.Schedule{{Name: "tuesday", Recurrences: []firemon.Recurrence{{Days: []time.Weekday{time.Tuesday}}}}}
+	in := intent(t, "10.0.2.9", "172.16.0.10", "tcp/443")
+	in.Schedule = "tuesday"
+	p := plan(t, cfg, in)
+	if !p.Verified || p.Status != design.StatusChange {
+		t.Fatalf("plan %s verified %v: %v", p.Status, p.Verified, p.Unknown)
+	}
+	if err := design.Apply(cfg, p.Changes); err != nil {
+		t.Fatal(err)
+	}
+	fw, err := firemon.Compile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := query.New(fw, query.Options{})
+	for _, tc := range []struct {
+		at   time.Time
+		want query.Verdict
+	}{{now, query.VerdictAllowed}, {now.AddDate(0, 0, 1), query.VerdictDenied}} {
+		q, err := engine.Query(query.Request{Src: in.Src, Dst: in.Dst, Service: in.Service, At: tc.at})
+		if err != nil || q.Verdict != tc.want {
+			t.Fatalf("%s: got %v, want %v (%v)", tc.at.Weekday(), q.Verdict, tc.want, err)
+		}
+	}
+}
+
+func TestPlan_PermanentIntentHonorsScheduledDeny(t *testing.T) {
+	t.Parallel()
+	d := rule("5", firemon.ActionDeny, "trust", "dmz", nil, nil, "HTTPS")
+	d.Schedule = "wednesday"
+	a := rule("6", firemon.ActionPermit, "trust", "dmz", nil, nil, "HTTPS")
+	cfg := lab(d, a)
+	cfg.Schedules = []firemon.Schedule{{Name: "wednesday", Recurrences: []firemon.Recurrence{{Days: []time.Weekday{time.Wednesday}}}}, {Name: "tuesday", Recurrences: []firemon.Recurrence{{Days: []time.Weekday{time.Tuesday}}}}}
+	in := intent(t, "10.0.1.9", "172.16.0.10", "tcp/443")
+	p := plan(t, cfg, in)
+	if p.Verified || p.Status != design.StatusConflict || len(p.Conflicts) != 1 || p.Conflicts[0].RuleID != "5" {
+		t.Fatalf("%s verified %v conflicts %v", p.Status, p.Verified, p.Conflicts)
+	}
+	in.Schedule = "tuesday"
+	p = plan(t, cfg, in)
+	if !p.Verified || p.Status != design.StatusNoChange {
+		t.Fatalf("Tuesday %s verified %v conflicts %v", p.Status, p.Verified, p.Conflicts)
 	}
 }

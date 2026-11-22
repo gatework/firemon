@@ -1,10 +1,10 @@
-# 0016 — Unified rule model: conditions, inspection, likely matches
+# 0016 — Unified rule model: conditions, inspection and application matches
 
 Status: accepted (2026-11-19)
 
 ## Context
 
-firemon manages firewalls of different vendors and forms through one model. Beyond the five-tuple, what a rule matches on was spread over vendor-shaped fields: `Applications`, `ApplicationDefault`, FQDN entries and an `Unsupported []string` of vendor text whose kind was guessed from its prefix. Every new kind of criterion became a special case in the algorithms (application ports, domain views, narrowing denies). Security inspection was dropped by the parsers, so operators could not see it. Operators also need application rules judged by the applications' standard ports when they query by five-tuple.
+firemon manages firewalls of different vendors and forms through one model. Beyond the five-tuple, what a rule matches on was spread over vendor-shaped fields: `Applications`, `ApplicationDefault`, FQDN entries and an `Unsupported []string` of vendor text whose kind was guessed from its prefix. Every new kind of criterion became a special case in the algorithms (application ports, domain views, narrowing denies). Security inspection was dropped by the parsers, so operators could not see it. Operators query by five-tuple even when application identification depends on session traffic.
 
 ## Decision
 
@@ -12,9 +12,9 @@ firemon manages firewalls of different vendors and forms through one model. Beyo
 - **One extension point for criteria.** A security rule matches on zones, addresses, services and a list of `Condition{Kind, Values, Raw}`. Kind is a closed set — application, domain, user, url-category, other — each a question an operator asks on its own; everything else is `other`. Raw keeps the vendor text for display and rendering. `DynamicNAT` and `PolicyRoute` use the same list.
 - **Inspection is one opaque list.** `SecurityRule.Inspection []string` records the inspection a rule enables in the vendor's terms (`ips NAME`, `group NAME`). It never affects matching; it is counted, shown, audited and reported as not migrated.
 - **Neutral names.** `ApplicationDefault` becomes `DefaultPorts` (the services are the applications' standard ports), `Logging.Setting` becomes `Logging.Forward`. `NumericRuleIDs` stays in `Semantics` only: it describes how the device identifies rules, which reading a stored configuration needs.
-- **Three spaces per compiled rule.** Each condition kind has an evaluator that constrains the five-tuple match; a compiled rule exposes `Certain ⊆ Likely ⊆ Bound`. Likely is what an operator reads as a hit: for an application condition, the services narrowed to the applications' standard ports when every one is known. Evaluation has a strict mode (only Certain decides; converge, audit, migration checks) and an operational mode (Likely decides, with its reason; search, block, deploy).
+- **Application and service are independent criteria.** `Certain()` gives traffic the rule definitely matches. `Bound()` includes traffic it may match. With `application-default`, a complete default port book can exclude ports. With `service any`, an application may use any port. The five-tuple query, design and readback use the same first-match semantics. Conflicting possible actions produce an indeterminate result.
 - **Derived, not stored.** Classification by condition kind, counts and the indexes by kind, application and domain are computed at compile time.
 
 ## Consequences
 
-The stored configuration changes shape (`ModelVersion` 4): snapshots are parsed again from their text on first use. A new vendor implements a parser, a renderer, a platform description and its books; the model and algorithms do not change. Operational-mode answers depend on the standard port books and say so in every hit they decide by them.
+The stored configuration changes shape (`ModelVersion` 4): snapshots are parsed again from their text on first use. A new vendor implements a parser, a renderer, a platform description and its books; the model and algorithms do not change. Reports identify the application-default rules whose known service bounds excluded some of the requested ports.

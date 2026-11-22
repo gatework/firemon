@@ -42,3 +42,16 @@
 | Finding tier | 收敛层级 | Safe (a change keeping the effective policy exists and is verified) or Review (advice) (`converge.Tier`). |
 | Evidence | 证据 | What a convergence finding rests on: the configuration, hit counters, or both (`converge.Evidence`). |
 | Fidelity | 翻译保真度 | Exact, approximate (stated difference) or untranslatable (carried over disabled) (`migrate.Fidelity`). |
+| Premise | 前提 | Assumption a determinate result rests on, stated in the report: the inferred application, or a user, URL-category, domain or schedule criterion taken not to hold (ADR 0017). |
+| Inferred application | 推断应用 | Application family a firewall identifies on the standard ports of the requested service (`firemon.AppGuess`). |
+| Flow | 流 | One source item to one destination item of a request, followed through every firewall it crosses (`report.Flow`). |
+| Hop | 跳 | One firewall on a flow's way and the rules deciding the flow there (`report.Hop`). |
+| Strict reading | 保守判定 | Evaluation without premises: application, user, URL and domain rules stay possible matches (`--strict`). |
+| Hand-off | NAT 接力 | Traffic one firewall's NAT translates, evaluated as translated on the next firewall its routes reach (`inventory.Upstream`). |
+| Change risk | 变更风险 | Grade of what a planned change opens or bypasses (`design.Risk`): any address, wide network, any service, sensitive service across zones, bypassed isolation deny. |
+| Temporary access | 限时开通 | Access that ends at `--until`: a rule validity window or a one-time schedule. |
+| Batch ticket | 批量工单 | One row of `--file`, designed on the changes of the rows before it. |
+| Device view | 设备视图 | What one firewall does to a request: the existing rules permitting and denying its flows, the rules to add or modify, their risks (`report.DeviceView`). |
+| Health score | 健康分 | 100 less stated deductions: rules that never take effect, broad and unlogged permits, unused objects, unreadable configuration (`health.Assess`). |
+| Ineffective rule | 不生效策略 | A rule that never decides traffic: redundant, shadowed, disabled, expired, incomplete or never matching. |
+| Conditional rule | 按条件匹配的策略 | A rule unresolved only by application, user, URL category or domain criteria, which a query settles under premises (`Rule.Conditional`). |

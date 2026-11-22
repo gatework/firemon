@@ -48,7 +48,7 @@ func (tr *translator) rules() {
 				r.Description = strings.TrimSpace("[migrate: " + strings.Join(res.notes, "; ") + "] " + r.Description)
 			}
 			r.ID = tr.ruleID(src, len(ids))
-			if tr.t.Vendor == firemon.VendorPaloAlto {
+			if !tr.t.Semantics.NumericRuleIDs {
 				r.Name = r.ID
 			}
 			tr.out.Rules = append(tr.out.Rules, r)
@@ -408,7 +408,7 @@ func (tr *translator) defaults() {
 		var ids []string
 		for _, r := range rules {
 			r.ID = tr.ruleID(firemon.SecurityRule{ID: what + "-default", Name: "migrated-" + what + "-default"}, len(ids))
-			if tr.t.Vendor == firemon.VendorPaloAlto {
+			if !tr.t.Semantics.NumericRuleIDs {
 				r.Name = r.ID
 			}
 			tr.out.Rules = append(tr.out.Rules, r)

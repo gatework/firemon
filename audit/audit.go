@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"cmp"
 	"slices"
 	"strings"
 	"time"
@@ -53,10 +54,13 @@ func Run(fw *firemon.Firewall, opts Options) Report {
 	return r
 }
 
-// certain reports whether a rule is decidable, enabled and unscheduled, so
-// its match is in effect at every instant.
+// certain reports whether a rule's match is exact, enabled and
+// unscheduled, so it is in effect at every instant. A rule restricted only
+// by applications counts: its five-tuple match is exact, and coverage
+// compares its applications (covers).
 func certain(r *firemon.Rule, at time.Time) bool {
-	return r.Decidable() && !r.Scheduled() && !r.InactiveAt(at)
+	exact := r.Decidable() || (r.DecidableWithout(firemon.IssueKindApplication) && !r.DefaultPorts())
+	return exact && !r.Scheduled() && !r.InactiveAt(at)
 }
 
 func ruleFindings(r *firemon.Rule, at time.Time) []Finding {
@@ -70,7 +74,9 @@ func ruleFindings(r *firemon.Rule, at time.Time) []Finding {
 	case r.ExpiredAt(at):
 		out = append(out, Finding{Kind: KindExpired, Rule: r.ID()})
 	}
-	if !r.Decidable() {
+	if !r.Decidable() && !r.Conditional() {
+		// Rules by application, user, URL category or domain are settled
+		// by a query's premises (ADR 0017); only the rest is undecidable.
 		out = append(out, Finding{Kind: KindUndecidable, Rule: r.ID(), Detail: joinIssues(r.Issues())})
 	}
 	m := r.Match()
@@ -87,6 +93,9 @@ func ruleFindings(r *firemon.Rule, at time.Time) []Finding {
 // to. It returns nil when part of r remains reachable.
 // sure tells which earlier rules are certain.
 func shadowing(r *firemon.Rule, earlier []*firemon.Rule, sure []bool, budget int) (*Finding, bool) {
+	if !projectionsCovered(r, earlier, sure) {
+		return nil, true // some packet of r no earlier rule can match
+	}
 	remaining := traffic.NewRegion(r.Match())
 	var by []string
 	opposite := false
@@ -101,7 +110,7 @@ func shadowing(r *firemon.Rule, earlier []*firemon.Rule, sure []bool, budget int
 		opposite = opposite || e.Action() != r.Action()
 		remaining = remaining.Subtract(e.Match())
 		if remaining.Len() > budget {
-			return nil, false
+			return coveredAnyOrder(r, earlier, sure, budget)
 		}
 	}
 	if !remaining.IsEmpty() {
@@ -114,8 +123,49 @@ func shadowing(r *firemon.Rule, earlier []*firemon.Rule, sure []bool, budget int
 	return &Finding{Kind: kind, Rule: r.ID(), By: by}, true
 }
 
-// covers reports whether e applies to every zone pair r applies to.
+// projectionsCovered is a cheap, exact test that r is not covered: the
+// earlier rules that may cover it must together hold its sources, its
+// destinations and its services, each dimension on its own. A source no
+// earlier rule names is a packet of r nothing before it matches. Broad
+// rules ("any to any") end here instead of in a region that splits into
+// thousands of pieces.
+func projectionsCovered(r *firemon.Rule, earlier []*firemon.Rule, sure []bool) bool {
+	m := r.Match()
+	var src, dst traffic.AddressSet
+	var svc traffic.ServiceSet
+	for i, e := range earlier {
+		if !sure[i] || !covers(e, r) {
+			continue
+		}
+		em := e.Match()
+		if !em.Overlaps(m) {
+			continue
+		}
+		src, dst, svc = src.Union(em.Src.Intersect(m.Src)), dst.Union(em.Dst.Intersect(m.Dst)), svc.Union(em.Service.Intersect(m.Service))
+	}
+	return src.ContainsSet(m.Src) && dst.ContainsSet(m.Dst) && svc.ContainsSet(m.Service)
+}
+
+// covers reports whether e applies to every zone pair r applies to and to
+// every application r matches: e matches any application, or r names
+// applications that e all admits (directly or through a group).
 func covers(e, r *firemon.Rule) bool {
+	if apps := e.Applications(); len(apps) > 0 {
+		rApps := r.Applications()
+		if len(rApps) == 0 {
+			return false
+		}
+		for _, a := range rApps {
+			if !e.MatchesApplication(a) {
+				return false
+			}
+		}
+	}
+	return zonesCover(e, r)
+}
+
+// zonesCover reports whether e applies to every zone pair r applies to.
+func zonesCover(e, r *firemon.Rule) bool {
 	eFrom, eTo := e.Zones()
 	rFrom, rTo := r.Zones()
 	return zoneSuperset(eFrom, rFrom) && zoneSuperset(eTo, rTo) && r.Scope().Covers(e.Scope())
@@ -160,4 +210,78 @@ func anyFamily(src, dst traffic.AddressSet) bool {
 		}
 	}
 	return false
+}
+
+// coveredAnyOrder decides coverage when subtracting the earlier rules in
+// device order splits r into too many pieces: whether r is covered does
+// not depend on the order, so the rules covering most go first and the
+// pieces stay few. Which rule decides each packet does: when the covering
+// rules all share r's action, r is redundant; when one has the opposite
+// action it may decide part of r, and r is reported shadowed, the reading
+// that asks a person to look. Either way r never takes effect.
+func coveredAnyOrder(r *firemon.Rule, earlier []*firemon.Rule, sure []bool, budget int) (*Finding, bool) {
+	m := r.Match()
+	var cands []*firemon.Rule
+	for i, e := range earlier {
+		if sure[i] && covers(e, r) && e.Match().Overlaps(m) {
+			if e.Match().ContainsSpace(m) {
+				return coverFinding(r, []*firemon.Rule{e}), true
+			}
+			cands = append(cands, e)
+		}
+	}
+	slices.SortStableFunc(cands, func(a, b *firemon.Rule) int {
+		return cmp.Compare(volume(b.Match().Intersect(m)), volume(a.Match().Intersect(m)))
+	})
+	remaining := traffic.NewRegion(m)
+	var used []*firemon.Rule
+	for _, e := range cands {
+		if remaining.IsEmpty() {
+			break
+		}
+		if !remaining.Overlaps(e.Match()) {
+			continue
+		}
+		used = append(used, e)
+		remaining = remaining.Subtract(e.Match())
+		if remaining.Len() > budget {
+			return nil, false
+		}
+	}
+	if !remaining.IsEmpty() {
+		return nil, true
+	}
+	slices.SortFunc(used, func(a, b *firemon.Rule) int { return cmp.Compare(a.Position(), b.Position()) })
+	return coverFinding(r, used), true
+}
+
+// coverFinding reports r covered by rules.
+func coverFinding(r *firemon.Rule, by []*firemon.Rule) *Finding {
+	kind := KindRedundant
+	ids := make([]string, len(by))
+	for i, e := range by {
+		ids[i] = e.ID()
+		if e.Action() != r.Action() {
+			kind = KindShadowed
+		}
+	}
+	return &Finding{Kind: kind, Rule: r.ID(), By: ids}
+}
+
+// volume estimates how much traffic a space holds, for ordering.
+func volume(s traffic.Space) float64 {
+	count := func(a traffic.AddressSet) float64 {
+		var n float64
+		for _, rg := range a.Ranges() {
+			from, to := rg.From().As16(), rg.To().As16()
+			n += float64(uint32(to[12])<<24|uint32(to[13])<<16|uint32(to[14])<<8|uint32(to[15])) -
+				float64(uint32(from[12])<<24|uint32(from[13])<<16|uint32(from[14])<<8|uint32(from[15])) + 1
+		}
+		return n
+	}
+	ports := 0.0
+	for rg := range s.Service.All() {
+		ports += float64(int(rg.ProtocolHigh)-int(rg.ProtocolLow)+1) * float64(int(rg.Dst.High)-int(rg.Dst.Low)+1)
+	}
+	return count(s.Src) * count(s.Dst) * ports
 }

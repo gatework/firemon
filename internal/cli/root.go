@@ -99,9 +99,14 @@ type options struct {
 	snapshot string
 	store    string
 	book     string
-	// inventoryFile is the YAML operator inventory with protected networks.
+	// inventoryFile is the YAML operator inventory with protected networks,
+	// or a configuration backup directory.
 	inventoryFile string
 	timezone      string
+	// inventoryDefault is the inventory of the environment or settings,
+	// kept when --inventory names a backup directory instead: it then
+	// describes the topology of the firewalls the backup holds.
+	inventoryDefault string
 	// timezoneDefault reports no time zone chosen by flag, environment or
 	// settings: a configuration that names its own is read in it.
 	timezoneDefault bool
@@ -124,15 +129,16 @@ func newRoot(ctx context.Context, deps *Deps) *cobra.Command {
 	f.StringVar(&o.file, "config", "", "运行配置文件（代替登录设备读取）")
 	f.StringVar(&o.snapshot, "snapshot", "", "使用已保存的该设备快照（见 collect）")
 	f.StringVar(&o.store, "store", "", "快照目录（默认依次取 $FIREMON_STORE、库存文件的 store、配置文件、用户配置目录）")
-	f.StringVar(&o.inventoryFile, "inventory", "", "库存文件（YAML）：防火墙、HA 集群、快照与受保护网段（默认取 $FIREMON_INVENTORY 或配置文件）")
+	f.StringVar(&o.inventoryFile, "inventory", "", "库存文件（YAML）：防火墙、HA 集群、快照与受保护网段；或配置备份目录（<名称>-<IP>.txt），直接用其中的防火墙配置（默认取 $FIREMON_INVENTORY 或配置文件）")
 	f.StringVar(&o.book, "predefined-service", "", "设备上实际的预定义服务表（JSON），覆盖厂商默认值（见 predefined-service 命令）")
 	f.StringVar(&o.timezone, "timezone", "", "设备时区，用于时间计划，IANA 名称（默认取 $FIREMON_TIMEZONE、配置文件或本机时区）")
 	f.BoolVar(&o.json, "json", false, "输出 JSON")
 	o.device.register(root)
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &usageError{err} })
+	//nolint:contextcheck // cobra hands the command context to resolveDefaults through cmd.Context()
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error { return o.resolveDefaults(cmd) }
 	root.SetContext(ctx)
-	root.AddCommand(newCheckCmd(o), newNATCmd(o), newBlockCmd(o), newDeployCmd(o), newCollectCmd(o), newHitsCmd(o), newConvergeCmd(o), newAuditCmd(o), newMigrateCmd(o), newParseCmd(o), newServicesCmd(o), newUsageCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
+	root.AddCommand(newCheckCmd(o), newNATCmd(o), newBlockCmd(o), newDeployCmd(o), newCollectCmd(o), newHitsCmd(o), newConvergeCmd(o), newHealthCmd(o), newAuditCmd(o), newMigrateCmd(o), newParseCmd(o), newServicesCmd(o), newUsageCmd(o)) //nolint:contextcheck // cobra hands the context to RunE through cmd.Context()
 	localizeHelp(root)
 	return root
 }

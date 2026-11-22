@@ -4,8 +4,8 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"maps"
-	"slices"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,7 +16,7 @@ import (
 	"github.com/gatework/firemon/design"
 	"github.com/gatework/firemon/hits"
 	"github.com/gatework/firemon/internal/bootstrap"
-	"github.com/gatework/firemon/internal/workflow"
+	"github.com/gatework/firemon/inventory"
 )
 
 type convergeFlags struct {
@@ -24,16 +24,21 @@ type convergeFlags struct {
 	minWindow time.Duration
 	plan      bool
 	selection []string
+	clusters  []string
+	out       string
+	verbosity int
 }
 
 func newConvergeCmd(o *options) *cobra.Command {
 	var f convergeFlags
 	cmd := &cobra.Command{
 		Use:   "converge",
-		Short: "策略收敛：未使用对象、无效策略、过宽放通、可合并策略，安全项输出变更与回退命令",
-		Long: "审查策略：未使用或为空的对象，不会生效的策略（冗余、被覆盖、禁用、过期、不完整、永不命中），\n" +
-			"过宽的放通策略，以及可合并的策略。命中计数（用 firemon hits 为 --snapshot 保存，或 --hits 文件）\n" +
-			"提供零命中证据。--plan 把安全项（或 --select 指定的发现）设计为变更，并验证每个判定都不变。",
+		Short: "策略收敛：不会生效的策略、未用对象、可合并策略、过宽放通，安全项生成已验证的清理脚本与回退",
+		Long: "审查策略：不会生效的策略（冗余、被覆盖、禁用、过期、不完整、永不命中），未使用、为空或重复的对象，\n" +
+			"可合并的策略，以及需要人工评估的过宽放通和未开日志的放通。默认每台给出汇总，-v 逐条列出（方括号里是 --select 用的编号）。\n" +
+			"--plan 把安全项（或 --select 指定的发现）设计为变更，验证每个判定都不变后给出脚本与回退；--out 目录 保存为文件。\n" +
+			"--inventory 可以是配置备份目录或库存文件，--cluster 只处理指定集群：\n" +
+			"  firemon converge --inventory ~/Documents/2026-10-14 --cluster SZX9-IN --plan --out ./cleanup",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return o.converge(cmd, f)
@@ -43,47 +48,255 @@ func newConvergeCmd(o *options) *cobra.Command {
 	fl.StringVar(&f.hitsFile, "hits", "", "命中计数文件（JSON 或 CSV）；默认使用快照库中该快照最新的计数")
 	fl.DurationVar(&f.minWindow, "min-window", converge.DefaultMinWindow, "判定零命中所需的最短观察时长")
 	fl.BoolVar(&f.plan, "plan", false, "为安全项生成变更方案、命令与回退命令")
-	fl.StringSliceVar(&f.selection, "select", nil, "只处理这些发现（ID，见报告）；默认全部安全项")
+	fl.StringSliceVar(&f.selection, "select", nil, "只处理这些发现（-v 列表方括号中的编号）；默认全部安全项")
+	fl.StringSliceVar(&f.clusters, "cluster", nil, "只处理这些集群（--inventory 时）")
+	fl.StringVar(&f.out, "out", "", "清理脚本与回退写入此目录（每台 <设备>-cleanup.txt 与 <设备>-rollback.txt）")
+	fl.CountVarP(&f.verbosity, "verbose", "v", "逐条列出发现及证据")
 	return cmd
 }
 
+// review is one firewall reviewed, with its cleanup when planned.
+type review struct {
+	converge.Report
+	Cluster string             `json:"cluster"`
+	Devices []inventory.Device `json:"devices"`
+	Plan    *design.Plan       `json:"plan,omitempty"`
+	Script  *design.Script     `json:"script,omitempty"`
+	// Files are where the script and rollback were written.
+	Files []string `json:"files,omitempty"`
+	err   error
+}
+
 func (o *options) converge(cmd *cobra.Command, f convergeFlags) error {
+	var targets []fleetCluster
 	if o.inventoryFile != "" {
-		return o.convergeFleet(cmd, f)
-	}
-	loaded, platform, err := o.load(cmd.Context())
-	if err != nil {
-		return err
-	}
-	counters, err := o.counters(cmd, f.hitsFile)
-	if err != nil {
-		return err
-	}
-	rep := converge.Analyze(loaded.Firewall, converge.Options{Now: o.deps.Now, Hits: counters, MinWindow: f.minWindow})
-	var plan *design.Plan
-	var script design.Script
-	if f.plan {
-		plan, err = converge.Plan(loaded.Firewall, rep, converge.Selection{IDs: f.selection}, converge.PlanOptions{Now: o.deps.Now, Naming: platform.Naming})
-		if err != nil {
-			return &usageError{err}
+		var err error
+		if targets, err = o.fleetClusters(cmd, f.clusters); err != nil {
+			return err
 		}
-		if script, err = platform.Render(plan); err != nil {
+		if len(targets) == 0 {
+			return &usageError{fmt.Errorf("--cluster %s 不在库存中", strings.Join(f.clusters, ","))}
+		}
+	} else {
+		loaded, platform, err := o.load(cmd.Context())
+		if err != nil {
+			return err
+		}
+		name := cmp.Or(o.snapshot, loaded.Config.Hostname, "firewall")
+		targets = []fleetCluster{{Name: name, Firewall: loaded.Firewall, Platform: platform, Devices: []inventory.Device{{Name: name, Host: o.device.host, Evaluated: true}}}}
+	}
+	reviews := make([]review, len(targets))
+	counters := make([]*hits.Snapshot, len(targets))
+	for i, t := range targets {
+		c, err := o.reviewCounters(cmd, f, t)
+		if err != nil {
+			return err
+		}
+		counters[i] = c
+	}
+	eachParallel(len(targets), func(i int) {
+		reviews[i] = o.reviewOne(targets[i], counters[i], f)
+	})
+	for _, r := range reviews {
+		if r.err != nil {
+			return r.err
+		}
+	}
+	if f.out != "" && f.plan {
+		if err := writeCleanups(f.out, reviews); err != nil {
 			return err
 		}
 	}
 	if o.json {
-		return writeJSON(cmd.OutOrStdout(), struct {
-			converge.Report
-			Plan   *design.Plan   `json:"plan,omitempty"`
-			Script *design.Script `json:"script,omitempty"`
-		}{rep, plan, scriptOrNil(plan, script)})
+		return writeJSON(cmd.OutOrStdout(), reviews)
 	}
 	p := &printer{w: cmd.OutOrStdout()}
-	printConverge(p, rep)
-	if plan != nil {
-		printCleanupPlan(p, plan, &script)
+	for _, r := range reviews {
+		printReview(p, r, f)
 	}
 	return p.err
+}
+
+// reviewCounters are the hit counters of a firewall: a file, the snapshot
+// store's latest for --snapshot, or those of every member of a cluster
+// whose snapshots the store holds (a rule unused on the active member may
+// carry the standby's traffic after a failover).
+func (o *options) reviewCounters(cmd *cobra.Command, f convergeFlags, t fleetCluster) (*hits.Snapshot, error) {
+	if o.inventoryFile == "" || f.hitsFile != "" {
+		return o.counters(cmd, f.hitsFile)
+	}
+	if isDir(o.inventoryFile) {
+		return nil, nil //nolint:nilnil // backups carry no counters
+	}
+	store, err := bootstrap.OpenSnapshots(o.store)
+	if err != nil {
+		return nil, err
+	}
+	var snaps []hits.Snapshot
+	for _, d := range t.Devices {
+		s, err := store.LatestHits(cmd.Context(), d.Name)
+		if errors.Is(err, filestore.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		snaps = append(snaps, s)
+	}
+	if len(snaps) == 0 {
+		return nil, nil //nolint:nilnil // no counters: static review only
+	}
+	merged := hits.Merge(t.Name, snaps...)
+	return &merged, nil
+}
+
+// reviewOne analyzes a firewall and, when asked, plans its cleanup.
+func (o *options) reviewOne(t fleetCluster, counters *hits.Snapshot, f convergeFlags) review {
+	rep := converge.Analyze(t.Firewall, converge.Options{Now: o.deps.Now, Hits: counters, MinWindow: f.minWindow})
+	r := review{Cluster: t.Name, Devices: t.Devices, Report: rep}
+	if !f.plan {
+		return r
+	}
+	plan, err := converge.Plan(t.Firewall, rep, converge.Selection{IDs: f.selection}, converge.PlanOptions{Now: o.deps.Now, Naming: t.Platform.Naming})
+	if err != nil {
+		r.err = &usageError{fmt.Errorf("%s：%w", t.Label(), err)}
+		return r
+	}
+	script, err := t.Platform.Render(plan)
+	if err != nil {
+		r.err = err
+		return r
+	}
+	r.Plan, r.Script = plan, scriptOrNil(plan, script)
+	return r
+}
+
+// writeCleanups writes each verified cleanup as two files.
+func writeCleanups(dir string, reviews []review) error {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("创建 %s 失败：%w", dir, err)
+	}
+	for i := range reviews {
+		r := &reviews[i]
+		if r.Script == nil || len(r.Script.Commands) == 0 {
+			continue
+		}
+		name := r.Cluster
+		if len(r.Devices) > 0 {
+			name = r.Devices[0].Name
+		}
+		base := filepath.Join(dir, fileSafe(name))
+		for suffix, lines := range map[string][]string{"-cleanup.txt": r.Script.Commands, "-rollback.txt": r.Script.Rollback} {
+			path := base + suffix
+			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+				return fmt.Errorf("写入 %s 失败：%w", path, err)
+			}
+			r.Files = append(r.Files, path)
+		}
+	}
+	return nil
+}
+
+func fileSafe(s string) string {
+	return strings.Map(func(r rune) rune {
+		if strings.ContainsRune(`/\:*?"<>|() `, r) {
+			return '_'
+		}
+		return r
+	}, s)
+}
+
+func label(devices []inventory.Device, fallback string) string {
+	if len(devices) > 0 {
+		return devices[0].Label()
+	}
+	return fallback
+}
+
+// printReview writes one firewall: the summary, the findings with -v, and
+// the cleanup when planned.
+func printReview(p *printer, r review, f convergeFlags) {
+	p.f("\n━━ %s", label(r.Devices, r.Cluster))
+	if len(r.Devices) > 1 {
+		peers := make([]string, 0, len(r.Devices)-1)
+		for _, d := range r.Devices[1:] {
+			peers = append(peers, d.Label())
+		}
+		p.f("  HA 同步至 %s", strings.Join(peers, "、"))
+	}
+	p.f("\n")
+	printReviewSummary(p, r.Report)
+	if f.verbosity > 0 {
+		printConverge(p, r.Report)
+	}
+	switch {
+	case r.Plan != nil:
+		printCleanupPlan(p, r, f.out != "")
+	case safeCount(r.Report) > 0:
+		p.f("  → 加 --plan 生成已验证的清理脚本（--out 目录 保存为文件）；-v 逐条列出\n")
+	}
+}
+
+// printReviewSummary counts a review by what an operator does with it.
+func printReviewSummary(p *printer, rep converge.Report) {
+	n := rep.Count
+	ineffective := n(converge.CategoryRedundant) + n(converge.CategoryShadowed) + n(converge.CategoryDisabled) +
+		n(converge.CategoryExpired) + n(converge.CategoryIncomplete) + n(converge.CategoryNeverMatches)
+	if ineffective > 0 {
+		p.f("  不会生效的策略 %d 条：%s\n", ineffective, countList(rep, converge.CategoryRedundant, converge.CategoryShadowed,
+			converge.CategoryDisabled, converge.CategoryExpired, converge.CategoryIncomplete, converge.CategoryNeverMatches))
+	}
+	if objects := countList(rep, converge.CategoryUnusedObject, converge.CategoryEmptyObject, converge.CategoryDuplicateObject); objects != "" {
+		p.f("  对象：%s\n", objects)
+	}
+	if m := n(converge.CategoryMergeable); m > 0 {
+		p.f("  可合并策略：%d 组\n", m)
+	}
+	if review := countList(rep, converge.CategoryBroad, converge.CategoryNoLog, converge.CategoryZeroHit); review != "" {
+		p.f("  需人工评估：%s\n", review)
+	}
+	if !rep.HitsTaken.IsZero() {
+		p.f("  命中计数采集于 %s\n", rep.HitsTaken.Format("2006-01-02 15:04"))
+	}
+	if len(rep.Incomplete) > 0 {
+		p.f("  覆盖分析未完成的策略：%s\n", strings.Join(rep.Incomplete, ","))
+	}
+	if ineffective == 0 && len(rep.Findings) == 0 {
+		p.f("  没有发现问题\n")
+	}
+	if s := safeCount(rep); s > 0 {
+		p.f("  可安全清理 %d 项\n", s)
+	}
+}
+
+// countList writes the categories with findings as "name N".
+func countList(rep converge.Report, cats ...converge.Category) string {
+	var parts []string
+	for _, c := range cats {
+		if k := rep.Count(c); k > 0 {
+			parts = append(parts, shortCategory(c)+" "+itoa(k))
+		}
+	}
+	return strings.Join(parts, "、")
+}
+
+func shortCategory(c converge.Category) string {
+	return map[converge.Category]string{
+		converge.CategoryRedundant: "冗余", converge.CategoryShadowed: "被覆盖", converge.CategoryDisabled: "禁用",
+		converge.CategoryExpired: "过期", converge.CategoryIncomplete: "不完整", converge.CategoryNeverMatches: "永不匹配",
+		converge.CategoryUnusedObject: "未使用", converge.CategoryEmptyObject: "空", converge.CategoryDuplicateObject: "重复",
+		converge.CategoryBroad: "过宽放通", converge.CategoryNoLog: "放通未开日志", converge.CategoryZeroHit: "零命中",
+	}[c]
+}
+
+func safeCount(rep converge.Report) int {
+	n := 0
+	for _, f := range rep.Findings {
+		if f.Tier == converge.TierSafe {
+			n++
+		}
+	}
+	return n
 }
 
 // scriptOrNil returns the script of a verified plan: commands of a plan
@@ -116,27 +329,17 @@ func (o *options) counters(cmd *cobra.Command, file string) (*hits.Snapshot, err
 	return &snap, err
 }
 
+// printConverge lists the findings by category, each with its selector.
 func printConverge(p *printer, rep converge.Report) {
-	counts := map[converge.Category]int{}
-	for _, f := range rep.Findings {
-		counts[f.Category]++
-	}
-	p.f("策略收敛报告")
-	if !rep.HitsTaken.IsZero() {
-		p.f("（命中计数采集于 %s）", rep.HitsTaken.Format("2006-01-02 15:04"))
-	}
-	p.f("\n")
 	last := converge.CategoryUnset
 	for _, f := range rep.Findings {
 		if f.Category != last {
 			last = f.Category
-			p.f("\n■ %s（%d 项）\n", text(categoryText, f.Category, f.Category.String()), counts[f.Category])
+			p.f("\n  ■ %s（%d 项）\n", text(categoryText, f.Category, f.Category.String()), rep.Count(f.Category))
 		}
-		p.f("  [%s|%s] %s %s\n", text(tierText, f.Tier, f.Tier.String()), text(evidenceText, f.Evidence, f.Evidence.String()), f.ID, findingText(f))
+		p.f("    %s  [%s｜%s｜%s]\n", findingText(f), text(tierText, f.Tier, f.Tier.String()), text(evidenceText, f.Evidence, f.Evidence.String()), f.ID)
 	}
-	if len(rep.Incomplete) > 0 {
-		p.f("\n覆盖分析超出预算的策略：%s\n", strings.Join(rep.Incomplete, ","))
-	}
+	p.f("\n")
 }
 
 func findingText(f converge.Finding) string {
@@ -169,152 +372,26 @@ func findingText(f converge.Finding) string {
 	return strings.Join(parts, "；")
 }
 
-func printCleanupPlan(p *printer, plan *design.Plan, script *design.Script) {
-	p.f("\n变更方案（%d 项，已验证全部判定不变：%s）\n", len(plan.Changes), yesNo(plan.Verified))
+// printCleanupPlan writes a verified cleanup: the files it went to, or the
+// commands and rollback.
+func printCleanupPlan(p *printer, r review, toFiles bool) {
+	plan := r.Plan
 	if !plan.Verified {
 		// Never print commands that are not proven to keep every decision.
-		p.f("  验证未通过：%s。不输出命令；请缩小 --select 范围后重试。\n", cmp.Or(plan.VerifyError, "未验证"))
+		p.f("  清理方案验证未通过：%s。不输出命令；请用 --select 缩小范围后重试\n", cmp.Or(plan.VerifyError, "未验证"))
 		return
 	}
-	if len(script.Commands) == 0 {
+	if r.Script == nil || len(r.Script.Commands) == 0 {
+		p.f("  没有需要清理的项\n")
 		return
 	}
-	p.f("命令：\n  %s\n回退命令：\n  %s\n", strings.Join(script.Commands, "\n  "), strings.Join(script.Rollback, "\n  "))
-	p.f("删除策略后可能产生新的未使用对象，下发后请再运行一次 converge。\n")
-}
-
-// convergeFleet reviews every cluster of --inventory on its active member
-// (or the first by name), with the hit counters of all its members merged: a rule unused
-// on the active member may carry the standby's traffic after a failover.
-func (o *options) convergeFleet(cmd *cobra.Command, f convergeFlags) error {
-	store, err := bootstrap.OpenSnapshots(o.store)
-	if err != nil {
-		return err
-	}
-	fleet, _, err := o.fleet(cmd, store)
-	if err != nil {
-		return err
-	}
-	clusters := groupClusters(fleet)
-	p := &printer{w: cmd.OutOrStdout()}
-	var out []clusterReview
-	for _, c := range slices.Sorted(maps.Keys(clusters)) {
-		members := clusters[c]
-		snap, err := o.loadStored(cmd.Context(), store, members[0].snapshot)
-		if err != nil {
-			return fmt.Errorf("集群 %s：%w", c, snapshotError(err, members[0].snapshot, o.store))
+	p.f("  清理方案：%d 项变更，已验证全部判定不变；命令 %d 行\n", len(plan.Changes), len(r.Script.Commands))
+	if toFiles {
+		for _, path := range r.Files {
+			p.f("    %s\n", path)
 		}
-		loaded, err := workflow.FromConfig(snap.Config)
-		if err != nil {
-			return err
-		}
-		platform, err := bootstrap.Lookup(snap.Vendor, snap.Config.Location, nil)
-		if err != nil {
-			return err
-		}
-		counters, err := clusterHits(cmd, store, c, members)
-		if err != nil {
-			return err
-		}
-		rep := converge.Analyze(loaded.Firewall, converge.Options{Now: o.deps.Now, Hits: counters, MinWindow: f.minWindow})
-		review := clusterReview{Cluster: c, Members: memberList(members), Report: rep}
-		if f.plan {
-			plan, err := converge.Plan(loaded.Firewall, rep, converge.Selection{IDs: f.selection}, converge.PlanOptions{Now: o.deps.Now, Naming: platform.Naming})
-			if err != nil {
-				return &usageError{fmt.Errorf("集群 %s：%w", c, err)}
-			}
-			script, err := platform.Render(plan)
-			if err != nil {
-				return err
-			}
-			review.Plan, review.Script = plan, scriptOrNil(plan, script)
-		}
-		if o.json {
-			out = append(out, review)
-			continue
-		}
-		p.f("\n══ %s（成员 %s，在 %s 上执行，备机通过 HA 同步）\n", c, memberNames(members), members[0].name)
-		printConverge(p, rep)
-		if review.Plan != nil {
-			printCleanupPlan(p, review.Plan, cmp.Or(review.Script, &design.Script{}))
-		}
+	} else {
+		p.f("  命令：\n    %s\n  回退：\n    %s\n", strings.Join(r.Script.Commands, "\n    "), strings.Join(r.Script.Rollback, "\n    "))
 	}
-	if o.json {
-		return writeJSON(cmd.OutOrStdout(), out)
-	}
-	return p.err
-}
-
-// groupClusters groups fleet members by cluster, each cluster's active
-// member first, then by name: the first is the one reviewed.
-func groupClusters(fleet []fleetMember) map[string][]fleetMember {
-	clusters := map[string][]fleetMember{}
-	for _, m := range fleet {
-		c := cmp.Or(m.cluster, m.name)
-		clusters[c] = append(clusters[c], m)
-	}
-	for _, members := range clusters {
-		slices.SortFunc(members, func(a, b fleetMember) int {
-			return cmp.Or(compareActive(a, b), strings.Compare(a.name, b.name))
-		})
-	}
-	return clusters
-}
-
-// clusterReview is the JSON form of one cluster's review.
-type clusterReview struct {
-	converge.Report
-	Cluster string `json:"cluster"`
-	// Members are the cluster's members, the reviewed (active) one first.
-	Members []string       `json:"members"`
-	Plan    *design.Plan   `json:"plan,omitempty"`
-	Script  *design.Script `json:"script,omitempty"`
-}
-
-func memberList(ms []fleetMember) []string {
-	out := make([]string, len(ms))
-	for i, m := range ms {
-		out[i] = m.name
-	}
-	return out
-}
-
-// clusterHits merges the latest counters of the members that have any;
-// nil when none has.
-func clusterHits(cmd *cobra.Command, store *filestore.Store, cluster string, members []fleetMember) (*hits.Snapshot, error) {
-	var snaps []hits.Snapshot
-	for _, m := range members {
-		s, err := store.LatestHits(cmd.Context(), m.snapshot)
-		if errors.Is(err, filestore.ErrNotFound) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		snaps = append(snaps, s)
-	}
-	if len(snaps) == 0 {
-		return nil, nil //nolint:nilnil // no counters: static review only
-	}
-	merged := hits.Merge(cluster, snaps...)
-	return &merged, nil
-}
-
-func memberNames(members []fleetMember) string {
-	names := make([]string, len(members))
-	for i, m := range members {
-		names[i] = m.name
-	}
-	return strings.Join(names, ",")
-}
-
-func compareActive(a, b fleetMember) int {
-	switch {
-	case a.active == b.active:
-		return 0
-	case a.active:
-		return -1
-	default:
-		return 1
-	}
+	p.f("  删除策略后可能产生新的未使用对象，下发后请再运行一次 converge\n")
 }
