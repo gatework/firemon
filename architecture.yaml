@@ -17,6 +17,7 @@ declared:
   - ./report
   - ./vendors/hillstone
   - ./vendors/paloalto
+  - ./platform
   - ./adapter/netconnector
   - ./adapter/filestore
   - ./adapter/yamlfile
@@ -29,7 +30,7 @@ declared:
 
 rules:
   - name: domain packages stay free of I/O
-    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./hits, ./converge, ./health, ./migrate, ./inventory, ./intake, ./report, ./vendors/...]
+    packages: [., ./traffic, ./query, ./design, ./deploy, ./audit, ./hits, ./converge, ./health, ./migrate, ./inventory, ./intake, ./report, ./vendors/..., ./platform]
     deny: [os, os/exec, io/fs, net, net/http, database/sql, path/filepath, syscall,
            github.com/gatework/net-connector/..., github.com/gatework/go-expect/...]
 
@@ -96,6 +97,10 @@ rules:
   - name: vendors do not depend on each other
     packages: [./vendors/hillstone]
     deny: [./vendors/paloalto]
+
+  - name: the platform bundles the vendors for callers, the CLI and backends alike
+    packages: [./platform]
+    only_local: [., ./design, ./hits, ./migrate, ./vendors/...]
 
   - name: adapters depend only on the domain
     packages: [./adapter/netconnector, ./adapter/filestore]
