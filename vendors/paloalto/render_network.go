@@ -25,6 +25,11 @@ func renderNetwork(ch design.Change) (do, undo []string, ok bool, err error) {
 		do, undo = renderInterface(c.Interface)
 	case design.AddRoute:
 		do, undo, err = renderRoute(c.Route)
+	case design.AddPolicyRoute:
+		do, err = renderPolicyRoute(c.Route)
+		undo = []string{"delete rulebase pbf rules " + name(c.Route.Policy)}
+	case design.AddPolicyBinding:
+		do = renderPolicyBinding(c.Binding)
 	default:
 		ok = false
 	}
@@ -98,4 +103,53 @@ func renderRoute(r firemon.Route) (do, undo []string, err error) {
 		do = append(do, p+"admin-dist "+strconv.FormatUint(uint64(r.Distance), 10))
 	}
 	return do, []string{"delete network virtual-router " + name(vr) + " routing-table ip static-route " + name(rname)}, nil
+}
+
+// renderPolicyRoute writes one PBF rule; its ingress comes from its
+// bindings (renderPolicyBinding).
+func renderPolicyRoute(r firemon.PolicyRoute) ([]string, error) {
+	if len(r.Conditions) > 0 {
+		return nil, fmt.Errorf("paloalto: policy route %s: criteria beyond addresses and services", r.Policy)
+	}
+	if r.Interface == "" {
+		return nil, fmt.Errorf("paloalto: policy route %s: a PBF rule forwards through an egress interface", r.Policy)
+	}
+	src, err := operandTexts(r.Source)
+	if err != nil {
+		return nil, fmt.Errorf("paloalto: policy route %s: %w", r.Policy, err)
+	}
+	dst, err := operandTexts(r.Destination)
+	if err != nil {
+		return nil, fmt.Errorf("paloalto: policy route %s: %w", r.Policy, err)
+	}
+	p := "set rulebase pbf rules " + name(r.Policy) + " "
+	out := []string{
+		p + "source " + list(orAny(src)),
+		p + "destination " + list(orAny(dst)),
+		p + "service " + list(orAny(r.Services)),
+	}
+	if r.NegateSource {
+		out = append(out, p+"negate-source yes")
+	}
+	if r.NegateDestination {
+		out = append(out, p+"negate-destination yes")
+	}
+	out = append(out, p+"action forward egress-interface "+r.Interface)
+	if r.NextHop.IsValid() {
+		out = append(out, p+"action forward nexthop ip-address "+r.NextHop.String())
+	}
+	if r.Disabled {
+		out = append(out, p+"disabled yes")
+	}
+	return out, nil
+}
+
+// renderPolicyBinding adds an ingress zone or interface to a PBF rule; the
+// rule's deletion undoes it.
+func renderPolicyBinding(b firemon.PolicyBinding) []string {
+	p := "set rulebase pbf rules " + name(b.Policy) + " from "
+	if b.Zone != "" {
+		return []string{p + "zone " + name(b.Zone)}
+	}
+	return []string{p + "interface " + b.Interface}
 }

@@ -35,12 +35,12 @@ type translator struct {
 // changeSet keeps changes by kind so the plan lists them in dependency
 // order whatever order they were found in.
 type changeSet struct {
-	network, schedules, addresses, groups, services, svcGroups, rules, nat []design.Change
+	network, schedules, addresses, groups, services, svcGroups, pbr, rules, nat []design.Change
 }
 
 func (c changeSet) all() []design.Change {
 	var out []design.Change
-	for _, part := range [][]design.Change{c.network, c.schedules, c.addresses, c.groups, c.services, c.svcGroups, c.rules, c.nat} {
+	for _, part := range [][]design.Change{c.network, c.schedules, c.addresses, c.groups, c.services, c.svcGroups, c.pbr, c.rules, c.nat} {
 		out = append(out, part...)
 	}
 	return out
@@ -70,6 +70,7 @@ func Translate(src *firemon.Config, m Mapping, t Target) (Result, error) {
 	tr.rules()
 	tr.defaults()
 	tr.nat()
+	tr.policyRoutes()
 	tr.out.Services = append(tr.out.Services, t.Services.Services(func(name string) bool { return tr.declared(name) })...)
 	if _, err := firemon.Compile(tr.out); err != nil {
 		return Result{}, fmt.Errorf("migrate: target: %w", err)
