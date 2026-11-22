@@ -4,6 +4,17 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-22
+
+- Package `platform` exports the vendor bundle the CLI uses (`For`, `Vendors`, `Platform.MigrationTarget`), so backends parse, render, read hit counters and plan migrations without rebuilding it.
+- `Platform.HARole` reads a member's runtime HA role: from the StoneOS prompt (`(M)`/`(B)`), and from the PAN-OS prompt or `show high-availability state` (`HAStateCommand`; not yet checked on a device).
+- Design plans over the period the access must hold: a timed rule in force only part of it counts against the access (`query.ScheduleWorstCase`). A scheduled deny is a conflict for permanent access, and rules are extended only when they are in force exactly when the intent asks.
+- Design: an undecidable deny that may match first (an application deny on a port no application claims) leaves the access indeterminate and names the rule, as ADR 0017 states; a plan that opens nothing is not verified.
+- `migrate` translates policy-based routing between StoneOS and PAN-OS, keeping each entry's place in the order of every ingress it applies to; both renderers write policy routes and bindings.
+- Fix: `nat` reports a rule in effect when any decided path uses it, and judges shadowing only on the paths its zones apply to.
+- Fix: a deployment whose session close fails persists the settled (uncertain) record again.
+- Fix: migration keeps a default static route distance the target's default.
+
 - Fleet health and cleanup output (ADR 0019):
   - `firemon health --inventory DIR|FILE` scores every cluster with stated deductions and lists the first things to fix, each with the command that acts on it.
   - `converge` and `audit` print a summary by default (`-v` lists findings). `converge --inventory` accepts a backup directory; `--cluster` narrows the fleet; `--plan --out DIR` writes the cleanup and rollback files.
