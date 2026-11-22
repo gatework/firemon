@@ -139,7 +139,7 @@ func TestNAT_FirstMatchInOrder(t *testing.T) {
 
 func TestPBR_UndecidableEntryBranches(t *testing.T) {
 	t.Parallel()
-	res := ask(t, natOrderEngine(t), "10.0.9.9", "8.8.8.8")
+	res := ask(t, natOrderEngine(t), "10.0.9.9", "203.0.113.208")
 	if len(res.Paths) != 2 {
 		t.Fatalf("want a branch through the user-group route and one without: %+v", res.Paths)
 	}

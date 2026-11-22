@@ -92,12 +92,12 @@ func TestBuild_Statuses(t *testing.T) {
 		{"full match", site(rule("web", p, "lan", "wan", "10.1.0.0/16", "", "https")), report.StatusFullMatch},
 		{"partial match", site(rule("web", p, "lan", "wan", "10.1.0.0/24", "", "https")), report.StatusPartialMatch},
 		{"need new", site(), report.StatusNeedNew},
-		{"blocked", site(rule("no", d, "lan", "wan", "10.1.0.0/16", "8.8.8.8/32")), report.StatusBlocked},
+		{"blocked", site(rule("no", d, "lan", "wan", "10.1.0.0/16", "203.0.113.208/32")), report.StatusBlocked},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			r := build(t, tt.fw, "10.1.0.0/23", "8.8.8.8", "tcp/443", false)
+			r := build(t, tt.fw, "10.1.0.0/23", "203.0.113.208", "tcp/443", false)
 			if len(r.Firewalls) != 1 || r.Firewalls[0].Status != tt.want || r.Status != tt.want {
 				t.Fatalf("got %+v", r.Firewalls)
 			}
@@ -109,11 +109,11 @@ func TestBuild_CandidatesRankSafeExtensionsFirst(t *testing.T) {
 	t.Parallel()
 	p := firemon.ActionPermit
 	fw := site(
-		rule("broad", p, "", "", "10.1.0.0/16", "", "ssh"),                   // zone any, other service
-		rule("exact", p, "lan", "wan", "10.1.0.5/32", "8.8.8.8/32", "https"), // lacks only sources
-		rule("wide", p, "lan", "wan", "10.1.0.6/32", "", "https"),            // destination any: wider than the request
+		rule("broad", p, "", "", "10.1.0.0/16", "", "ssh"),                         // zone any, other service
+		rule("exact", p, "lan", "wan", "10.1.0.5/32", "203.0.113.208/32", "https"), // lacks only sources
+		rule("wide", p, "lan", "wan", "10.1.0.6/32", "", "https"),                  // destination any: wider than the request
 	)
-	r := build(t, fw, "10.1.0.7", "8.8.8.8", "tcp/443", true)
+	r := build(t, fw, "10.1.0.7", "203.0.113.208", "tcp/443", true)
 	f := r.Firewalls[0]
 	if f.Status != report.StatusNeedNew || len(f.Candidates) == 0 {
 		t.Fatalf("firewall %+v", f)

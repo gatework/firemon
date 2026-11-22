@@ -27,11 +27,11 @@ func TestAccept_Matrix(t *testing.T) {
 		// Verdicts and the exit code contract.
 		{"full match", []string{"search", "--src", "203.0.113.9", "--dst", "172.16.0.10", "--service", "tcp/80"}, cli.ExitOK, "结论：完全命中", ""},
 		{"deny needs a rule before it", []string{"search", "--src", "203.0.113.9", "--dst", "10.0.0.5", "--service", "tcp/80"}, cli.ExitNotAllowed, "会绕过它", ""},
-		{"range source, default deny", []string{"search", "--src", "10.0.0.5-10.0.0.9", "--dst", "8.8.8.8", "--service", "tcp/80"}, cli.ExitNotAllowed, "默认拒绝", ""},
-		{"undecided without design", []string{"search", "--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/443", "--no-design"}, cli.ExitUndecided, "需确认", ""},
-		{"undecided settled by a plan", []string{"search", "--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/443"}, cli.ExitNotAllowed, "由已验证的方案确保放通", "结论：需确认"},
-		{"time-bound hit", []string{"search", "--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/22", "--at", "2026-11-20T10:00:00+08:00", "--timezone", "Asia/Shanghai"}, cli.ExitOK, "限时策略", ""},
-		{"NAT translates to the packet family", []string{"search", "--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/443"}, cli.ExitNotAllowed, "源 NAT 1", "2001:db8:1::2"},
+		{"range source, default deny", []string{"search", "--src", "10.0.0.5-10.0.0.9", "--dst", "203.0.113.208", "--service", "tcp/80"}, cli.ExitNotAllowed, "默认拒绝", ""},
+		{"undecided without design", []string{"search", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443", "--no-design"}, cli.ExitUndecided, "需确认", ""},
+		{"undecided settled by a plan", []string{"search", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443"}, cli.ExitNotAllowed, "由已验证的方案确保放通", "结论：需确认"},
+		{"time-bound hit", []string{"search", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/22", "--at", "2026-11-20T10:00:00+08:00", "--timezone", "Asia/Shanghai"}, cli.ExitOK, "限时策略", ""},
+		{"NAT translates to the packet family", []string{"search", "--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443"}, cli.ExitNotAllowed, "源 NAT 1", "2001:db8:1::2"},
 		{"protocol number reads as ip/N", []string{"search", "--src", "10.0.0.5", "--dst", "172.16.0.10", "--service", "proto/47", "--no-design"}, cli.ExitNotAllowed, "172.16.0.10 ip/47", ""},
 		// Input that is not answered rather than answered in part.
 		{"unknown application", []string{"search", "--src", "10.0.0.5", "--dst", "172.16.0.10", "--service", "app:nosuch"}, cli.ExitUsage, "未知应用", ""},
@@ -100,7 +100,7 @@ func TestAccept_JSONAgreesWithExit(t *testing.T) {
 		status string
 	}{
 		{[]string{"--src", "203.0.113.9", "--dst", "172.16.0.10", "--service", "tcp/80"}, cli.ExitOK, "full-match"},
-		{[]string{"--src", "10.0.0.5", "--dst", "8.8.8.8", "--service", "tcp/443", "--no-design"}, cli.ExitUndecided, "indeterminate"},
+		{[]string{"--src", "10.0.0.5", "--dst", "203.0.113.208", "--service", "tcp/443", "--no-design"}, cli.ExitUndecided, "indeterminate"},
 	} {
 		code, out, errOut := run(t, "", append([]string{"search", "--json", "--config", hillstoneConf}, c.args...)...)
 		var rep struct {

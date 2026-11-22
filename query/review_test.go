@@ -30,8 +30,8 @@ func req(t *testing.T, src, dst, service string) query.Request {
 func TestQ1_UnreachableNextHopFallsThrough(t *testing.T) {
 	t.Parallel()
 	cfg := lab(firemon.AddressStageOriginal, permit("1", "trust", "untrust", "", "", "https"))
-	cfg.Routes = append(cfg.Routes, firemon.Route{VirtualRouter: "vr", Destination: prefix("8.8.0.0/16"), NextHop: netip.MustParseAddr("192.0.2.99")})
-	res := queryOne(t, cfg, req(t, "10.0.0.9", "8.8.8.8", "tcp/443"))
+	cfg.Routes = append(cfg.Routes, firemon.Route{VirtualRouter: "vr", Destination: prefix("203.0.113.0/24"), NextHop: netip.MustParseAddr("192.0.2.99")})
+	res := queryOne(t, cfg, req(t, "10.0.0.9", "203.0.113.208", "tcp/443"))
 	if res.Verdict != query.VerdictAllowed || !res.Unrouted.IsEmpty() || res.Paths[0].To != "untrust" {
 		t.Fatalf("got %s unrouted %s", res.Verdict, res.Unrouted)
 	}
@@ -68,7 +68,7 @@ func TestQ3_DestinationNATChecksTheZoneOfTheRequestPart(t *testing.T) {
 			t.Fatalf("traffic routed to trust was translated by a rule for untrust: %+v", p)
 		}
 	}
-	res = queryOne(t, cfg, req(t, "10.0.0.9", "8.8.8.8", "tcp/80"))
+	res = queryOne(t, cfg, req(t, "10.0.0.9", "203.0.113.208", "tcp/80"))
 	if res.Paths[0].DestinationNAT == nil || res.Paths[0].To != "dmz" {
 		t.Fatalf("traffic to untrust must be translated to the dmz server: %+v", res.Paths)
 	}
@@ -81,7 +81,7 @@ func TestQ4_UndecidableNATMakesThePathUnknown(t *testing.T) {
 	n.To = nil
 	n.Destination = []firemon.AddressRef{firemon.NamedAddress("cdn")} // FQDN: undecidable
 	cfg.DynamicNATs = []firemon.DynamicNAT{n}
-	res := queryOne(t, cfg, req(t, "10.0.0.9", "8.8.8.8", "tcp/80"))
+	res := queryOne(t, cfg, req(t, "10.0.0.9", "203.0.113.208", "tcp/80"))
 	if res.Verdict != query.VerdictIndeterminate || len(res.Paths[0].NATUncertain) == 0 {
 		t.Fatalf("got %s %v", res.Verdict, res.Paths[0].NATUncertain)
 	}
@@ -90,10 +90,10 @@ func TestQ4_UndecidableNATMakesThePathUnknown(t *testing.T) {
 func TestQ4_ExemptionConsumesTheTraffic(t *testing.T) {
 	t.Parallel()
 	cfg := lab(firemon.AddressStageTranslated, permit("1", "", "", "", "", ""))
-	exempt := firemon.DynamicNAT{ID: "x", Destination: []firemon.AddressRef{inline("8.8.8.8/32")},
+	exempt := firemon.DynamicNAT{ID: "x", Destination: []firemon.AddressRef{inline("203.0.113.208/32")},
 		TranslatedDestination: firemon.Translation{Mode: firemon.TranslationModeNone}}
 	cfg.DynamicNATs = []firemon.DynamicNAT{exempt, dnatTo("untrust")}
-	res := queryOne(t, cfg, req(t, "10.0.0.9", "8.8.8.8", "tcp/80"))
+	res := queryOne(t, cfg, req(t, "10.0.0.9", "203.0.113.208", "tcp/80"))
 	if res.Paths[0].DestinationNAT != nil {
 		t.Fatal("an earlier no-NAT rule must exempt the traffic")
 	}
@@ -108,7 +108,7 @@ func TestQ5_SingleOrderNATIsFirstMatchAcrossSides(t *testing.T) {
 	dnat := dnatTo("untrust")
 	dnat.Precedence = 2
 	cfg.DynamicNATs = []firemon.DynamicNAT{snatOnly, dnat}
-	res := queryOne(t, cfg, req(t, "10.0.0.9", "8.8.8.8", "tcp/80"))
+	res := queryOne(t, cfg, req(t, "10.0.0.9", "203.0.113.208", "tcp/80"))
 	p := res.Paths[0]
 	if p.DestinationNAT != nil || len(p.SourceNAT) != 1 || p.SourceNAT[0].Rule.Spec().ID != "s1" {
 		t.Fatalf("the first matching rule decides both sides: dnat %v snat %v", p.DestinationNAT, p.SourceNAT)
@@ -155,7 +155,7 @@ func TestQ10_PathBudgetMarksIncomplete(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := query.New(fw, query.Options{Now: func() time.Time { return at }, MaxPaths: 1})
-	res, err := e.Query(req(t, "10.0.0.9", "172.16.0.10,8.8.8.8", "tcp/22"))
+	res, err := e.Query(req(t, "10.0.0.9", "172.16.0.10,203.0.113.208", "tcp/22"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestQ12_EqualCostRoutesAllCarryTraffic(t *testing.T) {
 	t.Parallel()
 	cfg := lab(firemon.AddressStageOriginal, permit("1", "", "", "", "", ""))
 	cfg.Routes = append(cfg.Routes, firemon.Route{VirtualRouter: "vr", Destination: prefix("0.0.0.0/0"), NextHop: netip.MustParseAddr("172.16.0.254")})
-	res := queryOne(t, cfg, req(t, "10.0.0.9", "8.8.8.8", "tcp/22"))
+	res := queryOne(t, cfg, req(t, "10.0.0.9", "203.0.113.208", "tcp/22"))
 	if len(res.Paths) != 2 {
 		t.Fatalf("want one path per equal-cost route, got %d", len(res.Paths))
 	}

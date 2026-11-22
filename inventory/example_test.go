@@ -28,7 +28,7 @@ func ExampleInventory_Locate() {
 		fmt.Println(err)
 		return
 	}
-	tr, err := inv.Locate(request("10.1.0.5", "8.8.8.8", "tcp/443"))
+	tr, err := inv.Locate(request("10.1.0.5", "203.0.113.208", "tcp/443"))
 	if err != nil {
 		fmt.Println(err)
 		return

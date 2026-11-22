@@ -4,6 +4,10 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-21
+
+- Use documentation IP ranges, example domains, and explicit dummy credential and certificate data in tests.
+
 ## [0.4.1] - 2026-11-21
 
 - Update device sessions to net-connector v0.10.3 and the shared operations packages to netops v0.4.0.

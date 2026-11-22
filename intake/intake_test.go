@@ -87,11 +87,11 @@ func TestParse_Services(t *testing.T) {
 func TestParse_DomainsAndApplications(t *testing.T) {
 	t.Parallel()
 	isApp := func(n string) bool { return n == "ms-rdp" || n == "ssh" }
-	req, err := intake.Parse("10.0.0.1", "Account.Live.COM., *.example.com", "app:ssh, ms-rdp", intake.Options{IsApplication: isApp})
+	req, err := intake.Parse("10.0.0.1", "Account.Example.ORG., *.example.com", "app:ssh, ms-rdp", intake.Options{IsApplication: isApp})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(req.DstDomains, []string{"*.example.com", "account.live.com"}) || !req.Dst.IsEmpty() {
+	if !slices.Equal(req.DstDomains, []string{"*.example.com", "account.example.org"}) || !req.Dst.IsEmpty() {
 		t.Fatalf("domains %v dst %s", req.DstDomains, req.Dst)
 	}
 	if !slices.Equal(req.Applications, []string{"ms-rdp", "ssh"}) || !req.Service.IsAny() {

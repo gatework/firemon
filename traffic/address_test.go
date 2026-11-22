@@ -17,7 +17,7 @@ func TestParseAddressSet(t *testing.T) {
 		{"range not aligned", "10.0.0.1-10.0.0.9", "10.0.0.1-10.0.0.9"},
 		{"adjacent merge", "10.0.0.0/25, 10.0.0.128/25", "10.0.0.0/24"},
 		{"any", "any", "any"},
-		{"ipv6", "2406:e300::/32", "2406:e300::/32"},
+		{"ipv6", "2001:db8::/32", "2001:db8::/32"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
